@@ -9,8 +9,6 @@ The design intentionally avoids Agent-specific concepts to maintain
 flexibility while preserving full observability through metadata tracking.
 """
 
-import importlib
-import sys
 import time
 import uuid
 from typing import Any, AsyncGenerator, Optional
@@ -30,8 +28,8 @@ from buttermilk._core.llms import CreateResult, ModelOutput
 from buttermilk._core.types import BaseRecord
 from buttermilk.utils.templating import load_template, make_messages
 from buttermilk.utils.utils import clean_empty_values, scrub_serializable
-
 from buttermilk.utils.validators import import_class_from_path
+
 
 class LLMResult(BaseModel):
     """Lightweight result structure for LLM operations.
@@ -63,7 +61,7 @@ class LLMCore:
     - Metadata tracking for observability
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         model: str,
         template: str,
@@ -84,7 +82,9 @@ class LLMCore:
             output_model: Optional Pydantic model for structured output (class or string path)
             tools: Optional list of tools the LLM can use
         """
-        self.parameters = kwargs
+        # CRITICAL: Include model and template in parameters for trace writing
+        # Issue #280: Traces need these fields for observability/analysis
+        self.parameters = {"model": model, "template": template, **kwargs}
 
         # Resolve output_model if it's a string
         if isinstance(output_model, str):
@@ -110,7 +110,7 @@ class LLMCore:
         self._trace_writer = None
 
     @property
-    def trace_writer(self):
+    def trace_writer(self) -> Any:
         """Lazy load trace writer."""
         if self._trace_writer is None:
             from buttermilk.utils.trace_writer import get_trace_writer
@@ -263,7 +263,7 @@ class LLMCore:
                 span.record_exception(e)
                 raise ProcessingError(f"LLMCore processing failed: {e}") from e
 
-    async def process_with_llm(
+    async def process_with_llm(  # noqa: PLR0912
         self, inputs: Any = None, parent_trace_id: Optional[str] = None, cancellation_token: Optional[CancellationToken] = None, **kwargs: Any
     ) -> LLMResult:
         """Process inputs through template rendering and LLM calling.
@@ -386,9 +386,7 @@ class LLMCore:
                     else:
                         content_str = str(result.content)
 
-                    result.messages.append(
-                        AssistantMessage(content=content_str, source=self.model)
-                    )
+                    result.messages.append(AssistantMessage(content=content_str, source=self.model))
 
                 # Collect metadata (preserve existing template metadata)
                 result.metadata = {

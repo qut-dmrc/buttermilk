@@ -72,9 +72,7 @@ class TestLLMCore:
         """Test template filling with basic inputs using real template file."""
         core = LLMCore(model="gpt-4", template="test/simple")
 
-        messages = await core._fill_template(
-            inputs={"var": "test value", "context": [], "records": []}
-        )
+        messages = await core._fill_template(inputs={"var": "test value", "context": [], "records": []})
 
         # Should have system and user messages
         assert len(messages) == 2
@@ -99,9 +97,7 @@ class TestLLMCore:
 
         # Only provide required_var, leave missing_var undefined
         with pytest.raises(ProcessingError, match="unfilled parameters"):
-            await core._fill_template(
-                inputs={"required_var": "value", "context": [], "records": []}
-            )
+            await core._fill_template(inputs={"required_var": "value", "context": [], "records": []})
 
     @pytest.mark.anyio
     async def test_fill_template_with_unfilled_vars_lenient(self):
@@ -113,9 +109,7 @@ class TestLLMCore:
         )
 
         # Only provide required_var, leave missing_var undefined
-        messages = await core._fill_template(
-            inputs={"required_var": "value", "context": [], "records": []}
-        )
+        messages = await core._fill_template(inputs={"required_var": "value", "context": [], "records": []})
 
         # Should return messages even with unfilled vars
         assert len(messages) >= 1
@@ -386,13 +380,8 @@ class TestLLMCore:
 
             # The bug: template metadata should be in result.metadata
             # If the bug exists, template metadata would be overwritten
-            assert (
-                "template" in result.metadata
-            ), "Template metadata should be present in result"
-            assert (
-                result.metadata["template"]["template_name"]
-                == "test/simple"
-            )
+            assert "template" in result.metadata, "Template metadata should be present in result"
+            assert result.metadata["template"]["template_name"] == "test/simple"
             assert "template_hash" in result.metadata["template"]
             assert result.metadata["template"]["template_hash"] != ""  # Should have a hash
             assert result.metadata["template"]["unfilled_vars"] == []
@@ -438,7 +427,7 @@ class TestLLMCore:
                 "required_var": "value",
                 "missing_var": "undefined",  # Literal string "undefined"
                 "context": [],
-                "records": []
+                "records": [],
             }
         )
 
@@ -478,3 +467,32 @@ class TestLLMCore:
 
         # Verify the internal flag is set to True
         assert core._fail_on_unfilled_parameters is True
+
+    def test_parameters_includes_model_and_template(self):
+        """Test that self.parameters captures model and template for trace writing.
+
+        Regression test for issue #280: LLMCore rescore traces missing parameters.
+        The trace writing in process() uses self.parameters, so model and template
+        MUST be included there for observability.
+
+        Without this, traces to BigQuery have incomplete parameters making it
+        impossible to analyze which models/prompts were used.
+        """
+        core = LLMCore(
+            model="gpt-4",
+            template="judge",
+            temperature=0.7,
+            max_tokens=1000,
+        )
+
+        # CRITICAL: parameters must include model and template for trace writing
+        assert "model" in core.parameters, "model must be in self.parameters for traces"
+        assert "template" in core.parameters, "template must be in self.parameters for traces"
+
+        # Verify the values are correct
+        assert core.parameters["model"] == "gpt-4"
+        assert core.parameters["template"] == "judge"
+
+        # Additional kwargs should also be present
+        assert core.parameters["temperature"] == 0.7
+        assert core.parameters["max_tokens"] == 1000
