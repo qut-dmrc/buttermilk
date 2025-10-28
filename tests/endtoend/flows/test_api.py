@@ -20,7 +20,7 @@ def flow_request_data():
     # Return raw dict for flow request data
     return {
         "flow": "test_minimal",
-        "model": "haiku",
+        "model": "claude45haiku",
         "template": "judge",
         "template_vars": {"formatting": "json_rules", "criteria": "criteria_ordinary"},
         "text": "Sample text",
@@ -35,12 +35,12 @@ def test_api_request_simple(
 ):
     # Send data directly as dict to API
     response = client.post("/flow/simple", json=flow_request_data)
-    
+
     # Debug the response if it fails
     if response.status_code != 200:
         print(f"Response status: {response.status_code}")
         print(f"Response body: {response.text}")
-    
+
     assert response.status_code == 200
     json_response = response.json()
     assert "outputs" in json_response

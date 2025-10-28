@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from buttermilk._core.llms import ModelOutput
 
 # Models known to not support tool calling
-MODELS_WITHOUT_TOOL_SUPPORT = {"haiku", "llama32_90b"}
+MODELS_WITHOUT_TOOL_SUPPORT = {"llama32_90b"}
 
 # Models that have quirks with tool calling (e.g., may not follow instructions perfectly)
 MODELS_WITH_TOOL_QUIRKS = {"llama4maverick", "llama33_70b", "o4mini"}
@@ -165,9 +165,9 @@ async def test_multiple_tool_calls(real_llm):
         # For models with tool quirks, be more lenient
         if model_name in MODELS_WITH_TOOL_QUIRKS:
             # Just check if they attempted to do math or mentioned the numbers
-            assert any(term in response.content.lower() for term in ["8", "eight", "5", "3", "calculate", "sum"]), (
-                f"Response should relate to the calculation, got: {response.content}"
-            )
+            assert any(
+                term in response.content.lower() for term in ["8", "eight", "5", "3", "calculate", "sum"]
+            ), f"Response should relate to the calculation, got: {response.content}"
         else:
             # Check for both digit "8" and word "eight"
             assert any(term in response.content.lower() for term in ["8", "eight"]), f"Response should contain the sum 8, got: {response.content}"

@@ -26,7 +26,7 @@ def param_model_cheap(request):
 
 @pytest.fixture
 def framer():
-    agent = LC(agent_id="testframer", parameters={"template": "frames", "model": "haiku0"})
+    agent = LC(agent_id="testframer", parameters={"template": "frames", "model": "claude45haiku"})
     return agent
 
 

@@ -17,9 +17,6 @@ fail_on_unfilled_parameters=True).
 from pathlib import Path
 
 import pytest
-from hydra import compose, initialize_config_dir
-from hydra.core.global_hydra import GlobalHydra
-from omegaconf import OmegaConf
 
 from buttermilk._core.contract import AgentOutput
 from buttermilk._core.message_data import extract_message_data
@@ -31,42 +28,30 @@ from buttermilk.utils.templating import load_template
 CONF_DIR = str(Path(__file__).parent.parent.parent / "buttermilk" / "conf")
 
 
-@pytest.fixture(scope="module")
-def hydra_config():
-    """Load real Hydra configuration from conf/."""
-    GlobalHydra.instance().clear()
-    with initialize_config_dir(config_dir=CONF_DIR, version_base="1.3"):
-        # Load the trans flow configuration
-        # Use +flows to append to defaults list
-        cfg = compose(config_name="config", overrides=["+flows=trans"])
-        yield cfg
-    GlobalHydra.instance().clear()
-
-
 @pytest.fixture
-def real_scorer_config(hydra_config):
+def real_scorer_config(real_bm):
     """Get the REAL scorer agent configuration from conf/agents/scorer.yaml."""
     # Scorer is in observers, not agents
-    # Don't fully resolve - we only need the inputs mappings which don't have interpolations
-    scorer_cfg = hydra_config.run.flows.trans.observers.scorer
-    return {
-        "inputs": OmegaConf.to_container(scorer_cfg.inputs, resolve=False),
-        "parameters": OmegaConf.to_container(scorer_cfg.parameters, resolve=False),
-    }
+    # Return the DictConfig directly - don't convert to plain dict
+    # The code expects OmegaConf objects, not plain dicts
+    scorer_cfg = real_bm.cfg.run.flows["trans"]["observers"]["scorer"]
+    return scorer_cfg
 
 
 @pytest.fixture
-def real_judge_config(hydra_config):
+def real_judge_config(real_bm):
     """Get the REAL judge agent configuration from conf/agents/judge.yaml."""
-    judge_cfg = hydra_config.run.flows.trans.agents.judge
-    return OmegaConf.to_container(judge_cfg, resolve=True)
+    # Return the DictConfig directly - don't convert to plain dict
+    judge_cfg = real_bm.cfg.run.flows["trans"]["agents"]["judge"]
+    return judge_cfg
 
 
 @pytest.fixture
-def real_fetch_config(hydra_config):
+def real_fetch_config(real_bm):
     """Get the REAL fetch agent configuration from conf/agents/fetch.yaml."""
-    fetch_cfg = hydra_config.run.flows.trans.agents.fetch
-    return OmegaConf.to_container(fetch_cfg, resolve=True)
+    # Return the DictConfig directly - don't convert to plain dict
+    fetch_cfg = real_bm.cfg.run.flows["trans"]["agents"]["fetch"]
+    return fetch_cfg
 
 
 @pytest.fixture
@@ -260,6 +245,7 @@ class TestAgentVariableExtraction:
 
         # Manually construct the inputs that SHOULD come from extraction
         # NOTE: Template expects 'expected' which contains the ground_truth data
+        # Score template requires: expected, answers, criteria, instructions, source
         proper_inputs = {
             "expected": sample_record_with_ground_truth.ground_truth,
             "answers": [
@@ -269,6 +255,9 @@ class TestAgentVariableExtraction:
                     "answer_id": "call-123",
                 }
             ],
+            "criteria": ["Test criterion 1", "Test criterion 2"],  # Required by score template
+            "instructions": "Evaluate the judge's reasoning against the ground truth",  # Required
+            "source": sample_record_with_ground_truth.content,  # Required - the source content being judged
         }
 
         # Render the REAL template with proper data
