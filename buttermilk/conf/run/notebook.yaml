@@ -1,7 +1,3 @@
-defaults:
-  - _self_
-
 run:
   mode: notebook
-
 verbose: true
