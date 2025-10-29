@@ -457,9 +457,7 @@ class AutoGenWrapper(BaseModel):
                         metadata={"pricing": pricing_metadata},
                     )
                 except ProcessingError as e:
-                    raise ProcessingError(
-                        f"Failed to parse structured output into {schema.__name__}: {e}",
-                    ) from e
+                    raise ProcessingError(f"Failed to parse structured output into {schema.__name__}.", error=e, args=e.args) from e
 
             result = ModelOutput(
                 content=create_result.content,
