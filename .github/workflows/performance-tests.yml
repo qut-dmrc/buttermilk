@@ -26,7 +26,10 @@ jobs:
         uses: astral-sh/setup-uv@v5
       - name: Install dependencies
         run: |
-          uv sync --all-extras --dev
+          # Skip ML extras (heavy dependencies like torch, transformers)
+          # Only install core + dev dependencies for performance tests
+          uv sync --no-install-project --extra azure --extra aws --extra research
+          uv sync --dev
       - name: Download baseline benchmarks
         id: download-baseline
         continue-on-error: true

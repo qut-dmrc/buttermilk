@@ -234,3 +234,6 @@ gs:/
 # academicOps deployment (symlinked scripts)
 .academicOps/
 .claude
+
+# Performance benchmark results (generated locally)
+.benchmarks/
