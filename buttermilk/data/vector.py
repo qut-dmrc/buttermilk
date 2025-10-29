@@ -25,9 +25,9 @@ from buttermilk._core.exceptions import RateLimit  # Import RateLimit exception
 from buttermilk._core.retry import RetryWrapper  # Add retry functionality
 from buttermilk._core.storage_config import VectorStorageConfig
 from buttermilk._core.types import BatchProcessingResult, ProcessingResult, Record
+from buttermilk.utils.utils import ensure_chromadb_cache, scrub_serializable
 
 ProcessingStatus = Literal["processed", "skipped", "failed"]
-from buttermilk.utils.utils import ensure_chromadb_cache, scrub_serializable
 
 MODEL_NAME = "gemini-embedding-001"
 DEFAULT_UPSERT_BATCH_SIZE = 10  # Still used for failed batch saving logic if needed
@@ -37,7 +37,7 @@ MAX_TOTAL_TASKS_PER_RUN = 500
 T = TypeVar("T")
 
 
-_db_registry = {}
+_db_registry: dict[str, Collection] = {}
 
 # --- New Result Types and Configuration (Breaking Changes) ---
 
@@ -105,14 +105,14 @@ async def _batch_iterator(
         yield batch
 
 
-def _get_chunk_embedding(chunk):
+def _get_chunk_embedding(chunk: Any) -> Any:
     """Safely get embedding from chunk (handles both dict and object types)."""
     if isinstance(chunk, dict):
         return chunk.get("embedding")
     return getattr(chunk, "embedding", None)
 
 
-def _set_chunk_embedding(chunk, embedding):
+def _set_chunk_embedding(chunk: Any, embedding: Any) -> None:
     """Safely set embedding on chunk (handles both dict and object types)."""
     if isinstance(chunk, dict):
         chunk["embedding"] = embedding
@@ -120,7 +120,7 @@ def _set_chunk_embedding(chunk, embedding):
         chunk.embedding = embedding
 
 
-def _get_chunk_field(chunk, field_name, default=None):
+def _get_chunk_field(chunk: Any, field_name: str, default: Any = None) -> Any:
     """Get any field from chunk whether it's dict or object."""
     if isinstance(chunk, dict):
         return chunk.get(field_name, default)
@@ -190,14 +190,14 @@ class SemanticSplitter(BaseModel):
         )
         return self
 
-    def _create_chunks(self, text) -> tuple[list[str], list[tuple[int, int]]]:
+    def _create_chunks(self, text: str) -> tuple[list[str], list[tuple[int, int]]]:
         # Pass an `offsets` argument to return the offsets of chunks, as well as an `overlap`
         # argument to overlap chunks by a ratio (if < 1) or an absolute number of tokens (if >= 1).
         chunks, offsets = self._chunker(text, offsets=True, overlap=self.chunk_overlap)
 
         return chunks, offsets
 
-    async def process(self, doc: Record, *, processor_stage: str = "chunk", **kwargs) -> AsyncGenerator[Record, None]:
+    async def process(self, doc: Record, *, processor_stage: str = "chunk", **kwargs: Any) -> AsyncGenerator[Record, None]:
         """Chunks documents and adds the chunks list to the Record."""
         # Extract text content from Record
         if hasattr(doc, "content"):
@@ -298,6 +298,10 @@ class ChromaDBEmbeddings(VectorStorageConfig):
     # Read-only mode (for deduplication checking only, no writes/sync)
     read_only: bool = Field(default=False, description="Read-only mode disables all write and sync operations")
 
+    # Background warmup configuration
+    enable_background_warmup: bool = Field(default=True, description="Enable background warmup of ChromaDB after delay")
+    warmup_delay_seconds: int = Field(default=60, description="Delay before starting background warmup (default 60s)")
+
     # Retry configuration for embedding API calls
     embedding_max_retries: int = Field(default=5, description="Max retries for embedding API calls")
     embedding_min_wait_seconds: float = Field(default=1.0, description="Min wait between embedding retries")
@@ -319,6 +323,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
     _sync_batch_size: int = PrivateAttr(default=50)  # Sync every 50 records
     _sync_interval_seconds: int = PrivateAttr(default=600)  # Sync every 10 minutes
     _cache_initialized: bool = PrivateAttr(default=False)  # Track if cache has been initialized
+    _warmup_task: asyncio.Task | None = PrivateAttr(default=None)  # Background warmup task
 
     @pydantic.model_validator(mode="after")
     def load_models(self) -> Self:
@@ -392,6 +397,10 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 Path(self.arrow_save_dir).mkdir(parents=True, exist_ok=True)
             # Embeddings cache directory creation handled by get_cache_subdir(create=True)
 
+        # Start background warmup task if enabled
+        if self.enable_background_warmup:
+            self._start_background_warmup()
+
         return self
 
     async def ensure_cache_initialized(self) -> None:
@@ -428,6 +437,39 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
         # Mark as initialized
         self._cache_initialized = True
+
+    def _start_background_warmup(self) -> None:
+        """Start background warmup task if event loop is available.
+
+        This starts a task that waits warmup_delay_seconds and then calls
+        ensure_cache_initialized() to pre-warm the ChromaDB collection.
+        """
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                logger.info(f"🔥 Starting background warmup task (will initialize after {self.warmup_delay_seconds}s)")
+                self._warmup_task = asyncio.create_task(self._background_warmup())
+            else:
+                logger.debug("Event loop not running, skipping background warmup")
+        except RuntimeError:
+            # No event loop - skip warmup
+            logger.debug("No event loop available, skipping background warmup")
+
+    async def _background_warmup(self) -> None:
+        """Background warmup implementation - waits then initializes."""
+        try:
+            # Wait for configured delay
+            await asyncio.sleep(self.warmup_delay_seconds)
+
+            # Initialize if not already initialized
+            if not self._cache_initialized:
+                logger.info("🔥 Background warmup starting ChromaDB initialization")
+                await self.ensure_cache_initialized()
+                logger.info("✅ Background warmup complete - ChromaDB ready")
+            else:
+                logger.debug("Background warmup skipped - already initialized")
+        except Exception as e:
+            logger.warning(f"Background warmup failed: {e}")
 
     async def _smart_cache_management(self, remote_path: str) -> Path:
         """Smart cache management that prevents overwriting newer local changes.
@@ -597,10 +639,8 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         try:
             # Temporarily override time check for forced sync
             if force:
-                # Backup original method and replace with forced version
-                original_method = self._sync_local_changes_to_remote
 
-                async def forced_sync():
+                async def forced_sync() -> bool:
                     cache_path = Path(self.persist_directory)
                     remote_path = self._original_remote_path
 
@@ -660,7 +700,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             logger.error(f"❌ Finalization failed: {e}")
             return False
 
-    async def process(self, record: Record, *, processor_stage: str = "embed", **kwargs) -> AsyncGenerator[Record, None]:
+    async def process(self, record: Record, *, processor_stage: str = "embed", **kwargs: Any) -> AsyncGenerator[Record, None]:
         """Process method for pipeline integration.
 
         Takes a chunked record and creates embeddings for it.
@@ -753,7 +793,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         """Create a new collection with proper configuration."""
         try:
             # Create collection with metadata and embedding function
-            new_collection = self._client.create_collection(
+            self._client.create_collection(
                 name=self.collection_name,
                 embedding_function=self._embedding_function,
                 metadata={
@@ -778,20 +818,91 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 fallback_collection._embedding_function = self._embedding_function
             logger.info(f"✅ Collection '{self.collection_name}' ready via fallback")
 
-    @property
-    def collection(self) -> Collection:
-        """Provides access to the ChromaDB collection.
+    def _initialize_client_sync(self) -> None:
+        """Synchronous client initialization for local storage.
 
-        Note: Call ensure_cache_initialized() first for proper setup.
+        This is called by the collection property for lazy initialization.
+        Should only be used for local persist_directory paths.
         """
         if not hasattr(self, "_client") or not self._client:
-            # Provide helpful error message about initialization
+            self._client = chromadb.PersistentClient(path=self.persist_directory, settings=chromadb.Settings(anonymized_telemetry=False))
+            logger.debug(f"📁 ChromaDB client initialized: {self.persist_directory}")
+
+    def _ensure_collection_ready_sync(self) -> None:
+        """Synchronous collection initialization for local storage.
+
+        This is a sync wrapper around the async _ensure_collection_ready logic.
+        Should only be used for local persist_directory paths.
+        """
+        if not self._client:
+            raise RuntimeError("ChromaDB client must be initialized before ensuring collection")
+
+        # Check if collection already exists
+        existing_collections = self._client.list_collections()
+        collection_names = [col.name for col in existing_collections]
+
+        if self.collection_name in collection_names:
+            logger.debug(f"📖 Found existing collection '{self.collection_name}'")
+            # Get existing collection and ensure embedding function is set
+            existing_collection = self._client.get_collection(
+                name=self.collection_name,
+            )
+            if hasattr(self, "_embedding_function") and self._embedding_function is not None:
+                existing_collection._embedding_function = self._embedding_function
+            logger.debug(f"✅ Collection '{self.collection_name}' ready")
+        else:
+            logger.debug(f"🆕 Creating new collection '{self.collection_name}'")
+            # Create collection with metadata and embedding function
+            try:
+                self._client.create_collection(
+                    name=self.collection_name,
+                    embedding_function=self._embedding_function if not self.read_only else None,
+                    metadata={
+                        "embedding_model": self.embedding_model,
+                        "dimensionality": self.dimensionality,
+                        "created_by": "buttermilk",
+                        "task_type": self.task,
+                    },
+                )
+                logger.debug(f"✅ Created collection '{self.collection_name}'")
+            except Exception as e:
+                # Fallback to get_or_create
+                logger.debug(f"Direct creation failed, using get_or_create fallback: {e}")
+                fallback_collection = self._client.get_or_create_collection(
+                    name=self.collection_name,
+                )
+                if hasattr(self, "_embedding_function") and self._embedding_function is not None:
+                    fallback_collection._embedding_function = self._embedding_function
+
+    @property
+    def collection(self) -> Collection:
+        """Provides access to the ChromaDB collection with lazy initialization.
+
+        For local storage: Automatically initializes on first access.
+        For remote storage (gs://, s3://, etc.): Raises error requiring async initialization
+        via ensure_cache_initialized() because remote downloads can't happen in a property.
+
+        Recommended: Use await get_storage_async() from BM for auto-initialization of
+        remote storage, or call await ensure_cache_initialized() before accessing collection.
+        """
+        # Auto-initialize if not yet initialized and local storage
+        if not self._cache_initialized:
+            # Check if this is remote storage requiring async init
             if self.persist_directory.startswith(("gs://", "s3://", "azure://", "gcs://")):
                 raise ValueError(
                     f"Remote persist_directory '{self.persist_directory}' detected. "
                     "Please call ensure_cache_initialized() asynchronously before "
-                    "accessing the collection.",
+                    "accessing the collection. Recommended: Use await bm.get_storage_async(config) "
+                    "for auto-initialization."
                 )
+
+            # Local storage - can initialize synchronously
+            logger.info("Auto-initializing ChromaDB collection on first access (local storage)")
+            self._initialize_client_sync()
+            self._ensure_collection_ready_sync()
+            self._cache_initialized = True
+
+        if not hasattr(self, "_client") or not self._client:
             raise ValueError(
                 "ChromaDB client not initialized. Please call ensure_cache_initialized() before accessing the collection.",
             )
@@ -818,7 +929,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
         return collection
 
-    async def process_record(
+    async def process_record(  # noqa: PLR0912
         self,
         record: Record,
         *,
@@ -950,7 +1061,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
             processing_time_ms = (time.time() - start_time) * 1000
 
-            chunk_types = {}
+            chunk_types: dict[str, int] = {}
             for chunk in record.chunks:
                 chunk_metadata = _get_chunk_field(chunk, "metadata", {})
                 chunk_type = chunk_metadata.get("chunk_type", "content")
@@ -1148,7 +1259,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             dict: Validation results with safety assessment
 
         """
-        validation_results = {
+        validation_results: dict[str, Any] = {
             "safe_to_add": True,
             "warnings": [],
             "conflicts": [],
@@ -1560,7 +1671,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
     ) -> dict[str, Any]:
         """Synchronous helper to query collection safely."""
 
-        def _normalize_where(w: dict[str, Any]) -> dict[str, Any]:
+        def _normalize_where(w: dict[str, Any]) -> dict[str, Any]:  # noqa: PLR0911, PLR0912
             if not w:
                 return w
             # If already operator-based at top level, ensure it is valid
@@ -1620,7 +1731,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             logger.warning(f"Collection query failed (where={normalized_where}): {e}")
             return {"ids": [], "metadatas": []}
 
-    async def _should_skip_record(
+    async def _should_skip_record(  # noqa: PLR0911
         self,
         record: Record,
         force_reprocess: bool = False,
@@ -1699,7 +1810,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         # Fallback (should not occur)
         return False, "no matching deduplication strategy"
 
-    def _write_record_to_parquet(self, record: Record, file_path: Path):
+    def _write_record_to_parquet(self, record: Record, file_path: Path) -> None:
         """Synchronous helper to write Record chunks to a Parquet file."""
         if not record.chunks:
             logger.warning(
@@ -1708,7 +1819,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             return
 
         # Handle both dict and object chunks
-        def get_field(chunk, field_name):
+        def get_field(chunk: Any, field_name: str) -> Any:
             return chunk.get(field_name) if isinstance(chunk, dict) else getattr(chunk, field_name)
 
         data = {
