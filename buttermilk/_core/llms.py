@@ -444,20 +444,18 @@ class AutoGenWrapper(BaseModel):
 
             # Handle schema parsing if requested
             if schema and is_valid_schema_type:
-                try:
-                    # Parse the content (which is now always a string) with the schema
-                    schema_parsed_object = await self._parse_structured_output(create_result.content, schema)
-                    return ModelOutput(
-                        content=create_result.content,
-                        finish_reason=create_result.finish_reason,
-                        usage=create_result.usage,
-                        thought=getattr(create_result, "thought", None),
-                        parsed_object=schema_parsed_object,
-                        cached=create_result.cached,
-                        metadata={"pricing": pricing_metadata},
-                    )
-                except ProcessingError as e:
-                    raise ProcessingError(f"Failed to parse structured output into {schema.__name__}.", error=e, args=e.args) from e
+                # This will fail fast if the content cannot be parsed into the schema
+                # Parse the content (which is now always a string) with the schema
+                schema_parsed_object = await self._parse_structured_output(create_result.content, schema)
+                return ModelOutput(
+                    content=create_result.content,
+                    finish_reason=create_result.finish_reason,
+                    usage=create_result.usage,
+                    thought=getattr(create_result, "thought", None),
+                    parsed_object=schema_parsed_object,
+                    cached=create_result.cached,
+                    metadata={"pricing": pricing_metadata},
+                )
 
             result = ModelOutput(
                 content=create_result.content,
