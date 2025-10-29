@@ -204,7 +204,7 @@ class PerformanceMonitor:
 
         print("\n" + "=" * 70)
 
-    def has_regressions(self, comparison: dict[str, Any]) -> bool:  # type: ignore[return]
+    def has_regressions(self, comparison: dict[str, Any]) -> bool:
         """Check if comparison shows any regressions."""
         return len(comparison.get("regressions", [])) > 0
 
