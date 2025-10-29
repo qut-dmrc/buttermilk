@@ -56,6 +56,7 @@ async def test_pipeline_tmdb_simple():
     """Test that TMDBTool yields observations and uploader passes them through."""
     # Skip if themoviedb is not available
     from buttermilk.tools.catalog_test import THEMOVIEDB_AVAILABLE
+
     if not THEMOVIEDB_AVAILABLE:
         pytest.skip("themoviedb library not available")
 
@@ -84,6 +85,7 @@ async def test_pipeline_tmdb_simple():
 
     # Create mock uploader
     from buttermilk.storage.base import Storage
+
     mock_storage = MagicMock(spec=Storage)
     mock_storage.save = MagicMock()
     uploader = AsyncDataUploader(storage=mock_storage, buffer_size=1)
@@ -193,15 +195,8 @@ class SplittingProcessor:
         for i in range(self.split_count):
             # Create split record with same record_id but additional fields
             metadata = record.metadata.copy() if record.metadata else {}
-            metadata["split_info"] = {
-                "split_index": i,
-                "split_id": f"{record.record_id}_split_{i}",
-                "total_splits": self.split_count
-            }
-            updated_record = record.model_copy(update={
-                "content": f"Split {i} of {record.content}",
-                "metadata": metadata
-            })
+            metadata["split_info"] = {"split_index": i, "split_id": f"{record.record_id}_split_{i}", "total_splits": self.split_count}
+            updated_record = record.model_copy(update={"content": f"Split {i} of {record.content}", "metadata": metadata})
             yield updated_record
 
 
@@ -212,6 +207,7 @@ async def test_metadata_accumulation_and_record_id_preservation():
     # Create test data source using Title like the working test
     async def source():
         from buttermilk.tools.catalog_test import Title
+
         title = Title(record_id="test123", title="Test Movie", year=2024)
         yield title
 
@@ -267,11 +263,8 @@ async def test_one_to_n_transformation_with_output_indexing():
     # Create test data source
     async def source():
         from buttermilk._core.types import Record
-        record = Record(
-            record_id="split_test",
-            content="Content to split",
-            metadata={"source": "test"}
-        )
+
+        record = Record(record_id="split_test", content="Content to split", metadata={"source": "test"})
         yield record
 
     # Create splitting processor and pass-through processor
@@ -337,6 +330,7 @@ async def test_record_filtering_no_metadata_update():
     # Create test data source
     async def source():
         from buttermilk._core.types import Record
+
         records = [
             Record(record_id="keep1", content="keep this record"),
             Record(record_id="skip1", content="skip this record"),
@@ -384,10 +378,8 @@ async def test_pipeline_tracks_processing_summary():
     # Create test data source
     async def source():
         from buttermilk._core.types import Record
-        records = [
-            Record(record_id=f"test_{i}", content=f"Content {i}")
-            for i in range(3)
-        ]
+
+        records = [Record(record_id=f"test_{i}", content=f"Content {i}") for i in range(3)]
         for record in records:
             yield record
 
@@ -418,6 +410,7 @@ async def test_pipeline_tracks_processing_summary():
 
     # Verify summary tracked the processing
     from buttermilk._core.types import ProcessingSummary
+
     assert isinstance(orchestrator._summary, ProcessingSummary)
     assert orchestrator._summary.attempted >= 3
     assert orchestrator._summary.processed >= 0
@@ -429,6 +422,7 @@ async def test_pipeline_summary_counts_attempted():
 
     async def source():
         from buttermilk._core.types import Record
+
         for i in range(5):
             yield Record(record_id=f"test_{i}", content=f"Content {i}")
 
@@ -457,6 +451,7 @@ async def test_pipeline_summary_counts_processed():
 
     async def source():
         from buttermilk._core.types import Record
+
         for i in range(3):
             yield Record(record_id=f"test_{i}", content=f"Content {i}")
 
@@ -484,6 +479,7 @@ async def test_pipeline_summary_with_limit():
 
     async def source():
         from buttermilk._core.types import Record
+
         # Provide many records
         for i in range(100):
             yield Record(record_id=f"test_{i}", content=f"Content {i}")
@@ -515,6 +511,7 @@ async def test_pipeline_summary_success_rate():
 
     async def source():
         from buttermilk._core.types import Record
+
         for i in range(5):
             yield Record(record_id=f"test_{i}", content=f"Content {i}")
 
@@ -530,7 +527,7 @@ async def test_pipeline_summary_success_rate():
         enable_record_cache=False,
     )
 
-    results = [record async for record in orchestrator()]
+    _results = [record async for record in orchestrator()]
 
     # All should succeed
     success_rate = orchestrator._summary.success_rate()
@@ -545,6 +542,7 @@ async def test_pipeline_summary_duration_tracking():
 
     async def source():
         from buttermilk._core.types import Record
+
         yield Record(record_id="test_1", content="Content 1")
 
     class SlowProcessor:
@@ -560,7 +558,7 @@ async def test_pipeline_summary_duration_tracking():
         enable_record_cache=False,
     )
 
-    results = [record async for record in orchestrator()]
+    _results = [record async for record in orchestrator()]
 
     # Duration should be at least 100ms
     assert orchestrator._summary.duration_ms() >= 100
@@ -572,6 +570,7 @@ async def test_pipeline_summary_with_concurrency():
 
     async def source():
         from buttermilk._core.types import Record
+
         for i in range(10):
             yield Record(record_id=f"test_{i}", content=f"Content {i}")
 
@@ -601,6 +600,7 @@ async def test_pipeline_summary_as_dict_export():
 
     async def source():
         from buttermilk._core.types import Record
+
         for i in range(3):
             yield Record(record_id=f"test_{i}", content=f"Content {i}")
 
@@ -616,7 +616,7 @@ async def test_pipeline_summary_as_dict_export():
         enable_record_cache=False,
     )
 
-    results = [record async for record in orchestrator()]
+    _results = [record async for record in orchestrator()]
 
     # Export summary as dict
     summary_dict = orchestrator._summary.as_dict()

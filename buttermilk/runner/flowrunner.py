@@ -903,7 +903,6 @@ class FlowRunner(BaseModel):
     session_manager: SessionManager = Field(default_factory=lambda: SessionManager())
     _session_manager_started: bool = False
 
-
     async def _ensure_session_manager_started(self) -> None:
         """Ensure the session manager is started."""
         if not self._session_manager_started:
