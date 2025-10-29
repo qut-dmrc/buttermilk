@@ -445,7 +445,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         ensure_cache_initialized() to pre-warm the ChromaDB collection.
         """
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             if loop.is_running():
                 logger.info(f"🔥 Starting background warmup task (will initialize after {self.warmup_delay_seconds}s)")
                 self._warmup_task = asyncio.create_task(self._background_warmup())

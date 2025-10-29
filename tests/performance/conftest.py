@@ -27,4 +27,4 @@ def pytest_benchmark_update_machine_info(config, machine_info):
 # Configure pytest-benchmark defaults via pytest ini options
 def pytest_benchmark_scale_unit(config, unit, benchmarks, best, worst, sort):  # noqa: PLR0913
     """Custom scale unit for benchmark results."""
-    return "ms", 1000  # Display in milliseconds
+    return "ms", 1000, "{value:.2f}"  # Display in milliseconds with 2 decimal places
