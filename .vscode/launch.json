@@ -4,7 +4,7 @@
   // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
   "version": "0.2.0",
   "configurations": [
-  
+
     {
       "name": "Buttermilk API daemon",
       "type": "debugpy",
@@ -24,7 +24,7 @@
         "+flows@run.flows.trans=trans",
         "run=api",
         "verbose=true",
-        "+llms@run.llms=${input:llms}",
+        "+llms@run.llms=${input:llms}"
       ],
       "envFile": "${userHome}/.env",
       "console": "integratedTerminal"
@@ -140,14 +140,20 @@
       "request": "launch",
       "module": "buttermilk.runner.cli",
       "cwd": "${workspaceFolder}",
+      "python": "uv",
       "pythonArgs": [
+        "run",
+        "python",
         "-Xfrozen_modules=off",
         "-Xdev"
       ],
       "justMyCode": false,
       "args": [
-        "run=rescore",
+        "--config-path",
+        "/home/nic/src/automod/conf",
         "verbose=true",
+        "+run=rescore",
+        "run.limit=2"
       ],
       "envFile": "${userHome}/.env",
       "console": "integratedTerminal"
@@ -169,7 +175,7 @@
         "+flows=[trans]",
         "+flow=trans",
         "+dataset_key=tja",
-        "verbose=true",
+        "verbose=true"
       ],
       "envFile": "${userHome}/.env",
       "console": "integratedTerminal"
@@ -224,7 +230,7 @@
       "runtimeArgs": [
         "--remote-debugging-port=9222",
         "--remote-debugging-address=0.0.0.0"
-      ],
+      ]
     },
     {
       "type": "msedge",
@@ -245,7 +251,7 @@
       "configurations": [
         "Buttermilk API daemon",
         "Chat web ui",
-        "attach edge devtools",
+        "attach edge devtools"
       ]
     }
   ],
@@ -280,7 +286,7 @@
       "description": "human in the loop?",
       "options": [
         "true",
-        "false",
+        "false"
       ]
     }
   ]

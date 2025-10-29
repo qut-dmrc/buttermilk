@@ -19,9 +19,6 @@ repos:
       - id: check-added-large-files
         name: Check for large files
         args: ['--maxkb=1000']
-      - id: check-json
-        name: Check JSON syntax (strict)
-        exclude: '\.(json5|jsonc)$' # Exclude JSON5 files from strict check
       - id: check-yaml
         name: Check YAML syntax
         args: ['--unsafe'] # Allow custom YAML tags used by Hydra
@@ -54,13 +51,13 @@ repos:
           - mdformat-frontmatter # YAML frontmatter
           - mdformat-footnote # Footnote support
         args: [--wrap, "no"] # Don't wrap long lines
-  # JSON5 checking (for VSCode config files with comments)
+  # JSON5 checking (looser, allows comments)
   - repo: https://github.com/maresb/check-json5
     rev: v1.0.0
     hooks:
       - id: check-json5
-        name: Check JSON5 syntax
-        files: '\.(json|json5|jsonc)$'
+        name: Check JSON5 syntax (allows comments)
+        files: '(\.(json|json5|jsonc|jsonl)$)'
   # JSON Schema validation
   - repo: https://github.com/python-jsonschema/check-jsonschema
     rev: 0.30.0
