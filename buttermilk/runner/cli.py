@@ -40,7 +40,7 @@ from buttermilk.runner.flowrunner import FlowRunner
 
 
 @hydra.main(version_base="1.3", config_path="../conf", config_name="config")
-def main(conf: DictConfig) -> None:
+def main(conf: DictConfig) -> None:  # noqa: PLR0912
     """Main application entry point with async initialization.
 
     This function initializes the Buttermilk environment using async initialization
@@ -91,7 +91,7 @@ def main(conf: DictConfig) -> None:
             # Run the flow synchronously
             logger.info(f"Running flow '{run_request.flow}' in console mode...")
 
-            async def run_with_shutdown():
+            async def run_with_shutdown() -> None:
                 await flow_runner.run_flow(run_request=run_request, wait_for_completion=True)
                 await bm.graceful_shutdown()
 
@@ -101,7 +101,7 @@ def main(conf: DictConfig) -> None:
         case "batch":
             logger.info("Creating batch jobs...")
 
-            async def run_with_shutdown():
+            async def run_with_shutdown() -> None:
                 # Get storage config from run section
                 storage_config = conf.run.storage_config or None
 
@@ -121,8 +121,9 @@ def main(conf: DictConfig) -> None:
 
             logger.info(f"Running in batch mode with limit={limit}...")
 
-            async def run_with_shutdown():
-                await flow_runner.run_batch_job(max_jobs=limit, callback_to_ui=ui.make_callback(), wait_for_completion=True)
+            async def run_with_shutdown() -> None:
+                summary = await flow_runner.run_batch_job(max_jobs=limit, callback_to_ui=ui.make_callback(), wait_for_completion=True)
+                logger.info(summary.format_for_console())
                 await bm.graceful_shutdown()
 
             asyncio.run(run_with_shutdown())
@@ -132,7 +133,7 @@ def main(conf: DictConfig) -> None:
             # Use limit to control how many jobs to enqueue or process
             logger.info("Batch all mode: enqueue and process")
 
-            async def run_with_shutdown():
+            async def run_with_shutdown() -> None:
                 # Enqueue phase
                 logger.info("Enqueueing batch jobs...")
                 storage_config = conf.run.storage_config or None
@@ -143,7 +144,8 @@ def main(conf: DictConfig) -> None:
                 limit = conf.run.limit or 999  # Process all by default
                 ui = CLIUserAgent()
                 logger.info(f"Processing batch jobs (limit: {limit})...")
-                await flow_runner.run_batch_job(max_jobs=limit, callback_to_ui=ui.make_callback(), wait_for_completion=True)
+                summary = await flow_runner.run_batch_job(max_jobs=limit, callback_to_ui=ui.make_callback(), wait_for_completion=True)
+                logger.info(summary.format_for_console())
                 logger.info("Batch processing completed successfully")
 
                 await bm.graceful_shutdown()
@@ -202,22 +204,11 @@ def main(conf: DictConfig) -> None:
 
         case "pub/sub":
             # Starts a Google Cloud Pub/Sub listener.
-            # This mode might involve running a worker that processes messages from a Pub/Sub topic.
-            # The original code delegated to `batch_cli.main`. If `batch_cli.main` is designed
-            # to handle Pub/Sub listening when `conf.ui` (or similar) indicates pub/sub mode,
-            # then this delegation is appropriate.
-            # Ensure `batch_cli.main` is compatible with being called this way.
-            logger.info("Pub/Sub mode: Initializing Pub/Sub listener or batch CLI...")
-            try:
-                from buttermilk.runner.batch_cli import main as batch_cli_main  # Assuming this handles pub/sub logic
-
-                # Pass the already loaded and resolved Hydra config.
-                # batch_cli_main might need adaptation if it expects to run @hydra.main itself.
-                batch_cli_main(conf)  # This call might be synchronous or start an async loop.
-            except ImportError:
-                logger.error("Failed to import `buttermilk.runner.batch_cli`. Pub/Sub mode cannot start.")
-            except Exception as e_pubsub:
-                logger.error(f"Error in Pub/Sub mode execution: {e_pubsub!s}", exc_info=True)
+            # TODO: Implement Pub/Sub listener functionality
+            # This mode was previously delegated to batch_cli, which has been removed.
+            # Pub/Sub integration should be implemented using the JobQueueClient with Pub/Sub backend.
+            logger.error("Pub/Sub mode is not yet implemented. Use 'batch_run' mode with a Pub/Sub job queue backend instead.")
+            raise NotImplementedError("Pub/Sub mode requires implementation. See GitHub issues for status.")
 
         case "slackbot":
             # Starts a Slack bot integration.
@@ -258,7 +249,7 @@ def main(conf: DictConfig) -> None:
             # Start the Slack Bolt handler in a background task
             _ = event_loop.create_task(slack_bolt_handler.start_async())
 
-            async def runloop():
+            async def runloop() -> None:
                 """Registers handlers and keeps the main loop running for the Slack bot."""
                 # Register the specific Buttermilk command/event handlers with the Bolt app.
                 # This connects Slack events (like slash commands) to Buttermilk flow execution.
@@ -312,7 +303,7 @@ def main(conf: DictConfig) -> None:
 
             orchestrator = PipelineOrchestrator(**pipeline_conf)
 
-            async def run_pipeline():
+            async def run_pipeline() -> None:
                 # Ensure tracing is initialized before running pipeline
                 # This is required because @weave.op decorators are evaluated at import time
                 # but weave.init() hasn't been called yet
