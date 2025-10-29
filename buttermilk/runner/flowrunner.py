@@ -9,7 +9,7 @@ from enum import Enum
 from typing import Any
 
 import shortuuid
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
+from pydantic import BaseModel, ConfigDict, Field
 from starlette.websockets import WebSocketDisconnect
 
 from buttermilk import ExecutionTrace, logger
@@ -22,7 +22,7 @@ from buttermilk._core.contract import (
 )
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.orchestrator import Orchestrator, OrchestratorProtocol
-from buttermilk._core.types import Record, RunRequest
+from buttermilk._core.types import ProcessingSummary, Record, RunRequest
 from buttermilk.api.job_queue import JobQueueClient
 from buttermilk.api.services.message_service import MessageService
 from buttermilk.api.services.session_storage import SessionStorageService
@@ -903,7 +903,6 @@ class FlowRunner(BaseModel):
     session_manager: SessionManager = Field(default_factory=lambda: SessionManager())
     _session_manager_started: bool = False
 
-
     async def _ensure_session_manager_started(self) -> None:
         """Ensure the session manager is started."""
         if not self._session_manager_started:
@@ -1500,17 +1499,29 @@ class FlowRunner(BaseModel):
 
         return job_definitions
 
-    async def run_batch_job(self, callback_to_ui: Callable, max_jobs: int = 1, wait_for_completion: bool = True) -> None:
+    async def run_batch_job(
+        self, callback_to_ui: Callable, max_jobs: int = 1, wait_for_completion: bool = True, show_progress: bool = True
+    ) -> ProcessingSummary:
         """Pull and run jobs from the queue, ensuring fresh state for each job.
 
         Args:
             max_jobs: Maximum number of jobs to process in this batch run
+            callback_to_ui: Callback function for UI updates
+            wait_for_completion: Whether to wait for each job to complete
+            show_progress: Whether to display a progress bar (default: True)
+
+        Returns:
+            ProcessingSummary: Statistics about the batch processing
 
         Raises:
             FatalError: If no run requests are found in the queue
             Exception: If there's an error running a job
 
         """
+        from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn, TimeElapsedColumn
+
+        summary = ProcessingSummary()
+
         try:
             worker = JobQueueClient(
                 max_concurrent_jobs=1,  # Process one job at a time to maintain isolation
@@ -1518,39 +1529,67 @@ class FlowRunner(BaseModel):
 
             jobs_processed = 0
 
-            while jobs_processed < max_jobs:
-                # Pull a job from the queue
-                run_request, ack_id = await worker.pull_single_task()
-                if not run_request:
-                    if jobs_processed == 0:
-                        # Only raise an error if we didn't process any jobs
-                        raise FatalError("No run request found in the queue.")
-                    break  # No more jobs to process
+            # Set up progress bar
+            progress = Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                MofNCompleteColumn(),
+                TaskProgressColumn(),
+                TextColumn("•"),
+                TimeElapsedColumn(),
+                disable=not show_progress,
+            )
 
-                run_request.callback_to_ui = callback_to_ui
+            with progress:
+                task_id = progress.add_task("Processing batch jobs", total=max_jobs)
 
-                logger.info(
-                    "Processing batch job", job_number=jobs_processed + 1, max_jobs=max_jobs, flow=run_request.flow, job_id=run_request.job_id
-                )
-                try:
-                    await self.run_flow(run_request=run_request, wait_for_completion=wait_for_completion)
-                    if wait_for_completion:
-                        logger.info("Successfully completed job", job_id=run_request.job_id)
-                        worker.ack_message(ack_id)  # Acknowledge only after successful processing
-                    else:
-                        logger.info("Job started in the background", job_id=run_request.job_id)
-                        # Defer ack until the background task completes successfully
-                        try:
-                            self.schedule_ack_on_completion(session_id=run_request.session_id, ack_id=ack_id, worker=worker)
-                        except Exception as e:
-                            logger.warning("Failed to schedule ack on completion", job_id=run_request.job_id, error=str(e))
-                except Exception as job_error:
-                    logger.error("Error running job", job_id=run_request.job_id, error=str(job_error))
-                    # Continue processing other jobs even if one fails
+                while jobs_processed < max_jobs:
+                    # Pull a job from the queue
+                    run_request, ack_id = await worker.pull_single_task()
+                    if not run_request:
+                        if summary.attempted == 0:
+                            # Only raise an error if we didn't process any jobs
+                            raise FatalError("No run request found in the queue.")
+                        # Update progress to show we're done
+                        progress.update(task_id, total=summary.attempted)
+                        break  # No more jobs to process
 
-                jobs_processed += 1
+                    summary.increment_attempted()
+                    run_request.callback_to_ui = callback_to_ui
 
-            logger.info("Batch processing complete", jobs_processed=jobs_processed)
+                    # Update progress description with current job
+                    progress.update(
+                        task_id,
+                        description=f"Processing {run_request.flow} [{run_request.job_id[:8]}...]",
+                    )
+
+                    logger.info(
+                        "Processing batch job", job_number=jobs_processed + 1, max_jobs=max_jobs, flow=run_request.flow, job_id=run_request.job_id
+                    )
+                    try:
+                        await self.run_flow(run_request=run_request, wait_for_completion=wait_for_completion)
+                        summary.increment_processed()
+                        if wait_for_completion:
+                            logger.info("Successfully completed job", job_id=run_request.job_id)
+                            worker.ack_message(ack_id)  # Acknowledge only after successful processing
+                        else:
+                            logger.info("Job started in the background", job_id=run_request.job_id)
+                            # Defer ack until the background task completes successfully
+                            try:
+                                self.schedule_ack_on_completion(session_id=run_request.session_id, ack_id=ack_id, worker=worker)
+                            except Exception as e:
+                                logger.warning("Failed to schedule ack on completion", job_id=run_request.job_id, error=str(e))
+                    except Exception as job_error:
+                        summary.increment_failed()
+                        logger.error("Error running job", job_id=run_request.job_id, error=str(job_error))
+                        # Continue processing other jobs even if one fails
+
+                    jobs_processed += 1
+                    progress.update(task_id, advance=1)
+
+            logger.info(summary.format_for_console())
+            return summary
 
         except FatalError:
             # Re-raise FatalError to be handled by the caller

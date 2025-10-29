@@ -10,7 +10,6 @@ Simple top-level commands for all Buttermilk modes:
 This wraps the existing infrastructure with a simpler, more intuitive interface.
 """
 import asyncio
-from pathlib import Path
 from typing import Optional
 
 import typer
@@ -224,11 +223,32 @@ async def run_batch_async(
             jobs_to_process = limit or 999  # Process all if not specified
 
             logger.info(f"Processing batch jobs (limit: {jobs_to_process})...")
-            await flow_runner.run_batch_job(
+            summary = await flow_runner.run_batch_job(
                 callback_to_ui=ui.callback_to_ui,
                 max_jobs=jobs_to_process,
                 wait_for_completion=True
             )
+
+            # Display summary with rich formatting
+            from rich.console import Console
+            from rich.panel import Panel
+            from rich.table import Table
+
+            console = Console()
+
+            # Create summary table
+            table = Table(title="Batch Processing Summary", show_header=True, header_style="bold magenta")
+            table.add_column("Metric", style="cyan", width=20)
+            table.add_column("Value", justify="right", style="green")
+
+            table.add_row("Attempted", str(summary.attempted))
+            table.add_row("Processed", str(summary.processed))
+            table.add_row("Skipped", str(summary.skipped))
+            table.add_row("Failed", str(summary.failed))
+            table.add_row("Success Rate", f"{summary.success_rate() * 100:.1f}%")
+            table.add_row("Duration", f"{summary.duration_ms() / 1000:.2f}s")
+
+            console.print(Panel(table, border_style="green" if summary.failed == 0 else "yellow"))
             logger.info("Batch processing completed successfully")
 
     finally:

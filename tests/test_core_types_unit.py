@@ -1,6 +1,8 @@
 """Unit tests for core types in buttermilk._core.types module."""
 
-from buttermilk._core.types import Record
+import time
+
+from buttermilk._core.types import ProcessingSummary, Record
 
 
 def test_record_creation():
@@ -243,3 +245,225 @@ def test_hash_fields_excluded_from_dump():
     # But metadata should contain the hash values
     assert "record_hash" in dumped["metadata"]
     assert "ground_truth_hash" in dumped["metadata"]
+
+
+# ProcessingSummary tests
+
+def test_processing_summary_creation():
+    """Test ProcessingSummary can be created with default values."""
+    summary = ProcessingSummary()
+
+    assert summary.attempted == 0
+    assert summary.processed == 0
+    assert summary.skipped == 0
+    assert summary.failed == 0
+    assert summary.start_time > 0  # Should auto-initialize
+
+
+def test_processing_summary_increment_attempted():
+    """Test increment_attempted method."""
+    summary = ProcessingSummary()
+
+    summary.increment_attempted()
+    assert summary.attempted == 1
+
+    summary.increment_attempted()
+    assert summary.attempted == 2
+
+
+def test_processing_summary_increment_processed():
+    """Test increment_processed method."""
+    summary = ProcessingSummary()
+
+    summary.increment_processed()
+    assert summary.processed == 1
+
+    summary.increment_processed()
+    assert summary.processed == 2
+
+
+def test_processing_summary_increment_skipped():
+    """Test increment_skipped method."""
+    summary = ProcessingSummary()
+
+    summary.increment_skipped()
+    assert summary.skipped == 1
+
+    summary.increment_skipped()
+    assert summary.skipped == 2
+
+
+def test_processing_summary_increment_failed():
+    """Test increment_failed method."""
+    summary = ProcessingSummary()
+
+    summary.increment_failed()
+    assert summary.failed == 1
+
+    summary.increment_failed()
+    assert summary.failed == 2
+
+
+def test_processing_summary_duration_ms():
+    """Test duration_ms calculation."""
+    summary = ProcessingSummary()
+
+    # Should be very small initially
+    duration1 = summary.duration_ms()
+    assert duration1 >= 0
+    assert duration1 < 100  # Less than 100ms
+
+    # Wait a bit and check duration increased
+    time.sleep(0.1)
+    duration2 = summary.duration_ms()
+    assert duration2 > duration1
+    assert duration2 >= 100  # At least 100ms
+
+
+def test_processing_summary_success_rate_zero_attempted():
+    """Test success_rate when nothing attempted."""
+    summary = ProcessingSummary()
+
+    assert summary.success_rate() == 0.0
+
+
+def test_processing_summary_success_rate_all_successful():
+    """Test success_rate when all processed successfully."""
+    summary = ProcessingSummary()
+
+    summary.increment_attempted()
+    summary.increment_processed()
+    summary.increment_attempted()
+    summary.increment_processed()
+
+    assert summary.success_rate() == 1.0
+
+
+def test_processing_summary_success_rate_partial_success():
+    """Test success_rate with partial success."""
+    summary = ProcessingSummary()
+
+    # 3 attempted, 2 processed
+    summary.increment_attempted()
+    summary.increment_processed()
+    summary.increment_attempted()
+    summary.increment_processed()
+    summary.increment_attempted()
+    summary.increment_failed()
+
+    assert summary.attempted == 3
+    assert summary.processed == 2
+    assert summary.failed == 1
+    assert abs(summary.success_rate() - 0.6667) < 0.001
+
+
+def test_processing_summary_success_rate_all_failed():
+    """Test success_rate when all failed."""
+    summary = ProcessingSummary()
+
+    summary.increment_attempted()
+    summary.increment_failed()
+    summary.increment_attempted()
+    summary.increment_failed()
+
+    assert summary.success_rate() == 0.0
+
+
+def test_processing_summary_format_for_console():
+    """Test format_for_console output."""
+    summary = ProcessingSummary()
+
+    summary.increment_attempted()
+    summary.increment_processed()
+    summary.increment_attempted()
+    summary.increment_skipped()
+    summary.increment_attempted()
+    summary.increment_failed()
+
+    formatted = summary.format_for_console()
+
+    # Verify it's a string with expected content
+    assert isinstance(formatted, str)
+    assert "attempted=3" in formatted
+    assert "processed=1" in formatted
+    assert "skipped=1" in formatted
+    assert "failed=1" in formatted
+    assert "success=" in formatted
+    assert "duration=" in formatted
+    assert "%" in formatted  # success percentage
+    assert "s)" in formatted  # seconds
+
+
+def test_processing_summary_as_dict():
+    """Test as_dict export."""
+    summary = ProcessingSummary()
+
+    summary.increment_attempted()
+    summary.increment_processed()
+    summary.increment_skipped()
+
+    result = summary.as_dict()
+
+    # Verify all expected fields
+    assert result["attempted"] == 1
+    assert result["processed"] == 1
+    assert result["skipped"] == 1
+    assert result["failed"] == 0
+    assert "start_time" in result
+    assert "duration_ms" in result
+    assert "success_rate" in result
+
+    # Verify computed fields are correct
+    assert result["duration_ms"] >= 0
+    assert result["success_rate"] == 1.0
+
+
+def test_processing_summary_as_dict_structure():
+    """Test as_dict returns correct structure and types."""
+    summary = ProcessingSummary()
+
+    result = summary.as_dict()
+
+    # Check types
+    assert isinstance(result["attempted"], int)
+    assert isinstance(result["processed"], int)
+    assert isinstance(result["skipped"], int)
+    assert isinstance(result["failed"], int)
+    assert isinstance(result["start_time"], float)
+    assert isinstance(result["duration_ms"], int)
+    assert isinstance(result["success_rate"], float)
+
+
+def test_processing_summary_typical_workflow():
+    """Test ProcessingSummary in a typical workflow scenario."""
+    summary = ProcessingSummary()
+
+    # Simulate processing 5 items: 3 success, 1 skip, 1 fail
+    items = ["item1", "item2", "item3", "item4", "item5"]
+
+    for i, item in enumerate(items):
+        summary.increment_attempted()
+
+        if i == 1:
+            # Skip item 2
+            summary.increment_skipped()
+        elif i == 4:
+            # Fail item 5
+            summary.increment_failed()
+        else:
+            # Process successfully
+            summary.increment_processed()
+
+    # Verify final counts
+    assert summary.attempted == 5
+    assert summary.processed == 3
+    assert summary.skipped == 1
+    assert summary.failed == 1
+
+    # Verify success rate (3/5 = 60%)
+    assert abs(summary.success_rate() - 0.6) < 0.001
+
+    # Verify format_for_console works
+    formatted = summary.format_for_console()
+    assert "attempted=5" in formatted
+    assert "processed=3" in formatted

@@ -56,6 +56,7 @@ async def test_pipeline_tmdb_simple():
     """Test that TMDBTool yields observations and uploader passes them through."""
     # Skip if themoviedb is not available
     from buttermilk.tools.catalog_test import THEMOVIEDB_AVAILABLE
+
     if not THEMOVIEDB_AVAILABLE:
         pytest.skip("themoviedb library not available")
 
@@ -84,6 +85,7 @@ async def test_pipeline_tmdb_simple():
 
     # Create mock uploader
     from buttermilk.storage.base import Storage
+
     mock_storage = MagicMock(spec=Storage)
     mock_storage.save = MagicMock()
     uploader = AsyncDataUploader(storage=mock_storage, buffer_size=1)
@@ -193,15 +195,8 @@ class SplittingProcessor:
         for i in range(self.split_count):
             # Create split record with same record_id but additional fields
             metadata = record.metadata.copy() if record.metadata else {}
-            metadata["split_info"] = {
-                "split_index": i,
-                "split_id": f"{record.record_id}_split_{i}",
-                "total_splits": self.split_count
-            }
-            updated_record = record.model_copy(update={
-                "content": f"Split {i} of {record.content}",
-                "metadata": metadata
-            })
+            metadata["split_info"] = {"split_index": i, "split_id": f"{record.record_id}_split_{i}", "total_splits": self.split_count}
+            updated_record = record.model_copy(update={"content": f"Split {i} of {record.content}", "metadata": metadata})
             yield updated_record
 
 
@@ -212,6 +207,7 @@ async def test_metadata_accumulation_and_record_id_preservation():
     # Create test data source using Title like the working test
     async def source():
         from buttermilk.tools.catalog_test import Title
+
         title = Title(record_id="test123", title="Test Movie", year=2024)
         yield title
 
@@ -267,11 +263,8 @@ async def test_one_to_n_transformation_with_output_indexing():
     # Create test data source
     async def source():
         from buttermilk._core.types import Record
-        record = Record(
-            record_id="split_test",
-            content="Content to split",
-            metadata={"source": "test"}
-        )
+
+        record = Record(record_id="split_test", content="Content to split", metadata={"source": "test"})
         yield record
 
     # Create splitting processor and pass-through processor
@@ -337,6 +330,7 @@ async def test_record_filtering_no_metadata_update():
     # Create test data source
     async def source():
         from buttermilk._core.types import Record
+
         records = [
             Record(record_id="keep1", content="keep this record"),
             Record(record_id="skip1", content="skip this record"),
@@ -372,3 +366,270 @@ async def test_record_filtering_no_metadata_update():
     for record in results:
         assert "filtering_test" in record.metadata
         assert record.metadata["filtering_test"]["status"] == "processed"
+
+
+# ProcessingSummary integration tests
+
+
+@pytest.mark.anyio
+async def test_pipeline_tracks_processing_summary():
+    """Test that PipelineOrchestrator uses ProcessingSummary to track statistics."""
+
+    # Create test data source
+    async def source():
+        from buttermilk._core.types import Record
+
+        records = [Record(record_id=f"test_{i}", content=f"Content {i}") for i in range(3)]
+        for record in records:
+            yield record
+
+    # Create simple pass-through processor
+    class PassThroughProcessor:
+        async def process(self, record, **kwargs):
+            yield record
+
+    processor = PassThroughProcessor()
+
+    # Create orchestrator
+    orchestrator = PipelineOrchestrator(
+        pipeline_name="summary_test",
+        source=source(),
+        processors=[processor],
+        concurrency=1,
+        enable_record_cache=False,
+    )
+
+    # Run pipeline
+    results = []
+    async for record in orchestrator():
+        results.append(record)
+
+    # Verify orchestrator has ProcessingSummary
+    assert hasattr(orchestrator, "_summary")
+    assert orchestrator._summary is not None
+
+    # Verify summary tracked the processing
+    from buttermilk._core.types import ProcessingSummary
+
+    assert isinstance(orchestrator._summary, ProcessingSummary)
+    assert orchestrator._summary.attempted >= 3
+    assert orchestrator._summary.processed >= 0
+
+
+@pytest.mark.anyio
+async def test_pipeline_summary_counts_attempted():
+    """Test that ProcessingSummary increments attempted counter."""
+
+    async def source():
+        from buttermilk._core.types import Record
+
+        for i in range(5):
+            yield Record(record_id=f"test_{i}", content=f"Content {i}")
+
+    class PassThroughProcessor:
+        async def process(self, record, **kwargs):
+            yield record
+
+    orchestrator = PipelineOrchestrator(
+        pipeline_name="attempted_test",
+        source=source(),
+        processors=[PassThroughProcessor()],
+        concurrency=1,
+        enable_record_cache=False,
+    )
+
+    # Process all records
+    results = [record async for record in orchestrator()]
+
+    # Verify attempted count
+    assert orchestrator._summary.attempted >= len(results)
+
+
+@pytest.mark.anyio
+async def test_pipeline_summary_counts_processed():
+    """Test that ProcessingSummary increments processed counter."""
+
+    async def source():
+        from buttermilk._core.types import Record
+
+        for i in range(3):
+            yield Record(record_id=f"test_{i}", content=f"Content {i}")
+
+    class PassThroughProcessor:
+        async def process(self, record, **kwargs):
+            yield record
+
+    orchestrator = PipelineOrchestrator(
+        pipeline_name="processed_test",
+        source=source(),
+        processors=[PassThroughProcessor()],
+        concurrency=1,
+        enable_record_cache=False,
+    )
+
+    results = [record async for record in orchestrator()]
+
+    # All records should be processed successfully
+    assert orchestrator._summary.processed >= len(results)
+
+
+@pytest.mark.anyio
+async def test_pipeline_summary_with_limit():
+    """Test that ProcessingSummary respects limit parameter."""
+
+    async def source():
+        from buttermilk._core.types import Record
+
+        # Provide many records
+        for i in range(100):
+            yield Record(record_id=f"test_{i}", content=f"Content {i}")
+
+    class PassThroughProcessor:
+        async def process(self, record, **kwargs):
+            yield record
+
+    # Limit to 5 records
+    orchestrator = PipelineOrchestrator(
+        pipeline_name="limit_test",
+        source=source(),
+        processors=[PassThroughProcessor()],
+        concurrency=1,
+        limit=5,  # Only process 5
+        enable_record_cache=False,
+    )
+
+    results = [record async for record in orchestrator()]
+
+    # Should only process 5 records
+    assert len(results) <= 5
+    assert orchestrator._summary.attempted <= 5
+
+
+@pytest.mark.anyio
+async def test_pipeline_summary_success_rate():
+    """Test that ProcessingSummary calculates success rate correctly."""
+
+    async def source():
+        from buttermilk._core.types import Record
+
+        for i in range(5):
+            yield Record(record_id=f"test_{i}", content=f"Content {i}")
+
+    class PassThroughProcessor:
+        async def process(self, record, **kwargs):
+            yield record
+
+    orchestrator = PipelineOrchestrator(
+        pipeline_name="success_rate_test",
+        source=source(),
+        processors=[PassThroughProcessor()],
+        concurrency=1,
+        enable_record_cache=False,
+    )
+
+    _results = [record async for record in orchestrator()]
+
+    # All should succeed
+    success_rate = orchestrator._summary.success_rate()
+    assert success_rate >= 0.0
+    assert success_rate <= 1.0
+
+
+@pytest.mark.anyio
+async def test_pipeline_summary_duration_tracking():
+    """Test that ProcessingSummary tracks processing duration."""
+    import asyncio
+
+    async def source():
+        from buttermilk._core.types import Record
+
+        yield Record(record_id="test_1", content="Content 1")
+
+    class SlowProcessor:
+        async def process(self, record, **kwargs):
+            await asyncio.sleep(0.1)  # 100ms delay
+            yield record
+
+    orchestrator = PipelineOrchestrator(
+        pipeline_name="duration_test",
+        source=source(),
+        processors=[SlowProcessor()],
+        concurrency=1,
+        enable_record_cache=False,
+    )
+
+    _results = [record async for record in orchestrator()]
+
+    # Duration should be at least 100ms
+    assert orchestrator._summary.duration_ms() >= 100
+
+
+@pytest.mark.anyio
+async def test_pipeline_summary_with_concurrency():
+    """Test that ProcessingSummary works correctly with concurrent processing."""
+
+    async def source():
+        from buttermilk._core.types import Record
+
+        for i in range(10):
+            yield Record(record_id=f"test_{i}", content=f"Content {i}")
+
+    class PassThroughProcessor:
+        async def process(self, record, **kwargs):
+            yield record
+
+    # Use concurrency=3
+    orchestrator = PipelineOrchestrator(
+        pipeline_name="concurrency_test",
+        source=source(),
+        processors=[PassThroughProcessor()],
+        concurrency=3,
+        enable_record_cache=False,
+    )
+
+    results = [record async for record in orchestrator()]
+
+    # Should process all 10 records
+    assert len(results) == 10
+    assert orchestrator._summary.attempted >= 10
+
+
+@pytest.mark.anyio
+async def test_pipeline_summary_as_dict_export():
+    """Test that ProcessingSummary can be exported as dict."""
+
+    async def source():
+        from buttermilk._core.types import Record
+
+        for i in range(3):
+            yield Record(record_id=f"test_{i}", content=f"Content {i}")
+
+    class PassThroughProcessor:
+        async def process(self, record, **kwargs):
+            yield record
+
+    orchestrator = PipelineOrchestrator(
+        pipeline_name="export_test",
+        source=source(),
+        processors=[PassThroughProcessor()],
+        concurrency=1,
+        enable_record_cache=False,
+    )
+
+    _results = [record async for record in orchestrator()]
+
+    # Export summary as dict
+    summary_dict = orchestrator._summary.as_dict()
+
+    # Verify expected fields
+    assert "attempted" in summary_dict
+    assert "processed" in summary_dict
+    assert "skipped" in summary_dict
+    assert "failed" in summary_dict
+    assert "duration_ms" in summary_dict
+    assert "success_rate" in summary_dict
+
+    # Verify types
+    assert isinstance(summary_dict["attempted"], int)
+    assert isinstance(summary_dict["duration_ms"], int)
+    assert isinstance(summary_dict["success_rate"], float)

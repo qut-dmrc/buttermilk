@@ -200,10 +200,7 @@ class PipelineOrchestrator(BaseModel):
     # Internal state
     _semaphore: asyncio.Semaphore = PrivateAttr()
     _record_cache: Any = PrivateAttr(default=None)
-    _attempted: int = PrivateAttr(default=0)
-    _processed: int = PrivateAttr(default=0)
-    _skipped: int = PrivateAttr(default=0)
-    _failed: int = PrivateAttr(default=0)
+    _summary: Any = PrivateAttr(default=None)  # ProcessingSummary instance
 
     model_config = ConfigDict(arbitrary_types_allowed=True, populate_by_name=True)
 
@@ -220,8 +217,11 @@ class PipelineOrchestrator(BaseModel):
 
     @pydantic.model_validator(mode="after")
     def _init(self):
-        """Initialize semaphore and record cache."""
+        """Initialize semaphore, record cache, and processing summary."""
+        from buttermilk._core.types import ProcessingSummary
+
         self._semaphore = asyncio.Semaphore(self.concurrency)
+        self._summary = ProcessingSummary()
 
         # Initialize record cache (lazy base_dir resolution happens in RecordCache)
         if self.enable_record_cache:
@@ -355,7 +355,7 @@ class PipelineOrchestrator(BaseModel):
                     except Exception as e:
                         # If hashing fails, use a default hash to avoid breaking the pipeline
                         logger.warning(
-                            f"Failed to compute processor config hash, using default",
+                            "Failed to compute processor config hash, using default",
                             processor_class=processor_class,
                             error=str(e)
                         )
@@ -364,7 +364,8 @@ class PipelineOrchestrator(BaseModel):
                     # Create unique processor ID for this processor (for caching and process() calls)
                     # Format: {pipeline_name}/{index:02d}.{processor_class}/{param_hash}
                     # The param_hash ensures cache invalidation when processor configuration changes
-                    processor_stage_name = f"{self.pipeline_name}/{processor_index:02d}.{processor_class}/{param_hash}"  # TODO: rename to processor_id
+                    # TODO: rename to processor_id
+                    processor_stage_name = f"{self.pipeline_name}/{processor_index:02d}.{processor_class}/{param_hash}"
                     processor_span_attributes = {
                         "processor.index": processor_index,
                         "processor.class": processor_class,
@@ -524,10 +525,33 @@ class PipelineOrchestrator(BaseModel):
                 stage_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                 raise
 
-    async def _run_pipeline_with_tracing(self, stage_span, start_time) -> AsyncIterator[BaseRecord]:
-        """Internal method to run pipeline with tracing context."""
+    async def _run_pipeline_with_tracing(self, stage_span, start_time, show_progress: bool = True) -> AsyncIterator[BaseRecord]:
+        """Internal method to run pipeline with tracing context.
+
+        Args:
+            stage_span: OpenTelemetry span for tracing
+            start_time: Start time of the pipeline
+            show_progress: Whether to display a progress bar (default: True)
+        """
+        from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn, TimeElapsedColumn
+
         tracer = trace.get_tracer("buttermilk.pipeline")
         pending_tasks: set[asyncio.Task] = set()
+
+        # Set up progress bar
+        progress = Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            TextColumn("•"),
+            TextColumn("Processed: {task.fields[processed]}"),
+            TextColumn("Skipped: {task.fields[skipped]}"),
+            TextColumn("Failed: {task.fields[failed]}"),
+            TextColumn("•"),
+            TimeElapsedColumn(),
+            disable=not show_progress,
+        )
 
         try:
             log_interval = 15.0
@@ -538,8 +562,8 @@ class PipelineOrchestrator(BaseModel):
                 now = time.monotonic()
                 if now - last_log >= log_interval:
                     logger.debug(
-                        f"📊 Pipeline '{self.pipeline_name}': attempted={self._attempted} processed={self._processed} "
-                        f"skipped={self._skipped} failed={self._failed} pending={pending_count}"
+                        f"📊 Pipeline '{self.pipeline_name}': attempted={self._summary.attempted} processed={self._summary.processed} "
+                        f"skipped={self._summary.skipped} failed={self._summary.failed} pending={pending_count}"
                     )
                     last_log = now
 
@@ -567,7 +591,7 @@ class PipelineOrchestrator(BaseModel):
 
                         # Only count as processed if we got at least one output
                         if results_count > 0:
-                            self._processed += 1
+                            self._summary.increment_processed()
                             task_span.set_attribute("outputs.count", results_count)
                             task_span.set_attribute("status", "processed")
                             task_span.set_status(trace.Status(trace.StatusCode.OK))
@@ -576,7 +600,7 @@ class PipelineOrchestrator(BaseModel):
                             task_span.set_status(trace.Status(trace.StatusCode.OK))
 
                     except RecordSkippedException as e:
-                        self._skipped += 1
+                        self._summary.increment_skipped()
                         task_span.set_attribute("status", "skipped")
                         task_span.set_attribute("skip_reason", str(e))
                         task_span.set_status(trace.Status(trace.StatusCode.OK))
@@ -590,7 +614,7 @@ class PipelineOrchestrator(BaseModel):
                         # For now we just drop skipped records, don't put them in queue
 
                     except Exception as e:
-                        self._failed += 1
+                        self._summary.increment_failed()
                         task_span.set_attribute("status", "failed")
                         task_span.set_attribute("error_type", type(e).__name__)
                         task_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
@@ -622,14 +646,14 @@ class PipelineOrchestrator(BaseModel):
             async def producer():
                 nonlocal pending_tasks
                 async for record in source_iter:
-                    self._attempted += 1
+                    self._summary.increment_attempted()
 
                     # Check if we've hit limit
-                    if self.limit is not None and (self._processed + self._failed + self._skipped) >= self.limit:
+                    if self.limit is not None and (self._summary.processed + self._summary.failed + self._summary.skipped) >= self.limit:
                         logger.info(
-                            f"🔚 Stage '{self.pipeline_name}' reached limit ({self._attempted}/{self.limit}) – stopping",
+                            f"🔚 Stage '{self.pipeline_name}' reached limit ({self._summary.attempted}/{self.limit}) – stopping",
                             pipeline_name=self.pipeline_name,
-                            attempted=self._attempted,
+                            attempted=self._summary.attempted,
                             limit=self.limit,
                         )
                         break
@@ -679,22 +703,49 @@ class PipelineOrchestrator(BaseModel):
             # Start producer
             producer_task = asyncio.create_task(producer())
 
-            # Yield from consumer
-            async for record in consumer():
-                yield record
+            # Yield from consumer with progress bar
+            with progress:
+                # Create progress task
+                progress_task = progress.add_task(
+                    f"Pipeline: {self.pipeline_name}",
+                    total=self.limit if self.limit else None,
+                    processed=0,
+                    skipped=0,
+                    failed=0,
+                )
 
-            # Wait for producer to finish
-            await producer_task
+                async for record in consumer():
+                    # Update progress with current stats
+                    progress.update(
+                        progress_task,
+                        completed=self._summary.attempted,
+                        processed=self._summary.processed,
+                        skipped=self._summary.skipped,
+                        failed=self._summary.failed,
+                    )
+                    yield record
+
+                # Wait for producer to finish
+                await producer_task
+
+                # Final progress update
+                progress.update(
+                    progress_task,
+                    completed=self._summary.attempted,
+                    processed=self._summary.processed,
+                    skipped=self._summary.skipped,
+                    failed=self._summary.failed,
+                )
 
             # Call finalize_processing on all processors
             await self._finalize_all_processors()
 
             # Set final stage span attributes
-            stage_duration_ms = int((time.time() - start_time) * 1000)
-            stage_span.set_attribute("records.attempted", self._attempted)
-            stage_span.set_attribute("records.processed", self._processed)
-            stage_span.set_attribute("records.skipped", self._skipped)
-            stage_span.set_attribute("records.failed", self._failed)
+            stage_duration_ms = self._summary.duration_ms()
+            stage_span.set_attribute("records.attempted", self._summary.attempted)
+            stage_span.set_attribute("records.processed", self._summary.processed)
+            stage_span.set_attribute("records.skipped", self._summary.skipped)
+            stage_span.set_attribute("records.failed", self._summary.failed)
             stage_span.set_attribute("stage.duration_ms", stage_duration_ms)
             stage_span.set_status(trace.Status(trace.StatusCode.OK))
 
@@ -715,10 +766,7 @@ class PipelineOrchestrator(BaseModel):
                 logger.error(f"Error during finalization after pipeline error: {finalize_error}", error=str(finalize_error))
             raise
         finally:
-            logger.info(
-                f"✅ Pipeline '{self.pipeline_name}' stage ? complete: attempted={self._attempted} "
-                f"processed={self._processed} skipped={self._skipped} failed={self._failed}"
-            )
+            logger.info(f"Pipeline '{self.pipeline_name}': {self._summary.format_for_console()}")
 
     async def _check_processor_cache(self, record: BaseRecord, processor_stage_name: str) -> list[BaseRecord] | None:
         """Check cache for processor-specific outputs."""
