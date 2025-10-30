@@ -23,6 +23,7 @@ Note:
     elsewhere in the codebase, relying on this global setup.
 
 """
+
 import base64
 import logging
 import os
@@ -48,7 +49,7 @@ from opentelemetry.instrumentation.openai import OpenAIInstrumentor
 from opentelemetry.instrumentation.vertexai import VertexAIInstrumentor
 from opentelemetry.sdk.trace import SpanProcessor as _SpanProcessor, TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.trace import SpanKind as _SpanKind
+from opentelemetry.trace import SpanKind as _SpanKind, set_span_in_context as _set_span_in_context
 
 from buttermilk import bm, logger
 from buttermilk._core.config import FatalError, Tracing
@@ -64,7 +65,7 @@ def setup_tracing_otel_with_execution_context(tracing_cfg: Tracing, execution_co
     """Initialize OpenTelemetry with OTLP exporters using ExecutionContext infrastructure."""
     # Get credentials from ExecutionContext instead of BM singleton
     creds = execution_context.gcp_credentials
-    
+
     # Use project_id from tracing config, or fallback to GOOGLE_CLOUD_PROJECT env var
     project_id = tracing_cfg.project_id
     if project_id is None:
@@ -112,7 +113,7 @@ def setup_tracing_otel_with_execution_context(tracing_cfg: Tracing, execution_co
         LoggingInstrumentor().instrument(
             tracer_provider=provider,
             set_logging_format=False,  # Don't override our logging setup
-            log_level=logging.INFO,    # Only include INFO+ logs in OTEL traces
+            log_level=logging.INFO,  # Only include INFO+ logs in OTEL traces
         )
 
     # Exporters / processors
@@ -120,11 +121,13 @@ def setup_tracing_otel_with_execution_context(tracing_cfg: Tracing, execution_co
     # Also lift selected baggage keys onto spans
     try:
         provider.add_span_processor(
-            BaggageToAttributesSpanProcessor(keys=[
-                "buttermilk.session.id",
-                "buttermilk.project",
-                "buttermilk.execution_context.id",
-            ])
+            BaggageToAttributesSpanProcessor(
+                keys=[
+                    "buttermilk.session.id",
+                    "buttermilk.project",
+                    "buttermilk.execution_context.id",
+                ]
+            )
         )
     except Exception:
         pass
@@ -135,6 +138,7 @@ def setup_tracing_otel_with_execution_context(tracing_cfg: Tracing, execution_co
 
 
 # ---- Reusable helpers: session-aware spans and baggage ----
+
 
 def _clean_attrs(attrs: dict | None) -> dict:
     """Remove None values to keep spans tidy."""
@@ -277,7 +281,7 @@ class BaggageToAttributesSpanProcessor(_SpanProcessor):
 
 
 # --- OpenTelemetry Tracing Setup for Traceloop ---
-def setup_traceloop_otel() ->  OTLPHttpSpanExporter | None:
+def setup_traceloop_otel() -> OTLPHttpSpanExporter | None:
     """Initialize Traceloop for OpenTelemetry tracing."""
 
     try:
@@ -312,8 +316,7 @@ def setup_wandb_otel_tracing() -> OTLPSpanExporter | None:
         wandb_entity = os.getenv("WANDB_ENTITY") or creds["WANDB_ENTITY"]
         if not (wandb_api_key and wandb_project and wandb_entity):
             raise FatalError(
-                "W&B tracing is enabled but missing required credentials: "
-                "WANDB_API_KEY, WANDB_PROJECT, or WANDB_ENTITY.",
+                "W&B tracing is enabled but missing required credentials: WANDB_API_KEY, WANDB_PROJECT, or WANDB_ENTITY.",
             )
 
         # Prepare authentication header for W&B OTLP exporter.
@@ -325,7 +328,7 @@ def setup_wandb_otel_tracing() -> OTLPSpanExporter | None:
         # and the W&B project ID.
         wandb_headers = {
             "Authorization": f"Basic {auth_header_value}",  # Basic authentication header
-            "project_id": f"{wandb_entity}/{wandb_project}",           # W&B Project ID for trace grouping
+            "project_id": f"{wandb_entity}/{wandb_project}",  # W&B Project ID for trace grouping
         }
 
         # Use the HTTP OTLP exporter for the HTTPS endpoint

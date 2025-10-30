@@ -30,9 +30,10 @@ from buttermilk.utils import scrub_serializable
 from buttermilk.utils.otel import (
     attach_session_baggage,
     detach_session_baggage,
-    end_session_root_span,
     span_with_session,
-    start_session_root_span,
+    # Session root span functions removed (Phase 1 OTEL fix)
+    # end_session_root_span,
+    # start_session_root_span,
 )
 from buttermilk.utils.utils import expand_dict
 
@@ -80,7 +81,7 @@ class SessionResources(BaseModel):
         """Add a custom resource to be tracked."""
         self.custom_resources[name] = resource
 
-    async def cleanup(self) -> dict[str, Any]:
+    async def cleanup(self) -> dict[str, Any]:  # noqa: PLR0912
         """Cleanup all tracked resources and return a report."""
         report = {
             "tasks_cancelled": 0,
@@ -253,14 +254,9 @@ class FlowRunContext(BaseModel):
             except Exception:
                 pass
 
-            # End session-root span if active
-            try:
-                if self._otel_session_root is not None:
-                    span, token = self._otel_session_root
-                    end_session_root_span(span, token)
-                    self._otel_session_root = None
-            except Exception:
-                pass
+            # Session root span removed (Phase 1 OTEL fix)
+            # No cleanup needed - session context propagated via baggage only
+            # _otel_session_root is always None now
 
             # Log cleanup report
             if cleanup_report.get("errors"):
@@ -548,13 +544,10 @@ class SessionManager:
             except Exception:
                 pass
 
-            # Start a session root span and store it
-            try:
-                session._otel_session_root = start_session_root_span(
-                    session_id, attributes={"buttermilk.session.status": SessionStatus.INITIALIZING.value}
-                )
-            except Exception:
-                session._otel_session_root = None
+            # Session root span removed (Phase 1 OTEL fix)
+            # Session context now propagated via OTEL baggage only
+            # Each flow run creates its own independent root trace
+            session._otel_session_root = None
 
             logger.info("Created new session with INITIALIZING status", session_id=session_id)
 
@@ -833,7 +826,7 @@ class SessionManager:
         logger.error("Failed to transition session back to ACTIVE after reconnection", session_id=session_id)
         return None
 
-    async def _periodic_cleanup(self) -> None:
+    async def _periodic_cleanup(self) -> None:  # noqa: PLR0912
         """Background task that periodically cleans up expired sessions with enhanced logic."""
         while self._running:
             try:
@@ -1241,7 +1234,7 @@ class FlowRunner(BaseModel):
         # Use the enhanced cleanup from FlowRunContext
         await context.cleanup()
 
-    async def run_flow(self, run_request: RunRequest, wait_for_completion: bool = False, **kwargs) -> None:
+    async def run_flow(self, run_request: RunRequest, wait_for_completion: bool = False, **kwargs) -> None:  # noqa: PLR0912
         """Run a flow based on its configuration and a request.
 
         Args:
@@ -1267,6 +1260,18 @@ class FlowRunner(BaseModel):
         if hasattr(bm, "ensure_initialized"):
             await bm.ensure_initialized()
             logger.debug("BM initialization verified before flow execution")
+
+        # Phase 1 OTEL fix: Validate session ID consistency
+        # Ensure BM session_id matches request session_id
+        if hasattr(bm, "session_info") and run_request.session_id:
+            bm_session_id = bm.session_info.session_id
+            request_session_id = run_request.session_id
+            if bm_session_id != request_session_id:
+                raise ValueError(
+                    f"Session ID mismatch: BM has '{bm_session_id}', "
+                    f"request has '{request_session_id}'. "
+                    f"Session-scoped BM must have matching session_id."
+                )
 
         # Initialize metrics tracking
         start_time = time.time()
@@ -1390,7 +1395,7 @@ class FlowRunner(BaseModel):
                 await self.session_manager.cleanup_session(run_request.session_id)
         return
 
-    async def create_batch(self, flow_name, storage_config: dict | str | None = None, max_records: int | None = None) -> list[RunRequest]:
+    async def create_batch(self, flow_name, storage_config: dict | str | None = None, max_records: int | None = None) -> list[RunRequest]:  # noqa: PLR0912
         """Create a new batch job from storage source.
 
         Args:
