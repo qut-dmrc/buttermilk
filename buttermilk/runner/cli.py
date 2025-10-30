@@ -39,6 +39,44 @@ from buttermilk.api.flow import create_app as create_fastapi_app
 from buttermilk.runner.flowrunner import FlowRunner
 
 
+def _validate_flow_config(conf: DictConfig, mode: str) -> None:
+    """Validate that required flow configuration exists for the given mode.
+
+    Args:
+        conf: The configuration object
+        mode: The operational mode (can be string or RunMode enum)
+
+    Raises:
+        ValueError: If required configuration is missing or invalid
+    """
+    # Convert mode to string if it's an enum
+    mode_str = str(mode).split(".")[-1].lower() if hasattr(mode, "value") else str(mode).lower()
+
+    # Modes that require a flow to be specified
+    flow_required_modes = {"console", "batch", "batch_all"}
+
+    if mode_str in flow_required_modes:
+        if not hasattr(conf.run, "flow") or not conf.run.flow:
+            available_modes = ", ".join(flow_required_modes)
+            raise ValueError(
+                f"Mode '{mode_str}' requires 'run.flow' to be specified.\n"
+                f"Usage: python -m buttermilk.runner.cli run.mode={mode_str} run.flow=<flow_name>\n"
+                f"Example: python -m buttermilk.runner.cli run.mode={mode_str} run.flow=trans\n"
+                f"Modes requiring flow: {available_modes}"
+            )
+
+        # Check if the flow exists in the configuration
+        flow_name = conf.run.flow
+        if not hasattr(conf.run, "flows") or flow_name not in conf.run.flows:
+            available_flows = list(conf.run.flows.keys()) if hasattr(conf.run, "flows") else []
+            flows_list = ", ".join(available_flows) if available_flows else "none configured"
+            raise ValueError(
+                f"Flow '{flow_name}' not found in configuration.\n"
+                f"Available flows: {flows_list}\n"
+                f"Check your flow configurations in buttermilk/conf/flows/"
+            )
+
+
 @hydra.main(version_base="1.3", config_path="../conf", config_name="config")
 def main(conf: DictConfig) -> None:  # noqa: PLR0912
     """Main application entry point with async initialization.
@@ -52,6 +90,38 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
         conf (DictConfig): The configuration object loaded and populated by Hydra.
             This OmegaConf `DictConfig` contains nested configurations for various
             parts of the application.
+
+    Usage Examples:
+        # Run a flow in console mode with default config
+        python -m buttermilk.runner.cli run.mode=console run.flow=trans
+
+        # Run batch processing with limit
+        python -m buttermilk.runner.cli run.mode=batch run.flow=trans run.limit=100
+
+        # Start API server
+        python -m buttermilk.runner.cli run.mode=api
+
+        # Run pipeline mode
+        python -m buttermilk.runner.cli run.mode=pipeline
+
+    Hydra Configuration Overrides:
+        You can override any configuration parameter using Hydra's dot notation:
+        - run.mode=<mode>        : Set operational mode (console, batch, batch_run, batch_all, api, pipeline, streamlit, slackbot)
+        - run.flow=<flow_name>   : Specify which flow to run (required for most modes)
+        - run.limit=<number>     : Limit number of records/jobs to process
+        - run.record_id=<id>     : Run on a specific record (console mode)
+        - llms=<config>          : Override LLM configuration
+        - storage=<config>       : Override storage configuration
+
+    Available Modes:
+        - console    : Run a single flow interactively in the terminal
+        - batch      : Create batch jobs and add them to a queue
+        - batch_run  : Process jobs from the queue (worker mode)
+        - batch_all  : Create and process batch jobs in one command
+        - api        : Start FastAPI server for HTTP API access
+        - pipeline   : Run data processing pipeline
+        - streamlit  : Launch Streamlit web interface
+        - slackbot   : Start Slack bot integration
 
     """
     OmegaConf.resolve(conf)
@@ -67,6 +137,14 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
 
     # Get the mode from config to determine if we need FlowRunner
     mode = conf.run.mode
+    logger.info(f"Running in '{mode}' mode")
+
+    # Validate configuration before proceeding
+    try:
+        _validate_flow_config(conf, mode)
+    except ValueError as e:
+        logger.error(f"Configuration validation failed: {e}")
+        raise
 
     flow_runner = FlowRunner(flows=conf.run.flows)
 
@@ -76,11 +154,15 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
     # Branch execution based on the configured UI mode.
     match mode:
         case "console":
+            # Console mode: Run a single flow interactively
+            logger.info("Console mode: Running single flow interactively")
             ui = CLIUserAgent()
+
             # Prepare the RunRequest with command-line parameters
             parameters = {}
             if conf.run.record_id:
                 parameters["record_id"] = conf.run.record_id
+                logger.info(f"Running on specific record_id: {conf.run.record_id}")
 
             run_request = RunRequest(
                 flow=conf.run.flow,
@@ -89,68 +171,91 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
             )
 
             # Run the flow synchronously
-            logger.info(f"Running flow '{run_request.flow}' in console mode...")
+            logger.info(f"Starting flow '{run_request.flow}'...")
 
             async def run_with_shutdown() -> None:
                 await flow_runner.run_flow(run_request=run_request, wait_for_completion=True)
                 await bm.graceful_shutdown()
 
-            asyncio.run(run_with_shutdown())
-            logger.info(f"Flow '{run_request.flow}' finished.")
+            try:
+                asyncio.run(run_with_shutdown())
+                logger.info(f"✓ Flow '{run_request.flow}' completed successfully")
+            except Exception as e:
+                logger.error(f"✗ Flow '{run_request.flow}' failed: {e}")
+                raise
 
         case "batch":
-            logger.info("Creating batch jobs...")
+            # Batch mode: Create batch jobs and enqueue them
+            flow_name = conf.run.flow
+            limit = conf.run.limit
+            logger.info(f"Batch mode: Creating jobs for flow '{flow_name}'")
+            if limit:
+                logger.info(f"Processing limit: {limit} records")
 
             async def run_with_shutdown() -> None:
                 # Get storage config from run section
                 storage_config = conf.run.storage_config or None
 
-                await flow_runner.create_batch(flow_name=conf.run.flow, storage_config=storage_config, max_records=conf.run.limit)
+                await flow_runner.create_batch(flow_name=flow_name, storage_config=storage_config, max_records=limit)
                 await bm.graceful_shutdown()
 
-            asyncio.run(run_with_shutdown())
+            try:
+                asyncio.run(run_with_shutdown())
+                logger.info(f"✓ Batch jobs created successfully for flow '{flow_name}'")
+            except Exception as e:
+                logger.error(f"✗ Batch job creation failed: {e}")
+                raise
 
         case "batch_run":
-            # Run batch jobs from the queue
-            # limit controls how many jobs to process before exiting
+            # Batch run mode: Process jobs from the queue (worker mode)
             # Each job gets a completely fresh orchestrator instance to ensure
             # no state is shared between jobs, preventing cross-contamination
             # This is critical for research integrity where old state might affect results
             limit = conf.run.limit or 5  # Get limit from config or default to 5
             ui = CLIUserAgent()
 
-            logger.info(f"Running in batch mode with limit={limit}...")
+            logger.info("Batch run mode: Processing jobs from queue")
+            logger.info(f"Maximum jobs to process: {limit}")
 
             async def run_with_shutdown() -> None:
                 summary = await flow_runner.run_batch_job(max_jobs=limit, callback_to_ui=ui.make_callback(), wait_for_completion=True)
-                logger.info(summary.format_for_console())
+                logger.info("\n" + summary.format_for_console())
                 await bm.graceful_shutdown()
 
-            asyncio.run(run_with_shutdown())
+            try:
+                asyncio.run(run_with_shutdown())
+                logger.info("✓ Batch processing completed")
+            except Exception as e:
+                logger.error(f"✗ Batch processing failed: {e}")
+                raise
 
         case "batch_all":
-            # Combined batch mode: enqueue and/or process jobs
-            # Use limit to control how many jobs to enqueue or process
-            logger.info("Batch all mode: enqueue and process")
+            # Batch all mode: Create and process jobs in one command
+            flow_name = conf.run.flow
+            limit = conf.run.limit or 999
+            logger.info(f"Batch all mode: Create and process jobs for flow '{flow_name}'")
 
             async def run_with_shutdown() -> None:
                 # Enqueue phase
-                logger.info("Enqueueing batch jobs...")
+                logger.info("Phase 1: Enqueueing batch jobs...")
                 storage_config = conf.run.storage_config or None
-                await flow_runner.create_batch(flow_name=conf.run.flow, storage_config=storage_config, max_records=conf.run.limit)
-                logger.info("Batch jobs enqueued successfully")
+                await flow_runner.create_batch(flow_name=flow_name, storage_config=storage_config, max_records=limit)
+                logger.info("✓ Batch jobs enqueued successfully")
 
                 # Process phase
-                limit = conf.run.limit or 999  # Process all by default
                 ui = CLIUserAgent()
-                logger.info(f"Processing batch jobs (limit: {limit})...")
+                logger.info(f"Phase 2: Processing batch jobs (limit: {limit})...")
                 summary = await flow_runner.run_batch_job(max_jobs=limit, callback_to_ui=ui.make_callback(), wait_for_completion=True)
-                logger.info(summary.format_for_console())
-                logger.info("Batch processing completed successfully")
+                logger.info("\n" + summary.format_for_console())
 
                 await bm.graceful_shutdown()
 
-            asyncio.run(run_with_shutdown())
+            try:
+                asyncio.run(run_with_shutdown())
+                logger.info("✓ Batch all mode completed successfully")
+            except Exception as e:
+                logger.error(f"✗ Batch all mode failed: {e}")
+                raise
 
         case "streamlit":
             # Starts the Streamlit web interface.
@@ -168,8 +273,11 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
                 logger.error(f"Error starting Streamlit interface: {e_streamlit_start!s}", exc_info=True)
 
         case "api":
-            # Starts a FastAPI web server.
-            logger.info("Starting FastAPI API server...")
+            # API mode: Start FastAPI web server for HTTP API access
+            host = str(conf.run.host or "0.0.0.0")
+            port = int(conf.run.port or 8000)
+            logger.info("API mode: Starting FastAPI server")
+
             # Pass both FlowRunner and the already-initialized BM to avoid re-bootstrapping
             fastapi_app = create_fastapi_app(
                 flows=flow_runner,  # Pass the FlowRunner
@@ -180,13 +288,12 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
             logger.debug("Verifying FastAPI app readiness...")
             if not hasattr(fastapi_app.state, "flow_runner") or not fastapi_app.state.flow_runner:
                 raise RuntimeError("FlowRunner not properly initialized in FastAPI app state")
-            logger.debug("FastAPI app readiness verified")
+            logger.debug("✓ FastAPI app readiness verified")
 
-            logger.info("Configuring Uvicorn server for FastAPI app...")
             uvicorn_config = uvicorn.Config(
                 app=fastapi_app,
-                host=str(conf.run.host or "0.0.0.0"),  # Host from config or default
-                port=int(conf.run.port or 8000),  # Port from config or default
+                host=host,
+                port=port,
                 reload=bool(conf.run.reload or False),  # Hot reloading (dev only)
                 log_level=str(conf.run.log_level or "info").lower(),
                 access_log=True,  # Enable access logs
@@ -194,13 +301,14 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
                 log_config=None,  # Preserve existing logging configuration
             )
             api_server = uvicorn.Server(config=uvicorn_config)
-            logger.info(f"FastAPI server starting on http://{uvicorn_config.host}:{uvicorn_config.port}")
+            logger.info(f"✓ Server ready at http://{host}:{port}")
+            logger.info(f"   Documentation: http://{host}:{port}/docs")
             try:
                 api_server.run()  # This is a blocking call
             except KeyboardInterrupt:
-                logger.info("FastAPI server shutting down due to KeyboardInterrupt...")
+                logger.info("Shutting down gracefully (Ctrl+C received)...")
             finally:
-                logger.info("FastAPI server stopped.")
+                logger.info("API server stopped.")
 
         case "pub/sub":
             # Starts a Google Cloud Pub/Sub listener.
@@ -276,27 +384,35 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
                 logger.info("Slackbot event loop closed.")
 
         case "pipeline":
-            # Run pipeline using Hydra instantiation
-            logger.info("Starting pipeline mode...")
+            # Pipeline mode: Run data processing pipeline
+            logger.info("Pipeline mode: Starting data processing pipeline")
+
+            if not hasattr(conf.run, "pipeline"):
+                raise ValueError(
+                    "Pipeline configuration missing. Ensure 'run.pipeline' is configured.\n" "Check your pipeline configurations in buttermilk/conf/"
+                )
 
             pipeline_conf = conf.run.pipeline
 
             # Instantiate source storage
+            logger.info("Initializing source storage...")
             pipeline_conf["source"] = bm.get_storage(pipeline_conf["source"])
 
             # Instantiate output storage
+            logger.info("Initializing output storage...")
             pipeline_conf["output"] = bm.get_storage(pipeline_conf["output"])
 
             # Instantiate processors
+            logger.info(f"Loading {len(pipeline_conf['processors'])} processor(s)...")
             processors = []
             for proc_conf in pipeline_conf["processors"]:
                 processors.append(hydra.utils.instantiate(proc_conf))
-
             pipeline_conf["processors"] = processors
 
             # Use run.limit instead of pipeline.max_records for consistency with batch modes
             if conf.run.limit is not None:
                 pipeline_conf["limit"] = conf.run.limit
+                logger.info(f"Processing limit: {conf.run.limit} records")
 
             # Instantiate pipeline orchestrator
             from buttermilk.pipeline import PipelineOrchestrator
@@ -312,15 +428,26 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
                 exec_ctx = get_execution_context()
                 await exec_ctx._ensure_tracing_initialized()
 
+                logger.info("Starting pipeline execution...")
                 async for _ in orchestrator():
                     pass
                 await bm.graceful_shutdown()
 
-            asyncio.run(run_pipeline())
-            logger.info("Pipeline complete.")
+            try:
+                asyncio.run(run_pipeline())
+                logger.info("✓ Pipeline completed successfully")
+            except Exception as e:
+                logger.error(f"✗ Pipeline failed: {e}")
+                raise
         case _:
             # Handles any unsupported modes specified in the configuration.
-            raise ValueError(f"Unsupported run mode in configuration: '{mode}'. Check 'run.mode' in your Hydra config.")
+            valid_modes = ["console", "batch", "batch_run", "batch_all", "api", "pipeline", "streamlit", "slackbot"]
+            raise ValueError(
+                f"Unsupported run mode: '{mode}'\n"
+                f"Valid modes: {', '.join(valid_modes)}\n"
+                f"Usage: python -m buttermilk.runner.cli run.mode=<mode>\n"
+                f"Example: python -m buttermilk.runner.cli run.mode=console run.flow=trans"
+            )
 
 
 if __name__ == "__main__":
