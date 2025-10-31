@@ -1469,6 +1469,7 @@ class FlowRunner(BaseModel):
                 job = RunRequest(
                     batch_id=batch_id,
                     flow=flow_name,
+                    session_id=bm.session_info.session_id,  # Use current session ID
                     parameters=iteration_params,
                     inputs=data,
                     callback_to_ui=None,
