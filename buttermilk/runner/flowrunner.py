@@ -1262,16 +1262,9 @@ class FlowRunner(BaseModel):
             logger.debug("BM initialization verified before flow execution")
 
         # Phase 1 OTEL fix: Validate session ID consistency
-        # Ensure BM session_id matches request session_id
-        if hasattr(bm, "session_info") and run_request.session_id:
-            bm_session_id = bm.session_info.session_id
-            request_session_id = run_request.session_id
-            if bm_session_id != request_session_id:
-                raise ValueError(
-                    f"Session ID mismatch: BM has '{bm_session_id}', "
-                    f"request has '{request_session_id}'. "
-                    f"Session-scoped BM must have matching session_id."
-                )
+        # NOTE: We do NOT validate session_id match between BM and request
+        # Each job creates its own session and can be run by any worker.
+        # The BM instance's session is for the worker process, not the job.
 
         # Initialize metrics tracking
         start_time = time.time()
@@ -1469,7 +1462,7 @@ class FlowRunner(BaseModel):
                 job = RunRequest(
                     batch_id=batch_id,
                     flow=flow_name,
-                    session_id=bm.session_info.session_id,  # Use current session ID
+                    # session_id gets auto-generated UUID - each job is independent
                     parameters=iteration_params,
                     inputs=data,
                     callback_to_ui=None,
