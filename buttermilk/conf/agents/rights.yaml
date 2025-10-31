@@ -7,6 +7,6 @@ rights:
   parameters:
     template: rights
   variants:
-    model: ${run.llms.general}
+    model: ${llms.general}
   inputs:
     record: "[FETCH.outputs]||*.record"

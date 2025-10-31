@@ -63,6 +63,73 @@ from buttermilk._core.tracing import get_parent_call_weave  # Function to retrie
 from buttermilk._core.types import BaseRecord  # Data record structure
 from buttermilk.utils.templating import KeyValueCollector  # Utility for managing state data
 
+
+# Utility functions for agent tracing
+def get_agent_type_for_trace(agent: Any) -> str:
+    """Get simplified agent type for tracing.
+
+    Returns lowercase agent class name (e.g., 'judge', 'fetchagent').
+    This follows OTEL semantic conventions for component types.
+
+    Args:
+        agent: Agent instance
+
+    Returns:
+        Lowercase agent class name
+
+    Examples:
+        >>> from buttermilk.agents.judge import Judge
+        >>> judge = Judge(...)
+        >>> get_agent_type_for_trace(judge)
+        'judge'
+    """
+    return agent.__class__.__name__.lower()
+
+
+def create_agent_trace_info(agent: Any, template_hash: str | None = None) -> dict[str, Any]:
+    """Create comprehensive agent info for ExecutionTrace.
+
+    Captures all critical parameters for reproducibility and debugging:
+    - Agent identity (type, name, role)
+    - Template name and hash
+    - Model configuration
+    - Full parameter set
+
+    Args:
+        agent: Agent instance
+        template_hash: Optional pre-computed template hash.
+                      If not provided, will use agent.parameters.get("template_hash")
+
+    Returns:
+        Dictionary of agent trace information
+
+    Example:
+        >>> trace_info = create_agent_trace_info(judge_agent, template_hash="abc123")
+        >>> trace_info["agent_type"]  # "judge"
+        >>> trace_info["agent_class"]  # "buttermilk.agents.judge.Judge"
+        >>> trace_info["template"]  # "judge.jinja2"
+        >>> trace_info["model"]  # "gemini-2.0-flash"
+    """
+    agent_info = {
+        # Identity - simple and full
+        "agent_type": get_agent_type_for_trace(agent),  # Simple: "judge"
+        "agent_class": f"{agent.__class__.__module__}.{agent.__class__.__name__}",  # Full
+        "agent_name": agent.agent_name,
+        "agent_role": agent.role,
+        # Critical parameters for reproducibility
+        "template": agent.parameters.get("template"),
+        "template_hash": template_hash or agent.parameters.get("template_hash"),
+        "model": agent.parameters.get("model"),
+        # Full config for reference
+        "parameters": agent.parameters,
+        # Additional metadata
+        "description": agent.description,
+    }
+
+    # Remove None values to keep traces clean
+    return {k: v for k, v in agent_info.items() if v is not None}
+
+
 # --- Base Agent Class ---
 
 

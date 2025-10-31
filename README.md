@@ -77,29 +77,45 @@ Configurations are stored as YAML files in `conf/`. You can select options at ru
 
 ### Command Line Interface
 
-Run Buttermilk flows from the command line using Hydra configuration:
+Run flows using the `bm` command with Hydra configuration:
 
 ```shell
-# Run a flow in console mode
-uv run python -m buttermilk.runner.cli run.mode=console run.flow=trans
+# Run a single flow interactively
+bm run.mode=console run.flow=trans
 
-# Run batch processing
-uv run python -m buttermilk.runner.cli run.mode=batch run.flow=trans run.limit=100
+# Use different LLM configurations
+bm run.mode=console llms=debug      # Fast, cheap models for testing
+bm run.mode=console llms=full       # Production-quality models
+
+# Batch processing
+bm run.mode=batch run.flow=trans run.limit=100        # Create batch jobs
+bm run.mode=batch_run run.limit=5                     # Process queued jobs
+bm run.mode=batch_all run.flow=trans run.limit=100   # Create and process
 
 # Start API server
-uv run python -m buttermilk.runner.cli run.mode=api
+bm run.mode=api
 
-# Use custom config directory
-uv run python -m buttermilk.runner.cli --config-dir=/path/to/conf run.mode=batch run.flow=trans
+# Run data pipeline
+bm run.mode=pipeline run.limit=100
 ```
 
-**Configuration Requirements**:
-
-- Flows must be loaded in your config's `defaults` section or via `+flows=[flow1,flow2]` override
-- `run.flow=trans` specifies which loaded flow to execute (for console/batch modes)
-- Flow definitions live in `conf/flows/*.yaml`
-
 Available modes: `console`, `batch`, `batch_run`, `batch_all`, `api`, `pipeline`, `streamlit`, `slackbot`
+
+Available LLM configurations: `debug`, `lite`, `full`, `expensive` (see `conf/llms/` for details)
+
+#### Using from Third-Party Projects
+
+Install buttermilk as a dependency and point to your project's config directory:
+
+```shell
+# Use bm with custom config path
+bm --config-path=./conf run.mode=console run.flow=your_flow
+
+# Or use Python module
+uv run python -m buttermilk.runner.cli --config-path=./conf run.mode=batch run.flow=your_flow
+```
+
+Create a `conf/` directory in your project with `config.yaml` and your flow definitions in `conf/flows/`
 
 ### Python API
 

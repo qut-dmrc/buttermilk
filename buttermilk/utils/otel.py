@@ -181,7 +181,7 @@ def span_with_session(
     """Context manager that binds session baggage and starts a span.
 
     - Attaches buttermilk.session.id as baggage so nested spans/logs inherit context.
-    - Adds session id as a span attribute for easy querying.
+    - Adds session id and project name as span attributes for easy querying.
     - Accepts kind as a string ("internal", "producer", "consumer", "server", "client") or SpanKind.
     """
     # Map kind
@@ -197,8 +197,22 @@ def span_with_session(
     else:
         span_kind = kind or _SpanKind.INTERNAL
 
-    # Merge attributes with session id
-    base_attrs = {"buttermilk.session.id": session_id} if session_id else {}
+    # Get project name from BM (with graceful fallback)
+    project_name = "unknown"
+    try:
+        # Access BM instance to get project name
+        if bm is not None and hasattr(bm, "session_info") and hasattr(bm.session_info, "project_name"):
+            project_name = bm.session_info.project_name
+    except Exception:
+        # BM not available or no project name set - use unknown
+        project_name = "unknown"
+
+    # Merge attributes with session id and project name
+    base_attrs = {}
+    if session_id:
+        base_attrs["buttermilk.session.id"] = session_id
+        base_attrs["buttermilk.project.name"] = project_name
+
     all_attrs = _clean_attrs({**base_attrs, **(attributes or {})})
 
     tracer = trace.get_tracer(__name__)

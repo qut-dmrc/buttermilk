@@ -9,3 +9,4 @@
 - when debugging, remember not just to prove the fail case -- you also need to prove a success case before you can reliably identify the failure
 - if the code review agent raises concerns about your code, you should LISTEN to it and CAREFULLY evaluate the potential options to revise or refactor. YOU ARE NOT SPECIAL; the rules apply to you, and the rules exist for a reason.
 - in tests/endtoend: "run these tests with `uv run pytest -m endtoend`
+DEPENDENCIES: `uv sync --extra dev --extra research --extra azure --upgrade`

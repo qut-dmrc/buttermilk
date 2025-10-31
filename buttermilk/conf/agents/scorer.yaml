@@ -1,12 +1,13 @@
 scorer:
   role: SCORERS
   name_components: ["📊", "role", "model", "unique_identifier"]
-  agent_obj: LLMScorer
-  num_runs: 1
+  agent_obj: LLMAgent
+  num_runs: 2
   description: Checks and scores answers against our expected ground truth.
   variants:
-    model: ${run.llms.judgers}
+    model: ${llms.judgers}
   parameters:
+    output_model: "tja.types.QualScore"
     template: score
   inputs:
     model: "*.agent_info.parameters.model|[0]"

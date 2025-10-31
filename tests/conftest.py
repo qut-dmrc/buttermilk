@@ -427,3 +427,67 @@ def pytest_addoption(parser):
         default=False,
         help="run gpu and memory intensive tests",
     )
+
+
+# =============================================================================
+# OPENTELEMETRY TEST INFRASTRUCTURE
+# =============================================================================
+
+
+@pytest.fixture
+def in_memory_span_exporter():
+    """Provides in-memory span exporter for testing OTEL spans."""
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
+    return InMemorySpanExporter()
+
+
+@pytest.fixture
+def tracer_provider(in_memory_span_exporter):
+    """Provides tracer provider with in-memory exporter for testing."""
+    from opentelemetry import trace
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(in_memory_span_exporter))
+    trace.set_tracer_provider(provider)
+
+    yield provider
+
+    # Cleanup
+    trace._TRACER_PROVIDER = None
+
+
+@pytest.fixture
+def get_recorded_spans(in_memory_span_exporter):
+    """Helper function to get recorded spans from exporter."""
+
+    def _get_spans():
+        return in_memory_span_exporter.get_finished_spans()
+
+    return _get_spans
+
+
+@pytest.fixture
+def clear_recorded_spans(in_memory_span_exporter):
+    """Helper function to clear recorded spans."""
+
+    def _clear():
+        in_memory_span_exporter.clear()
+
+    return _clear
+
+
+def _get_span_attributes(span) -> dict:
+    """Extract attributes from OTEL span for testing.
+
+    Args:
+        span: OTEL Span object
+
+    Returns:
+        Dictionary of span attributes
+    """
+    if hasattr(span, "attributes"):
+        return dict(span.attributes)
+    return {}

@@ -60,29 +60,13 @@ class JudgeReasons(Reasons):
 
     This model defines the expected JSON structure that the `Judge` agent's LLM
     should return after evaluating content against provided criteria or a policy.
-    It extends `Reasons` to include a specific prediction (e.g., policy violation)
-    and a level of uncertainty.
-
-    Attributes:
-        prediction (bool): A boolean flag indicating the outcome of the judgment.
-            For example, `True` if the content violates a policy or meets a
-            negative criterion, `False` otherwise. This should be logically
-            derived from the reasoning and criteria application.
-        reasons (list[str]): Overrides the description from `Reasons`. A list of strings,
-            where each string represents a distinct step in the reasoning process
-            leading to the `conclusion` and `prediction` regarding the
-            policy/guidelines or criteria.
-        uncertainty (Literal["high", "medium", "low"]): An assessment of the
-            uncertainty or confidence in the prediction and conclusion.
-            "high" uncertainty means there's significant room for reasonable
-            minds to differ.
 
     """
 
     # `conclusion` is inherited from the `Reasons` base model.
     reasons: list[str] = Field(
         ...,
-        description="A list of strings, where each string represents a distinct step in the reasoning process leading to the conclusion and prediction regarding policy/guidelines.",
+        description="A list of logically connected points, each representing a distinct logical step in the reasoning process leading to the conclusion and prediction.",
     )
     prediction: bool = Field(
         ...,

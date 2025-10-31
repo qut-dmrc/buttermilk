@@ -3,7 +3,6 @@
 run:
   mode: console
   flows: {}
-  llms: {}
 project_name: buttermilk
 verbose: false
 session:

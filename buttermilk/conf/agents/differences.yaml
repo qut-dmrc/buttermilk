@@ -5,7 +5,7 @@ differentiator:
   num_runs: 1
   description: Prepares analysis of the discussion and differences between draft answers (required step after synthesizing a response).
   variants:
-    model: ${run.llms.general}
+    model: ${llms.general}
   parameters:
     template: differences
   inputs:

@@ -11,10 +11,10 @@ defaults:
     - synth 
     - differences
   # Observer agents
-  - /agents@observers: 
+  - /agents@observers:
+    - scorer 
     - spy
     - owl
-    - scorer
     - host/sequence_host
   # Data source configuration
   - /storage@storage.tja: tja

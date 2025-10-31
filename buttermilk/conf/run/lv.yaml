@@ -32,7 +32,7 @@ run:
           parameters:
             template: judge
           variants:
-            model: ${run.llms.judgers}
+            model: ${llms.judgers}
           inputs:
             record: '[FETCH.outputs]||*.record[]'
       observers:
@@ -53,6 +53,6 @@ run:
           agent_obj: StructuredLLMHostAgent
           parameters:
             template: lead_ra
-            model: ${run.llms.host}
+            model: ${llms.host}
             task: Assign an agent to the task. Repeat.
           inputs: {}
