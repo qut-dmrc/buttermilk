@@ -549,21 +549,34 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         # Get OTEL tracer for agent spans
         tracer = trace.get_tracer("buttermilk.agent")
 
-        # Create OTEL span for agent execution
-        # Filter out None values to avoid OpenTelemetry attribute warnings
+        # Create comprehensive agent trace info using our utility function
+        agent_trace_info = create_agent_trace_info(
+            agent=self,
+            template_hash=None,  # Will be populated from parameters if available
+        )
+
+        # Build OTEL span attributes from agent trace info
         span_attributes = {
+            # Core agent identity
             "agent.name": self.agent_name,
             "agent.id": self.agent_id,
-            "agent.type": str(type(self)),
+            "agent.type": agent_trace_info.get("agent_type"),  # Simple: "judge", "fetchagent"
+            "agent.class": agent_trace_info.get("agent_class"),  # Full: "buttermilk.agents.judge.Judge"
+            "agent.role": agent_trace_info.get("agent_role"),
+            # Critical parameters for reproducibility
+            "agent.model": agent_trace_info.get("model"),
+            "agent.template": agent_trace_info.get("template"),
+            "agent.template_hash": agent_trace_info.get("template_hash"),
         }
 
-        # Only add optional attributes if they have non-None values
-        if self._config and self._config.role:
-            span_attributes["agent.role"] = self._config.role
+        # Add session/parent context
         if session_id := getattr(message, "session_id", None):
             span_attributes["session_id"] = session_id
         if parent_call_id := getattr(message, "parent_call_id", None):
             span_attributes["parent_call_id"] = parent_call_id
+
+        # Filter out None values to avoid OpenTelemetry warnings
+        span_attributes = {k: v for k, v in span_attributes.items() if v is not None}
 
         with tracer.start_as_current_span(
             f"agent.{self.agent_name}",
