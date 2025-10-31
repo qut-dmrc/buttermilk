@@ -86,7 +86,11 @@ def get_agent_type_for_trace(agent: Any) -> str:
     return agent.__class__.__name__.lower()
 
 
-def create_agent_trace_info(agent: Any, template_hash: str | None = None) -> dict[str, Any]:
+def create_agent_trace_info(
+    agent: Any,
+    template_hash: str | None = None,
+    hash_collector: Any | None = None,
+) -> dict[str, Any]:
     """Create comprehensive agent info for ExecutionTrace.
 
     Captures all critical parameters for reproducibility and debugging:
@@ -94,14 +98,16 @@ def create_agent_trace_info(agent: Any, template_hash: str | None = None) -> dic
     - Template name and hash
     - Model configuration
     - Full parameter set
+    - Optional hash collection for systematic tracing
 
     Args:
         agent: Agent instance
         template_hash: Optional pre-computed template hash.
                       If not provided, will use agent.parameters.get("template_hash")
+        hash_collector: Optional HashCollector with all hashes
 
     Returns:
-        Dictionary of agent trace information
+        Dictionary of agent trace information including hashes
 
     Example:
         >>> trace_info = create_agent_trace_info(judge_agent, template_hash="abc123")
@@ -125,6 +131,10 @@ def create_agent_trace_info(agent: Any, template_hash: str | None = None) -> dic
         # Additional metadata
         "description": agent.description,
     }
+
+    # Merge hash collector attributes if provided
+    if hash_collector:
+        agent_info.update(hash_collector.to_span_attributes())
 
     # Remove None values to keep traces clean
     return {k: v for k, v in agent_info.items() if v is not None}
