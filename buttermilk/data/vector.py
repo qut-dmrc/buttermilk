@@ -1991,13 +1991,23 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 f"Upserting {len(ids)} chunks for document {doc.record_id} into collection '{self.collection_name}'...",
             )
             try:
-                await asyncio.to_thread(
-                    self.collection.upsert,
-                    ids=ids,
-                    embeddings=chroma_embeddings,
-                    metadatas=metadatas,
-                    documents=documents,
-                )
+                # Execute the upsert operation in batches to respect ChromaDB's max batch size
+                total_chunks = len(ids)
+                for i in range(0, total_chunks, CHROMA_MAX_BATCH_SIZE):
+                    batch_end = min(i + CHROMA_MAX_BATCH_SIZE, total_chunks)
+                    batch_slice = slice(i, batch_end)
+                    batch_size = batch_end - i
+
+                    logger.debug(f"Upserting batch {i // CHROMA_MAX_BATCH_SIZE + 1}: " f"chunks {i}-{batch_end - 1} ({batch_size} items)")
+
+                    await asyncio.to_thread(
+                        self.collection.upsert,
+                        ids=ids[batch_slice],
+                        embeddings=chroma_embeddings[batch_slice],
+                        metadatas=metadatas[batch_slice],
+                        documents=documents[batch_slice],
+                    )
+
                 successful_docs_upserted += 1
                 logger.debug(
                     f"Successfully upserted chunks for document {doc.record_id}.",
