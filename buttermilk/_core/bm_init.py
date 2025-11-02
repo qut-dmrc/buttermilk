@@ -338,6 +338,9 @@ class BM(BaseModel):
     _initialization_complete: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
     _initialization_error: Exception | None = PrivateAttr(default=None)
 
+    # OTEL context management
+    _otel_baggage_token: Any = PrivateAttr(default=None)  # Token for cleaning up OTEL baggage
+
     # Allow attaching test doubles/mocks to instances (e.g., real_bm.get_storage = Mock(...))
     # This relaxes Pydantic's attribute setting restrictions for testing convenience.
     model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
@@ -418,8 +421,20 @@ class BM(BaseModel):
 
         This method performs all I/O operations and setup logic that should happen
         asynchronously after the BM instance is created.
+
+        IMPORTANT: This initializes the complete session context including:
+        - Python contextvars (session_id_var, batch_id_var)
+        - OTEL baggage (for span attribute propagation)
+        - OTEL root span context (detached from any parent)
+
+        Each new BM instance creates a fresh, isolated observability context.
         """
         try:
+            # UNIFIED SESSION CONTEXT SETUP
+            # This must happen FIRST to establish observability context
+            # for all subsequent operations (logging, tracing, etc.)
+            self._setup_session_context()
+
             # Set up session-specific logging context
             self._setup_session_logging()
 
@@ -443,6 +458,47 @@ class BM(BaseModel):
             logger.error(f"Error during session initialization: {e}")
             self._initialization_error = e
             self._initialization_complete.set()
+
+    def _setup_session_context(self) -> None:
+        """Establish unified session context for observability.
+
+        This method initializes ALL session context in one place:
+        1. Python contextvars (session_id_var, batch_id_var) for logging/app logic
+        2. OTEL baggage (buttermilk.session.id, etc.) for span propagation
+        3. Detaches from any parent OTEL context to ensure root span creation
+
+        This ensures that each BM session creates an independent observability context,
+        preventing trace nesting when multiple jobs run in the same worker process.
+        """
+        from buttermilk._core.context import set_logging_context
+        from buttermilk.utils.otel import attach_session_baggage
+
+        session_id = self.session_info.session_id
+        batch_id = self.session_info.batch_id
+        project_name = self.session_info.project_name
+
+        # 1. Set Python contextvars (for logging and application logic)
+        set_logging_context(
+            session_id=session_id,
+            batch_id=batch_id,
+        )
+
+        # 2. Attach OTEL baggage (propagates to all child spans and logs)
+        # Store the baggage token so it can be cleaned up later
+        self._otel_baggage_token = attach_session_baggage(
+            session_id=session_id,
+            extra={
+                "buttermilk.project": project_name,
+                "buttermilk.batch.id": batch_id,
+            },
+        )
+
+        logger.debug(
+            "Session context established (contextvars + OTEL baggage)",
+            session_id=session_id,
+            batch_id=batch_id,
+            project_name=project_name,
+        )
 
     def _setup_session_logging(self) -> None:
         """Sets up simplified session-specific logging context."""
@@ -508,6 +564,21 @@ class BM(BaseModel):
         if self._initialization_error:
             raise RuntimeError(f"Session initialization failed: {self._initialization_error}") from self._initialization_error
         logger.debug("Session initialization verified complete")
+
+    async def cleanup(self) -> None:
+        """Clean up session resources including OTEL baggage.
+
+        Call this when the session is complete to ensure proper cleanup of:
+        - OTEL baggage context
+        - Any other session-specific resources
+        """
+        from buttermilk.utils.otel import detach_session_baggage
+
+        # Detach OTEL baggage if it was attached
+        if self._otel_baggage_token is not None:
+            detach_session_baggage(self._otel_baggage_token)
+            self._otel_baggage_token = None
+            logger.debug("Cleaned up OTEL baggage for session", session_id=self.session_info.session_id)
 
     def _save_initial_config(self) -> None:
         """Save the initial BM configuration to disk including the full .cfg object.

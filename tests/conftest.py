@@ -11,7 +11,7 @@ from pytest import MarkDecorator
 from buttermilk import BM, init
 from buttermilk._core.llms import CHAT_MODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS, LLMs
 from buttermilk._core.types import Record
-from buttermilk.runner.flowrunner import FlowRunner, FlowRunContext
+from buttermilk.runner.flowrunner import FlowRunContext, FlowRunner
 from buttermilk.utils.media import download_and_convert
 from buttermilk.utils.utils import read_file
 
@@ -312,7 +312,7 @@ Perhaps they could just shut up and get on with it.""",
     ids=[x[0] for x in MEDIA_RECORDS],
 )
 async def multimodal_record(request) -> Record:
-    from buttermilk.utils.utils import is_uri, is_filepath
+    from buttermilk.utils.utils import is_filepath, is_uri
 
     source = request.param[1]
     mime_type = request.param[2]

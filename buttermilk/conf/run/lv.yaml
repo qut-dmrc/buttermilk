@@ -1,6 +1,6 @@
 defaults:
-- /local
-- _self_
+  - /local
+  - _self_
 name: lvtest
 job: testing
 run:
@@ -14,20 +14,14 @@ run:
       agents:
         judge:
           role: judge
-          description: Expert analysts, particularly suited to assess content with
-            subject matter expertise. Call on them first to provide an initial assessment
-            of the content provided. They will bring their own criteria and assess
-            a record in its entirety. They are expensive, and they will not respond
-            to directions -- they know their job and they do it well. So you should
-            only ask them to judge a piece of content once, and don't ask follow up
-            questions of them.
+          description: Expert analysts, particularly suited to assess content with subject matter expertise. Call on them first to provide an initial assessment of the content provided. They will bring their own criteria and assess a record in its entirety. They are expensive, and they will not respond to directions -- they know their job and they do it well. So you should only ask them to judge a piece of content once, and don't ask follow up questions of them.
           agent_obj: Judge
           name_components:
-          - "\u2696\uFE0F"
-          - role
-          - model
-          - criteria
-          - unique_identifier
+            - "⚖️"
+            - role
+            - model
+            - criteria
+            - unique_identifier
           num_runs: 1
           parameters:
             template: judge
@@ -38,18 +32,16 @@ run:
       observers:
         fetch:
           role: FETCH
-          name: "\U0001F50D fetch record"
+          name: "🔍 fetch record"
           agent_obj: FetchAgent
-          description: A TOOL to retrieve the content of URLs and stored RECORDS required
-            for the discussion.
+          description: A TOOL to retrieve the content of URLs and stored RECORDS required for the discussion.
           data: {}
           inputs:
             prompt: prompt||content
         host:
           role: HOST
-          name: "\U0001F3AF Assistant"
-          description: You are the HOST, an assistant to the MANAGER. Help them with
-            their tasks.
+          name: "🎯 Assistant"
+          description: You are the HOST, an assistant to the MANAGER. Help them with their tasks.
           agent_obj: StructuredLLMHostAgent
           parameters:
             template: lead_ra

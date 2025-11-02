@@ -30,7 +30,7 @@ from buttermilk.utils import scrub_serializable
 from buttermilk.utils.otel import (
     attach_session_baggage,
     detach_session_baggage,
-    span_with_session,
+    start_root_span,
     # Session root span functions removed (Phase 1 OTEL fix)
     # end_session_root_span,
     # start_session_root_span,
@@ -1278,11 +1278,14 @@ class FlowRunner(BaseModel):
             logger.debug("Failed to initialize metrics collector", error=str(e))
             metrics_collector = None
 
-        # Wrap the flow execution in a tracing span using session-aware helper
-        with span_with_session(
-            getattr(run_request, "session_id", None),
+        # Wrap the flow execution in a ROOT tracing span (detached from any parent)
+        # This ensures each flow execution creates an independent trace, preventing
+        # traces from nesting when multiple jobs run in the same worker process.
+        # Session baggage is already attached during BM initialization.
+        with start_root_span(
             name="buttermilk.flow.run",
             attributes={
+                "buttermilk.session.id": getattr(run_request, "session_id", None),
                 "buttermilk.flow.name": getattr(run_request, "flow", None),
                 "buttermilk.job.id": getattr(run_request, "job_id", None),
                 "buttermilk.source": ", ".join(run_request.source) if getattr(run_request, "source", None) else "direct",

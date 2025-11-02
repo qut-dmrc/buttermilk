@@ -41,12 +41,12 @@ debug:
 	@echo "To view logs: uv run python -m buttermilk.debug.ws_debug_cli logs -n 50"
 	@echo "Starting server in background..."
 	@nohup uv run python -m buttermilk.runner.cli run=api "+flows@run.flows.trans=trans" "llms=debug" verbose=true > /dev/null 2>&1 &
-	@echo "Server starting... Use 'uv run python -m buttermilk.debug.ws_debug_cli logs -n 30' to check logs." 
+	@echo "Server starting... Use 'uv run python -m buttermilk.debug.ws_debug_cli logs -n 30' to check logs."
 
 build:
 	@echo "Building Buttermilk Docker image..."
 	@docker build -t buttermilk:latest -t us-central1-docker.pkg.dev/prosocial-443205/reg/buttermilk:latest -f containers/deploy/Dockerfile .
-	
+
 # Run unit tests and generate a coverage report.
 coverage:
 	uv run pytest --cov \
@@ -55,20 +55,20 @@ coverage:
 		--cov-report term-missing:skip-covered \
 		$(TEST_FILE)
 
-format:	
+format:
 	uv run python -m black buttermilk
 
 lint:
 	uv run python -m  ruff buttermilk
 
 test tests:
-	uv run python -m pytest 
+	uv run python -m pytest
 
 health:
 	uv run python scripts/test_health_dashboard.py
-	
+
 scheduled_tests:
 	uv run 	python -m pytest -m scheduled tests
 
-	
+
 .PHONY: config kill kill_api kill_chat build

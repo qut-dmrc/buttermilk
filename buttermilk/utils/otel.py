@@ -73,7 +73,13 @@ def setup_tracing_otel_with_execution_context(tracing_cfg: Tracing, execution_co
         if project_id is None:
             raise RuntimeError("OTEL tracing requires a project_id but none found in config or GOOGLE_CLOUD_PROJECT environment variable")
 
-    os.environ["OTEL_RESOURCE_ATTRIBUTES"] = f"gcp.project_id={project_id}"
+    # Get service name (preserve if already set by config_bootstrap.py)
+    # Default to "buttermilk" if not set
+    service_name = os.environ.get("OTEL_SERVICE_NAME", "buttermilk")
+
+    # Set OTEL_RESOURCE_ATTRIBUTES with BOTH service.name and gcp.project_id
+    # This preserves the service name that was set in config_bootstrap.py
+    os.environ["OTEL_RESOURCE_ATTRIBUTES"] = f"service.name={service_name},gcp.project_id={project_id}"
     os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = project_id
     os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = tracing_cfg.endpoint
 
@@ -222,6 +228,64 @@ def span_with_session(
             yield span
     finally:
         detach_session_baggage(token)
+
+
+@contextmanager
+def start_root_span(
+    name: str,
+    attributes: dict | None = None,
+    kind: str | _SpanKind | None = None,
+):
+    """Context manager that starts a ROOT span (detached from any parent context).
+
+    This is crucial for batch jobs running in the same worker process - it ensures
+    each job gets an independent trace instead of nesting under previous jobs.
+
+    Use this for top-level operations like:
+    - Flow execution (buttermilk.flow.run)
+    - Batch job processing
+    - Any operation that should start a new trace tree
+
+    NOTE: This does NOT attach baggage - baggage should already be set via
+    attach_session_baggage() during BM initialization.
+
+    Args:
+        name: Span name
+        attributes: Span attributes (should include buttermilk.session.id)
+        kind: Span kind (string or SpanKind enum)
+
+    Yields:
+        The root span
+    """
+    # Map kind
+    if isinstance(kind, str):
+        kind_map = {
+            "internal": _SpanKind.INTERNAL,
+            "server": _SpanKind.SERVER,
+            "client": _SpanKind.CLIENT,
+            "producer": _SpanKind.PRODUCER,
+            "consumer": _SpanKind.CONSUMER,
+        }
+        span_kind = kind_map.get(kind.lower(), _SpanKind.INTERNAL)
+    else:
+        span_kind = kind or _SpanKind.INTERNAL
+
+    tracer = trace.get_tracer(__name__)
+    all_attrs = _clean_attrs(attributes)
+
+    # Create a detached context (no parent span)
+    # This ensures this span becomes a root of a new trace
+    from opentelemetry import context as otel_context
+
+    detached_context = otel_context.Context()  # Fresh, empty context
+
+    with tracer.start_as_current_span(
+        name,
+        context=detached_context,  # Explicitly detach from parent!
+        kind=span_kind,
+        attributes=all_attrs,
+    ) as span:
+        yield span
 
 
 def begin_span(name: str, attributes: dict | None = None, kind: str | _SpanKind | None = None):

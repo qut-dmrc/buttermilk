@@ -49,10 +49,7 @@ class Reasons(BaseModel):
 
         """
         reasons_str = "\n\n\t".join(f"- {reason}" for reason in self.reasons)
-        return (
-            f"**Conclusion:** {self.conclusion}\n\n"
-            f"**Reasoning Steps:**\n\t{reasons_str or 'No specific reasons provided.'}"
-        )
+        return f"**Conclusion:** {self.conclusion}\n\n" f"**Reasoning Steps:**\n\t{reasons_str or 'No specific reasons provided.'}"
 
 
 class JudgeReasons(Reasons):
@@ -79,14 +76,14 @@ class JudgeReasons(Reasons):
 
     def as_markdown(self, agent_id: str = None, call_id: str = None) -> str:
         """Returns a Markdown formatted string for insertion into templates.
-        
+
         Format follows the standard: agent identifier on first line, followed by
         content-specific fields without empty lines between components.
-        
+
         Args:
             agent_id: The agent identifier (e.g., "JUDGE-gpt4")
             call_id: The call identifier for this execution
-            
+
         Returns:
             str: Formatted markdown string suitable for template insertion
         """
@@ -95,34 +92,28 @@ class JudgeReasons(Reasons):
             # Use only the last 8 characters of call_id for brevity
             short_call_id = call_id[-8:] if len(call_id) > 8 else call_id
             header = f"**{agent_id} #{short_call_id}**\n"
-        
+
         # Format conclusion line - "violating" or "non-violating"
         conclusion_type = "violating" if self.prediction else "non-violating"
-        
+
         # Format reasons as bullet points
         reasons_str = "\n".join(f"- {reason}" for reason in self.reasons)
-        
-        return (
-            f"{header}"
-            f"{self.conclusion}\n"
-            f"Conclusion: {conclusion_type}\n"
-            f"{reasons_str}\n"
-            f"Prediction: {self.prediction}"
-        )
-    
+
+        return f"{header}" f"{self.conclusion}\n" f"Conclusion: {conclusion_type}\n" f"{reasons_str}\n" f"Prediction: {self.prediction}"
+
     def __str__(self) -> str:
         """Returns a Markdown formatted string representation.
-        
+
         When agent context is available (via _agent_id and _call_id attributes),
         includes the full header. Otherwise returns a simpler format.
         """
         # Check if agent context is available (set by ExecutionTrace)
         agent_id = getattr(self, "_agent_id", None)
         call_id = getattr(self, "_call_id", None)
-        
+
         if agent_id and call_id:
             return self.as_markdown(agent_id, call_id)
-        
+
         # Fallback to simpler format without header
         reasons_str = "\n".join(f"\t- {reason}" for reason in self.reasons)
         return (
