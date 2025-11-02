@@ -33,6 +33,7 @@ MODEL_NAME = "gemini-embedding-001"
 DEFAULT_UPSERT_BATCH_SIZE = 10  # Still used for failed batch saving logic if needed
 FAILED_BATCH_DIR = "failed_upsert_batches"
 MAX_TOTAL_TASKS_PER_RUN = 500
+CHROMA_MAX_BATCH_SIZE = 5000  # ChromaDB's actual limit is 5,461; use 5,000 for safe margin
 
 T = TypeVar("T")
 
@@ -1175,7 +1176,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 metadata={"error": str(e)},
             )
 
-    async def _store_chunks_for_record(self, record: Record) -> None:
+    async def _store_chunks_for_record(self, record: Record) -> None:  # noqa: PLR0912
         """Store record chunks with metadata in ChromaDB.
 
         Args:
@@ -1249,14 +1250,22 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
             logger.info(f"Upserting {len(ids)} chunks for record {record.record_id}...")
 
-            # Execute the upsert operation
-            await asyncio.to_thread(
-                self.collection.upsert,
-                ids=ids,
-                embeddings=embeddings_list,
-                metadatas=metadatas,
-                documents=documents,
-            )
+            # Execute the upsert operation in batches to respect ChromaDB's max batch size
+            total_chunks = len(ids)
+            for i in range(0, total_chunks, CHROMA_MAX_BATCH_SIZE):
+                batch_end = min(i + CHROMA_MAX_BATCH_SIZE, total_chunks)
+                batch_slice = slice(i, batch_end)
+                batch_size = batch_end - i
+
+                logger.debug(f"Upserting batch {i // CHROMA_MAX_BATCH_SIZE + 1}: " f"chunks {i}-{batch_end - 1} ({batch_size} items)")
+
+                await asyncio.to_thread(
+                    self.collection.upsert,
+                    ids=ids[batch_slice],
+                    embeddings=embeddings_list[batch_slice],
+                    metadatas=metadatas[batch_slice],
+                    documents=documents[batch_slice],
+                )
 
             logger.info(f"Successfully stored {len(ids)} chunks for record {record.record_id}")
 
