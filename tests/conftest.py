@@ -5,7 +5,7 @@ import inspect
 from pathlib import Path
 
 import pytest
-import weave  # noqa
+# weave import removed
 from pytest import MarkDecorator
 
 from buttermilk import BM, init
