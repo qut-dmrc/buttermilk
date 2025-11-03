@@ -224,16 +224,18 @@ async def test_session_id_consistency(bm_function, caplog):
 
 @pytest.mark.anyio
 async def test_session_id_mismatch_raises_error(bm_function):
-    """Verify FlowRunner raises error if session IDs don't match.
+    """Verify FlowRunner ALLOWS different session IDs between BM and request.
 
-    This is a defensive test to ensure the validation logic works.
-    If BM session_id differs from request session_id, execution should
-    fail fast with a clear error message.
+    DESIGN DECISION (commit 7bf6eb31): Session ID validation was deliberately
+    removed because each job creates its own session and can be run by any worker.
+    The BM instance's session is for the worker process, not the job.
 
-    This test:
-    1. Creates a BM with session_id X
-    2. Attempts to run flow with session_id Y (different)
-    3. Verifies ValueError is raised with clear message
+    This test verifies:
+    1. A BM with session_id X can run a job with session_id Y
+    2. No ValueError is raised for session ID mismatch
+    3. The flow completes successfully despite different session IDs
+
+    This is CORRECT behavior - jobs are independent of worker sessions.
 
     NOTE: Uses function-scoped BM fixture to get fresh instance.
     """
@@ -249,11 +251,12 @@ async def test_session_id_mismatch_raises_error(bm_function):
     # Create request with different session ID
     request = RunRequest(flow="trans", source=["test_source"], session_id=request_session_id, job_id="test_mismatch")
 
-    # ACT & ASSERT: Verify error is raised
-    with pytest.raises(ValueError, match="Session ID mismatch"):
-        await runner.run_flow(request, wait_for_completion=True)
+    # ACT: Run flow with different session_id - this SHOULD succeed
+    await runner.run_flow(request, wait_for_completion=True)
 
-    logger.info("✅ Session ID mismatch correctly raises ValueError")
+    # ASSERT: Flow completed without error
+    # No exception raised means session ID mismatch is correctly allowed
+    logger.info("✅ Session ID mismatch correctly allowed (jobs independent of worker sessions)")
 
 
 @pytest.mark.anyio
