@@ -11,11 +11,8 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from typing import Any, TypeVar
 
-import weave
-from weave.trace.weave_client import Call
-
-from buttermilk import bm, logger
-from buttermilk._core.message_data import clean_empty_values
+# weave imports removed
+from buttermilk import logger
 
 T = TypeVar("T")
 
@@ -37,56 +34,26 @@ class StandaloneTraceContext:
         """
         self.name = name
         self.attributes = attributes or {}
-        self.trace_call: Call | None = None
+        self.trace_call: Any | None = None  # Previously weave.Call, now always None
         self._op = None
 
     async def __aenter__(self) -> "StandaloneTraceContext":
-        """Enter the trace context and create the parent trace."""
-
-        # Create a dummy operation for tracing
-        async def _standalone_operation(**kwargs):
-            """Standalone operation for tracing."""
-            return kwargs
-
-        self._op = weave.op(_standalone_operation, call_display_name=self.name)
-
-        # Create the parent trace call
-        client = await bm.get_weave_client()
-        self.trace_call = client.create_call(
-            self._op,
-            inputs=clean_empty_values({"name": self.name, **self.attributes}),
-            display_name=self.name,
-            attributes=self.attributes,
-        )
-
-        logger.debug(f"Created standalone trace context: {self.name} (trace_id: {self.trace_call.trace_id})")
+        """Enter the trace context - weave has been removed."""
+        logger.debug(f"Standalone trace context (weave removed): {self.name}")
+        self.trace_call = None
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Exit the trace context and finish the trace."""
-        if self.trace_call and self._op:
-            # Finish the trace call
-            output = {"status": "error" if exc_type else "success"}
-            if exc_type:
-                output["error"] = str(exc_val)
+        """Exit the trace context - weave has been removed."""
+        logger.debug(f"Finished standalone trace context (weave removed): {self.name}")
 
-            bm.weave.finish_call(self.trace_call, output=output, op=self._op)
-            logger.debug(f"Finished standalone trace context: {self.name}")
+    def get_trace_id(self) -> str | None:
+        """Get the trace ID for this context - weave has been removed."""
+        return None
 
-            if self.trace_call.ui_url:
-                logger.info(f"Trace URL: {self.trace_call.ui_url}")
-
-    def get_trace_id(self) -> str:
-        """Get the trace ID for this context."""
-        if not self.trace_call:
-            raise RuntimeError("Trace context not active. Use within 'async with' block.")
-        return self.trace_call.trace_id
-
-    def get_call_id(self) -> str:
-        """Get the call ID for this context."""
-        if not self.trace_call:
-            raise RuntimeError("Trace context not active. Use within 'async with' block.")
-        return self.trace_call.id
+    def get_call_id(self) -> str | None:
+        """Get the call ID for this context - weave has been removed."""
+        return None
 
 
 @asynccontextmanager

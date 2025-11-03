@@ -35,7 +35,6 @@ from typing import Any
 import psutil  # For system utilities like getting username
 import pydantic  # Pydantic core
 import shortuuid  # For generating short, unique IDs
-import weave  # For tracing - core dependency
 from cloudpathlib import AnyPath, CloudPath  # For handling local and cloud paths
 from omegaconf import DictConfig
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator  # Pydantic components
@@ -205,7 +204,7 @@ class SessionInfo(BaseModel):
         elif self.started_at:
             duration = (datetime.datetime.now(datetime.UTC) - self.started_at).total_seconds()
 
-        summary = {
+        return {
             "session_id": self.session_id,
             "batch_id": self.batch_id,
             "project_name": self.project_name,
@@ -688,23 +687,16 @@ class BM(BaseModel):
         # Return the actual PubSubServiceConfig object
         return gcp_config.pubsub
 
-    async def get_weave_client(self) -> weave.trace.weave_client.WeaveClient:
-        """Provide access to the Weights & Biases Weave client.
+    async def get_weave_client(self) -> None:
+        """Legacy method - weave has been removed.
 
-        Delegates to ExecutionContext for proper weave initialization. The ExecutionContext
-        handles unified tracing configuration, environment variables, and error handling.
+        This method previously provided access to the Weave client via ExecutionContext.
+        After weave removal, it always returns None.
+
+        Returns:
+            None: Weave is no longer used
         """
-        try:
-            from buttermilk._core.execution_context import get_execution_context
-
-            execution_context = get_execution_context()
-            return await execution_context.get_weave_client()
-        except RuntimeError as e:
-            raise RuntimeError(
-                "Weave client not available. Ensure ExecutionContext is properly initialized "
-                "with weave tracing configuration. Check that infrastructure.tracing.weave is "
-                "enabled in your configuration with valid project_id and api_key."
-            ) from e
+        logger.debug("get_weave_client called but weave has been removed, returning None")
 
     @property
     def credentials(self) -> dict[str, str]:

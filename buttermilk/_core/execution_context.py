@@ -23,22 +23,22 @@ from typing import Any
 
 import psutil
 import shortuuid
-import weave
 from pydantic import BaseModel, Field, PrivateAttr
 
 from buttermilk._core.cloud import CloudManager
 from buttermilk._core.cloud_config import CloudProvider
 from buttermilk._core.config import LoggerConfig, Tracing
-from buttermilk._core.constants import cache, CONFIG_CACHE_FILENAME, MODELS_CFG_KEY, SHARED_CREDENTIALS_KEY, get_base_cache_dir
+from buttermilk._core.constants import CONFIG_CACHE_FILENAME, MODELS_CFG_KEY, SHARED_CREDENTIALS_KEY, cache, get_base_cache_dir
 from buttermilk._core.keys import SecretsManager
 from buttermilk._core.llms import LLMs
 from buttermilk._core.log import logger, setup_console_logging, setup_file_logging
 from buttermilk._core.query import QueryRunner
 from buttermilk._core.storage_config import BaseStorageConfig
-from buttermilk.utils.utils import load_json_flexi, load_dotenv
+from buttermilk.utils.utils import load_json_flexi
 
 # Global variable to store the execution context ID
 _global_execution_context_id = ""
+
 
 def _make_execution_context_id() -> str:
     """Generates a unique execution context ID for the current process.
@@ -82,31 +82,16 @@ class ExecutionContext(BaseModel):
         datasets (dict[str, BaseStorageConfig]): Shared dataset configurations.
     """
 
-    execution_context_id: str = Field(
-        default_factory=_make_execution_context_id,
-        description="Unique identifier for this execution context."
-    )
+    execution_context_id: str = Field(default_factory=_make_execution_context_id, description="Unique identifier for this execution context.")
 
     # Project management
-    project_name: str | None = Field(
-        default=None,
-        description="Project name shared across all sessions in this execution context."
-    )
-    
+    project_name: str | None = Field(default=None, description="Project name shared across all sessions in this execution context.")
+
     # Infrastructure configuration
-    clouds: list[CloudProvider] = Field(
-        default_factory=list,
-        description="List of cloud provider configurations."
-    )
+    clouds: list[CloudProvider] = Field(default_factory=list, description="List of cloud provider configurations.")
     logging: LoggerConfig | None = Field(default=None, description="Configuration for cloud-based logging.")
-    tracing: dict[str, Tracing] | None = Field(
-        default_factory=dict,
-        description="Configuration for tracing systems."
-    )
-    datasets: dict[str, BaseStorageConfig] = Field(
-        default_factory=dict,
-        description="Shared dataset configurations."
-    )
+    tracing: dict[str, Tracing] | None = Field(default_factory=dict, description="Configuration for tracing systems.")
+    datasets: dict[str, BaseStorageConfig] = Field(default_factory=dict, description="Shared dataset configurations.")
 
     # Private attributes for lazy-loaded infrastructure
     _cloud_manager: CloudManager | None = PrivateAttr(default=None)
@@ -151,7 +136,7 @@ class ExecutionContext(BaseModel):
             "Initialized ExecutionContext",
             execution_context_id=self.execution_context_id,
             cloud_providers=len(self.clouds),
-            secret_provider=secret_provider_type
+            secret_provider=secret_provider_type,
         )
 
     def _setup_logging(self) -> None:
@@ -161,20 +146,12 @@ class ExecutionContext(BaseModel):
         setup_console_logging(verbose=verbose, enable_console=enable_console)
 
         # Set up structured JSON file logging with project name
-        log_files = setup_file_logging(
-            execution_context_id=self.execution_context_id,
-            verbose=verbose,
-            project_name=self.project_name
-        )
+        log_files = setup_file_logging(execution_context_id=self.execution_context_id, verbose=verbose, project_name=self.project_name)
         for log_file in log_files:
             logger.info("ExecutionContext logging enabled", log_file=log_file)
 
         # Log initialization message
-        logger.info(
-            "ExecutionContext logging initialized",
-            execution_context_id=self.execution_context_id,
-            project_name=self.project_name
-        )
+        logger.info("ExecutionContext logging initialized", execution_context_id=self.execution_context_id, project_name=self.project_name)
 
     def _setup_gcp_environment(self) -> None:
         """Set up GCP environment variables for early access."""
@@ -195,10 +172,7 @@ class ExecutionContext(BaseModel):
             if quota_project_id:
                 os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = quota_project_id
 
-            logger.debug(
-                f"Set GCP environment: GOOGLE_CLOUD_PROJECT={project_id}, "
-                f"GOOGLE_CLOUD_QUOTA_PROJECT={quota_project_id}"
-            )
+            logger.debug(f"Set GCP environment: GOOGLE_CLOUD_PROJECT={project_id}, " f"GOOGLE_CLOUD_QUOTA_PROJECT={quota_project_id}")
 
     async def _async_background_init(self) -> None:
         """Async initialization of infrastructure components."""
@@ -224,13 +198,11 @@ class ExecutionContext(BaseModel):
         """Ensure that ExecutionContext initialization is complete."""
         await self._initialization_complete.wait()
         if self._initialization_error:
-            raise RuntimeError(
-                f"ExecutionContext initialization failed: {self._initialization_error}"
-            ) from self._initialization_error
-        
+            raise RuntimeError(f"ExecutionContext initialization failed: {self._initialization_error}") from self._initialization_error
+
         # Set up async components like tracing
         await self._setup_tracing()
-        
+
         logger.debug("ExecutionContext initialization verified complete")
 
     def validate_and_set_project(self, project: str | None) -> str:
@@ -331,9 +303,7 @@ class ExecutionContext(BaseModel):
                 try:
                     connections_data = load_json_flexi(cache_path.read_text(encoding="utf-8"))
                     if not isinstance(connections_data, dict):
-                        logger.warning(
-                            f"LLM connections cache at {cache_path} is not a dict. Will try secrets."
-                        )
+                        logger.warning(f"LLM connections cache at {cache_path} is not a dict. Will try secrets.")
                         connections_data = None
                     else:
                         logger.debug("Loaded LLM connections from cache", cache_path=str(cache_path))
@@ -373,6 +343,7 @@ class ExecutionContext(BaseModel):
         """Synchronous cache writing helper."""
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         import json
+
         logger.debug("Caching LLM connections", cache_path=str(cache_path))
         cache_path.write_text(json.dumps(connections_data), encoding="utf-8")
 
@@ -435,20 +406,19 @@ class ExecutionContext(BaseModel):
 
     async def _setup_tracing(self) -> None:
         """Set up tracing based on configuration.
-        
+
         All tracing setup is deferred to avoid circular dependencies during
         ExecutionContext initialization. Tracing will be initialized on-demand
         when first accessed.
         """
         # Log configured tracing providers but defer actual initialization
         enabled_providers = []
-        if self.tracing.get("weave") and self.tracing["weave"].enabled:
-            enabled_providers.append("weave")
+        # Weave support has been removed
         if self.tracing.get("traceloop") and self.tracing["traceloop"].enabled:
             enabled_providers.append("traceloop")
         if self.tracing.get("otel") and self.tracing["otel"].enabled:
             enabled_providers.append("otel")
-            
+
         if enabled_providers:
             logger.debug("Tracing providers configured (deferred initialization)", providers=enabled_providers)
         else:
@@ -456,102 +426,65 @@ class ExecutionContext(BaseModel):
 
         self._tracing_instrumented.set()
 
-    async def get_weave_client(self) -> weave.trace.weave_client.WeaveClient:
-        """Provide access to the Weights & Biases Weave client."""
-        # Ensure tracing is set up (this will be deferred initialization)
-        await self._ensure_tracing_initialized()
-        return weave.get_client()
+    async def get_weave_client(self) -> None:
+        """Legacy method - weave has been removed.
+
+        This method previously provided access to the Weave client.
+        After weave removal, it always returns None.
+
+        Returns:
+            None: Weave is no longer used
+        """
+        logger.debug("get_weave_client called but weave has been removed, returning None")
 
     async def _ensure_tracing_initialized(self) -> None:
         """Ensure all tracing providers are initialized on-demand."""
         if not self._tracing_instrumented.is_set():
             await self._setup_tracing()
-            
+
         # Now perform actual tracing initialization for all enabled providers
         await self._initialize_all_tracing_providers()
-
 
     async def _initialize_all_tracing_providers(self) -> None:
         """Initialize all configured tracing providers."""
         # Skip if already initialized to prevent duplicate setup
         if self._tracing_providers_initialized:
             return
-            
-        # Initialize Weave if enabled
-        if self.tracing.get("weave") and self.tracing["weave"].enabled:
-            await self._initialize_weave()
+
+        # Weave support has been removed
 
         # Initialize Traceloop if enabled
         if self.tracing.get("traceloop") and self.tracing["traceloop"].enabled:
             await self._initialize_traceloop()
-            
+
         # Initialize OTEL if enabled (now safe since BM singleton should be available)
         if self.tracing.get("otel") and self.tracing["otel"].enabled:
             await self._initialize_otel()
-            
+
         # Mark as initialized
         self._tracing_providers_initialized = True
         logger.debug("All tracing providers initialization completed")
 
     async def _initialize_weave(self) -> None:
-        """Initialize Weave tracing."""
-        weave_config = self.tracing["weave"]
-        
-        # Extract credentials from configuration (fail-fast if missing)
-        # Use 'or' to fallback to env var if config value is None/empty
-        wandb_entity = getattr(weave_config, "project_id", None) or os.getenv("WANDB_ENTITY")
-        wandb_api_key = getattr(weave_config, "api_key", None) or os.getenv("WANDB_API_KEY")
-        
-        if not wandb_entity:
-            raise RuntimeError(
-                "Weave tracing enabled but project_id (WANDB_ENTITY) not configured. Add project_id to infrastructure.tracing.weave in config or set WANDB_ENTITY environment variable."
-            )
-        
-        if not wandb_api_key:
-            raise RuntimeError(
-                "Weave tracing enabled but api_key (WANDB_API_KEY) not configured. Add api_key to infrastructure.tracing.weave in config or set WANDB_API_KEY environment variable."
-            )
-        
-        # Set environment variables for Weave initialization
-        os.environ["WANDB_ENTITY"] = wandb_entity
-        os.environ["WANDB_API_KEY"] = wandb_api_key
-        
-        try:
-            # Setup Weave tracing
-            # Use project name for collection, fallback to execution context if project not set yet
-            if self.project_name:
-                collection_name = self.project_name
-            else:
-                # Fallback for edge case where weave is initialized before first session
-                collection_name = f"execution-context-{self.execution_context_id[:8]}"
-                logger.warning("Weave initialized before project name was set, using execution context ID", execution_context_id=self.execution_context_id)
+        """Legacy method - weave has been removed.
 
-            autopatch = {"autogen": {"enabled": False}}
-            logger.debug("Starting weave client initialization", entity=wandb_entity, collection=collection_name)
-
-            client = weave.init(
-                project_name=f"{wandb_entity}/{collection_name}",
-                autopatch_settings=autopatch
-            )
-            logger.info("Weave initialized successfully", entity=wandb_entity, collection=collection_name)
-        except Exception as e:
-            logger.error("Failed to initialize Weave tracing", error=str(e))
-            raise RuntimeError(f"Weave tracing initialization failed: {e}") from e
+        This method previously initialized Weave tracing. After weave removal,
+        it does nothing and logs a debug message.
+        """
+        logger.debug("_initialize_weave called but weave has been removed, doing nothing")
 
     async def _initialize_traceloop(self) -> None:
         """Initialize Traceloop tracing."""
         traceloop_config = self.tracing["traceloop"]
         api_key = getattr(traceloop_config, "api_key", None)
-        
+
         if not api_key:
             raise RuntimeError("Traceloop tracing enabled but api_key not configured. Add api_key to infrastructure.tracing.traceloop in config.")
-        
+
         try:
             from traceloop.sdk import Traceloop
-            Traceloop.init(
-                app_name="buttermilk",
-                api_key=api_key
-            )
+
+            Traceloop.init(app_name="buttermilk", api_key=api_key)
             logger.info("Traceloop initialized successfully", execution_context_id=self.execution_context_id)
         except Exception as e:
             logger.error("Failed to initialize Traceloop tracing", error=str(e))
@@ -561,6 +494,7 @@ class ExecutionContext(BaseModel):
         """Initialize OTEL tracing using ExecutionContext's infrastructure."""
         try:
             from buttermilk.utils.otel import setup_tracing_otel_with_execution_context
+
             setup_tracing_otel_with_execution_context(self.tracing["otel"], self)
             logger.info("OTEL Tracing has been set up successfully", execution_context_id=self.execution_context_id)
         except Exception as e:
@@ -720,7 +654,7 @@ async def create_session_from_context_async(
     execution_context: ExecutionContext,
     session,
     storage_configs: dict | None = None,
-    full_config = None,
+    full_config=None,
 ):
     """Create a new session-scoped BM instance from ExecutionContext.
 

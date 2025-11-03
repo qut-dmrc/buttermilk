@@ -14,7 +14,6 @@ import uuid
 from typing import Any, AsyncGenerator, Optional
 
 import pydantic
-import weave
 from autogen_core import CancellationToken
 from autogen_core.models import LLMMessage
 from autogen_core.tools import Tool
@@ -152,7 +151,6 @@ class LLMCore:
         combined = {**input_dict, **kwargs}
         return combined
 
-    @weave.op
     async def process(
         self,
         record: Any = BaseRecord,

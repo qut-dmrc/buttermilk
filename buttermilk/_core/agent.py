@@ -16,7 +16,6 @@ from abc import abstractmethod
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
-import weave  # For tracing - core dependency
 from opentelemetry import trace
 
 from buttermilk.utils import scrub_serializable
@@ -348,7 +347,6 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
     # --- Announcement Methods ---
 
-    @weave.op
     async def _send_chat(
         self,
         message: OOBMessages,
@@ -584,24 +582,11 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         ) as otel_span:
             try:
                 logger.debug(f"Invoking Agent {self.agent_id} with args: {message}")
-                if weave_client is not None:
-                    process_op = weave.op(self._process, call_display_name=self.agent_name)
-                    parent_call = await get_parent_call_weave(message)
+                # Weave has been removed
+                child_call = None
+                parent_call = None
 
-                    child_call = weave_client.create_call(
-                        process_op,
-                        inputs=scrub_serializable(message.model_dump()),
-                        parent=parent_call,
-                        display_name=self.agent_name,
-                        attributes=trace_params,
-                    )
-
-                    if parent_call is not None:
-                        parent_call._children.append(child_call)  # Nest this call for tracing # noqa: SLF001
-                else:
-                    child_call = None
-
-                # Run without weave tracing either way (weave swallows errors, which we want to avoid.)
+                # Run without weave tracing
                 result = await self._process(message=message)
 
                 otel_span.set_status(trace.Status(trace.StatusCode.OK))
@@ -614,12 +599,8 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 otel_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                 otel_span.record_exception(e)
             finally:
-                # Mark the child call as complete, regardless of success or failure.
-                # Output is passed to .finish_call if result is not None
-                # Error is also passed if exception_obj is not None
-                if weave_client and child_call:
-                    weave_client.finish_call(child_call, output=result or None, op=process_op, exception=exception_obj)
-                    tracing_link = child_call.ui_url
+                # Weave tracing has been removed - nothing to finalize
+                pass
 
         # --- Turn the result into ExecutionTrace for long-term storage ---
         # Handle case where _process returns None (e.g., UI agents that don't produce output)
@@ -640,8 +621,8 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
         trace_object = ExecutionTrace.from_output(
             result,
-            parent_call_id=parent_call.id if parent_call else message.parent_call_id,
-            call_id=child_call.id if child_call else result.call_id,
+            parent_call_id=message.parent_call_id if hasattr(message, "parent_call_id") else None,
+            call_id=result.call_id if hasattr(result, "call_id") else None,
             inputs=trace_inputs,
             agent_info={
                 "component_name": self.agent_name,

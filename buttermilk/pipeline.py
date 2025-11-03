@@ -60,7 +60,8 @@ from typing import Any, AsyncGenerator, AsyncIterator, Mapping, Optional, Protoc
 
 import hydra
 import pydantic
-import weave
+
+# weave import removed
 from omegaconf import DictConfig
 from opentelemetry import trace
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
@@ -239,7 +240,6 @@ class PipelineOrchestrator(BaseModel):
 
         return self
 
-    @weave.op
     async def _process_single_record(self, record: BaseRecord) -> AsyncGenerator[BaseRecord, None]:
         """Process a single BaseRecord through the entire processor chain.
 
@@ -354,11 +354,7 @@ class PipelineOrchestrator(BaseModel):
                         param_hash = compute_processor_config_hash(processor_config)
                     except Exception as e:
                         # If hashing fails, use a default hash to avoid breaking the pipeline
-                        logger.warning(
-                            "Failed to compute processor config hash, using default",
-                            processor_class=processor_class,
-                            error=str(e)
-                        )
+                        logger.warning("Failed to compute processor config hash, using default", processor_class=processor_class, error=str(e))
                         param_hash = "00000000"
 
                     # Create unique processor ID for this processor (for caching and process() calls)
