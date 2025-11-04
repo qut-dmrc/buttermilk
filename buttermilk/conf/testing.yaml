@@ -84,59 +84,76 @@ vectoriser:
   collection_name: ${storage.zotero_vectors.collection_name}
   embedding_model: ${storage.zotero_vectors.embedding_model}
   dimensionality: ${storage.zotero_vectors.dimensionality}
-  concurrency: ${pipeline.concurrency}
+  concurrency: ${pipelines.zotero_vectorization.concurrency}
   sync_batch_size: 500
   deduplication_strategy: record_id # Skip existing records before downloading
   enable_record_cache: true
-pipeline:
-  _target_: buttermilk.pipeline.PipelineOrchestrator
-  pipeline_name: zotero_vectorization
-  concurrency: 1
-  limit: 99
-  # Source: Zotero library with deduplication filter
-  source:
-    _target_: buttermilk.libs.zotero.ZoteroSource
-    library_id: ${oc.env:ZOTERO_LIBRARY_ID}
-    save_dir: ${oc.env:HOME}/.cache/buttermilk/zotero/state
-    filter:
-      _target_: buttermilk.libs.zotero.VectorStoreExistenceFilter
-      vector_store: ${vectoriser}
-    force_full_sync: false
-    max_records: ${pipeline.limit}
-  processors:
-    # 0. Download PDFs and extract full text
-    - _target_: buttermilk.libs.zotero.ZoteroDownloadProcessor
-      library_id: ${oc.env:ZOTERO_LIBRARY_ID}
-      save_dir: ${oc.env:HOME}/.cache/buttermilk/zotero/items
-    # 0b. Extract text using pdftotext (replaces pdfminer extraction)
-    - _target_: buttermilk.processors.bash.PDFToTextProcessor
-    # 1. Generate citations using LLM
-    - _target_: buttermilk.tools.citator.Citator
-      model: gemini25flash
-      template: citator
-    # 2. Chunk text semantically
-    - _target_: buttermilk.data.vector.SemanticSplitter
-      chunk_size: 500
-      chunk_overlap: 200
-    # 3. Generate embeddings (pure, no side effects)
-    - _target_: buttermilk.processors.embeddings.EmbeddingGenerator
-      embedding_model: ${storage.zotero_vectors.embedding_model}
-      dimensionality: ${storage.zotero_vectors.dimensionality}
-      embedding_batch_size: 100
-      embedding_max_retries: 5
-      embedding_cooldown_seconds: 0.1
-    # 4. Store in ChromaDB
-    - ${vectoriser}
-# Testing overrides for image generation pipeline
-# Apply with: --config-name=testing +pipeline=image_generation
 pipelines:
-  image_generation:
+  zotero_vectorization:
+    _target_: buttermilk.pipeline.PipelineOrchestrator
+    pipeline_name: zotero_vectorization
+    concurrency: 1
+    limit: 99
+    # Source: Zotero library with deduplication filter
     source:
-      scenarios:
-        - "working in an office"
-        - "at a coffee shop"
+      _target_: buttermilk.libs.zotero.ZoteroSource
+      library_id: ${oc.env:ZOTERO_LIBRARY_ID}
+      save_dir: ${oc.env:HOME}/.cache/buttermilk/zotero/state
+      filter:
+        _target_: buttermilk.libs.zotero.VectorStoreExistenceFilter
+        vector_store: ${vectoriser}
+      force_full_sync: false
+      max_records: ${pipelines.zotero_vectorization.limit}
     processors:
-      0: # Override first processor (BatchExpansionProcessor)
-        repetitions: 2
+      # 0. Download PDFs and extract full text
+      - _target_: buttermilk.libs.zotero.ZoteroDownloadProcessor
+        library_id: ${oc.env:ZOTERO_LIBRARY_ID}
+        save_dir: ${oc.env:HOME}/.cache/buttermilk/zotero/items
+      # 0b. Extract text using pdftotext (replaces pdfminer extraction)
+      - _target_: buttermilk.processors.bash.PDFToTextProcessor
+      # 1. Generate citations using LLM
+      - _target_: buttermilk.tools.citator.Citator
+        model: gemini25flash
+        template: citator
+      # 2. Chunk text semantically
+      - _target_: buttermilk.data.vector.SemanticSplitter
+        chunk_size: 500
+        chunk_overlap: 200
+      # 3. Generate embeddings (pure, no side effects)
+      - _target_: buttermilk.processors.embeddings.EmbeddingGenerator
+        embedding_model: ${storage.zotero_vectors.embedding_model}
+        dimensionality: ${storage.zotero_vectors.dimensionality}
+        embedding_batch_size: 100
+        embedding_max_retries: 5
+        embedding_cooldown_seconds: 0.1
+      # 4. Store in ChromaDB
+      - ${vectoriser}
+  image_generation:
+    name: image_generation
+    description: "Generate images using character-based prompts across multiple models"
+    # Character-based prompt source
+    source:
+      _target_: buttermilk.data.sources.character_prompt_source.CharacterPromptSource
+      mask_attributes:
+        - sexuality
+        - gender
+    # Processing stages
+    processors:
+      # 1. Expand to multiple repetitions × models
+      - _target_: buttermilk.processors.batch_expansion.BatchExpansionProcessor
+        repetitions: 3
         models:
+          # Use cheap models for cost control
           - _target_: buttermilk.agents.imagegen.VertexImagen3Fast
+          - _target_: buttermilk.agents.imagegen.VertexImagen4Fast
+      # 2. Generate images via Vertex AI
+      - _target_: buttermilk.processors.image_generation.ImageGenerationProcessor
+        # Model class specified in record.metadata
+      # 3. Upload to GCS with structured paths
+      - _target_: buttermilk.processors.gcs_image_storage.GCSImageStorageProcessor
+        bucket: prosocial-dev
+        base_path: "image-generation"
+      # 4. Log all metadata to CSV
+      - _target_: buttermilk.processors.csv_metadata_logger.CSVMetadataLogger
+        bucket: prosocial-dev
+        base_path: "image-generation"
