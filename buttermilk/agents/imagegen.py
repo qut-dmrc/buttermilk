@@ -289,6 +289,48 @@ class VertexImagegenModels(TextToImageClient):
         )
 
 
+# =============================================================================
+# VERTEX IMAGEN MODEL VARIANTS
+# =============================================================================
+# Subclasses for each Vertex Imagen model variant to enable proper categorization
+# and registration in the model registry below.
+
+
+class VertexImagen3Fast(VertexImagegenModels):
+    """Imagen 3.0 Fast - Low-cost, fast generation."""
+
+    model: str = "imagen-3.0-fast-generate-001"
+    prefix: str = "imagen3fast001_"
+
+
+class VertexImagen4Fast(VertexImagegenModels):
+    """Imagen 4.0 Fast - Low-cost, fast generation with improved quality."""
+
+    model: str = "imagen-4.0-fast-generate-001"
+    prefix: str = "imagen4fast001_"
+
+
+class VertexImagen3(VertexImagegenModels):
+    """Imagen 3.0 Standard - High-quality generation."""
+
+    model: str = "imagen-3.0-generate-002"
+    prefix: str = "imagen3_"
+
+
+class VertexImagen4(VertexImagegenModels):
+    """Imagen 4.0 Standard - High-quality generation."""
+
+    model: str = "imagen-4.0-generate-001"
+    prefix: str = "imagen4_"
+
+
+class VertexImagen4Ultra(VertexImagegenModels):
+    """Imagen 4.0 Ultra - Highest quality, most expensive."""
+
+    model: str = "imagen-4.0-ultra-generate-001"
+    prefix: str = "imagen4ultra_"
+
+
 class SD35Large(TextToImageClient):
     """Client for Stability AI's Stable Diffusion 3.5 Large model via Azure.
 
@@ -942,9 +984,45 @@ class DALLE(TextToImageClient):
         )
 
 
-ImageClients: list[Type[TextToImageClient]] = [DALLE, SD35Large, FLUX11Pro, VertexImagegenModels, SD3, SDXL, SDXLReplicate]
+# =============================================================================
+# IMAGE GENERATION MODEL REGISTRY
+# =============================================================================
+# Centralized registry of all image generation models categorized by cost tier.
+# Tests, pipelines, and other consumers should import from this registry to
+# ensure consistent model categorization and selection.
+#
+# CHEAP MODELS: Fast, low-cost models suitable for testing and high-volume generation
+# EXPENSIVE MODELS: High-quality, high-cost models - use sparingly
+
+# Cheap/Fast Models
+CHEAP_IMAGE_CLIENTS: list[Type[TextToImageClient]] = [
+    VertexImagen3Fast,  # Imagen 3.0 Fast (GCP Vertex AI)
+    VertexImagen4Fast,  # Imagen 4.0 Fast (GCP Vertex AI) - NEW
+    SD35Large,  # Stable Diffusion 3.5 Large (Azure)
+    FLUX11Pro,  # FLUX 1.1 Pro (Azure)
+]
+
+# Expensive/High-Quality Models
+EXPENSIVE_IMAGE_CLIENTS: list[Type[TextToImageClient]] = [
+    VertexImagen3,  # Imagen 3.0 Standard (GCP Vertex AI)
+    VertexImagen4,  # Imagen 4.0 Standard (GCP Vertex AI)
+    VertexImagen4Ultra,  # Imagen 4.0 Ultra (GCP Vertex AI)
+    DALLE,  # DALL-E 3 (OpenAI)
+    SD3,  # Stable Diffusion 3 (Stability AI direct API)
+    SDXL,  # Stable Diffusion XL (HuggingFace Hub - base + refiner)
+    SDXLReplicate,  # Stable Diffusion XL (Replicate)
+    SD,  # Stable Diffusion 2.1 (Replicate)
+]
+
+# Complete registry
+ALL_IMAGE_CLIENTS: list[Type[TextToImageClient]] = CHEAP_IMAGE_CLIENTS + EXPENSIVE_IMAGE_CLIENTS
+
+# Backward compatibility - ImageClients now references the full registry
+# NOTE: Tests and new code should use CHEAP_IMAGE_CLIENTS or ALL_IMAGE_CLIENTS directly
+ImageClients: list[Type[TextToImageClient]] = ALL_IMAGE_CLIENTS
 """A list of available `TextToImageClient` classes that can be used by `BatchImageGenerator`.
-This list allows for easy iteration or selection of different image generation models.
+This list now references ALL_IMAGE_CLIENTS from the model registry above.
+For cost-aware selection, use CHEAP_IMAGE_CLIENTS or EXPENSIVE_IMAGE_CLIENTS instead.
 """
 
 

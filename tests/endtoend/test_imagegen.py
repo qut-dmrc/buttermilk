@@ -1,10 +1,7 @@
 import pytest
 
 from buttermilk import logger
-from buttermilk.agents.imagegen import (
-    BatchImageGenerator,
-    ImageClients,
-)
+from buttermilk.agents.imagegen import BatchImageGenerator
 
 # Skip entire module if replicate not installed (requires ml extras)
 pytest.importorskip("replicate", reason="replicate package not installed - requires ml extras")
@@ -21,9 +18,21 @@ prompts = [
 ]
 
 
+def pytest_generate_tests(metafunc):
+    """Generate test parameters dynamically based on --run-expensive flag."""
+    if "client" in metafunc.fixturenames:
+        from buttermilk.agents.imagegen import ALL_IMAGE_CLIENTS, CHEAP_IMAGE_CLIENTS
+
+        if metafunc.config.getoption("--run-expensive"):
+            clients = ALL_IMAGE_CLIENTS
+        else:
+            clients = CHEAP_IMAGE_CLIENTS
+
+        metafunc.parametrize("client", clients)
+
+
 @pytest.mark.anyio
 @pytest.mark.parametrize("prompt", [x[1] for x in prompts], ids=[x[0] for x in prompts])
-@pytest.mark.parametrize("client", ImageClients)
 async def test_model(client, prompt):
     negative_prompt = "dog"
     imagegenerator = client()
@@ -39,26 +48,11 @@ async def test_model(client, prompt):
 
 
 @pytest.mark.anyio
-async def test_flux11pro_generation():
-    """Test FLUX 1.1 Pro image generation via Azure."""
-    from buttermilk.agents.imagegen import FLUX11Pro
-
-    client = FLUX11Pro()
-    image = await client.generate(
-        text="a simple geometric shape on white background",
-        save_path=None,
-    )
-    assert not image.error, f"Image generation failed: {image.error}"
-    assert image.image is not None, "No image was generated"
-    logger.info("FLUX 1.1 Pro image generated", uri=image.uri)
-
-
-@pytest.mark.anyio
-async def test_batch(real_bm):
+async def test_batch(real_bm, image_clients):
     prompt = prompts[0][1]
-    runner = BatchImageGenerator(generators=ImageClients)
+    runner = BatchImageGenerator(generators=image_clients)
     images = []
-    async for result in runner.abatch(input=[prompt], n=1):
+    async for result in runner.abatch(inputs=[prompt], n=1):
         images.append(result)
         result.image.show()
-    assert len(images) == len(ImageClients)
+    assert len(images) == len(image_clients)
