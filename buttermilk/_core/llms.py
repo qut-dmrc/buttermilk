@@ -634,7 +634,7 @@ class AutoGenWrapper(BaseModel):
     async def _execute_tools(
         self,
         calls: list[FunctionCall],
-        tools_list: Sequence[ToolSchema],
+        tools_list: Sequence[Tool | ToolSchema],
         cancellation_token: CancellationToken | None,
     ) -> list[FunctionExecutionResult]:
         """Executes a list of tool calls concurrently.
@@ -888,7 +888,7 @@ class LiteLLMWrapper(BaseModel):
     """
 
     model: str = Field(..., description="Model name in LiteLLM format")
-    model_info: ModelInfo = Field(..., description="Model metadata")
+    model_info: dict[str, Any] = Field(..., description="Model metadata")
     litellm_model_name: str = Field(..., description="Resolved model name for LiteLLM")
     api_key: str | None = Field(default=None, description="API key for the provider")
     base_url: str | None = Field(default=None, description="Custom base URL")
@@ -1137,7 +1137,7 @@ class LiteLLMWrapper(BaseModel):
     async def _execute_tools(
         self,
         calls: list[FunctionCall],
-        tools_list: Sequence[ToolSchema],
+        tools_list: Sequence[Tool | ToolSchema],
         cancellation_token: CancellationToken | None,
     ) -> list[FunctionExecutionResult]:
         """Execute tools (reuse AutoGenWrapper implementation)."""
