@@ -14,7 +14,6 @@ import importlib
 import inspect
 import json
 import random
-import time
 from collections.abc import Sequence
 from enum import Enum
 from typing import Any, Callable, TypeVar
@@ -27,14 +26,12 @@ from anthropic import (
 
 # LiteLLM imports
 try:
-    import litellm
-    from litellm import acompletion, completion
+    from litellm import acompletion
+
     LITELLM_AVAILABLE = True
 except ImportError:
     LITELLM_AVAILABLE = False
-    litellm = None
     acompletion = None
-    completion = None
 
 # Autogen library imports - these are required dependencies
 from autogen_core import CancellationToken, FunctionCall  # Autogen core types
@@ -137,10 +134,7 @@ class LLMConfig(BaseModel):
     model_info: ModelInfo = Field(..., description="Model metadata (family, context size, etc.)")
     configs: dict = Field(default_factory=dict, description="Options to pass to the constructor")
     litellm_model: str | None = Field(default=None, description="Explicit litellm model identifier override")
-    use_litellm: bool = Field(
-        default=False,
-        description="Use LiteLLMWrapper instead of AutoGenWrapper (default: False for backward compatibility)"
-    )
+    use_litellm: bool = Field(default=False, description="Use LiteLLMWrapper instead of AutoGenWrapper (default: False for backward compatibility)")
 
     @field_validator("client_type", mode="before")
     @classmethod
@@ -346,7 +340,7 @@ class AutoGenWrapper(BaseModel):
 
         """
         parsed_object = None
-        tool_calls = []
+        tool_calls: list[FunctionCall] | None = []
 
         is_valid_schema_type = (
             schema is not None
@@ -782,67 +776,34 @@ def autogen_to_litellm_messages(messages: Sequence[LLMMessage]) -> list[dict[str
         msg_type = type(msg).__name__
 
         if msg_type == "SystemMessage":
-            litellm_messages.append({
-                "role": "system",
-                "content": msg.content
-            })
+            litellm_messages.append({"role": "system", "content": msg.content})
         elif msg_type == "UserMessage":
-            litellm_messages.append({
-                "role": "user",
-                "content": msg.content
-            })
+            litellm_messages.append({"role": "user", "content": msg.content})
         elif msg_type == "AssistantMessage":
             # Handle tool calls in assistant messages
             if isinstance(msg.content, list) and all(isinstance(c, FunctionCall) for c in msg.content):
                 # Convert FunctionCall objects to tool_calls format
                 tool_calls = []
                 for fc in msg.content:
-                    tool_calls.append({
-                        "id": fc.id,
-                        "type": "function",
-                        "function": {
-                            "name": fc.name,
-                            "arguments": fc.arguments
-                        }
-                    })
-                litellm_messages.append({
-                    "role": "assistant",
-                    "content": None,
-                    "tool_calls": tool_calls
-                })
+                    tool_calls.append({"id": fc.id, "type": "function", "function": {"name": fc.name, "arguments": fc.arguments}})
+                litellm_messages.append({"role": "assistant", "content": None, "tool_calls": tool_calls})
             else:
                 # Regular text response
                 content = msg.content if isinstance(msg.content, str) else str(msg.content)
-                litellm_messages.append({
-                    "role": "assistant",
-                    "content": content
-                })
+                litellm_messages.append({"role": "assistant", "content": content})
         elif msg_type == "FunctionExecutionResultMessage":
             # Convert tool results to tool message format
             for result in msg.content:
-                litellm_messages.append({
-                    "role": "tool",
-                    "tool_call_id": result.call_id,
-                    "name": result.name,
-                    "content": result.content
-                })
+                litellm_messages.append({"role": "tool", "tool_call_id": result.call_id, "name": result.name, "content": result.content})
         else:
             # Fallback for unknown message types
             logger.warning(f"Unknown message type {msg_type}, treating as user message")
-            litellm_messages.append({
-                "role": "user",
-                "content": str(msg.content)
-            })
+            litellm_messages.append({"role": "user", "content": str(msg.content)})
 
     return litellm_messages
 
 
-def litellm_to_autogen_result(
-    response: Any,
-    usage: Any,
-    model: str,
-    schema: type[BaseModel] | None = None
-) -> CreateResult | ModelOutput:
+def litellm_to_autogen_result(response: Any, usage: Any, model: str, schema: type[BaseModel] | None = None) -> CreateResult | ModelOutput:
     """Convert LiteLLM response to Autogen CreateResult/ModelOutput.
 
     Args:
@@ -857,6 +818,7 @@ def litellm_to_autogen_result(
     from autogen_core.models import RequestUsage
 
     # Extract content from response
+    content: str | list[FunctionCall]
     if hasattr(response, "choices") and response.choices:
         choice = response.choices[0]
         message = choice.message if hasattr(choice, "message") else choice
@@ -864,13 +826,9 @@ def litellm_to_autogen_result(
         # Check for tool calls
         if hasattr(message, "tool_calls") and message.tool_calls:
             # Convert to FunctionCall objects
-            tool_calls = []
+            tool_calls: list[FunctionCall] = []
             for tc in message.tool_calls:
-                tool_calls.append(FunctionCall(
-                    id=tc.id,
-                    name=tc.function.name,
-                    arguments=tc.function.arguments
-                ))
+                tool_calls.append(FunctionCall(id=tc.id, name=tc.function.name, arguments=tc.function.arguments))
             content = tool_calls
         else:
             # Regular text content
@@ -884,10 +842,7 @@ def litellm_to_autogen_result(
 
     # Create RequestUsage object
     if hasattr(usage, "prompt_tokens"):
-        request_usage = RequestUsage(
-            prompt_tokens=usage.prompt_tokens or 0,
-            completion_tokens=usage.completion_tokens or 0
-        )
+        request_usage = RequestUsage(prompt_tokens=usage.prompt_tokens or 0, completion_tokens=usage.completion_tokens or 0)
     else:
         request_usage = RequestUsage(prompt_tokens=0, completion_tokens=0)
 
@@ -901,15 +856,9 @@ def litellm_to_autogen_result(
             finish_reason=finish_reason,
             usage=request_usage,
             cached=cached,
-            parsed_object=None  # Will be parsed by caller if needed
+            parsed_object=None,  # Will be parsed by caller if needed
         )
-    else:
-        return CreateResult(
-            content=content,
-            finish_reason=finish_reason,
-            usage=request_usage,
-            cached=cached
-        )
+    return CreateResult(content=content, finish_reason=finish_reason, usage=request_usage, cached=cached)
 
 
 # =============================================================================
@@ -954,26 +903,19 @@ class LiteLLMWrapper(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    def __init__(self, **data):
+    def __init__(self, **data: Any):
         """Initialize LiteLLMWrapper."""
         super().__init__(**data)
 
         if not LITELLM_AVAILABLE:
-            raise ImportError(
-                "LiteLLM is not installed. Please install it with: pip install litellm"
-            )
+            raise ImportError("LiteLLM is not installed. Please install it with: pip install litellm")
 
-    async def _execute_with_retry(
-        self,
-        func: Callable,
-        *args,
-        **kwargs
-    ) -> Any:
+    async def _execute_with_retry(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         """Execute a function with exponential backoff retry logic.
 
         Mirrors RetryWrapper behavior for consistency.
         """
-        last_exception = None
+        last_exception: Exception | None = None
         wait_time = self.min_wait_seconds
 
         for attempt in range(self.max_retries + 1):
@@ -991,20 +933,14 @@ class LiteLLMWrapper(BaseModel):
                 error_msg = str(e).lower()
 
                 # Check if this is a retryable error
-                is_retryable = any(
-                    keyword in error_msg
-                    for keyword in ["rate limit", "timeout", "503", "429", "502", "500"]
-                )
+                is_retryable = any(keyword in error_msg for keyword in ["rate limit", "timeout", "503", "429", "502", "500"])
 
                 if attempt < self.max_retries and is_retryable:
                     # Calculate wait time with jitter
                     jitter = random.uniform(-self.jitter_seconds, self.jitter_seconds)
                     actual_wait = min(wait_time + jitter, self.max_wait_seconds)
 
-                    logger.warning(
-                        f"LiteLLM call failed (attempt {attempt + 1}/{self.max_retries + 1}): {e}. "
-                        f"Retrying in {actual_wait:.1f}s..."
-                    )
+                    logger.warning(f"LiteLLM call failed (attempt {attempt + 1}/{self.max_retries + 1}): {e}. " f"Retrying in {actual_wait:.1f}s...")
 
                     await asyncio.sleep(actual_wait)
                     wait_time *= 2  # Exponential backoff
@@ -1042,12 +978,7 @@ class LiteLLMWrapper(BaseModel):
         litellm_messages = autogen_to_litellm_messages(messages)
 
         # Build LiteLLM parameters
-        litellm_params = {
-            "model": self.litellm_model_name,
-            "messages": litellm_messages,
-            **self.extra_params,
-            **kwargs
-        }
+        litellm_params = {"model": self.litellm_model_name, "messages": litellm_messages, **self.extra_params, **kwargs}
 
         # Add API key if provided
         if self.api_key:
@@ -1068,20 +999,22 @@ class LiteLLMWrapper(BaseModel):
             for tool in tools:
                 if hasattr(tool, "schema"):
                     tool_schema = tool.schema
-                    litellm_tools.append({
-                        "type": "function",
-                        "function": {
-                            "name": tool_schema.get("name", tool.name),
-                            "description": tool_schema.get("description", ""),
-                            "parameters": tool_schema.get("parameters", {})
+                    litellm_tools.append(
+                        {
+                            "type": "function",
+                            "function": {
+                                "name": tool_schema.get("name", tool.name),
+                                "description": tool_schema.get("description", ""),
+                                "parameters": tool_schema.get("parameters", {}),
+                            },
                         }
-                    })
+                    )
 
             if litellm_tools:
                 litellm_params["tools"] = litellm_tools
 
         # Execute with retry logic
-        async def _call_litellm():
+        async def _call_litellm() -> Any:
             return await acompletion(**litellm_params)
 
         try:
@@ -1249,16 +1182,10 @@ class LiteLLMWrapper(BaseModel):
 
         # Use existing pricing calculation utility
         prompt_tokens, completion_tokens, total_cost = calculate_token_cost(
-            model=self.litellm_model_name,
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens
+            model=self.litellm_model_name, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens
         )
 
-        return {
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": completion_tokens,
-            "total_cost": total_cost
-        }
+        return {"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens, "total_cost": total_cost}
 
 
 class LLMs(BaseModel):
@@ -1348,23 +1275,18 @@ class LLMs(BaseModel):
     @staticmethod
     def _provider_prefix_for_client_type(client_type: str) -> str:
         """Normalize internal client_type to a litellm provider prefix."""
-        match client_type:
-            case "azure":
-                return "azure"
-            case "openai":
-                return "openai"
-            case "gemini" | "gemini_vertex":
-                # litellm uses 'gemini' for Gemini API; vertex-hosted Gemini still routes differently upstream
-                return "gemini"
-            case "huggingface":
-                return "huggingface"
-            case "vertex_openai" | "anthropic_vertex":
-                # Vertex OpenAI-compatible & Anthropic-on-Vertex
-                return "vertex_ai"
-            case "anthropic":
-                return "anthropic"
-            case _:
-                return client_type  # fallback / extension
+        # Mapping of internal client types to litellm provider prefixes
+        prefix_map = {
+            "azure": "azure",
+            "openai": "openai",
+            "gemini": "gemini",  # litellm uses 'gemini' for Gemini API
+            "gemini_vertex": "gemini",  # vertex-hosted Gemini still routes differently upstream
+            "huggingface": "huggingface",
+            "vertex_openai": "vertex_ai",  # Vertex OpenAI-compatible
+            "anthropic_vertex": "vertex_ai",  # Anthropic-on-Vertex
+            "anthropic": "anthropic",
+        }
+        return prefix_map.get(client_type, client_type)  # fallback / extension
 
     @staticmethod
     def _is_already_litellm_identifier(model_name: str, registry: dict[str, Any] | None = None) -> bool:
@@ -1450,9 +1372,8 @@ class LLMs(BaseModel):
             expected_prefix = LLMs._provider_prefix_for_client_type(client_type)
             if prefix == expected_prefix:
                 return base
-            else:
-                # Keep the full name as-is for cross-provider compatibility
-                return model_name
+            # Keep the full name as-is for cross-provider compatibility
+            return model_name
 
         # No prefix found, return as-is
         return model_name
@@ -1503,38 +1424,28 @@ class LLMs(BaseModel):
         def create_client_factory() -> Callable[[], ChatCompletionClient]:
             """Create a factory function that returns fresh clients with current credentials."""
 
-            if config.client_type == ClientType.OPENAI:
+            # Define factory functions for each client type
+            def _openai_factory() -> ChatCompletionClient:
+                return OpenAIChatCompletionClient(
+                    base_url=config.base_url or "",  # Provide default empty string if None
+                    model_info=config.model_info,
+                    **client_params,
+                )
 
-                def factory() -> ChatCompletionClient:
-                    return OpenAIChatCompletionClient(
-                        base_url=config.base_url or "",  # Provide default empty string if None
-                        model_info=config.model_info,
-                        **client_params,
-                    )
-
-                return factory
-
-            elif config.client_type == ClientType.AZURE:
+            def _azure_factory() -> ChatCompletionClient:
                 if not config.base_url:
                     raise ValueError("Azure endpoint URL is required for Azure client")
+                return AzureOpenAIChatCompletionClient(
+                    azure_endpoint=config.base_url,
+                    model_info=config.model_info,
+                    **client_params,
+                )
 
-                def factory() -> ChatCompletionClient:
-                    return AzureOpenAIChatCompletionClient(
-                        azure_endpoint=config.base_url,
-                        model_info=config.model_info,
-                        **client_params,
-                    )
-
-                return factory
-
-            elif config.client_type == ClientType.ANTHROPIC:
+            def _anthropic_factory() -> ChatCompletionClient:
                 # Direct Anthropic API
-                def factory() -> ChatCompletionClient:
-                    return AnthropicChatCompletionClient(**client_params)
+                return AnthropicChatCompletionClient(**client_params)
 
-                return factory
-
-            elif config.client_type == ClientType.ANTHROPIC_VERTEX:
+            def _anthropic_vertex_factory() -> ChatCompletionClient:
                 # Anthropic via Vertex AI
                 if not bm.gcp_credentials:
                     raise ValueError("GCP credentials not available for Anthropic via Vertex AI.")
@@ -1546,79 +1457,80 @@ class LLMs(BaseModel):
                 }
                 vertex_params = {k: v for k, v in vertex_params.items() if v is not None}
 
-                def factory() -> ChatCompletionClient:
-                    try:
-                        vertex_client = AsyncAnthropicVertex(**vertex_params)
-                        # Remove api_key for Vertex auth
-                        vertex_client_params = client_params.copy()
-                        vertex_client_params.pop("api_key", None)
+                try:
+                    vertex_client = AsyncAnthropicVertex(**vertex_params)
+                    # Remove api_key for Vertex auth
+                    vertex_client_params = client_params.copy()
+                    vertex_client_params.pop("api_key", None)
 
-                        client = AnthropicChatCompletionClient(**vertex_client_params)
-                        client._client = vertex_client  # type: ignore[attr-defined]
-                        return client
-                    except Exception as e:
-                        logger.error(f"Error initializing Anthropic client for Vertex: {e!s}")
-                        raise
+                    client = AnthropicChatCompletionClient(**vertex_client_params)
+                    client._client = vertex_client  # type: ignore[attr-defined]
+                    return client
+                except Exception as e:
+                    logger.error(f"Error initializing Anthropic client for Vertex: {e!s}")
+                    raise
 
-                return factory
-
-            elif config.client_type == ClientType.GEMINI:
+            def _gemini_factory() -> ChatCompletionClient:
                 # Google Generative AI (Gemini) API
                 if not bm.gcp_credentials:
                     raise ValueError("GCP credentials not available for Gemini API.")
+                return OpenAIChatCompletionClient(
+                    model_info=config.model_info,
+                    **client_params,
+                )
 
-                def factory() -> ChatCompletionClient:
-                    return OpenAIChatCompletionClient(
-                        model_info=config.model_info,
-                        **client_params,
-                    )
+            def _gemini_vertex_factory() -> ChatCompletionClient:
+                vertex_params = client_params.copy()
+                # Get fresh token on each client creation
+                vertex_params["api_key"] = bm.get_gcp_access_token()
+                return OpenAIChatCompletionClient(
+                    base_url=config.base_url,
+                    model_info=config.model_info,
+                    **vertex_params,
+                )
 
-                return factory
-
-            elif config.client_type == ClientType.GEMINI_VERTEX:
-
-                def factory() -> ChatCompletionClient:
-                    vertex_params = client_params.copy()
-                    # Get fresh token on each client creation
-                    vertex_params["api_key"] = bm.get_gcp_access_token()
-                    return OpenAIChatCompletionClient(
-                        base_url=config.base_url,
-                        model_info=config.model_info,
-                        **vertex_params,
-                    )
-
-                return factory
-
-            elif config.client_type == ClientType.VERTEX_OPENAI:
+            def _vertex_openai_factory() -> ChatCompletionClient:
                 # OpenAI-compatible endpoint on Vertex (for Llama, etc.)
                 if not bm.gcp_credentials:
                     raise ValueError("GCP credentials not available for Vertex AI.")
 
-                def factory() -> ChatCompletionClient:
-                    vertex_params = client_params.copy()
+                vertex_params = client_params.copy()
 
-                    # Set up OAuth2 bearer token authentication with fresh token
-                    headers = {
-                        "Authorization": f"Bearer {bm.get_gcp_access_token()}",
-                    }
+                # Set up OAuth2 bearer token authentication with fresh token
+                headers = {
+                    "Authorization": f"Bearer {bm.get_gcp_access_token()}",
+                }
 
-                    # Dummy API key for OpenAI client validation
-                    if vertex_params.get("api_key") is None:
-                        vertex_params["api_key"] = "dummy-key-for-vertex"
+                # Dummy API key for OpenAI client validation
+                if vertex_params.get("api_key") is None:
+                    vertex_params["api_key"] = "dummy-key-for-vertex"
 
-                    vertex_params["default_headers"] = headers
+                vertex_params["default_headers"] = headers
 
-                    if not config.base_url:
-                        raise ValueError("Base URL is required for Vertex OpenAI endpoint")
-                    return OpenAIChatCompletionClient(
-                        base_url=config.base_url,
-                        model_info=config.model_info,
-                        **vertex_params,
-                    )
+                if not config.base_url:
+                    raise ValueError("Base URL is required for Vertex OpenAI endpoint")
+                return OpenAIChatCompletionClient(
+                    base_url=config.base_url,
+                    model_info=config.model_info,
+                    **vertex_params,
+                )
 
-                return factory
-            else:
+            # Map client types to their factory functions
+            factory_map = {
+                ClientType.OPENAI: _openai_factory,
+                ClientType.AZURE: _azure_factory,
+                ClientType.ANTHROPIC: _anthropic_factory,
+                ClientType.ANTHROPIC_VERTEX: _anthropic_vertex_factory,
+                ClientType.GEMINI: _gemini_factory,
+                ClientType.GEMINI_VERTEX: _gemini_vertex_factory,
+                ClientType.VERTEX_OPENAI: _vertex_openai_factory,
+            }
+
+            # Get the appropriate factory or raise error
+            factory = factory_map.get(config.client_type)
+            if factory is None:
                 raise ProcessingError(f"Unsupported client_type: {config.client_type}")
+            return factory
 
         # Choose wrapper type based on configuration
         if config.use_litellm:
@@ -1638,17 +1550,13 @@ class LLMs(BaseModel):
                 litellm_model_name=resolved_litellm,
                 api_key=config.api_key,
                 base_url=config.base_url,
-                extra_params=extra_params
+                extra_params=extra_params,
             )
         else:
             # Use AutoGenWrapper (existing behavior)
             logger.debug(f"Using AutoGenWrapper for model '{name}' with provider '{config.client_type.value}'")
             client_factory = create_client_factory()
-            wrapped_client = AutoGenWrapper(
-                client_factory=client_factory,
-                model_info=config.model_info,
-                litellm_model_name=resolved_litellm
-            )
+            wrapped_client = AutoGenWrapper(client_factory=client_factory, model_info=config.model_info, litellm_model_name=resolved_litellm)
 
         self.autogen_models[name] = wrapped_client
         return wrapped_client
