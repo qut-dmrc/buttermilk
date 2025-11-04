@@ -81,7 +81,7 @@ dependencies = [
     "autogen-ext[azure,gemini,openai]>=0.7.0",
     "autogen-gemini>=0.0.1",
     # Tracing and observability
-    "weave==0.51.59",
+    # weave removed for performance optimization
     "traceloop-sdk>=0.38.5",
     "opentelemetry-api>=1.30.0",
     "opentelemetry-sdk>=1.30.0",

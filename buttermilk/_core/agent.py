@@ -16,7 +16,6 @@ from abc import abstractmethod
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
-import weave  # For tracing - core dependency
 from opentelemetry import trace
 
 from buttermilk.utils import scrub_serializable
@@ -62,6 +61,83 @@ from buttermilk._core.message_data import extract_message_data
 from buttermilk._core.tracing import get_parent_call_weave  # Function to retrieve parent call for tracing
 from buttermilk._core.types import BaseRecord  # Data record structure
 from buttermilk.utils.templating import KeyValueCollector  # Utility for managing state data
+
+
+# Utility functions for agent tracing
+def get_agent_type_for_trace(agent: Any) -> str:
+    """Get simplified agent type for tracing.
+
+    Returns lowercase agent class name (e.g., 'judge', 'fetchagent').
+    This follows OTEL semantic conventions for component types.
+
+    Args:
+        agent: Agent instance
+
+    Returns:
+        Lowercase agent class name
+
+    Examples:
+        >>> from buttermilk.agents.judge import Judge
+        >>> judge = Judge(...)
+        >>> get_agent_type_for_trace(judge)
+        'judge'
+    """
+    return agent.__class__.__name__.lower()
+
+
+def create_agent_trace_info(
+    agent: Any,
+    template_hash: str | None = None,
+    hash_collector: Any | None = None,
+) -> dict[str, Any]:
+    """Create comprehensive agent info for ExecutionTrace.
+
+    Captures all critical parameters for reproducibility and debugging:
+    - Agent identity (type, name, role)
+    - Template name and hash
+    - Model configuration
+    - Full parameter set
+    - Optional hash collection for systematic tracing
+
+    Args:
+        agent: Agent instance
+        template_hash: Optional pre-computed template hash.
+                      If not provided, will use agent.parameters.get("template_hash")
+        hash_collector: Optional HashCollector with all hashes
+
+    Returns:
+        Dictionary of agent trace information including hashes
+
+    Example:
+        >>> trace_info = create_agent_trace_info(judge_agent, template_hash="abc123")
+        >>> trace_info["agent_type"]  # "judge"
+        >>> trace_info["agent_class"]  # "buttermilk.agents.judge.Judge"
+        >>> trace_info["template"]  # "judge.jinja2"
+        >>> trace_info["model"]  # "gemini-2.0-flash"
+    """
+    agent_info = {
+        # Identity - simple and full
+        "agent_type": get_agent_type_for_trace(agent),  # Simple: "judge"
+        "agent_class": f"{agent.__class__.__module__}.{agent.__class__.__name__}",  # Full
+        "agent_name": agent.agent_name,
+        "agent_role": agent.role,
+        # Critical parameters for reproducibility
+        "template": agent.parameters.get("template"),
+        "template_hash": template_hash or agent.parameters.get("template_hash"),
+        "model": agent.parameters.get("model"),
+        # Full config for reference
+        "parameters": agent.parameters,
+        # Additional metadata
+        "description": agent.description,
+    }
+
+    # Merge hash collector attributes if provided
+    if hash_collector:
+        agent_info.update(hash_collector.to_span_attributes())
+
+    # Remove None values to keep traces clean
+    return {k: v for k, v in agent_info.items() if v is not None}
+
 
 # --- Base Agent Class ---
 
@@ -271,7 +347,6 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
     # --- Announcement Methods ---
 
-    @weave.op
     async def _send_chat(
         self,
         message: OOBMessages,
@@ -472,21 +547,34 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         # Get OTEL tracer for agent spans
         tracer = trace.get_tracer("buttermilk.agent")
 
-        # Create OTEL span for agent execution
-        # Filter out None values to avoid OpenTelemetry attribute warnings
+        # Create comprehensive agent trace info using our utility function
+        agent_trace_info = create_agent_trace_info(
+            agent=self,
+            template_hash=None,  # Will be populated from parameters if available
+        )
+
+        # Build OTEL span attributes from agent trace info
         span_attributes = {
+            # Core agent identity
             "agent.name": self.agent_name,
             "agent.id": self.agent_id,
-            "agent.type": str(type(self)),
+            "agent.type": agent_trace_info.get("agent_type"),  # Simple: "judge", "fetchagent"
+            "agent.class": agent_trace_info.get("agent_class"),  # Full: "buttermilk.agents.judge.Judge"
+            "agent.role": agent_trace_info.get("agent_role"),
+            # Critical parameters for reproducibility
+            "agent.model": agent_trace_info.get("model"),
+            "agent.template": agent_trace_info.get("template"),
+            "agent.template_hash": agent_trace_info.get("template_hash"),
         }
 
-        # Only add optional attributes if they have non-None values
-        if self._config and self._config.role:
-            span_attributes["agent.role"] = self._config.role
+        # Add session/parent context
         if session_id := getattr(message, "session_id", None):
             span_attributes["session_id"] = session_id
         if parent_call_id := getattr(message, "parent_call_id", None):
             span_attributes["parent_call_id"] = parent_call_id
+
+        # Filter out None values to avoid OpenTelemetry warnings
+        span_attributes = {k: v for k, v in span_attributes.items() if v is not None}
 
         with tracer.start_as_current_span(
             f"agent.{self.agent_name}",
@@ -494,24 +582,11 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         ) as otel_span:
             try:
                 logger.debug(f"Invoking Agent {self.agent_id} with args: {message}")
-                if weave_client is not None:
-                    process_op = weave.op(self._process, call_display_name=self.agent_name)
-                    parent_call = await get_parent_call_weave(message)
+                # Weave has been removed
+                child_call = None
+                parent_call = None
 
-                    child_call = weave_client.create_call(
-                        process_op,
-                        inputs=scrub_serializable(message.model_dump()),
-                        parent=parent_call,
-                        display_name=self.agent_name,
-                        attributes=trace_params,
-                    )
-
-                    if parent_call is not None:
-                        parent_call._children.append(child_call)  # Nest this call for tracing # noqa: SLF001
-                else:
-                    child_call = None
-
-                # Run without weave tracing either way (weave swallows errors, which we want to avoid.)
+                # Run without weave tracing
                 result = await self._process(message=message)
 
                 otel_span.set_status(trace.Status(trace.StatusCode.OK))
@@ -524,12 +599,8 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 otel_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                 otel_span.record_exception(e)
             finally:
-                # Mark the child call as complete, regardless of success or failure.
-                # Output is passed to .finish_call if result is not None
-                # Error is also passed if exception_obj is not None
-                if weave_client and child_call:
-                    weave_client.finish_call(child_call, output=result or None, op=process_op, exception=exception_obj)
-                    tracing_link = child_call.ui_url
+                # Weave tracing has been removed - nothing to finalize
+                pass
 
         # --- Turn the result into ExecutionTrace for long-term storage ---
         # Handle case where _process returns None (e.g., UI agents that don't produce output)
@@ -550,8 +621,8 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
         trace_object = ExecutionTrace.from_output(
             result,
-            parent_call_id=parent_call.id if parent_call else message.parent_call_id,
-            call_id=child_call.id if child_call else result.call_id,
+            parent_call_id=message.parent_call_id if hasattr(message, "parent_call_id") else None,
+            call_id=result.call_id if hasattr(result, "call_id") else None,
             inputs=trace_inputs,
             agent_info={
                 "component_name": self.agent_name,

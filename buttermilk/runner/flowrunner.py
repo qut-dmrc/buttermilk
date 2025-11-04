@@ -30,9 +30,10 @@ from buttermilk.utils import scrub_serializable
 from buttermilk.utils.otel import (
     attach_session_baggage,
     detach_session_baggage,
-    end_session_root_span,
-    span_with_session,
-    start_session_root_span,
+    start_root_span,
+    # Session root span functions removed (Phase 1 OTEL fix)
+    # end_session_root_span,
+    # start_session_root_span,
 )
 from buttermilk.utils.utils import expand_dict
 
@@ -80,7 +81,7 @@ class SessionResources(BaseModel):
         """Add a custom resource to be tracked."""
         self.custom_resources[name] = resource
 
-    async def cleanup(self) -> dict[str, Any]:
+    async def cleanup(self) -> dict[str, Any]:  # noqa: PLR0912
         """Cleanup all tracked resources and return a report."""
         report = {
             "tasks_cancelled": 0,
@@ -253,14 +254,9 @@ class FlowRunContext(BaseModel):
             except Exception:
                 pass
 
-            # End session-root span if active
-            try:
-                if self._otel_session_root is not None:
-                    span, token = self._otel_session_root
-                    end_session_root_span(span, token)
-                    self._otel_session_root = None
-            except Exception:
-                pass
+            # Session root span removed (Phase 1 OTEL fix)
+            # No cleanup needed - session context propagated via baggage only
+            # _otel_session_root is always None now
 
             # Log cleanup report
             if cleanup_report.get("errors"):
@@ -548,13 +544,10 @@ class SessionManager:
             except Exception:
                 pass
 
-            # Start a session root span and store it
-            try:
-                session._otel_session_root = start_session_root_span(
-                    session_id, attributes={"buttermilk.session.status": SessionStatus.INITIALIZING.value}
-                )
-            except Exception:
-                session._otel_session_root = None
+            # Session root span removed (Phase 1 OTEL fix)
+            # Session context now propagated via OTEL baggage only
+            # Each flow run creates its own independent root trace
+            session._otel_session_root = None
 
             logger.info("Created new session with INITIALIZING status", session_id=session_id)
 
@@ -833,7 +826,7 @@ class SessionManager:
         logger.error("Failed to transition session back to ACTIVE after reconnection", session_id=session_id)
         return None
 
-    async def _periodic_cleanup(self) -> None:
+    async def _periodic_cleanup(self) -> None:  # noqa: PLR0912
         """Background task that periodically cleans up expired sessions with enhanced logic."""
         while self._running:
             try:
@@ -1241,7 +1234,7 @@ class FlowRunner(BaseModel):
         # Use the enhanced cleanup from FlowRunContext
         await context.cleanup()
 
-    async def run_flow(self, run_request: RunRequest, wait_for_completion: bool = False, **kwargs) -> None:
+    async def run_flow(self, run_request: RunRequest, wait_for_completion: bool = False, **kwargs) -> None:  # noqa: PLR0912
         """Run a flow based on its configuration and a request.
 
         Args:
@@ -1268,6 +1261,11 @@ class FlowRunner(BaseModel):
             await bm.ensure_initialized()
             logger.debug("BM initialization verified before flow execution")
 
+        # Phase 1 OTEL fix: Validate session ID consistency
+        # NOTE: We do NOT validate session_id match between BM and request
+        # Each job creates its own session and can be run by any worker.
+        # The BM instance's session is for the worker process, not the job.
+
         # Initialize metrics tracking
         start_time = time.time()
         success = False
@@ -1280,11 +1278,14 @@ class FlowRunner(BaseModel):
             logger.debug("Failed to initialize metrics collector", error=str(e))
             metrics_collector = None
 
-        # Wrap the flow execution in a tracing span using session-aware helper
-        with span_with_session(
-            getattr(run_request, "session_id", None),
+        # Wrap the flow execution in a ROOT tracing span (detached from any parent)
+        # This ensures each flow execution creates an independent trace, preventing
+        # traces from nesting when multiple jobs run in the same worker process.
+        # Session baggage is already attached during BM initialization.
+        with start_root_span(
             name="buttermilk.flow.run",
             attributes={
+                "buttermilk.session.id": getattr(run_request, "session_id", None),
                 "buttermilk.flow.name": getattr(run_request, "flow", None),
                 "buttermilk.job.id": getattr(run_request, "job_id", None),
                 "buttermilk.source": ", ".join(run_request.source) if getattr(run_request, "source", None) else "direct",
@@ -1390,7 +1391,7 @@ class FlowRunner(BaseModel):
                 await self.session_manager.cleanup_session(run_request.session_id)
         return
 
-    async def create_batch(self, flow_name, storage_config: dict | str | None = None, max_records: int | None = None) -> list[RunRequest]:
+    async def create_batch(self, flow_name, storage_config: dict | str | None = None, max_records: int | None = None) -> list[RunRequest]:  # noqa: PLR0912
         """Create a new batch job from storage source.
 
         Args:
@@ -1464,6 +1465,7 @@ class FlowRunner(BaseModel):
                 job = RunRequest(
                     batch_id=batch_id,
                     flow=flow_name,
+                    # session_id gets auto-generated UUID - each job is independent
                     parameters=iteration_params,
                     inputs=data,
                     callback_to_ui=None,

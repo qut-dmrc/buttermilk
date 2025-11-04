@@ -446,6 +446,17 @@ def load_template(
 
     rendered_string = jinja_template.render(**rendering_context)
 
+    # Check if fail_on_unfilled_parameters is enabled and there are undefined variables
+    fail_on_unfilled = parameters.get("fail_on_unfilled_parameters", False)
+    if fail_on_unfilled and collected_undefined_vars:
+        # Fail-fast: Raise exception when variables are unfilled and flag is enabled
+        unfilled_list = ", ".join(sorted(set(collected_undefined_vars)))
+        raise FatalError(
+            f"Template '{template}' has unfilled parameters: {unfilled_list}. "
+            f"This violates fail_on_unfilled_parameters=True. "
+            f"Ensure all required variables are provided in parameters or untrusted_inputs."
+        )
+
     # Calculate template hash for version tracking
     try:
         template_hash, _ = calculate_template_hash(template)
@@ -553,7 +564,7 @@ def _parse_chat_messages(chat_str: str, valid_roles: list[str] | None = None) ->
     return messages
 
 
-def make_messages(
+def make_messages(  # noqa: PLR0912
     local_template: str,  # Rendered template string, potentially in Prompty format
     *,
     context: list[LLMMessage] | None = None,  # Conversation history

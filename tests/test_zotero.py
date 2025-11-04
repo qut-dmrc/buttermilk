@@ -113,8 +113,8 @@ class TestZoteroSourceCitationKeys:
         - ZOTERO_LIBRARY_ID in config
         - At least one item with Citation Key in extra field
         """
-        # Get library_id from hydra config (NO hardcoded values)
-        library_id = real_bm.cfg.zotero["library_id"]
+        # Get library_id from pipeline config (NO hardcoded values)
+        library_id = real_bm.cfg.pipeline["source"]["library_id"]
 
         # Create real ZoteroSource (NO mocking)
         # Use force_full_sync=True to bypass incremental sync in tests
@@ -172,8 +172,8 @@ class TestZoteroDownloadProcessorCitationKeys:
         - ZOTERO_LIBRARY_ID in config
         - At least one item with PDF attachment and citation key
         """
-        # Get library_id from hydra config
-        library_id = real_bm.cfg.zotero["library_id"]
+        # Get library_id from pipeline config
+        library_id = real_bm.cfg.pipeline["processors"][0]["library_id"]
 
         # Create real ZoteroSource and Processor
         # Use force_full_sync=True to bypass incremental sync in tests
@@ -252,7 +252,7 @@ class TestZoteroAPIDataFormat:
 
         # Get credentials from BM
         api_key = real_bm.credentials.get("ZOTERO_API_KEY")
-        library_id = real_bm.cfg.zotero["library_id"]
+        library_id = real_bm.cfg.pipeline["source"]["library_id"]
 
         # Create real Zotero client
         zot = zotero.Zotero(
@@ -390,7 +390,7 @@ class TestZoteroAPIDataFormat:
         from pyzotero import zotero
 
         api_key = real_bm.credentials.get("ZOTERO_API_KEY")
-        library_id = real_bm.cfg.zotero["library_id"]
+        library_id = real_bm.cfg.pipeline["source"]["library_id"]
 
         zot = zotero.Zotero(
             library_id=library_id,
@@ -431,7 +431,7 @@ class TestZoteroSourceBehavior:
     @pytest.mark.anyio
     async def test_source_yields_base_records_with_metadata(self, real_bm):
         """Test that ZoteroSource yields BaseRecord objects with correct structure."""
-        library_id = real_bm.cfg.zotero["library_id"]
+        library_id = real_bm.cfg.pipeline["source"]["library_id"]
 
         # Use force_full_sync=True to bypass incremental sync in tests
         source = ZoteroSource(
@@ -467,7 +467,7 @@ class TestZoteroDownloadProcessorBehavior:
     @pytest.mark.anyio
     async def test_processor_downloads_and_extracts_text(self, real_bm):
         """Test that processor downloads PDF and extracts text successfully."""
-        library_id = real_bm.cfg.zotero["library_id"]
+        library_id = real_bm.cfg.pipeline["source"]["library_id"]
 
         # Get a real record with PDF
         # Use force_full_sync=True to bypass incremental sync in tests
@@ -530,7 +530,7 @@ class TestMetadataUpdateBehavior:
         import json
         from pathlib import Path
 
-        library_id = real_bm.cfg.zotero["library_id"]
+        library_id = real_bm.cfg.pipeline["source"]["library_id"]
 
         # Get a test item with PDF
         source = ZoteroSource(
@@ -616,7 +616,7 @@ class TestMetadataUpdateBehavior:
         - This is expected behavior to avoid missing items on interrupted syncs
         - On third sync, if nothing new changed, should yield 0-2 boundary items again
         """
-        library_id = real_bm.cfg.zotero["library_id"]
+        library_id = real_bm.cfg.pipeline["source"]["library_id"]
 
         # First sync: Process some items (force_full_sync to get baseline)
         source1 = ZoteroSource(
@@ -675,7 +675,7 @@ class TestMetadataUpdateBehavior:
         from datetime import UTC, datetime, timedelta
         from pathlib import Path
 
-        library_id = real_bm.cfg.zotero["library_id"]
+        library_id = real_bm.cfg.pipeline["source"]["library_id"]
 
         # Get the sync state file path
         from buttermilk._core.constants import cache
@@ -765,7 +765,7 @@ class TestMetadataUpdateBehavior:
         import os
         from pathlib import Path
 
-        library_id = real_bm.cfg.zotero["library_id"]
+        library_id = real_bm.cfg.pipeline["source"]["library_id"]
 
         # Get a test item with PDF
         source = ZoteroSource(
@@ -870,7 +870,7 @@ class TestMetadataUpdateBehavior:
         import os
         from pathlib import Path
 
-        library_id = real_bm.cfg.zotero["library_id"]
+        library_id = real_bm.cfg.pipeline["source"]["library_id"]
 
         # Get a test item with PDF attachment
         source = ZoteroSource(
@@ -1014,7 +1014,7 @@ class TestMetadataUpdateBehavior:
         import json
         from pathlib import Path
 
-        library_id = real_bm.cfg.zotero["library_id"]
+        library_id = real_bm.cfg.pipeline["source"]["library_id"]
 
         # Get sync state file path
         from buttermilk._core.constants import cache

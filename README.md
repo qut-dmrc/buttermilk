@@ -75,6 +75,50 @@ Configurations are stored as YAML files in `conf/`. You can select options at ru
 
 ## Usage
 
+### Command Line Interface
+
+Run flows using the `bm` command with Hydra configuration:
+
+```shell
+# Run a single flow interactively
+bm run.mode=console run.flow=trans
+
+# Use different LLM configurations
+bm run.mode=console llms=debug      # Fast, cheap models for testing
+bm run.mode=console llms=full       # Production-quality models
+
+# Batch processing
+bm run.mode=batch run.flow=trans run.limit=100        # Create batch jobs
+bm run.mode=batch_run run.limit=5                     # Process queued jobs
+bm run.mode=batch_all run.flow=trans run.limit=100   # Create and process
+
+# Start API server
+bm run.mode=api
+
+# Run data pipeline
+bm run.mode=pipeline run.limit=100
+```
+
+Available modes: `console`, `batch`, `batch_run`, `batch_all`, `api`, `pipeline`, `streamlit`, `slackbot`
+
+Available LLM configurations: `debug`, `lite`, `full`, `expensive` (see `conf/llms/` for details)
+
+#### Using from Third-Party Projects
+
+Install buttermilk as a dependency and point to your project's config directory:
+
+```shell
+# Use bm with custom config path
+bm --config-path=./conf run.mode=console run.flow=your_flow
+
+# Or use Python module
+uv run python -m buttermilk.runner.cli --config-path=./conf run.mode=batch run.flow=your_flow
+```
+
+Create a `conf/` directory in your project with `config.yaml` and your flow definitions in `conf/flows/`
+
+### Python API
+
 ```python
 from pathlib import Path
 from buttermilk import init, init_async

@@ -33,6 +33,7 @@ MODEL_NAME = "gemini-embedding-001"
 DEFAULT_UPSERT_BATCH_SIZE = 10  # Still used for failed batch saving logic if needed
 FAILED_BATCH_DIR = "failed_upsert_batches"
 MAX_TOTAL_TASKS_PER_RUN = 500
+CHROMA_MAX_BATCH_SIZE = 5000  # ChromaDB's actual limit is 5,461; use 5,000 for safe margin
 
 T = TypeVar("T")
 
@@ -323,6 +324,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
     _sync_batch_size: int = PrivateAttr(default=50)  # Sync every 50 records
     _sync_interval_seconds: int = PrivateAttr(default=600)  # Sync every 10 minutes
     _cache_initialized: bool = PrivateAttr(default=False)  # Track if cache has been initialized
+    _init_lock: asyncio.Lock = PrivateAttr(default=None)  # Lock to prevent concurrent initialization
     _warmup_task: asyncio.Task | None = PrivateAttr(default=None)  # Background warmup task
 
     @pydantic.model_validator(mode="after")
@@ -379,6 +381,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
         self._embedding_semaphore = asyncio.Semaphore(self.concurrency)
 
+        # Initialize lock for thread-safe lazy initialization
+        self._init_lock = asyncio.Lock()
+
         # Log sync configuration
         if self.read_only:
             logger.info("🔒 Sync disabled (read-only mode)")
@@ -412,31 +417,45 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         - Creates collection if it doesn't exist
         - Validates existing collection compatibility
 
-        Uses a flag to ensure initialization only happens once per instance.
+        This method is thread-safe and can be called:
+        1. On-demand when first actually needed (lazy init)
+        2. By background warmup task to pre-warm before first use
+        3. Multiple times safely (subsequent calls are no-ops)
+
+        Uses a lock to prevent concurrent initialization and a flag to skip if already done.
         """
-        # Skip if already initialized
+        # Quick check without lock - optimization for repeated calls
         if self._cache_initialized:
             return
 
-        # Step 1: Handle remote ChromaDB caching with smart cache management
-        if self.persist_directory.startswith(("gs://", "s3://", "azure://", "gcs://")):
-            self._original_remote_path = self.persist_directory  # Store original remote path
-            local_cache_path = await self._smart_cache_management(self.persist_directory)
+        # Acquire lock to prevent concurrent initialization
+        async with self._init_lock:
+            # Double-check after acquiring lock (another task may have initialized)
+            if self._cache_initialized:
+                return
 
-            # Update persist_directory to use local cache
-            self.persist_directory = str(local_cache_path)
-            logger.info(f"✅ ChromaDB cache ready at: {local_cache_path}")
+            logger.debug("🔧 Starting ChromaDB initialization...")
 
-        # Step 2: Initialize ChromaDB client
-        if not hasattr(self, "_client") or not self._client:
-            self._client = chromadb.PersistentClient(path=self.persist_directory, settings=chromadb.Settings(anonymized_telemetry=False))
-            logger.debug(f"📁 ChromaDB client initialized: {self.persist_directory}")
+            # Step 1: Handle remote ChromaDB caching with smart cache management
+            if self.persist_directory.startswith(("gs://", "s3://", "azure://", "gcs://")):
+                self._original_remote_path = self.persist_directory  # Store original remote path
+                local_cache_path = await self._smart_cache_management(self.persist_directory)
 
-        # Step 3: Ensure collection is ready (create or validate)
-        await self._ensure_collection_ready()
+                # Update persist_directory to use local cache
+                self.persist_directory = str(local_cache_path)
+                logger.info(f"✅ ChromaDB cache ready at: {local_cache_path}")
 
-        # Mark as initialized
-        self._cache_initialized = True
+            # Step 2: Initialize ChromaDB client
+            if not hasattr(self, "_client") or not self._client:
+                self._client = chromadb.PersistentClient(path=self.persist_directory, settings=chromadb.Settings(anonymized_telemetry=False))
+                logger.debug(f"📁 ChromaDB client initialized: {self.persist_directory}")
+
+            # Step 3: Ensure collection is ready (create or validate)
+            await self._ensure_collection_ready()
+
+            # Mark as initialized
+            self._cache_initialized = True
+            logger.debug("✅ ChromaDB initialization complete")
 
     def _start_background_warmup(self) -> None:
         """Start background warmup task if event loop is available.
@@ -456,7 +475,12 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             logger.debug("No event loop available, skipping background warmup")
 
     async def _background_warmup(self) -> None:
-        """Background warmup implementation - waits then initializes."""
+        """Background warmup implementation - waits then initializes.
+
+        This pre-warms the ChromaDB cache in the background to make the first
+        actual use faster. If something uses ChromaDB before the warmup completes,
+        the on-demand initialization will handle it (and the warmup becomes a no-op).
+        """
         try:
             # Wait for configured delay
             await asyncio.sleep(self.warmup_delay_seconds)
@@ -467,9 +491,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 await self.ensure_cache_initialized()
                 logger.info("✅ Background warmup complete - ChromaDB ready")
             else:
-                logger.debug("Background warmup skipped - already initialized")
+                logger.debug("Background warmup skipped - already initialized by on-demand init")
         except Exception as e:
-            logger.warning(f"Background warmup failed: {e}")
+            logger.warning(f"⚠️ Background warmup failed (will init on first use): {e}")
 
     async def _smart_cache_management(self, remote_path: str) -> Path:
         """Smart cache management that prevents overwriting newer local changes.
@@ -1152,7 +1176,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 metadata={"error": str(e)},
             )
 
-    async def _store_chunks_for_record(self, record: Record) -> None:
+    async def _store_chunks_for_record(self, record: Record) -> None:  # noqa: PLR0912
         """Store record chunks with metadata in ChromaDB.
 
         Args:
@@ -1226,14 +1250,22 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
             logger.info(f"Upserting {len(ids)} chunks for record {record.record_id}...")
 
-            # Execute the upsert operation
-            await asyncio.to_thread(
-                self.collection.upsert,
-                ids=ids,
-                embeddings=embeddings_list,
-                metadatas=metadatas,
-                documents=documents,
-            )
+            # Execute the upsert operation in batches to respect ChromaDB's max batch size
+            total_chunks = len(ids)
+            for i in range(0, total_chunks, CHROMA_MAX_BATCH_SIZE):
+                batch_end = min(i + CHROMA_MAX_BATCH_SIZE, total_chunks)
+                batch_slice = slice(i, batch_end)
+                batch_size = batch_end - i
+
+                logger.debug(f"Upserting batch {i // CHROMA_MAX_BATCH_SIZE + 1}: " f"chunks {i}-{batch_end - 1} ({batch_size} items)")
+
+                await asyncio.to_thread(
+                    self.collection.upsert,
+                    ids=ids[batch_slice],
+                    embeddings=embeddings_list[batch_slice],
+                    metadatas=metadatas[batch_slice],
+                    documents=documents[batch_slice],
+                )
 
             logger.info(f"Successfully stored {len(ids)} chunks for record {record.record_id}")
 
@@ -1959,13 +1991,23 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 f"Upserting {len(ids)} chunks for document {doc.record_id} into collection '{self.collection_name}'...",
             )
             try:
-                await asyncio.to_thread(
-                    self.collection.upsert,
-                    ids=ids,
-                    embeddings=chroma_embeddings,
-                    metadatas=metadatas,
-                    documents=documents,
-                )
+                # Execute the upsert operation in batches to respect ChromaDB's max batch size
+                total_chunks = len(ids)
+                for i in range(0, total_chunks, CHROMA_MAX_BATCH_SIZE):
+                    batch_end = min(i + CHROMA_MAX_BATCH_SIZE, total_chunks)
+                    batch_slice = slice(i, batch_end)
+                    batch_size = batch_end - i
+
+                    logger.debug(f"Upserting batch {i // CHROMA_MAX_BATCH_SIZE + 1}: " f"chunks {i}-{batch_end - 1} ({batch_size} items)")
+
+                    await asyncio.to_thread(
+                        self.collection.upsert,
+                        ids=ids[batch_slice],
+                        embeddings=chroma_embeddings[batch_slice],
+                        metadatas=metadatas[batch_slice],
+                        documents=documents[batch_slice],
+                    )
+
                 successful_docs_upserted += 1
                 logger.debug(
                     f"Successfully upserted chunks for document {doc.record_id}.",

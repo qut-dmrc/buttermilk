@@ -12,9 +12,9 @@ defaults:
       - differences
   # Observer agents
   - /agents@observers:
+      - scorer
       - spy
       - owl
-      - scorer
       - host/sequence_host
   # Data source configuration
   - /storage@storage.tja: tja

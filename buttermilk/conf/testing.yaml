@@ -1,5 +1,5 @@
 defaults:
-  - llms@run.llms: debug
+  - llms: debug
   - flows:
       - trans
   - _self_

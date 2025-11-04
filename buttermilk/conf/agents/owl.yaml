@@ -7,6 +7,6 @@ owl:
   parameters:
     template: owl
   variants:
-    model: ${run.llms.general}
+    model: ${llms.general}
   inputs:
     context: context

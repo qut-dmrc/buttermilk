@@ -3,11 +3,12 @@
 This module provides a base client `TextToImageClient` with retry capabilities
 and several concrete implementations for different image generation models/services:
 - Google's Imagen 3 and 4 (via Vertex AI)
+- FLUX 1.1 Pro (via Azure OpenAI)
+- DALL-E 3 (via Azure OpenAI)
 - Stable Diffusion 3.5 Large (via Azure)
 - Stable Diffusion 3 (via Stability AI API)
 - Stable Diffusion XL (via HuggingFace Hub and Replicate)
 - Stable Diffusion 2.1 (via Replicate)
-- DALL-E 3 (via OpenAI API or Azure OpenAI)
 
 It also includes `BatchImageGenerator` for generating images from multiple prompts
 using a selection of these clients asynchronously.
@@ -28,12 +29,11 @@ from tempfile import mkdtemp
 from typing import Any, Literal, Type  # For type hinting
 
 import aiohttp  # Asynchronous HTTP client (used by SD3, SDXLReplicate, SD)
-import httpx  # Asynchronous HTTP client (used by SD35Large, DALLE)
+import httpx  # Asynchronous HTTP client (used by SD35Large, DALLE, FLUX)
 import replicate  # Client for Replicate API
 from cloudpathlib import CloudPath  # For handling cloud storage paths
 from google.genai.types import GenerateImagesConfig
 from huggingface_hub import AsyncInferenceClient, login  # HuggingFace Hub client
-from openai import AsyncOpenAI  # OpenAI client
 from PIL import Image  # Pillow library for image manipulation
 from pydantic import BaseModel, Field, PrivateAttr, field_validator  # Pydantic components
 from shortuuid import ShortUUID  # For generating short unique IDs
@@ -288,6 +288,48 @@ class VertexImagegenModels(TextToImageClient):
         )
 
 
+# =============================================================================
+# VERTEX IMAGEN MODEL VARIANTS
+# =============================================================================
+# Subclasses for each Vertex Imagen model variant to enable proper categorization
+# and registration in the model registry below.
+
+
+class VertexImagen3Fast(VertexImagegenModels):
+    """Imagen 3.0 Fast - Low-cost, fast generation."""
+
+    model: str = "imagen-3.0-fast-generate-001"
+    prefix: str = "imagen3fast001_"
+
+
+class VertexImagen4Fast(VertexImagegenModels):
+    """Imagen 4.0 Fast - Low-cost, fast generation with improved quality."""
+
+    model: str = "imagen-4.0-fast-generate-001"
+    prefix: str = "imagen4fast001_"
+
+
+class VertexImagen3(VertexImagegenModels):
+    """Imagen 3.0 Standard - High-quality generation."""
+
+    model: str = "imagen-3.0-generate-002"
+    prefix: str = "imagen3_"
+
+
+class VertexImagen4(VertexImagegenModels):
+    """Imagen 4.0 Standard - High-quality generation."""
+
+    model: str = "imagen-4.0-generate-001"
+    prefix: str = "imagen4_"
+
+
+class VertexImagen4Ultra(VertexImagegenModels):
+    """Imagen 4.0 Ultra - Highest quality, most expensive."""
+
+    model: str = "imagen-4.0-ultra-generate-001"
+    prefix: str = "imagen4ultra_"
+
+
 class SD35Large(TextToImageClient):
     """Client for Stability AI's Stable Diffusion 3.5 Large model via Azure.
 
@@ -364,6 +406,110 @@ class SD35Large(TextToImageClient):
         image_record = read_image(image_b64=image_b64)
         image_record.model = self.model
         image_record.parameters = request_data  # Log parameters used
+        image_record.prompt = text
+        image_record.negative_prompt = negative_prompt
+
+        return image_record
+
+
+class FLUX11Pro(TextToImageClient):
+    """Client for FLUX 1.1 Pro model via Azure.
+
+    Uses Azure OpenAI endpoint for FLUX 1.1 Pro image generation.
+    Requires `AZURE_API_KEY` in `bm.credentials`.
+
+    Attributes:
+        model (str): Defaults to "FLUX-1.1-pro".
+        prefix (str): File prefix defaults to "flux11pro_".
+    """
+
+    model: str = "FLUX-1.1-pro"
+    prefix: str = "flux11pro_"
+
+    async def generate_image(
+        self,
+        text: str,
+        negative_prompt: str | None = "",
+        size: str = "1024x1024",  # Default size
+        **kwargs: Any,
+    ) -> ImageRecord:
+        """Generates an image using FLUX 1.1 Pro via Azure.
+
+        Args:
+            text: The prompt for image generation.
+            negative_prompt: Optional negative prompt (may not be supported by FLUX).
+            size: Image dimensions (e.g., "1024x1024").
+            **kwargs: Additional parameters for the API request.
+
+        Returns:
+            ImageRecord: An `ImageRecord` with the generated image and metadata.
+        """
+        # Get Azure credentials from bm.credentials
+        azure_url = bm.credentials.get("AZURE_FLUX_URL")
+        azure_api_key = bm.credentials.get("AZURE_API_KEY")
+
+        if not azure_url:
+            # Use default endpoint if not configured
+            azure_url = (
+                "https://platformaieast.cognitiveservices.azure.com/openai/deployments/FLUX-1.1-pro/images/generations?api-version=2025-04-01-preview"
+            )
+
+        if not azure_api_key:
+            raise ValueError("AZURE_API_KEY not configured in bm.credentials.")
+
+        # Build request data
+        request_data = {
+            "prompt": text,
+            "size": size,
+            **kwargs,
+        }
+
+        # Add negative_prompt if provided and not empty
+        if negative_prompt:
+            request_data["negative_prompt"] = negative_prompt
+
+        headers = {
+            "Content-Type": "application/json",
+            "api-key": azure_api_key,  # Azure uses 'api-key' header
+        }
+
+        async with httpx.AsyncClient() as http_client:
+            response = await http_client.post(
+                azure_url,
+                headers=headers,
+                json=request_data,
+                timeout=600.0,
+            )
+        response.raise_for_status()
+
+        # Parse response - Azure OpenAI typically returns data.url or data.b64_json
+        response_json = response.json()
+
+        # Try to get image data from various possible response formats
+        if "data" in response_json and len(response_json["data"]) > 0:
+            image_data_item = response_json["data"][0]
+
+            # Check for b64_json format
+            if "b64_json" in image_data_item:
+                image_b64 = image_data_item["b64_json"]
+                image_record = read_image(image_b64=image_b64)
+            # Check for url format
+            elif "url" in image_data_item:
+                image_url = image_data_item["url"]
+                # Fetch image from URL
+                async with httpx.AsyncClient() as http_client:
+                    img_response = await http_client.get(image_url, timeout=300.0)
+                img_response.raise_for_status()
+                pil_image = Image.open(BytesIO(img_response.content))
+                image_record = ImageRecord(image=pil_image)
+            else:
+                raise ValueError(f"Azure FLUX API response missing expected image data. Got: {image_data_item}")
+        else:
+            raise ValueError(f"Azure FLUX API response did not include 'data' array. Response: {response_json}")
+
+        # Set metadata
+        image_record.model = self.model
+        image_record.parameters = request_data
         image_record.prompt = text
         image_record.negative_prompt = negative_prompt
 
@@ -734,9 +880,10 @@ class SD(TextToImageClient):
 
 
 class DALLE(TextToImageClient):
-    """Client for OpenAI's DALL-E 3 model.
+    """Client for DALL-E 3 model via Azure.
 
-    Uses the `openai` Python library. Requires `OPENAI_API_KEY` in `bm.credentials`.
+    Uses Azure OpenAI endpoint for DALL-E 3 image generation.
+    Requires `AZURE_API_KEY` in `bm.credentials`.
 
     Attributes:
         model (str): Defaults to "dall-e-3".
@@ -745,7 +892,6 @@ class DALLE(TextToImageClient):
 
     model: str = "dall-e-3"
     prefix: str = "dalle3_"
-    # Client will be initialized in generate_image if None
 
     async def generate_image(
         self,
@@ -756,7 +902,7 @@ class DALLE(TextToImageClient):
         quality: str = "standard",  # "standard" or "hd"
         **kwargs: Any,
     ) -> ImageRecord:
-        """Generates an image using OpenAI's DALL-E 3 model.
+        """Generates an image using DALL-E 3 via Azure.
 
         Note: DALL-E 3 API does not have a direct `negative_prompt` parameter.
         If `negative_prompt` is provided, it's prepended to the main `text` prompt
@@ -768,78 +914,140 @@ class DALLE(TextToImageClient):
             size: Image dimensions (e.g., "1024x1024", "1792x1024", "1024x1792").
             style: The style of the generated images ("natural" or "vivid").
             quality: The quality of the image to generate ("standard" or "hd").
-            **kwargs: Additional parameters for the OpenAI images API.
+            **kwargs: Additional parameters for the Azure images API.
 
         Returns:
             ImageRecord: An `ImageRecord` with the generated image and metadata.
 
         Raises:
-            KeyError: If `OPENAI_API_KEY` is not in `bm.credentials`.
-            RuntimeError: If the OpenAI API call fails or returns unexpected data.
+            ValueError: If `AZURE_API_KEY` is not in `bm.credentials`.
+            RuntimeError: If the Azure API call fails or returns unexpected data.
         """
-        if self.client is None or not isinstance(self.client, AsyncOpenAI):
-            openai_api_key = bm.credentials.get("OPENAI_API_KEY")
-            if not openai_api_key:
-                raise KeyError("OPENAI_API_KEY not found in bm.credentials for DALL-E client.")
-            self.client = AsyncOpenAI(
-                api_key=openai_api_key,
-                timeout=600.0,  # httpx.Timeout
-            )
+        # Get Azure credentials from bm.credentials
+        azure_url = bm.credentials.get("AZURE_DALLE_URL")
+        azure_api_key = bm.credentials.get("AZURE_API_KEY")
+
+        if not azure_url:
+            # Use default endpoint if not configured
+            azure_url = "https://platformaieast.cognitiveservices.azure.com/openai/deployments/dall-e-3/images/generations?api-version=2024-02-01"
+
+        if not azure_api_key:
+            raise ValueError("AZURE_API_KEY not configured in bm.credentials.")
 
         prompt_for_api = text
         if negative_prompt:  # Simulate negative prompt by instruction
             prompt_for_api = f"{text} \n\nIMPORTANT: DO NOT INCLUDE the following elements: {negative_prompt}"
 
-        # Consolidate all parameters for the API call
-        api_parameters = {
-            "model": self.model,
+        # Build request data
+        request_data = {
             "prompt": prompt_for_api,
             "size": size,
-            "style": style,
-            "quality": quality,
-            "n": 1,  # DALL-E 3 currently supports n=1
-            "response_format": "url",  # Get a URL to download the image
-            **kwargs,  # Allow other valid DALL-E parameters
+            "n": 1,
+            **kwargs,
         }
 
-        try:
-            response = await self.client.images.generate(**api_parameters)  # type: ignore # client is AsyncOpenAI
-        except Exception as e:
-            logger.error(f"Error calling OpenAI DALL-E 3 API: {e!s}")
-            raise RuntimeError(f"OpenAI DALL-E 3 API call failed: {e!s}") from e
+        # Add style and quality if supported by the API version
+        if style:
+            request_data["style"] = style
+        if quality:
+            request_data["quality"] = quality
 
-        if not response.data or not response.data[0].url:
-            raise RuntimeError(f"OpenAI DALL-E 3 API returned no image data or URL. Response: {response}")
+        headers = {
+            "Content-Type": "application/json",
+            "api-key": azure_api_key,  # Azure uses 'api-key' header
+        }
 
-        output_image_url = response.data[0].url
-        revised_prompt_from_api = response.data[0].revised_prompt
+        async with httpx.AsyncClient() as http_client:
+            response = await http_client.post(
+                azure_url,
+                headers=headers,
+                json=request_data,
+                timeout=600.0,
+            )
+        response.raise_for_status()
+
+        # Parse response - Azure OpenAI returns data.url or data.b64_json
+        response_json = response.json()
+
+        if "data" not in response_json or len(response_json["data"]) == 0:
+            raise RuntimeError(f"Azure DALL-E 3 API response did not include 'data' array. Response: {response_json}")
+
+        image_data_item = response_json["data"][0]
+        revised_prompt_from_api = image_data_item.get("revised_prompt")
+
+        # Check for b64_json format
+        if "b64_json" in image_data_item:
+            image_b64 = image_data_item["b64_json"]
+            image_record = read_image(image_b64=image_b64)
+            output_image_url = None
+        # Check for url format
+        elif "url" in image_data_item:
+            output_image_url = image_data_item["url"]
+            # Fetch image from URL
+            async with httpx.AsyncClient() as http_client:
+                img_response = await http_client.get(output_image_url, timeout=300.0)
+            img_response.raise_for_status()
+            pil_image = Image.open(BytesIO(img_response.content))
+            image_record = ImageRecord(image=pil_image)
+        else:
+            raise ValueError(f"Azure DALL-E 3 API response missing expected image data. Got: {image_data_item}")
 
         # Store the actual prompt sent and any revised prompt
-        api_parameters["prompt_sent_to_api"] = prompt_for_api  # Store the exact prompt sent
+        request_data["prompt_sent_to_api"] = prompt_for_api
         if revised_prompt_from_api:
-            api_parameters["revised_prompt_by_api"] = revised_prompt_from_api
+            request_data["revised_prompt_by_api"] = revised_prompt_from_api
 
-        # Fetch the image from the URL provided by OpenAI
-        async with httpx.AsyncClient() as http_client:  # Renamed to avoid conflict
-            image_http_response = await http_client.get(output_image_url, timeout=300.0)
-        image_http_response.raise_for_status()  # Ensure download was successful
+        # Set metadata
+        image_record.model = self.model
+        image_record.parameters = request_data
+        image_record.prompt = text
+        image_record.negative_prompt = negative_prompt
+        image_record.enhanced_prompt = revised_prompt_from_api
+        if output_image_url:
+            image_record.uri = output_image_url
 
-        pil_image = Image.open(BytesIO(image_http_response.content))
-
-        return ImageRecord(
-            image=pil_image,
-            model=self.model,
-            parameters=api_parameters,  # Log all parameters used, including revisions
-            prompt=text,  # Original user prompt
-            negative_prompt=negative_prompt,  # Original user negative prompt
-            enhanced_prompt=revised_prompt_from_api,  # DALL-E often revises prompts
-            uri=output_image_url,  # Store the temporary OpenAI URL
-        )
+        return image_record
 
 
-ImageClients: list[Type[TextToImageClient]] = [DALLE, SD35Large, VertexImagegenModels, SD3, SDXL, SDXLReplicate]
+# =============================================================================
+# IMAGE GENERATION MODEL REGISTRY
+# =============================================================================
+# Centralized registry of all image generation models categorized by cost tier.
+# Tests, pipelines, and other consumers should import from this registry to
+# ensure consistent model categorization and selection.
+#
+# CHEAP MODELS: Fast, low-cost models suitable for testing and high-volume generation
+# EXPENSIVE MODELS: High-quality, high-cost models - use sparingly
+
+# Cheap/Fast Models
+CHEAP_IMAGE_CLIENTS: list[Type[TextToImageClient]] = [
+    VertexImagen3Fast,  # Imagen 3.0 Fast (GCP Vertex AI)
+    VertexImagen4Fast,  # Imagen 4.0 Fast (GCP Vertex AI)
+    SD35Large,  # Stable Diffusion 3.5 Large (Azure)
+    FLUX11Pro,  # FLUX 1.1 Pro (Azure)
+]
+
+# Expensive/High-Quality Models
+EXPENSIVE_IMAGE_CLIENTS: list[Type[TextToImageClient]] = [
+    VertexImagen3,  # Imagen 3.0 Standard (GCP Vertex AI)
+    VertexImagen4,  # Imagen 4.0 Standard (GCP Vertex AI)
+    VertexImagen4Ultra,  # Imagen 4.0 Ultra (GCP Vertex AI)
+    DALLE,  # DALL-E 3 (OpenAI)
+    SD3,  # Stable Diffusion 3 (Stability AI direct API)
+    SDXL,  # Stable Diffusion XL (HuggingFace Hub - base + refiner)
+    SDXLReplicate,  # Stable Diffusion XL (Replicate)
+    SD,  # Stable Diffusion 2.1 (Replicate)
+]
+
+# Complete registry
+ALL_IMAGE_CLIENTS: list[Type[TextToImageClient]] = CHEAP_IMAGE_CLIENTS + EXPENSIVE_IMAGE_CLIENTS
+
+# Backward compatibility - ImageClients now references the full registry
+# NOTE: Tests and new code should use CHEAP_IMAGE_CLIENTS or ALL_IMAGE_CLIENTS directly
+ImageClients: list[Type[TextToImageClient]] = ALL_IMAGE_CLIENTS
 """A list of available `TextToImageClient` classes that can be used by `BatchImageGenerator`.
-This list allows for easy iteration or selection of different image generation models.
+This list now references ALL_IMAGE_CLIENTS from the model registry above.
+For cost-aware selection, use CHEAP_IMAGE_CLIENTS or EXPENSIVE_IMAGE_CLIENTS instead.
 """
 
 
@@ -923,6 +1131,56 @@ class BatchImageGenerator(BaseModel):
         self._clients = {gen_class.__name__: gen_class() for gen_class in self.generators}
         logger.info(f"Initialized image generator clients: {list(self._clients.keys())}")
 
+    def _parse_batch_prompts(self, inputs: Sequence[str | dict[str, str]]) -> list[dict[str, Any]]:
+        """Parse and validate batch input prompts into a standardized format.
+
+        Args:
+            inputs: Sequence of prompts (strings or dicts with 'text' key)
+
+        Returns:
+            List of prompt dictionaries with 'text', 'id', and optional 'negative_prompt'
+
+        Raises:
+            ValueError: If a prompt has an invalid type
+        """
+        prompts_to_process: list[dict[str, Any]] = []
+        for idx, prompt_item in enumerate(inputs):
+            if isinstance(prompt_item, str):
+                prompts_to_process.append({"text": prompt_item, "id": str(idx)})
+            elif isinstance(prompt_item, dict):
+                if "text" not in prompt_item:
+                    logger.warning(f"Prompt dictionary at index {idx} is missing 'text' key. Skipping.")
+                    continue
+                prompts_to_process.append(
+                    {
+                        "text": prompt_item["text"],
+                        "id": str(prompt_item.get("id", idx)),
+                        "negative_prompt": prompt_item.get("negative_prompt", ""),
+                    }
+                )
+            else:
+                raise ValueError(f"Invalid prompt type at index {idx}: expected str or dict, got {type(prompt_item)}.")
+        return prompts_to_process
+
+    def _create_summary_record(self, image_result: ImageRecord) -> dict[str, Any]:
+        """Create a summary record from an ImageRecord for JSON export.
+
+        Args:
+            image_result: The ImageRecord to summarize
+
+        Returns:
+            Dictionary containing summary information for the image result
+        """
+        return {
+            "prompt_id": image_result.parameters.get("id", "unknown_id_in_params"),
+            "original_prompt": image_result.prompt,
+            "negative_prompt": image_result.negative_prompt,
+            "model_used": image_result.model,
+            "image_uri": image_result.uri if (image_result.image and image_result.uri) else None,
+            "generation_parameters": image_result.parameters,
+            "error": image_result.error,
+        }
+
     async def abatch(
         self,
         inputs: Sequence[str | dict[str, str]],  # Changed 'input' to 'inputs' to avoid builtin clash
@@ -963,25 +1221,8 @@ class BatchImageGenerator(BaseModel):
         generated_records_summary: list[dict[str, Any]] = []
         self._tasks = []  # Reset tasks for this batch
 
-        # Prepare prompts list with IDs
-        prompts_to_process: list[dict[str, Any]] = []
-        for idx, prompt_item in enumerate(inputs):
-            if isinstance(prompt_item, str):
-                prompts_to_process.append({"text": prompt_item, "id": str(idx)})
-            elif isinstance(prompt_item, dict):
-                if "text" not in prompt_item:
-                    logger.warning(f"Prompt dictionary at index {idx} is missing 'text' key. Skipping.")
-                    continue
-                prompts_to_process.append(
-                    {
-                        "text": prompt_item["text"],
-                        "id": str(prompt_item.get("id", idx)),  # Ensure ID is string
-                        "negative_prompt": prompt_item.get("negative_prompt", ""),  # Default to empty
-                    }
-                )
-            else:
-                raise ValueError(f"Invalid prompt type at index {idx}: expected str or dict, got {type(prompt_item)}.")
-
+        # Parse and validate input prompts
+        prompts_to_process = self._parse_batch_prompts(inputs)
         if not prompts_to_process:
             logger.warning("No valid prompts to process in abatch.")
             return
@@ -1004,7 +1245,7 @@ class BatchImageGenerator(BaseModel):
                             "save_path": img_full_save_path,
                             # Add any other specific params from current_prompt_info if needed
                         }
-                        self._tasks.append(client_instance.generate(**task_params))
+                        self._tasks.append(asyncio.create_task(client_instance.generate(**task_params)))
                     except Exception as e:
                         logger.error(
                             f"Error adding task: generate image from {client_name}, run {i_run}, prompt ID {prompt_id}. Error: {e!s}",
@@ -1020,30 +1261,8 @@ class BatchImageGenerator(BaseModel):
                 yield image_result  # Yield the successful ImageRecord
 
                 # Collect summary information for info.json
-                if image_result and image_result.image and image_result.uri:  # Successfully generated and saved
-                    generated_records_summary.append(
-                        {
-                            "prompt_id": image_result.parameters.get("id", "unknown_id_in_params"),  # Try to get ID from params if set
-                            "original_prompt": image_result.prompt,
-                            "negative_prompt": image_result.negative_prompt,
-                            "model_used": image_result.model,
-                            "image_uri": image_result.uri,
-                            "generation_parameters": image_result.parameters,
-                            "error": image_result.error,  # Will be None if successful
-                        }
-                    )
-                elif image_result and image_result.error:  # Generation failed, record error
-                    generated_records_summary.append(
-                        {
-                            "prompt_id": image_result.parameters.get("id", "unknown_id_in_params"),
-                            "original_prompt": image_result.prompt,
-                            "negative_prompt": image_result.negative_prompt,
-                            "model_used": image_result.model,
-                            "image_uri": None,
-                            "generation_parameters": image_result.parameters,
-                            "error": image_result.error,
-                        }
-                    )
+                if image_result:
+                    generated_records_summary.append(self._create_summary_record(image_result))
 
             except Exception as e:  # Catch errors from await task itself
                 logger.error(f"Error collecting result from an image generation task: {e!s}", exc_info=True)

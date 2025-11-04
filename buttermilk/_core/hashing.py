@@ -236,3 +236,122 @@ def compute_processor_config_hash(processor_config: dict[str, Any]) -> str:
     # Return first 8 characters for readability in cache paths
     full_hash = compute_sha256_hash(config_json)
     return full_hash[:8]
+
+
+def hash_dict(data: dict[str, Any]) -> str:
+    """Compute deterministic hash of dictionary.
+
+    Sorts keys and values to ensure consistent hashing.
+
+    Args:
+        data: Dictionary to hash
+
+    Returns:
+        SHA256 hex hash of dictionary
+
+    Example:
+        >>> hash_dict({"model": "gpt-4", "temp": 0.7})
+        'a3f8b2c1...'
+    """
+    # Sort keys for deterministic hashing
+    serialized = json.dumps(data, sort_keys=True)
+    return compute_sha256_hash(serialized)
+
+
+def hash_content(content: str | bytes) -> str:
+    """Compute hash of content for tracing.
+
+    Args:
+        content: String or bytes to hash
+
+    Returns:
+        Hex string of content hash
+
+    Example:
+        >>> hash_content("test content")
+        'abc123def456...'
+    """
+    if isinstance(content, str):
+        content = content.encode("utf-8")
+
+    return hashlib.sha256(content).hexdigest()
+
+
+class HashCollector:
+    """Collects all hashes for a trace.
+
+    Provides systematic hash capture for OpenTelemetry spans,
+    ensuring all critical hashes (template, config, record, etc.)
+    are logged consistently.
+
+    Example:
+        >>> collector = HashCollector()
+        >>> collector.add_template_hash("judge.jinja2", template_content)
+        >>> collector.add_config_hash(agent.parameters)
+        >>> span_attrs = collector.to_span_attributes()
+        >>> # Use span_attrs in OTEL span creation
+    """
+
+    def __init__(self) -> None:
+        """Initialize empty hash collector."""
+        self.hashes: dict[str, str] = {}
+
+    def add_template_hash(self, template_name: str, template_content: str) -> None:
+        """Add template content hash.
+
+        Args:
+            template_name: Name of the template (for reference)
+            template_content: Template content to hash
+        """
+        self.hashes["hash.template"] = compute_template_hash(template_content)
+        self.hashes["hash.template.name"] = template_name
+
+    def add_config_hash(self, config: dict[str, Any]) -> None:
+        """Add configuration hash.
+
+        Args:
+            config: Configuration dictionary to hash
+        """
+        self.hashes["hash.config"] = hash_dict(config)
+
+    def add_record_hash(self, record: Any) -> None:
+        """Add record hash.
+
+        Args:
+            record: Record object with record_hash and record_id attributes
+        """
+        if hasattr(record, "record_hash") and record.record_hash:
+            self.hashes["hash.record"] = record.record_hash
+
+        if hasattr(record, "record_id") and record.record_id:
+            self.hashes["hash.record.id"] = record.record_id
+
+    def add_output_hash(self, output: str | dict[str, Any]) -> None:
+        """Add output hash.
+
+        Args:
+            output: Agent output to hash
+        """
+        if isinstance(output, dict):
+            self.hashes["hash.output"] = hash_dict(output)
+        else:
+            self.hashes["hash.output"] = hash_content(str(output))
+
+    def add_custom_hash(self, key: str, value: str) -> None:
+        """Add custom hash with specified key.
+
+        Args:
+            key: Hash key (should start with "hash.")
+            value: Hash value
+        """
+        if not key.startswith("hash."):
+            key = f"hash.{key}"
+        self.hashes[key] = value
+
+    def to_span_attributes(self) -> dict[str, str]:
+        """Convert to OTEL span attributes.
+
+        Returns:
+            Dictionary of hash attributes, excluding None values
+        """
+        return {k: v for k, v in self.hashes.items() if v is not None}

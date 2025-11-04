@@ -226,16 +226,8 @@ class TracingDetails(BaseModel):
         """
         if not value:  # Only attempt to auto-populate if no value was given
             try:
-                # Local import to keep Weave as a soft dependency at module level if needed
-                import weave as wv_internal
-
-                call = wv_internal.get_current_call()
-                # Check if call and its ref attribute and ref.id exist
-                if call and hasattr(call, "ref") and call.ref and hasattr(call.ref, "id"):
-                    return str(call.ref.id)  # Ensure it's a string
-                logger.debug("Weave call or ref.id not found during TracingDetails creation.")
-            except ImportError:
-                logger.warning("Weave library not installed. Cannot capture Weave trace ID for TracingDetails.")
+                # Weave has been removed - no longer auto-populating trace ID
+                logger.debug("Weave has been removed, trace ID auto-population disabled")
             except Exception as e:
                 logger.warning(f"Unable to get Weave call ID for TracingDetails: {e!s}")
             return ""  # Return empty string if auto-population fails

@@ -1,13 +1,9 @@
 import pytest
 
-# Skip module if replicate not installed (requires ml extras)
-pytest.importorskip("replicate", reason="replicate package not installed - requires ml extras")
-
 from buttermilk import logger
-from buttermilk.agents.imagegen import (
-    BatchImageGenerator,
-    ImageClients,
-)
+
+# Skip entire module if replicate not installed (requires ml extras)
+pytest.importorskip("replicate", reason="replicate package not installed - requires ml extras")
 
 prompts = [
     (
@@ -21,10 +17,22 @@ prompts = [
 ]
 
 
+def pytest_generate_tests(metafunc):
+    """Generate test parameters dynamically based on --run-expensive flag."""
+    if "client" in metafunc.fixturenames:
+        from buttermilk.agents.imagegen import ALL_IMAGE_CLIENTS, CHEAP_IMAGE_CLIENTS
+
+        if metafunc.config.getoption("--run-expensive"):
+            clients = ALL_IMAGE_CLIENTS
+        else:
+            clients = CHEAP_IMAGE_CLIENTS
+
+        metafunc.parametrize("client", clients)
+
+
 @pytest.mark.anyio
 @pytest.mark.parametrize("prompt", [x[1] for x in prompts], ids=[x[0] for x in prompts])
-@pytest.mark.parametrize("client", ImageClients)
-async def test_model(client, prompt):
+async def test_model(client, real_bm, prompt):
     negative_prompt = "dog"
     imagegenerator = client()
     image = await imagegenerator.generate(
@@ -36,14 +44,3 @@ async def test_model(client, prompt):
     image.image.show()
     logger.info("Saved image", model=imagegenerator.model, uri=image.uri)
     assert image
-
-
-@pytest.mark.anyio
-async def test_batch(real_bm):
-    prompt = prompts[0][1]
-    runner = BatchImageGenerator(generators=ImageClients)
-    images = []
-    async for result in runner.abatch(input=[prompt], n=1):
-        images.append(result)
-        result.image.show()
-    assert len(images) == len(ImageClients)

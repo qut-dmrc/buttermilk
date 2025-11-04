@@ -6,7 +6,7 @@ rag:
   agent_obj: RagAgent
   tools: {}
   variants:
-    model: ${run.llms.general}
+    model: ${llms.general}
   parameters:
     template: rag
     description: |

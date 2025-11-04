@@ -19,7 +19,6 @@ from enum import Enum
 from typing import Any, Callable, TypeVar
 
 # Core LLM library imports - these are required dependencies
-import weave
 from anthropic import (
     AsyncAnthropicVertex,
 )
@@ -302,7 +301,6 @@ class AutoGenWrapper(BaseModel):
             jitter_seconds=self.jitter_seconds,
         )
 
-    @weave.op
     async def create(  # noqa: PLR0912 - acceptable branching to normalize diverse provider results
         self,
         messages: Sequence[LLMMessage],
@@ -498,7 +496,6 @@ class AutoGenWrapper(BaseModel):
 
         return result
 
-    @weave.op
     async def call_chat(  # noqa: PLR0913
         self,
         messages: list[LLMMessage],  # Made mutable for extending with tool results
@@ -599,7 +596,6 @@ class AutoGenWrapper(BaseModel):
         # Return the original result
         return create_result
 
-    @weave.op
     async def _call_tool(  # noqa: D401
         self,
         call: FunctionCall,
@@ -950,7 +946,6 @@ class LiteLLMWrapper(BaseModel):
         # Should not reach here, but just in case
         raise last_exception or ProcessingError("LiteLLM call failed after all retries")
 
-    @weave.op
     async def create(
         self,
         messages: Sequence[LLMMessage],
@@ -1057,7 +1052,6 @@ class LiteLLMWrapper(BaseModel):
 
         return result
 
-    @weave.op
     async def call_chat(
         self,
         messages: list[LLMMessage],

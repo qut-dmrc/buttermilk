@@ -23,7 +23,6 @@ from typing import Any
 
 import psutil
 import shortuuid
-import weave
 from pydantic import BaseModel, Field, PrivateAttr
 
 from buttermilk._core.cloud import CloudManager
@@ -415,8 +414,7 @@ class ExecutionContext(BaseModel):
         """
         # Log configured tracing providers but defer actual initialization
         enabled_providers = []
-        if self.tracing.get("weave") and self.tracing["weave"].enabled:
-            enabled_providers.append("weave")
+        # Weave support has been removed
         if self.tracing.get("traceloop") and self.tracing["traceloop"].enabled:
             enabled_providers.append("traceloop")
         if self.tracing.get("otel") and self.tracing["otel"].enabled:
@@ -429,11 +427,16 @@ class ExecutionContext(BaseModel):
 
         self._tracing_instrumented.set()
 
-    async def get_weave_client(self) -> weave.trace.weave_client.WeaveClient:
-        """Provide access to the Weights & Biases Weave client."""
-        # Ensure tracing is set up (this will be deferred initialization)
-        await self._ensure_tracing_initialized()
-        return weave.get_client()
+    async def get_weave_client(self) -> None:
+        """Legacy method - weave has been removed.
+
+        This method previously provided access to the Weave client.
+        After weave removal, it always returns None.
+
+        Returns:
+            None: Weave is no longer used
+        """
+        logger.debug("get_weave_client called but weave has been removed, returning None")
 
     async def _ensure_tracing_initialized(self) -> None:
         """Ensure all tracing providers are initialized on-demand."""
@@ -449,9 +452,7 @@ class ExecutionContext(BaseModel):
         if self._tracing_providers_initialized:
             return
 
-        # Initialize Weave if enabled
-        if self.tracing.get("weave") and self.tracing["weave"].enabled:
-            await self._initialize_weave()
+        # Weave support has been removed
 
         # Initialize Traceloop if enabled
         if self.tracing.get("traceloop") and self.tracing["traceloop"].enabled:
@@ -466,48 +467,12 @@ class ExecutionContext(BaseModel):
         logger.debug("All tracing providers initialization completed")
 
     async def _initialize_weave(self) -> None:
-        """Initialize Weave tracing."""
-        weave_config = self.tracing["weave"]
+        """Legacy method - weave has been removed.
 
-        # Extract credentials from configuration (fail-fast if missing)
-        # Use 'or' to fallback to env var if config value is None/empty
-        wandb_entity = getattr(weave_config, "project_id", None) or os.getenv("WANDB_ENTITY")
-        wandb_api_key = getattr(weave_config, "api_key", None) or os.getenv("WANDB_API_KEY")
-
-        if not wandb_entity:
-            raise RuntimeError(
-                "Weave tracing enabled but project_id (WANDB_ENTITY) not configured. Add project_id to infrastructure.tracing.weave in config or set WANDB_ENTITY environment variable."
-            )
-
-        if not wandb_api_key:
-            raise RuntimeError(
-                "Weave tracing enabled but api_key (WANDB_API_KEY) not configured. Add api_key to infrastructure.tracing.weave in config or set WANDB_API_KEY environment variable."
-            )
-
-        # Set environment variables for Weave initialization
-        os.environ["WANDB_ENTITY"] = wandb_entity
-        os.environ["WANDB_API_KEY"] = wandb_api_key
-
-        try:
-            # Setup Weave tracing
-            # Use project name for collection, fallback to execution context if project not set yet
-            if self.project_name:
-                collection_name = self.project_name
-            else:
-                # Fallback for edge case where weave is initialized before first session
-                collection_name = f"execution-context-{self.execution_context_id[:8]}"
-                logger.warning(
-                    "Weave initialized before project name was set, using execution context ID", execution_context_id=self.execution_context_id
-                )
-
-            autopatch = {"autogen": {"enabled": False}}
-            logger.debug("Starting weave client initialization", entity=wandb_entity, collection=collection_name)
-
-            client = weave.init(project_name=f"{wandb_entity}/{collection_name}", autopatch_settings=autopatch)
-            logger.info("Weave initialized successfully", entity=wandb_entity, collection=collection_name)
-        except Exception as e:
-            logger.error("Failed to initialize Weave tracing", error=str(e))
-            raise RuntimeError(f"Weave tracing initialization failed: {e}") from e
+        This method previously initialized Weave tracing. After weave removal,
+        it does nothing and logs a debug message.
+        """
+        logger.debug("_initialize_weave called but weave has been removed, doing nothing")
 
     async def _initialize_traceloop(self) -> None:
         """Initialize Traceloop tracing."""

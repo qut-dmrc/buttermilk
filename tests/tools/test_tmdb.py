@@ -130,15 +130,23 @@ class TestTMDBGetAvailability:
         title = Title(record_id="550", title="Fight Club", year=1999, metadata={"original_title": "Fight Club"})
 
         with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
-            # Mock watch providers response
-            mock_providers = {
-                "results": {
-                    "US": {
-                        "flatrate": [{"provider_id": 8, "provider_name": "Netflix"}, {"provider_id": 9, "provider_name": "Amazon Prime Video"}],
-                        "rent": [{"provider_id": 2, "provider_name": "Apple TV"}],
-                    },
-                    "GB": {"flatrate": [{"provider_id": 8, "provider_name": "Netflix"}]},
-                }
+            # Mock watch providers response - needs to be an object with .results attribute
+            # region_data must be a dataclass, so we'll use dataclasses.make_dataclass
+            from dataclasses import make_dataclass
+            from unittest.mock import Mock
+
+            # Create a simple dataclass for region data
+            RegionData = make_dataclass("RegionData", [("flatrate", list), ("rent", list), ("buy", list), ("link", str)])
+
+            mock_providers = Mock()
+            mock_providers.results = {
+                "US": RegionData(
+                    flatrate=[{"provider_id": 8, "provider_name": "Netflix"}, {"provider_id": 9, "provider_name": "Amazon Prime Video"}],
+                    rent=[{"provider_id": 2, "provider_name": "Apple TV"}],
+                    buy=[],
+                    link="",
+                ),
+                "GB": RegionData(flatrate=[{"provider_id": 8, "provider_name": "Netflix"}], rent=[], buy=[], link=""),
             }
 
             # Mock the movie(id) method to return an object with watch_providers
@@ -146,12 +154,14 @@ class TestTMDBGetAvailability:
             mock_movie_obj.watch_providers = AsyncMock(return_value=mock_providers)
             mock_tmdb.movie.return_value = mock_movie_obj
 
-            # Get availability for US and GB regions
-            results = await tmdb_tool.get_availability(title, regions=["US", "GB", "AU"])
+            # Get availability for all regions TMDB returns
+            results = []
+            async for obs in tmdb_tool.get_availability(title):
+                results.append(obs)
 
-            # Should return observations for each region
+            # Should return observations for regions with providers
             assert isinstance(results, list)
-            assert len(results) >= 3  # At least one observation per region
+            assert len(results) >= 3  # At least some observations
 
             # Check US has providers
             us_observations = [r for r in results if r.region == "US"]
@@ -167,35 +177,34 @@ class TestTMDBGetAvailability:
             gb_observations = [r for r in results if r.region == "GB"]
             assert len(gb_observations) >= 1
 
-            # Check AU has null observation (no providers)
-            au_observations = [r for r in results if r.region == "AU"]
-            assert len(au_observations) == 1
-            assert au_observations[0].available is False
-            assert au_observations[0].provider_name is None
-
     @pytest.mark.anyio
     async def test_get_availability_no_providers_returns_null_observations(self, tmdb_tool):
-        """Test that regions with no providers get null observations."""
+        """Test that when TMDB returns no providers, we get a null observation."""
         title = Title(record_id="550", title="Fight Club", year=1999, metadata={})
 
         with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
-            # Mock empty providers response
-            mock_providers = {"results": {}}
+            # Mock empty providers response - needs to be an object with .results attribute
+            from unittest.mock import Mock
+
+            mock_providers = Mock()
+            mock_providers.results = {}
 
             # Mock the movie(id) method to return an object with watch_providers
             mock_movie_obj = AsyncMock()
             mock_movie_obj.watch_providers = AsyncMock(return_value=mock_providers)
             mock_tmdb.movie.return_value = mock_movie_obj
 
-            results = await tmdb_tool.get_availability(title, regions=["US", "GB"])
+            results = []
+            async for obs in tmdb_tool.get_availability(title):
+                results.append(obs)
 
-            # Should return null observations for each region
-            assert len(results) == 2
-            for obs in results:
-                assert isinstance(obs, Observation)
-                assert obs.available is False
-                assert obs.provider_name is None
-                assert obs.source == "TMDB"
+            # Should return one null observation when no regions have providers
+            assert len(results) == 1
+            obs = results[0]
+            assert isinstance(obs, Observation)
+            assert obs.available is False
+            assert obs.provider_name is None
+            assert obs.source == "TMDB"
 
     @pytest.mark.anyio
     async def test_get_availability_api_error_handling(self, tmdb_tool):
@@ -208,7 +217,9 @@ class TestTMDBGetAvailability:
             mock_movie_obj.watch_providers = AsyncMock(side_effect=Exception("API connection failed"))
             mock_tmdb.movie.return_value = mock_movie_obj
 
-            results = await tmdb_tool.get_availability(title, regions=["US"])
+            results = []
+            async for obs in tmdb_tool.get_availability(title):
+                results.append(obs)
 
             # Should return error observation
             assert len(results) == 1

@@ -4,6 +4,5 @@ run:
   mode: api
   human_in_loop: false
   flows: {}
-  llms: {}
 project_name: bm_api
 job: flows

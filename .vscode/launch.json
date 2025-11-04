@@ -24,7 +24,7 @@
         "+flows@run.flows.trans=trans",
         "run=api",
         "verbose=true",
-        "+llms@run.llms=${input:llms}"
+        "llms=${input:llms}"
       ],
       "envFile": "${userHome}/.env",
       "console": "integratedTerminal"
@@ -197,7 +197,7 @@
         "+run.flow=trans",
         "+flows=[trans]",
         "verbose=true",
-        "+llms=${input:llms}",
+        "llms=${input:llms}",
         "run.limit=2"
       ],
       "envFile": "${userHome}/.env",

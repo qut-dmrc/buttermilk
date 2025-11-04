@@ -3,18 +3,29 @@ from hashlib import sha256
 from io import BytesIO
 
 import pytest
-
-# Skip module if replicate not installed (requires ml extras)
-pytest.importorskip("replicate", reason="replicate package not installed - requires ml extras")
 from cloudpathlib import CloudPath
 from PIL import Image, ImageStat
 
 from buttermilk._core.image import ImageRecord
-from buttermilk.agents.imagegen import ImageClients
+
+# Skip module if replicate not installed (requires ml extras)
+pytest.importorskip("replicate", reason="replicate package not installed - requires ml extras")
 
 pytestmark = pytest.mark.anyio
 
-CLIENTS = [x for x in ImageClients]
+
+def pytest_generate_tests(metafunc):
+    """Generate test parameters dynamically based on --run-expensive flag."""
+    if "client" in metafunc.fixturenames:
+        from buttermilk.agents.imagegen import ALL_IMAGE_CLIENTS, CHEAP_IMAGE_CLIENTS
+
+        if metafunc.config.getoption("--run-expensive"):
+            clients = ALL_IMAGE_CLIENTS
+        else:
+            clients = CHEAP_IMAGE_CLIENTS
+
+        metafunc.parametrize("client", clients)
+
 
 TEST_PROMPT = "Two Bangladeshi women working at a coffee shop in Dhaka, Bangladesh."
 TEST_NEGATIVE_PROMPT = "TRADITIONAL ATTIRE"
@@ -35,7 +46,6 @@ def _is_nontrivial_image(img: Image.Image) -> bool:
         return False
 
 
-@pytest.mark.parametrize("client", CLIENTS)
 async def test_generated_image_is_valid_and_nontrivial(client):
     image_client = client()
     result = await image_client.generate_image(
@@ -63,7 +73,6 @@ async def test_generated_image_is_valid_and_nontrivial(client):
     assert _is_nontrivial_image(img2)
 
 
-@pytest.mark.parametrize("client", CLIENTS)
 async def test_image_can_roundtrip_to_bytes_and_reopen(client):
     image_client = client()
     result = await image_client.generate_image(
@@ -85,7 +94,6 @@ async def test_image_can_roundtrip_to_bytes_and_reopen(client):
     assert _is_nontrivial_image(reopened)
 
 
-@pytest.mark.parametrize("client", CLIENTS)
 async def test_cloud_artifact_matches_in_memory_dimensions(client):
     image_client = client()
     result = await image_client.generate_image(
@@ -108,7 +116,6 @@ async def test_cloud_artifact_matches_in_memory_dimensions(client):
     assert (w_mem, h_mem) == (w_disk, h_disk)
 
 
-@pytest.mark.parametrize("client", CLIENTS)
 async def test_allows_none_negative_prompt_and_still_produces_image(client):
     image_client = client()
     result = await image_client.generate_image(
@@ -122,7 +129,6 @@ async def test_allows_none_negative_prompt_and_still_produces_image(client):
     assert CloudPath(result.uri).exists()
 
 
-@pytest.mark.parametrize("client", CLIENTS)
 async def test_cloud_artifact_content_hash_is_stable_for_single_download(client):
     # Ensures the stored object is readable consistently (not necessarily deterministic generation)
     image_client = client()

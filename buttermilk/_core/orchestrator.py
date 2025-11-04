@@ -22,7 +22,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Any, Self
 
-import weave
+# weave import removed
 from opentelemetry import trace
 from pydantic import (
     BaseModel,
@@ -318,17 +318,11 @@ class Orchestrator(OrchestratorProtocol, ABC):
         # Get OTEL tracer for business logic spans
         tracer = trace.get_tracer("buttermilk.orchestrator")
 
-        weave_client = await bm.get_weave_client()
-        if weave_client is not None:
+        # Weave has been removed
+        weave_client = None
+        if False:  # Disabled weave code
             try:
-                op = weave.op(self.run, call_display_name=display_name)
-                logger.debug(f"Creating Weave call for orchestrator '{self.name}' with display name '{display_name}'.")
-                orchestrator_trace = weave_client.create_call(
-                    op,
-                    inputs=inputs,
-                    display_name=display_name,
-                    attributes=request.tracing_attributes,
-                )
+                pass
             except Exception as e:
                 # Disable Weave for this run if anything goes wrong
                 logger.warning(f"Weave initialization disabled for this run due to error: {e!s}")

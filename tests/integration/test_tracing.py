@@ -10,6 +10,7 @@ EXPECTED_PROJECT_NAME = "buttermilk"
 EXPECTED_JOB = "testing"
 
 
+@pytest.mark.skip(reason="Weave dependency removed from buttermilk")
 @pytest.mark.anyio
 async def test_weave_tracing_initialised_and_creates_calls(real_bm: BM):
     """Simple integration check for Weave tracing.
@@ -54,6 +55,7 @@ async def test_weave_tracing_initialised_and_creates_calls(real_bm: BM):
     assert fetched is not None, "Weave get_call should return the created call"
 
 
+@pytest.mark.skip(reason="Weave dependency removed from buttermilk")
 @pytest.mark.anyio
 async def test_unified_tracing_config_integration(real_bm: BM):
     """Verify that unified tracing configuration works with existing BM infrastructure.
@@ -111,6 +113,7 @@ async def test_unified_tracing_config_integration(real_bm: BM):
     # 4. The delegation from BM.get_weave_client() to ExecutionContext works properly
 
 
+@pytest.mark.skip(reason="Weave dependency removed from buttermilk")
 @pytest.mark.anyio
 async def test_weave_collection_uses_project_name(real_bm):
     """Test that weave initialization uses project name, not execution context ID.
