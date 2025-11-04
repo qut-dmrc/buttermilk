@@ -13,6 +13,8 @@ storage:
     table_id: traces
     dataset_name: traces
     schema_path: traces.schema.json
+session:
+  llm_wrapper: autogen
 infrastructure:
   clouds:
     - type: gcp

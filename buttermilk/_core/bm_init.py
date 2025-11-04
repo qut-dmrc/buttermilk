@@ -141,6 +141,7 @@ class SessionInfo(BaseModel):
     flow_config: dict[str, Any] = Field(default_factory=dict, description="Flow configuration for this session.")
     flow_hash: str | None = Field(default=None, description="Hash of flow configuration for A/B testing.")
     template_paths: list[str] = Field(default_factory=list, description="Paths to search for templates.")
+    llm_wrapper: str = Field(default="autogen", description="Global LLM wrapper selection (autogen or litellm). Per-model use_litellm overrides this.")
 
     _get_ip_task: asyncio.Task[Any] | None = PrivateAttr(default=None)  # type: ignore
 

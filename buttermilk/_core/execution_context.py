@@ -93,6 +93,7 @@ class ExecutionContext(BaseModel):
     logging: LoggerConfig | None = Field(default=None, description="Configuration for cloud-based logging.")
     tracing: dict[str, Tracing] | None = Field(default_factory=dict, description="Configuration for tracing systems.")
     datasets: dict[str, BaseStorageConfig] = Field(default_factory=dict, description="Shared dataset configurations.")
+    default_llm_wrapper: str = Field(default="autogen", description="Default LLM wrapper type (autogen or litellm). Passed to LLMs instance.")
 
     # Private attributes for lazy-loaded infrastructure
     _cloud_manager: CloudManager | None = PrivateAttr(default=None)
@@ -337,7 +338,7 @@ class ExecutionContext(BaseModel):
                         logger.warning("Proceeding with empty LLM connections. LLM functionality will not be available.")
                         connections_data = {}
 
-            self._llms_instance = LLMs(connections=connections_data)
+            self._llms_instance = LLMs(connections=connections_data, default_wrapper=self.default_llm_wrapper)
         return self._llms_instance
 
     def _write_cache_sync(self, connections_data: dict[str, Any], cache_path: Path) -> None:
@@ -637,7 +638,7 @@ def get_or_create_execution_context(**kwargs) -> ExecutionContext:
 # Factory methods for creating ExecutionContext from typed config
 
 
-async def from_config_async(infrastructure, project_name: str | None = None):
+async def from_config_async(infrastructure, project_name: str | None = None, default_llm_wrapper: str = "autogen"):
     """Create ExecutionContext from typed infrastructure config.
 
     This is the recommended factory method that takes the typed
@@ -646,6 +647,7 @@ async def from_config_async(infrastructure, project_name: str | None = None):
     Args:
         infrastructure: Typed InfrastructureConfig from ButtermilkConfig
         project_name: Optional project name
+        default_llm_wrapper: Default LLM wrapper type (autogen or litellm). Defaults to "autogen" for backward compatibility.
 
     Returns:
         Initialized ExecutionContext ready for creating sessions
@@ -657,7 +659,8 @@ async def from_config_async(infrastructure, project_name: str | None = None):
         >>> typed_cfg = await load_typed_config_async()
         >>> ctx = await from_config_async(
         ...     typed_cfg.infrastructure,
-        ...     project_name="my_project"
+        ...     project_name="my_project",
+        ...     default_llm_wrapper=typed_cfg.session.llm_wrapper
         ... )
     """
     # Convert TracingConfig to dict format if needed
@@ -679,6 +682,7 @@ async def from_config_async(infrastructure, project_name: str | None = None):
         logging=logging_config,
         tracing=tracing_dict,
         datasets=infrastructure.datasets,
+        default_llm_wrapper=default_llm_wrapper,
     )
 
     await context.ensure_initialized()

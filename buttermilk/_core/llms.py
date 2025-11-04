@@ -1227,6 +1227,10 @@ class LLMs(BaseModel):
         default_factory=dict,  # Changed from list to dict factory
         description="A dictionary where keys are connection names and values are LLMConfig objects.",
     )
+    default_wrapper: str = Field(
+        default="autogen",
+        description="Default LLM wrapper type (autogen or litellm). Used when config.use_litellm is None.",
+    )
     autogen_models: dict[str, AutoGenWrapper] = Field(
         default_factory=dict,  # For caching instantiated clients
         description="Cache for instantiated AutoGenWrapper clients. Populated on demand.",
@@ -1545,7 +1549,10 @@ class LLMs(BaseModel):
             return factory
 
         # Choose wrapper type based on configuration
-        if config.use_litellm:
+        # Per-model use_litellm takes precedence over global default_wrapper
+        use_litellm = config.use_litellm if config.use_litellm is not None else (self.default_wrapper == "litellm")
+
+        if use_litellm:
             # Use LiteLLMWrapper for unified provider support
             logger.debug(f"Using LiteLLMWrapper for model '{name}' with provider '{config.client_type.value}'")
 
