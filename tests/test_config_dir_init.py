@@ -4,9 +4,7 @@ These tests verify that the init() function correctly resolves config_dir paths
 in various scenarios, ensuring relative paths work as expected.
 """
 
-import os
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -75,8 +73,8 @@ class TestInitConfigDirResolution:
     @pytest.mark.anyio
     async def test_init_async_with_relative_config_dir(self, tmp_path, monkeypatch):
         """Test that init_async() works with relative config_dir."""
+
         from buttermilk._core.config_bootstrap import init_async
-        from omegaconf import DictConfig, OmegaConf
 
         # Arrange: Create a minimal config structure
         project_dir = tmp_path / "myproject"
@@ -163,8 +161,7 @@ pipeline: null
 
         # Also verify it's not using the package directory
         package_dir = Path(__file__).parent.parent / "buttermilk" / "conf"
-        assert result != str(package_dir.resolve()), \
-            f"config_dir should not resolve to package directory {package_dir}"
+        assert result != str(package_dir.resolve()), f"config_dir should not resolve to package directory {package_dir}"
 
 
 if __name__ == "__main__":

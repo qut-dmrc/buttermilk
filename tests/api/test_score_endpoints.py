@@ -16,19 +16,14 @@ class TestDataService:
     def real_flow_runner(self):
         """Mock flow runner with test data"""
         mock_runner = Mock()
-        
+
         # Mock flow with storage configuration
         mock_flow = Mock()
-        mock_flow.storage = {
-            "test_dataset": {"type": "file", "path": "test.jsonl"}
-        }
-        
-        mock_runner.flows = {
-            "test_flow": mock_flow
-        }
-        
-        yield mock_runner
+        mock_flow.storage = {"test_dataset": {"type": "file", "path": "test.jsonl"}}
 
+        mock_runner.flows = {"test_flow": mock_flow}
+
+        yield mock_runner
 
     @pytest.mark.anyio
     async def test_get_record_by_id_found(self, real_flow_runner, real_bm):
@@ -37,12 +32,7 @@ class TestDataService:
             # Create a proper mock record with actual values
             from buttermilk._core.types import Record
 
-            mock_record = Record(
-                record_id="test_record_1",
-                title="Test Record",
-                content="Test content",
-                metadata={}
-            )
+            mock_record = Record(record_id="test_record_1", title="Test Record", content="Test content", metadata={})
 
             mock_storage = Mock()
             mock_storage.get_record_by_id = Mock(return_value=mock_record)
@@ -126,13 +116,7 @@ class TestDataService:
             m.setattr("buttermilk.api.services.data_service.QueryRunner", lambda bq_client: mock_query_runner)
 
             # Setup mock flow with save config
-            real_flow_runner.flows["test_flow"].parameters = {
-                "save": {
-                    "type": "bigquery",
-                    "dataset_id": "test_dataset",
-                    "table_id": "test_table"
-                }
-            }
+            real_flow_runner.flows["test_flow"].parameters = {"save": {"type": "bigquery", "dataset_id": "test_dataset", "table_id": "test_table"}}
 
             result = await DataService.get_scores_for_record("test_record", "test_flow", real_flow_runner)
 
@@ -161,7 +145,7 @@ class TestDataService:
                     "parent_call_id": None,
                     "tracing_link": None,
                     "error": None,
-                    "messages": json.dumps([])
+                    "messages": json.dumps([]),
                 }
             ]
 
@@ -171,13 +155,7 @@ class TestDataService:
             m.setattr("buttermilk.api.services.data_service.QueryRunner", lambda bq_client: mock_query_runner)
 
             # Setup mock flow with save config
-            real_flow_runner.flows["test_flow"].parameters = {
-                "save": {
-                    "type": "bigquery",
-                    "dataset_id": "test_dataset",
-                    "table_id": "test_table"
-                }
-            }
+            real_flow_runner.flows["test_flow"].parameters = {"save": {"type": "bigquery", "dataset_id": "test_dataset", "table_id": "test_table"}}
 
             result = await DataService.get_scores_for_record("test_record", "test_flow", real_flow_runner)
 
@@ -206,7 +184,7 @@ class TestDataService:
                     "parent_call_id": None,
                     "tracing_link": None,
                     "error": None,
-                    "messages": json.dumps([])
+                    "messages": json.dumps([]),
                 }
             ]
 
@@ -216,13 +194,7 @@ class TestDataService:
             m.setattr("buttermilk.api.services.data_service.QueryRunner", lambda bq_client: mock_query_runner)
 
             # Setup mock flow with save config
-            real_flow_runner.flows["test_flow"].parameters = {
-                "save": {
-                    "type": "bigquery",
-                    "dataset_id": "test_dataset",
-                    "table_id": "test_table"
-                }
-            }
+            real_flow_runner.flows["test_flow"].parameters = {"save": {"type": "bigquery", "dataset_id": "test_dataset", "table_id": "test_table"}}
 
             result = await DataService.get_responses_for_record("test_record", "test_flow", real_flow_runner)
 
@@ -239,17 +211,17 @@ class TestScoreEndpointsIntegration:
         """Mock all the FastAPI dependencies"""
         mock_flows = Mock()
         mock_flows.flows = {"test_flow": Mock()}
-        
+
         return {
             "flows": mock_flows,
-            "bm_instance": None  # Will be injected by real_bm fixture
+            "bm_instance": None,  # Will be injected by real_bm fixture
         }
 
     def test_imports_work(self):
         """Test that all imports work correctly"""
         from buttermilk.api.routes import flow_data_router
         from buttermilk.api.services.data_service import DataService
-        
+
         # Basic smoke test
         assert flow_data_router is not None
         assert DataService is not None

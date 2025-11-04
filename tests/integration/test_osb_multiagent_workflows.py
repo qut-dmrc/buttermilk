@@ -34,58 +34,44 @@ from buttermilk.runner.flowrunner import FlowRunner
 def mock_vector_store():
     """Mock vector store for OSB testing."""
     mock_store = MagicMock(spec=VectorStoreInterface)
-    
+
     # Mock vector search results
     mock_store.query.return_value = {
         "results": [
             {
                 "content": "Policy section 4.2: Content must not contain hate speech targeting protected groups",
                 "metadata": {"source": "community_standards.pdf", "section": "4.2", "confidence": 0.92},
-                "score": 0.85
+                "score": 0.85,
             },
             {
                 "content": "Precedent case OSB-2024-089: Similar content was classified as hate speech",
                 "metadata": {"source": "case_database", "case_id": "OSB-2024-089", "confidence": 0.88},
-                "score": 0.82
+                "score": 0.82,
             },
             {
                 "content": "Policy enforcement guidelines: First violation requires content removal and warning",
                 "metadata": {"source": "enforcement_guide.pdf", "section": "2.1", "confidence": 0.95},
-                "score": 0.79
-            }
+                "score": 0.79,
+            },
         ],
         "total_results": 3,
-        "query_metadata": {
-            "embedding_model": "gemini-embedding-001",
-            "search_time_ms": 45.2
-        }
+        "query_metadata": {"embedding_model": "gemini-embedding-001", "search_time_ms": 45.2},
     }
-    
+
     return mock_store
 
 
 @pytest.fixture
 def mock_osb_agents():
     """Mock OSB agent implementations."""
-    return {
-        "researcher": MagicMock(),
-        "policy_analyst": MagicMock(),
-        "fact_checker": MagicMock(),
-        "explorer": MagicMock()
-    }
+    return {"researcher": MagicMock(), "policy_analyst": MagicMock(), "fact_checker": MagicMock(), "explorer": MagicMock()}
 
 
 @pytest.fixture
 def osb_flow_runner(mock_vector_store, mock_osb_agents):
     """Mock FlowRunner configured for OSB testing."""
     mock_runner = MagicMock(spec=FlowRunner)
-    mock_runner.flows = {
-        "osb": {
-            "name": "OSB Interactive Flow",
-            "agents": mock_osb_agents,
-            "vector_store": mock_vector_store
-        }
-    }
+    mock_runner.flows = {"osb": {"name": "OSB Interactive Flow", "agents": mock_osb_agents, "vector_store": mock_vector_store}}
     return mock_runner
 
 
@@ -99,11 +85,7 @@ class TestOSBMultiAgentCoordination:
         test_query = "This post contains language targeting a specific ethnic group with derogatory terms"
 
         # Execute workflow steps
-        workflow_results = await self._run_complete_osb_workflow(
-            query=test_query,
-            case_number="OSB-TEST-001",
-            flow_runner=osb_flow_runner
-        )
+        workflow_results = await self._run_complete_osb_workflow(query=test_query, case_number="OSB-TEST-001", flow_runner=osb_flow_runner)
 
         # Validate workflow completion
         assert workflow_results["workflow_complete"] is True
@@ -124,8 +106,7 @@ class TestOSBMultiAgentCoordination:
         # Validate confidence scores
         assert workflow_results["overall_confidence"] >= 0.5
 
-    async def _run_complete_osb_workflow(self, query: str, case_number: str,
-                                       flow_runner: FlowRunner) -> Dict[str, Any]:
+    async def _run_complete_osb_workflow(self, query: str, case_number: str, flow_runner: FlowRunner) -> Dict[str, Any]:
         """Execute complete OSB workflow simulation."""
         start_time = time.time()
 
@@ -139,7 +120,7 @@ class TestOSBMultiAgentCoordination:
             "workflow_complete": False,
             "error_occurred": False,
             "total_duration": 0,
-            "overall_confidence": 0.0
+            "overall_confidence": 0.0,
         }
 
         try:
@@ -150,15 +131,11 @@ class TestOSBMultiAgentCoordination:
             agent_names = ["researcher", "policy_analyst", "fact_checker", "explorer"]
 
             for agent_name in agent_names:
-                agent_result = await self._simulate_agent_execution(
-                    agent_name, query, vector_results, case_number
-                )
+                agent_result = await self._simulate_agent_execution(agent_name, query, vector_results, case_number)
                 workflow_results["agent_responses"][agent_name] = agent_result
 
             # Step 3: Synthesize results
-            synthesis_result = await self._simulate_synthesis(
-                query, workflow_results["agent_responses"]
-            )
+            synthesis_result = await self._simulate_synthesis(query, workflow_results["agent_responses"])
 
             workflow_results.update(synthesis_result)
             workflow_results["workflow_complete"] = True
@@ -174,17 +151,12 @@ class TestOSBMultiAgentCoordination:
         """Simulate vector store query for OSB context."""
         return {
             "results": [
-                {
-                    "content": "Policy section on hate speech and harassment",
-                    "metadata": {"source": "policy.pdf", "confidence": 0.9},
-                    "score": 0.85
-                }
+                {"content": "Policy section on hate speech and harassment", "metadata": {"source": "policy.pdf", "confidence": 0.9}, "score": 0.85}
             ],
-            "query_metadata": {"search_time_ms": 25.0}
+            "query_metadata": {"search_time_ms": 25.0},
         }
 
-    async def _simulate_agent_execution(self, agent_name: str, query: str,
-                                      vector_results: Dict[str, Any], case_number: str) -> Dict[str, Any]:
+    async def _simulate_agent_execution(self, agent_name: str, query: str, vector_results: Dict[str, Any], case_number: str) -> Dict[str, Any]:
         """Simulate individual agent execution."""
         # Mock agent-specific responses
         agent_responses = {
@@ -193,7 +165,7 @@ class TestOSBMultiAgentCoordination:
                 "evidence": ["Pattern match: derogatory_ethnic_terms", "Context: social_media_harassment"],
                 "confidence": 0.87,
                 "sources": ["pattern_detection.model", "context_analysis.db"],
-                "processing_time": 2.3
+                "processing_time": 2.3,
             },
             "policy_analyst": {
                 "analysis": "Content violates Community Standards Section 4.2: Hate Speech",
@@ -201,7 +173,7 @@ class TestOSBMultiAgentCoordination:
                 "violation_severity": "high",
                 "confidence": 0.92,
                 "recommendations": ["immediate_removal", "user_warning"],
-                "processing_time": 1.8
+                "processing_time": 1.8,
             },
             "fact_checker": {
                 "validation": "Claims and context verified through multiple sources",
@@ -209,7 +181,7 @@ class TestOSBMultiAgentCoordination:
                 "verified_facts": ["ethnic_targeting_confirmed", "harassment_pattern_verified"],
                 "confidence": 0.91,
                 "sources": ["fact_database", "verification_service"],
-                "processing_time": 2.1
+                "processing_time": 2.1,
             },
             "explorer": {
                 "themes": ["hate_speech", "ethnic_harassment", "coordinated_harassment"],
@@ -217,32 +189,26 @@ class TestOSBMultiAgentCoordination:
                 "trend_analysis": "Part of larger harassment campaign",
                 "confidence": 0.83,
                 "exploration_depth": "comprehensive",
-                "processing_time": 2.5
-            }
+                "processing_time": 2.5,
+            },
         }
 
-        return agent_responses.get(agent_name, {
-            "error": f"Unknown agent: {agent_name}",
-            "confidence": 0.0
-        })
+        return agent_responses.get(agent_name, {"error": f"Unknown agent: {agent_name}", "confidence": 0.0})
 
     async def _simulate_synthesis(self, query: str, agent_responses: Dict[str, Any]) -> Dict[str, Any]:
         """Simulate multi-agent response synthesis."""
         return {
             "synthesis_summary": "Multi-agent analysis confirms policy violation with high confidence",
-            "policy_violations": [
-                "Community Standards 4.2: Hate Speech",
-                "Community Standards 3.1: Harassment"
-            ],
+            "policy_violations": ["Community Standards 4.2: Hate Speech", "Community Standards 3.1: Harassment"],
             "recommendations": [
                 "Remove content immediately",
                 "Issue formal warning to user",
                 "Monitor user activity for 30 days",
-                "Document case for trend analysis"
+                "Document case for trend analysis",
             ],
             "overall_confidence": 0.89,
             "cross_validation_score": 0.91,
-            "consensus_level": "high"
+            "consensus_level": "high",
         }
 
     @pytest.mark.anyio
@@ -255,11 +221,7 @@ class TestOSBMultiAgentCoordination:
         async def mock_agent_with_timing(agent_name: str, delay: float):
             start_time = time.time()
             await asyncio.sleep(delay)  # Simulate processing time
-            execution_log.append({
-                "agent": agent_name,
-                "start_time": start_time,
-                "duration": time.time() - start_time
-            })
+            execution_log.append({"agent": agent_name, "start_time": start_time, "duration": time.time() - start_time})
             return {"agent": agent_name, "processed": True}
 
         # Simulate agent execution with different processing times
@@ -267,7 +229,7 @@ class TestOSBMultiAgentCoordination:
             mock_agent_with_timing("researcher", 0.1),
             mock_agent_with_timing("policy_analyst", 0.15),
             mock_agent_with_timing("fact_checker", 0.12),
-            mock_agent_with_timing("explorer", 0.18)
+            mock_agent_with_timing("explorer", 0.18),
         ]
 
         start_time = time.time()
@@ -300,7 +262,7 @@ class TestOSBMultiAgentCoordination:
             successful_agent("researcher"),
             failing_agent(),  # policy_analyst fails
             successful_agent("fact_checker"),
-            successful_agent("explorer")
+            successful_agent("explorer"),
         ]
 
         # Execute with error handling
@@ -311,7 +273,7 @@ class TestOSBMultiAgentCoordination:
         failed_results = [r for r in results if isinstance(r, Exception)]
 
         assert len(successful_results) == 3  # 3 agents succeeded
-        assert len(failed_results) == 1     # 1 agent failed
+        assert len(failed_results) == 1  # 1 agent failed
 
         # Validate workflow can continue with partial results
         assert all(r.get("success") for r in successful_results)
@@ -327,10 +289,7 @@ class TestOSBMultiAgentCoordination:
             "query": test_query,
             "case_number": case_number,
             "vector_results": await self._simulate_vector_query(test_query, osb_flow_runner),
-            "processing_metadata": {
-                "timestamp": time.time(),
-                "workflow_id": "test-workflow-001"
-            }
+            "processing_metadata": {"timestamp": time.time(), "workflow_id": "test-workflow-001"},
         }
 
         # Execute agents with shared context
@@ -361,7 +320,7 @@ class TestOSBMultiAgentCoordination:
             "source_query": context["query"],
             "confidence": 0.85,  # Consistent confidence format
             "timestamp": time.time(),
-            "context_validated": True
+            "context_validated": True,
         }
 
 
@@ -378,13 +337,11 @@ class TestOSBWorkflowIntegration:
             "content_type": "social_media_post",
             "platform": "twitter",
             "reported_by": "community_user",
-            "priority": "high"
+            "priority": "high",
         }
 
         # Execute complete workflow
-        workflow_result = await self._execute_end_to_end_workflow(
-            content_to_analyze, case_metadata, osb_flow_runner
-        )
+        workflow_result = await self._execute_end_to_end_workflow(content_to_analyze, case_metadata, osb_flow_runner)
 
         # Validate complete workflow execution
         assert workflow_result["status"] == "completed"
@@ -405,8 +362,7 @@ class TestOSBWorkflowIntegration:
         if decision == "policy_violation":
             assert len(workflow_result["enforcement_actions"]) > 0
 
-    async def _execute_end_to_end_workflow(self, content: str, metadata: Dict[str, Any],
-                                         flow_runner: FlowRunner) -> Dict[str, Any]:
+    async def _execute_end_to_end_workflow(self, content: str, metadata: Dict[str, Any], flow_runner: FlowRunner) -> Dict[str, Any]:
         """Execute complete end-to-end OSB workflow."""
         workflow_result = {
             "content": content,
@@ -417,43 +373,33 @@ class TestOSBWorkflowIntegration:
             "synthesis_result": {},
             "final_decision": "",
             "confidence_level": 0.0,
-            "enforcement_actions": []
+            "enforcement_actions": [],
         }
 
         try:
             # Stage 1: Initial processing and vector search
             vector_context = await self._get_policy_context(content)
-            workflow_result["audit_trail"].append({
-                "stage": "context_retrieval",
-                "timestamp": time.time(),
-                "results_count": len(vector_context.get("results", []))
-            })
+            workflow_result["audit_trail"].append(
+                {"stage": "context_retrieval", "timestamp": time.time(), "results_count": len(vector_context.get("results", []))}
+            )
 
             # Stage 2: Multi-agent analysis
             agents = ["researcher", "policy_analyst", "fact_checker", "explorer"]
             for agent in agents:
                 agent_output = await self._execute_agent_analysis(agent, content, vector_context, metadata)
                 workflow_result["agent_outputs"][agent] = agent_output
-                workflow_result["audit_trail"].append({
-                    "stage": f"agent_{agent}",
-                    "timestamp": time.time(),
-                    "confidence": agent_output.get("confidence", 0)
-                })
+                workflow_result["audit_trail"].append(
+                    {"stage": f"agent_{agent}", "timestamp": time.time(), "confidence": agent_output.get("confidence", 0)}
+                )
 
             # Stage 3: Synthesis and decision
-            synthesis = await self._synthesize_agent_outputs(
-                content, workflow_result["agent_outputs"], metadata
-            )
+            synthesis = await self._synthesize_agent_outputs(content, workflow_result["agent_outputs"], metadata)
             workflow_result["synthesis_result"] = synthesis
             workflow_result["final_decision"] = synthesis["decision"]
             workflow_result["confidence_level"] = synthesis["confidence"]
             workflow_result["enforcement_actions"] = synthesis.get("recommended_actions", [])
 
-            workflow_result["audit_trail"].append({
-                "stage": "synthesis",
-                "timestamp": time.time(),
-                "decision": synthesis["decision"]
-            })
+            workflow_result["audit_trail"].append({"stage": "synthesis", "timestamp": time.time(), "decision": synthesis["decision"]})
 
             workflow_result["status"] = "completed"
 
@@ -465,28 +411,19 @@ class TestOSBWorkflowIntegration:
 
     async def _get_policy_context(self, content: str) -> Dict[str, Any]:
         """Get policy context from vector store."""
-        return {
-            "results": [
-                {
-                    "content": "Policy context for content analysis",
-                    "metadata": {"source": "policy_db", "relevance": 0.9}
-                }
-            ]
-        }
+        return {"results": [{"content": "Policy context for content analysis", "metadata": {"source": "policy_db", "relevance": 0.9}}]}
 
-    async def _execute_agent_analysis(self, agent: str, content: str,
-                                    context: Dict[str, Any], metadata: Dict[str, Any]) -> Dict[str, Any]:
+    async def _execute_agent_analysis(self, agent: str, content: str, context: Dict[str, Any], metadata: Dict[str, Any]) -> Dict[str, Any]:
         """Execute individual agent analysis."""
         return {
             "agent": agent,
             "analysis": f"{agent} analysis of content",
             "confidence": 0.85,
             "findings": [f"{agent}_finding_1", f"{agent}_finding_2"],
-            "processing_time": 1.5
+            "processing_time": 1.5,
         }
 
-    async def _synthesize_agent_outputs(self, content: str, agent_outputs: Dict[str, Any],
-                                      metadata: Dict[str, Any]) -> Dict[str, Any]:
+    async def _synthesize_agent_outputs(self, content: str, agent_outputs: Dict[str, Any], metadata: Dict[str, Any]) -> Dict[str, Any]:
         """Synthesize agent outputs into final decision."""
         avg_confidence = sum(output.get("confidence", 0) for output in agent_outputs.values()) / len(agent_outputs)
 
@@ -497,10 +434,7 @@ class TestOSBWorkflowIntegration:
             "confidence": avg_confidence,
             "reasoning": "Multi-agent analysis synthesis",
             "recommended_actions": ["content_removal", "user_warning"] if decision == "policy_violation" else [],
-            "synthesis_metadata": {
-                "agents_consulted": list(agent_outputs.keys()),
-                "synthesis_time": time.time()
-            }
+            "synthesis_metadata": {"agents_consulted": list(agent_outputs.keys()), "synthesis_time": time.time()},
         }
 
     @pytest.mark.anyio
@@ -509,18 +443,14 @@ class TestOSBWorkflowIntegration:
         test_scenarios = [
             {"content": "Short test content", "expected_max_time": 5.0},
             {"content": "Medium length test content with more details for analysis", "expected_max_time": 10.0},
-            {"content": "Very long test content " * 50, "expected_max_time": 15.0}  # Long content
+            {"content": "Very long test content " * 50, "expected_max_time": 15.0},  # Long content
         ]
 
         for i, scenario in enumerate(test_scenarios):
             start_time = time.time()
 
             # Execute workflow
-            result = await self._execute_end_to_end_workflow(
-                scenario["content"],
-                {"case_number": f"PERF-TEST-{i:03d}"},
-                osb_flow_runner
-            )
+            result = await self._execute_end_to_end_workflow(scenario["content"], {"case_number": f"PERF-TEST-{i:03d}"}, osb_flow_runner)
 
             execution_time = time.time() - start_time
 
@@ -541,9 +471,7 @@ class TestOSBWorkflowIntegration:
         for i in range(num_concurrent_workflows):
             content = f"Concurrent test content {i}"
             metadata = {"case_number": f"CONCURRENT-{i:03d}"}
-            task = asyncio.create_task(
-                self._execute_end_to_end_workflow(content, metadata, osb_flow_runner)
-            )
+            task = asyncio.create_task(self._execute_end_to_end_workflow(content, metadata, osb_flow_runner))
             workflow_tasks.append(task)
 
         # Execute all workflows concurrently
@@ -578,9 +506,7 @@ class TestOSBWorkflowErrorRecovery:
         successful_agents = ["researcher", "explorer"]
         failed_agents = ["policy_analyst", "fact_checker"]
 
-        workflow_result = await self._execute_workflow_with_agent_failures(
-            content, metadata, successful_agents, failed_agents, osb_flow_runner
-        )
+        workflow_result = await self._execute_workflow_with_agent_failures(content, metadata, successful_agents, failed_agents, osb_flow_runner)
 
         # Validate workflow completes despite failures
         assert workflow_result["status"] == "partial_completion"
@@ -591,9 +517,9 @@ class TestOSBWorkflowErrorRecovery:
         assert "final_decision" in workflow_result
         assert workflow_result["confidence_level"] >= 0.3  # Lower but still valid confidence
 
-    async def _execute_workflow_with_agent_failures(self, content: str, metadata: Dict[str, Any],
-                                                   successful_agents: List[str], failed_agents: List[str],
-                                                   flow_runner: FlowRunner) -> Dict[str, Any]:
+    async def _execute_workflow_with_agent_failures(
+        self, content: str, metadata: Dict[str, Any], successful_agents: List[str], failed_agents: List[str], flow_runner: FlowRunner
+    ) -> Dict[str, Any]:
         """Execute workflow with simulated agent failures."""
         workflow_result = {
             "content": content,
@@ -603,7 +529,7 @@ class TestOSBWorkflowErrorRecovery:
             "failed_agents": [],
             "agent_outputs": {},
             "final_decision": "",
-            "confidence_level": 0.0
+            "confidence_level": 0.0,
         }
 
         # Execute successful agents
@@ -621,9 +547,7 @@ class TestOSBWorkflowErrorRecovery:
 
         # Make decision with partial results
         if workflow_result["successful_agents"]:
-            synthesis = await self._synthesize_partial_results(
-                content, workflow_result["agent_outputs"], metadata
-            )
+            synthesis = await self._synthesize_partial_results(content, workflow_result["agent_outputs"], metadata)
             workflow_result["final_decision"] = synthesis["decision"]
             workflow_result["confidence_level"] = synthesis["confidence"]
             workflow_result["status"] = "partial_completion"
@@ -632,19 +556,17 @@ class TestOSBWorkflowErrorRecovery:
 
         return workflow_result
 
-    async def _execute_agent_analysis(self, agent: str, content: str,
-                                    context: Dict[str, Any], metadata: Dict[str, Any]) -> Dict[str, Any]:
+    async def _execute_agent_analysis(self, agent: str, content: str, context: Dict[str, Any], metadata: Dict[str, Any]) -> Dict[str, Any]:
         """Execute individual agent analysis (reused from above)."""
         return {
             "agent": agent,
             "analysis": f"{agent} analysis of content",
             "confidence": 0.85,
             "findings": [f"{agent}_finding_1", f"{agent}_finding_2"],
-            "processing_time": 1.5
+            "processing_time": 1.5,
         }
 
-    async def _synthesize_partial_results(self, content: str, agent_outputs: Dict[str, Any],
-                                        metadata: Dict[str, Any]) -> Dict[str, Any]:
+    async def _synthesize_partial_results(self, content: str, agent_outputs: Dict[str, Any], metadata: Dict[str, Any]) -> Dict[str, Any]:
         """Synthesize partial agent results with reduced confidence."""
         if not agent_outputs:
             return {"decision": "insufficient_data", "confidence": 0.0}
@@ -659,5 +581,5 @@ class TestOSBWorkflowErrorRecovery:
             "decision": decision,
             "confidence": reduced_confidence,
             "reasoning": f"Partial analysis from {len(agent_outputs)} agents",
-            "missing_agents": 4 - len(agent_outputs)
+            "missing_agents": 4 - len(agent_outputs),
         }

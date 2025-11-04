@@ -7,10 +7,10 @@ echo "This setup script is running as $USER in `pwd`"
 
 # create a default .zshrc file
 touch /home/$USER/.zshrc || echo "Unable to create /home/$USER/.zshrc"
- 
+
 # increase the number of files we can watch at once
 #echo "fs.inotify.max_user_watches=524288" | sudo tee -a /etc/sysctl.conf
-#sudo sysctl -p  
+#sudo sysctl -p
 
 # Consider using a different directory for global npm packages
 # # Create a directory for your global packages

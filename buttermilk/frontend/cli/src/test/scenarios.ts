@@ -121,9 +121,9 @@ export const stressTestScenarios: TestScenario[] = [
     name: 'Large Message Test',
     steps: [
       { action: 'waitFor', matcher: 'Connected', timeout: 5000 },
-      { 
-        action: 'input', 
-        value: '{"type": "ui_message", "payload": {"text": "' + 'x'.repeat(1000) + '"}}' 
+      {
+        action: 'input',
+        value: '{"type": "ui_message", "payload": {"text": "' + 'x'.repeat(1000) + '"}}'
       },
       { action: 'waitFor', matcher: 'Mock server received:', timeout: 3000 }
     ]

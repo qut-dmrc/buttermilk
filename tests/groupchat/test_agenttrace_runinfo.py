@@ -52,14 +52,14 @@ def test_agenttrace_serializes_runinfo_correctly(real_bm, agent_config, agent_in
         outputs={"result": "test output"},
         timestamp=datetime.now(timezone.utc),  # Use datetime.now(timezone.utc) instead of utcnow()
     )
-    
+
     # Test serialization
     serialized = trace.model_dump(mode="json")
-    
+
     # Verify the structure matches what BigQuery expects
     assert "session_info" in serialized
     assert isinstance(serialized["session_info"], dict)
-    
+
     # Check all required fields are present
     session_info = serialized["session_info"]
     assert "project_name" in session_info  # Changed from "name" to "project_name"
@@ -70,7 +70,7 @@ def test_agenttrace_serializes_runinfo_correctly(real_bm, agent_config, agent_in
 
     # Verify values match real configuration
     assert session_info["project_name"] == "buttermilk"  # From real_bm fixture
-    assert session_info["job"] == "testing"      # From testing.yaml
+    assert session_info["job"] == "testing"  # From testing.yaml
     assert session_info["platform"] == "local"
     # session_id should be dynamically generated
     assert session_info["session_id"].startswith("session-")
@@ -87,13 +87,13 @@ def test_agenttrace_runinfo_is_json_serializable(real_bm, agent_config, agent_in
         outputs={"status": "success"},
         timestamp=datetime.now(timezone.utc),  # Use datetime.now(timezone.utc) instead of utcnow()
     )
-    
+
     serialized = trace.model_dump(mode="json")
 
     # Ensure session_info can be JSON serialized (required for BigQuery JSON field)
     session_info_json = json.dumps(serialized["session_info"])
     assert isinstance(session_info_json, str)
-    
+
     # Verify it can be deserialized back
     deserialized = json.loads(session_info_json)
     assert deserialized == serialized["session_info"]

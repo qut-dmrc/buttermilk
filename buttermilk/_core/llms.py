@@ -990,7 +990,10 @@ class LiteLLMWrapper(BaseModel):
 
         # Handle structured output via response_format
         if schema and self.model_info.get("structured_output", False):
-            litellm_params["response_format"] = schema
+            litellm_params["response_format"] = {
+                "type": "json_object",
+                "schema": schema.model_json_schema() if hasattr(schema, "model_json_schema") else schema.schema(),
+            }
 
         # Handle tools
         if tools:
@@ -999,13 +1002,24 @@ class LiteLLMWrapper(BaseModel):
             for tool in tools:
                 if hasattr(tool, "schema"):
                     tool_schema = tool.schema
+                    # Type check: tool_schema can be dict (ToolSchema) or object with attributes
+                    if isinstance(tool_schema, dict):
+                        name = tool_schema.get("name", getattr(tool, "name", ""))
+                        description = tool_schema.get("description", "")
+                        parameters = tool_schema.get("parameters", {})
+                    else:
+                        # Handle Tool objects with attribute access
+                        name = getattr(tool_schema, "name", getattr(tool, "name", ""))
+                        description = getattr(tool_schema, "description", "")
+                        parameters = getattr(tool_schema, "parameters", {})
+
                     litellm_tools.append(
                         {
                             "type": "function",
                             "function": {
-                                "name": tool_schema.get("name", tool.name),
-                                "description": tool_schema.get("description", ""),
-                                "parameters": tool_schema.get("parameters", {}),
+                                "name": name,
+                                "description": description,
+                                "parameters": parameters,
                             },
                         }
                     )

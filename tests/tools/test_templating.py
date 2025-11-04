@@ -4,6 +4,7 @@ import pytest
 
 try:
     from buttermilk.utils.json_parser import ChatParser
+
     CHATPARSER_AVAILABLE = True
 except ImportError:
     CHATPARSER_AVAILABLE = False
@@ -32,7 +33,7 @@ def test_template_synth():
     assert "Prompt is a jinja2 template that generates prompt for LLM" not in rendered
     # Template content may vary, just check that we got a non-empty rendered output
     assert len(rendered) > 1000
-    
+
     # Test template hash is returned and has correct format
     assert template_hash is not None
     assert isinstance(template_hash, str)
@@ -43,16 +44,16 @@ def test_template_synth():
 def test_calculate_template_hash():
     """Test that calculate_template_hash returns consistent hash for a template."""
     template_hash, template_path = calculate_template_hash("synthesise")
-    
+
     # Test hash format
     assert isinstance(template_hash, str)
     assert len(template_hash) == 64  # 64 hex chars (no prefix)
     assert all(c in "0123456789abcdef" for c in template_hash)
-    
+
     # Test path is returned
     assert isinstance(template_path, str)
     assert template_path.endswith("synthesise.jinja2")
-    
+
     # Test consistency - same template should return same hash
     hash2, path2 = calculate_template_hash("synthesise")
     assert template_hash == hash2
@@ -62,7 +63,7 @@ def test_calculate_template_hash():
 def test_calculate_template_hash_nonexistent():
     """Test that calculate_template_hash raises error for non-existent template."""
     from buttermilk._core.exceptions import FatalError
-    
+
     with pytest.raises(FatalError, match="Template file 'nonexistent.jinja2' not found"):
         calculate_template_hash("nonexistent")
 
@@ -71,14 +72,14 @@ def test_load_template_hash_consistency():
     """Test that load_template and calculate_template_hash return same hash."""
     # Get hash from calculate_template_hash
     direct_hash, _ = calculate_template_hash("synthesise")
-    
+
     # Get hash from load_template
     _, _, template_hash = load_template(
         template="synthesise",
         parameters={"test": "value"},
         untrusted_inputs={},
     )
-    
+
     # Should be the same
     assert direct_hash == template_hash
 
@@ -87,7 +88,7 @@ def test_different_templates_different_hashes():
     """Test that different templates have different hashes."""
     hash1, _ = calculate_template_hash("synthesise")
     hash2, _ = calculate_template_hash("judge")
-    
+
     # Different templates should have different hashes
     assert hash1 != hash2
     assert len(hash1) == 64  # 64 hex chars (no prefix)

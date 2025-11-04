@@ -8,7 +8,7 @@ import re
 
 class WeaveApplicationErrorFilter(logging.Filter):
     """Filter to suppress weave errors that are actually application errors being traced by weave.
-    
+
     This filter allows weave infrastructure errors (like upload failures) to pass through
     while suppressing duplicate application errors that weave is just reporting on.
     """

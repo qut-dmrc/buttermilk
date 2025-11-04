@@ -38,54 +38,25 @@ class FramedStatement(BaseModel):
 
     """
 
-    statement: str = Field(
-        ...,
-        description="Exact quote of the value-laden statement from the article"
-    )
-    speaker_name: str = Field(
-        ...,
-        description="Name of the person making the statement, or 'journalist' if narration"
-    )
-    speaker_affiliation: str = Field(
-        ...,
-        description="Organization, role, or institutional affiliation of the speaker"
-    )
-    solution_addressee: Optional[str] = Field(
-        None,
-        description="Person or entity to whom the solution/action is directed"
-    )
-    problem_definition: str = Field(
-        ...,
-        description="What is presented as the core issue or problem"
-    )
-    blame_attribution: Optional[str] = Field(
-        None,
-        description="Who or what is held responsible for causing the problem"
-    )
-    moral_evaluation: Optional[str] = Field(
-        None,
-        description="Moral judgment or evaluative stance toward the issue"
-    )
-    recommendation: Optional[str] = Field(
-        None,
-        description="Proposed solution or course of action"
-    )
-    confidence_score: float = Field(
-        default=1.0,
-        ge=0.0,
-        le=1.0,
-        description="Confidence level in the frame identification (0-1)"
-    )
+    statement: str = Field(..., description="Exact quote of the value-laden statement from the article")
+    speaker_name: str = Field(..., description="Name of the person making the statement, or 'journalist' if narration")
+    speaker_affiliation: str = Field(..., description="Organization, role, or institutional affiliation of the speaker")
+    solution_addressee: Optional[str] = Field(None, description="Person or entity to whom the solution/action is directed")
+    problem_definition: str = Field(..., description="What is presented as the core issue or problem")
+    blame_attribution: Optional[str] = Field(None, description="Who or what is held responsible for causing the problem")
+    moral_evaluation: Optional[str] = Field(None, description="Moral judgment or evaluative stance toward the issue")
+    recommendation: Optional[str] = Field(None, description="Proposed solution or course of action")
+    confidence_score: float = Field(default=1.0, ge=0.0, le=1.0, description="Confidence level in the frame identification (0-1)")
 
     def as_markdown(self, agent_id: str = None, call_id: str = None) -> str:
         """Returns a Markdown formatted string for insertion into templates.
-        
+
         Note: This is for a single statement. Usually used within FrameAnalysisResults.
-        
+
         Args:
             agent_id: The agent identifier (e.g., "FRAME-gpt4")
             call_id: The call identifier for this execution
-            
+
         Returns:
             str: Formatted markdown string suitable for template insertion
         """
@@ -97,7 +68,7 @@ class FramedStatement(BaseModel):
             f"Evaluation: {self.moral_evaluation or 'Not specified'}\n"
             f"Recommendation: {self.recommendation or 'Not specified'}"
         )
-    
+
     def __str__(self) -> str:
         """Returns a formatted string representation of the framed statement."""
         return (
@@ -114,39 +85,30 @@ class FramedStatement(BaseModel):
 
 class FrameAnalysisResults(BaseModel):
     """Container for multiple framed statements from an article analysis.
-    
+
     This model aggregates all the framed statements identified in a news article,
     providing a complete frame analysis following Entman's (1993) theory.
-    
+
     Attributes:
         statements (list[FramedStatement]): List of all framed statements identified.
         article_summary (str): Brief summary of the article being analyzed.
         dominant_frame (Optional[str]): The predominant framing pattern in the article.
     """
-    
-    statements: list[FramedStatement] = Field(
-        ...,
-        description="List of all framed statements identified in the article"
-    )
-    article_summary: str = Field(
-        ...,
-        description="Brief summary of the article being analyzed"
-    )
-    dominant_frame: Optional[str] = Field(
-        None,
-        description="The predominant framing pattern identified in the article"
-    )
-    
+
+    statements: list[FramedStatement] = Field(..., description="List of all framed statements identified in the article")
+    article_summary: str = Field(..., description="Brief summary of the article being analyzed")
+    dominant_frame: Optional[str] = Field(None, description="The predominant framing pattern identified in the article")
+
     def as_markdown(self, agent_id: str = None, call_id: str = None) -> str:
         """Returns a Markdown formatted string for insertion into templates.
-        
+
         Format follows the standard: agent identifier on first line, followed by
         content-specific fields without empty lines between components.
-        
+
         Args:
             agent_id: The agent identifier (e.g., "FRAME-gpt4")
             call_id: The call identifier for this execution
-            
+
         Returns:
             str: Formatted markdown string suitable for template insertion
         """
@@ -155,7 +117,7 @@ class FrameAnalysisResults(BaseModel):
             # Use only the last 8 characters of call_id for brevity
             short_call_id = call_id[-8:] if len(call_id) > 8 else call_id
             header = f"**{agent_id} #{short_call_id}**\n"
-        
+
         # Format statements
         statements_str = ""
         if self.statements:
@@ -165,30 +127,24 @@ class FrameAnalysisResults(BaseModel):
             statements_str = "\n".join(statement_parts)
             if len(self.statements) > 3:
                 statements_str += f"\n- ... and {len(self.statements) - 3} more statements"
-        
+
         frame_str = f"Frame: {self.dominant_frame}\n" if self.dominant_frame else ""
-        
-        return (
-            f"{header}"
-            f"{self.article_summary}\n"
-            f"{frame_str}"
-            f"Statements analyzed: {len(self.statements)}\n"
-            f"{statements_str}"
-        )
-    
+
+        return f"{header}" f"{self.article_summary}\n" f"{frame_str}" f"Statements analyzed: {len(self.statements)}\n" f"{statements_str}"
+
     def __str__(self) -> str:
         """Returns a Markdown formatted string representation.
-        
+
         When agent context is available (via _agent_id and _call_id attributes),
         includes the full header. Otherwise returns the summary.
         """
         # Check if agent context is available (set by ExecutionTrace)
         agent_id = getattr(self, "_agent_id", None)
         call_id = getattr(self, "_call_id", None)
-        
+
         if agent_id and call_id:
             return self.as_markdown(agent_id, call_id)
-        
+
         # Fallback to summary
         return self.article_summary
 

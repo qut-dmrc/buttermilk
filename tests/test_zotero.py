@@ -134,9 +134,7 @@ class TestZoteroSourceCitationKeys:
         # Check that citation_key field exists in metadata
         # (Will be None if item doesn't have citation key, but field should exist)
         for record in records:
-            assert "citation_key" in record.metadata, (
-                f"citation_key not in metadata for {record.record_id}"
-            )
+            assert "citation_key" in record.metadata, f"citation_key not in metadata for {record.record_id}"
 
         # Check if at least one record has citation_key extracted
         has_citation_key = False
@@ -154,10 +152,7 @@ class TestZoteroSourceCitationKeys:
         # If no citation keys found, log warning but don't fail
         # (Items may not have BetterBibTeX keys pinned yet)
         if not has_citation_key:
-            print(
-                "\n⚠️  No citation keys found in sample. "
-                "To test: Select items in Zotero → Right-click → Generate BibTeX key"
-            )
+            print("\n⚠️  No citation keys found in sample. " "To test: Select items in Zotero → Right-click → Generate BibTeX key")
 
 
 class TestZoteroDownloadProcessorCitationKeys:
@@ -203,16 +198,12 @@ class TestZoteroDownloadProcessorCitationKeys:
 
         if test_record is None:
             pytest.skip(
-                "No items found with both citation_key and PDF attachment. "
-                "Add BetterBibTeX citation keys to items in your Zotero library."
+                "No items found with both citation_key and PDF attachment. " "Add BetterBibTeX citation keys to items in your Zotero library."
             )
 
         # Process the record through ZoteroDownloadProcessor
         processed_records = []
-        async for processed in processor.process(
-            test_record,
-            processor_stage="test"
-        ):
+        async for processed in processor.process(test_record, processor_stage="test"):
             processed_records.append(processed)
 
         # Verify citation_key propagated
@@ -228,10 +219,7 @@ class TestZoteroDownloadProcessorCitationKeys:
         if result_key is None:
             result_key = result.metadata.get("zotero_data", {}).get("citation_key")
 
-        assert result_key == original_key, (
-            f"Citation key not propagated correctly: "
-            f"expected {original_key}, got {result_key}"
-        )
+        assert result_key == original_key, f"Citation key not propagated correctly: " f"expected {original_key}, got {result_key}"
 
 
 class TestZoteroAPIDataFormat:
@@ -339,18 +327,16 @@ class TestZoteroAPIDataFormat:
 
                 # CRITICAL: Must be string for our parsing logic
                 assert isinstance(extra_field, str), (
-                    f"Item {item['key']}: 'extra' field must be string, got {type(extra_field).__name__}. "
-                    f"Value: {extra_field}"
+                    f"Item {item['key']}: 'extra' field must be string, got {type(extra_field).__name__}. " f"Value: {extra_field}"
                 )
 
                 # If contains citation key, verify we can extract it
                 if "Citation Key:" in extra_field:
                     items_with_citation_key += 1
                     from buttermilk.libs.zotero import extract_citation_key
+
                     citation_key = extract_citation_key(extra_field)
-                    assert citation_key is not None, (
-                        f"Item {item['key']}: Failed to extract citation key from: {extra_field}"
-                    )
+                    assert citation_key is not None, f"Item {item['key']}: Failed to extract citation key from: {extra_field}"
                     assert isinstance(citation_key, str), "Citation key must be string"
                     assert len(citation_key) > 0, "Citation key must not be empty"
 
@@ -370,9 +356,7 @@ class TestZoteroAPIDataFormat:
                 items_with_attachments += 1
                 attachment = links["attachment"]
 
-                assert isinstance(attachment, dict), (
-                    f"Item {item['key']}: attachment should be dict, got {type(attachment)}"
-                )
+                assert isinstance(attachment, dict), f"Item {item['key']}: attachment should be dict, got {type(attachment)}"
 
                 # If attachment exists, should have href and attachmentType
                 if "href" in attachment:
@@ -429,8 +413,7 @@ class TestZoteroAPIDataFormat:
 
                 # CRITICAL: Must always be string
                 assert isinstance(extra_field, str), (
-                    f"Item {item.get('key')}: 'extra' field must be string, "
-                    f"got {type(extra_field).__name__}. Value: {extra_field}"
+                    f"Item {item.get('key')}: 'extra' field must be string, " f"got {type(extra_field).__name__}. Value: {extra_field}"
                 )
 
         print(f"\n✓ Checked {len(items)} items, found {extra_field_count} with 'extra' field")
@@ -544,8 +527,8 @@ class TestMetadataUpdateBehavior:
         - Be processed through ZoteroDownloadProcessor
         - Update ChromaDB with new metadata
         """
-        from pathlib import Path
         import json
+        from pathlib import Path
 
         library_id = real_bm.cfg.zotero["library_id"]
 
@@ -587,8 +570,7 @@ class TestMetadataUpdateBehavior:
         original_version = original_cache.get("data", {}).get("version", 0)
 
         # Verify item version is stored in cache
-        assert "version" in original_cache.get("data", {}), \
-            "Item version should be stored in cache data"
+        assert "version" in original_cache.get("data", {}), "Item version should be stored in cache data"
 
         # Verify attachment version is stored if attachment exists
         if original_cache.get("links", {}).get("attachment"):
@@ -603,7 +585,7 @@ class TestMetadataUpdateBehavior:
                 **test_record.metadata,
                 "citation_key": "test2025updated",  # New citation key
                 "zotero_version": original_version + 1,  # Version incremented
-            }
+            },
         )
 
         # Second: Process with updated metadata
@@ -621,8 +603,7 @@ class TestMetadataUpdateBehavior:
         # Verify cache was updated with new metadata
         with json_file.open("r") as f:
             updated_cache = json.load(f)
-        assert updated_cache.get("data", {}) != original_cache.get("data", {}), \
-            "Cache should be updated with new metadata"
+        assert updated_cache.get("data", {}) != original_cache.get("data", {}), "Cache should be updated with new metadata"
 
     @pytest.mark.integration
     @pytest.mark.anyio
@@ -690,14 +671,15 @@ class TestMetadataUpdateBehavior:
         - API should return items modified after that version
         - Returned items should have modification dates after the sync point
         """
-        from pathlib import Path
         import json
-        from datetime import datetime, UTC, timedelta
+        from datetime import UTC, datetime, timedelta
+        from pathlib import Path
 
         library_id = real_bm.cfg.zotero["library_id"]
 
         # Get the sync state file path
         from buttermilk._core.constants import cache
+
         cache_dir = Path(real_bm.session_info.get_cache_subdir(cache.ZOTERO))
         state_file = cache_dir / ".zotero_sync_state.json"
 
@@ -728,10 +710,7 @@ class TestMetadataUpdateBehavior:
         earlier_version = 1  # Very old version
 
         with state_file.open("w") as f:
-            json.dump({
-                "last_version": earlier_version,
-                "last_sync_timestamp": earlier_timestamp
-            }, f)
+            json.dump({"last_version": earlier_version, "last_sync_timestamp": earlier_timestamp}, f)
 
         print(f"📅 Set sync state to version {earlier_version} (1 year ago)")
 
@@ -747,22 +726,19 @@ class TestMetadataUpdateBehavior:
             synced_items.append(record)
 
         # Verify we got items (library has been updated since version 1)
-        assert len(synced_items) > 0, \
-            f"Incremental sync should return items modified after version {earlier_version}"
+        assert len(synced_items) > 0, f"Incremental sync should return items modified after version {earlier_version}"
 
         print(f"\n✅ Incremental sync returned {len(synced_items)} items")
 
         # Verify all returned items have versions greater than our sync point
         for record in synced_items:
             item_version = record.metadata.get("zotero_version", 0)
-            assert item_version > earlier_version, \
-                f"Item {record.record_id} version {item_version} should be > {earlier_version}"
+            assert item_version > earlier_version, f"Item {record.record_id} version {item_version} should be > {earlier_version}"
 
             # Verify item has modification date
             zotero_item = record.metadata.get("zotero_item", {})
             date_modified = zotero_item.get("dateModified")
-            assert date_modified is not None, \
-                f"Item {record.record_id} should have dateModified field"
+            assert date_modified is not None, f"Item {record.record_id} should have dateModified field"
 
             print(f"  • Item {record.record_id}: version={item_version}, modified={date_modified}")
 
@@ -771,8 +747,7 @@ class TestMetadataUpdateBehavior:
             final_state = json.load(f)
         final_version = final_state.get("last_version")
 
-        assert final_version >= saved_version, \
-            f"Final version {final_version} should be >= original version {saved_version}"
+        assert final_version >= saved_version, f"Final version {final_version} should be >= original version {saved_version}"
 
         print(f"\n✅ Sync state updated to version {final_version}")
 
@@ -786,9 +761,9 @@ class TestMetadataUpdateBehavior:
         - Metadata should be updated in cache
         - Content should be reused from existing PDF cache
         """
-        from pathlib import Path
         import json
         import os
+        from pathlib import Path
 
         library_id = real_bm.cfg.zotero["library_id"]
 
@@ -835,8 +810,7 @@ class TestMetadataUpdateBehavior:
         original_version = original_cache.get("data", {}).get("version", 0)
 
         # Verify item version is stored in cache
-        assert "version" in original_cache.get("data", {}), \
-            "Item version should be stored in cache data"
+        assert "version" in original_cache.get("data", {}), "Item version should be stored in cache data"
 
         # Verify attachment version is stored if attachment exists
         if original_cache.get("links", {}).get("attachment"):
@@ -850,7 +824,7 @@ class TestMetadataUpdateBehavior:
                 **test_record.metadata,
                 "citation_key": "test2025nocache",  # New citation key
                 "zotero_version": original_version + 1,  # Incremented version
-            }
+            },
         )
 
         # Second: Process with updated metadata
@@ -866,20 +840,17 @@ class TestMetadataUpdateBehavior:
 
         # CRITICAL: Verify PDF was NOT re-downloaded
         pdf_mtime_after = os.path.getmtime(pdf_file)
-        assert pdf_mtime_after == pdf_mtime_before, \
-            "PDF file should NOT be re-downloaded when only metadata changes"
+        assert pdf_mtime_after == pdf_mtime_before, "PDF file should NOT be re-downloaded when only metadata changes"
 
         # Verify cache was updated with new metadata (but same content)
         with json_file.open("r") as f:
             updated_cache = json.load(f)
 
         # Metadata should be different
-        assert updated_cache.get("data", {}) != original_cache.get("data", {}), \
-            "Cache metadata should be updated"
+        assert updated_cache.get("data", {}) != original_cache.get("data", {}), "Cache metadata should be updated"
 
         # But content should be the same (reused from cache)
-        assert updated_cache.get("content") == original_cache.get("content"), \
-            "Content should be reused from existing PDF cache"
+        assert updated_cache.get("content") == original_cache.get("content"), "Content should be reused from existing PDF cache"
 
     @pytest.mark.integration
     @pytest.mark.anyio
@@ -895,9 +866,9 @@ class TestMetadataUpdateBehavior:
         This is essential for efficient incremental sync when users edit item metadata
         but PDFs remain unchanged.
         """
-        from pathlib import Path
         import json
         import os
+        from pathlib import Path
 
         library_id = real_bm.cfg.zotero["library_id"]
 
@@ -954,7 +925,8 @@ class TestMetadataUpdateBehavior:
         # Try to extract version from href query parameter
         if "version=" in original_attachment_href:
             import re
-            match = re.search(r'version=(\d+)', original_attachment_href)
+
+            match = re.search(r"version=(\d+)", original_attachment_href)
             if match:
                 original_attachment_version = int(match.group(1))
 
@@ -983,10 +955,7 @@ class TestMetadataUpdateBehavior:
 
         updated_metadata["zotero_links"] = updated_links
 
-        updated_record = BaseRecord(
-            record_id=test_record.record_id,
-            metadata=updated_metadata
-        )
+        updated_record = BaseRecord(record_id=test_record.record_id, metadata=updated_metadata)
 
         # Second: Process with updated parent metadata but same attachment version
         results2 = []
@@ -1015,20 +984,17 @@ class TestMetadataUpdateBehavior:
             updated_cache = json.load(f)
 
         updated_item_version = updated_cache.get("data", {}).get("version", 0)
-        assert updated_item_version == original_item_version + 1, \
-            "Parent item version should be updated in cache"
+        assert updated_item_version == original_item_version + 1, "Parent item version should be updated in cache"
 
         # Verify attachment version stayed the same
         updated_attachment = updated_cache.get("links", {}).get("attachment", {})
         updated_attachment_href = updated_attachment.get("href", "")
 
         # Attachment href/version should be identical (unchanged)
-        assert updated_attachment_href == original_attachment_href, \
-            "Attachment href should be unchanged when PDF unchanged"
+        assert updated_attachment_href == original_attachment_href, "Attachment href should be unchanged when PDF unchanged"
 
         # Content should be reused (same PDF)
-        assert updated_cache.get("content") == original_cache.get("content"), \
-            "Content should be reused when attachment version unchanged"
+        assert updated_cache.get("content") == original_cache.get("content"), "Content should be reused when attachment version unchanged"
 
         print("✅ Cache updated with new parent metadata but same attachment/content")
 
@@ -1045,13 +1011,14 @@ class TestMetadataUpdateBehavior:
 
         This test verifies the sync state behavior with version boundaries.
         """
-        from pathlib import Path
         import json
+        from pathlib import Path
 
         library_id = real_bm.cfg.zotero["library_id"]
 
         # Get sync state file path
         from buttermilk._core.constants import cache
+
         cache_dir = Path(real_bm.session_info.get_cache_subdir(cache.ZOTERO))
         state_file = cache_dir / ".zotero_sync_state.json"
 
@@ -1092,8 +1059,7 @@ class TestMetadataUpdateBehavior:
         if len(unique_versions) >= 2:
             expected_version = unique_versions[-2]  # Second highest
             assert saved_version == expected_version, (
-                f"Saved version {saved_version} should be second-highest {expected_version}. "
-                f"Unique versions: {unique_versions}"
+                f"Saved version {saved_version} should be second-highest {expected_version}. " f"Unique versions: {unique_versions}"
             )
             print(f"✅ Safe version saved: {saved_version} (second-highest, highest was {highest_item_version})")
         else:
@@ -1102,6 +1068,5 @@ class TestMetadataUpdateBehavior:
 
         # Verify that saved version is strictly less than highest
         assert saved_version < highest_item_version, (
-            f"Saved version {saved_version} must be < highest {highest_item_version} "
-            f"to ensure boundary items are re-fetched on interrupted sync"
+            f"Saved version {saved_version} must be < highest {highest_item_version} " f"to ensure boundary items are re-fetched on interrupted sync"
         )

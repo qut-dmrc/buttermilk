@@ -7,8 +7,8 @@ This module tests that:
 4. No hardcoded cache paths exist in the codebase
 """
 
-import pytest
 from pathlib import Path
+
 from cloudpathlib import AnyPath, CloudPath
 
 from buttermilk._core.constants import cache
@@ -23,9 +23,7 @@ class TestSaveDir:
             save_path = AnyPath(real_bm.session_info.save_dir)
             # save_dir should be a CloudPath (gs://, s3://, etc.) in production
             # For local testing, it might be a Path, which is acceptable
-            assert isinstance(save_path, (CloudPath, Path)), (
-                f"save_dir must be either CloudPath or Path, got {type(save_path)}"
-            )
+            assert isinstance(save_path, (CloudPath, Path)), f"save_dir must be either CloudPath or Path, got {type(save_path)}"
 
 
 class TestCacheDir:
@@ -40,9 +38,7 @@ class TestCacheDir:
         assert isinstance(cache_dir, str), f"cache_dir must be str, got {type(cache_dir)}"
 
         # Should not start with cloud prefixes
-        assert not cache_dir.startswith(("gs://", "s3://", "azure://", "gcs://")), (
-            f"cache_dir must be local, not cloud storage: {cache_dir}"
-        )
+        assert not cache_dir.startswith(("gs://", "s3://", "azure://", "gcs://")), f"cache_dir must be local, not cloud storage: {cache_dir}"
 
         # Should be expandable to absolute path
         expanded = Path(cache_dir).expanduser().resolve()
@@ -60,9 +56,7 @@ class TestCacheSubdirectories:
 
     def test_get_cache_subdir_method_exists(self, real_bm):
         """Test that SessionInfo has get_cache_subdir method."""
-        assert hasattr(real_bm.session_info, "get_cache_subdir"), (
-            "SessionInfo must have get_cache_subdir() method"
-        )
+        assert hasattr(real_bm.session_info, "get_cache_subdir"), "SessionInfo must have get_cache_subdir() method"
 
     def test_cache_constants_exist(self):
         """Test that cache constants are defined."""
@@ -80,30 +74,24 @@ class TestCacheSubdirectories:
         chromadb_path = real_bm.session_info.get_cache_subdir(cache.CHROMADB)
 
         assert isinstance(chromadb_path, Path), f"get_cache_subdir must return Path, got {type(chromadb_path)}"
-        assert chromadb_path.name == cache.CHROMADB, (
-            f"ChromaDB cache subdirectory name must be '{cache.CHROMADB}', got '{chromadb_path.name}'"
-        )
-        assert str(real_bm.session_info.cache_dir) in str(chromadb_path), (
-            f"ChromaDB path must be under cache_dir: {chromadb_path}"
-        )
+        assert chromadb_path.name == cache.CHROMADB, f"ChromaDB cache subdirectory name must be '{cache.CHROMADB}', got '{chromadb_path.name}'"
+        assert str(real_bm.session_info.cache_dir) in str(chromadb_path), f"ChromaDB path must be under cache_dir: {chromadb_path}"
 
     def test_zotero_cache_path(self, real_bm):
         """Test Zotero cache path uses constants."""
         zotero_path = real_bm.session_info.get_cache_subdir(cache.ZOTERO)
 
         assert isinstance(zotero_path, Path), f"get_cache_subdir must return Path, got {type(zotero_path)}"
-        assert zotero_path.name == cache.ZOTERO, (
-            f"Zotero cache subdirectory name must be '{cache.ZOTERO}', got '{zotero_path.name}'"
-        )
+        assert zotero_path.name == cache.ZOTERO, f"Zotero cache subdirectory name must be '{cache.ZOTERO}', got '{zotero_path.name}'"
 
     def test_embeddings_cache_path(self, real_bm):
         """Test embeddings cache path uses constants."""
         embeddings_path = real_bm.session_info.get_cache_subdir(cache.EMBEDDINGS)
 
         assert isinstance(embeddings_path, Path), f"get_cache_subdir must return Path, got {type(embeddings_path)}"
-        assert embeddings_path.name == cache.EMBEDDINGS, (
-            f"Embeddings cache subdirectory name must be '{cache.EMBEDDINGS}', got '{embeddings_path.name}'"
-        )
+        assert (
+            embeddings_path.name == cache.EMBEDDINGS
+        ), f"Embeddings cache subdirectory name must be '{cache.EMBEDDINGS}', got '{embeddings_path.name}'"
 
     def test_cache_subdir_creates_directory(self, real_bm):
         """Test that get_cache_subdir creates the directory by default."""
@@ -118,13 +106,14 @@ class TestCacheSubdirectories:
         """Test that get_cache_subdir respects create=False."""
         # Use a temporary cache_dir for this test
         import tempfile
+
         with tempfile.TemporaryDirectory() as tmp_cache:
             real_bm.session_info.cache_dir = str(tmp_cache)
             test_subdir = "test_no_create"
 
             # Should not create when create=False
             cache_path = real_bm.session_info.get_cache_subdir(test_subdir, create=False)
-            assert not cache_path.exists(), f"get_cache_subdir(create=False) should not create directory"
+            assert not cache_path.exists(), "get_cache_subdir(create=False) should not create directory"
 
 
 class TestBackwardCompatibility:
@@ -160,9 +149,7 @@ class TestPathSeparation:
         cache_dir = real_bm.session_info.cache_dir
 
         # Cache must be local
-        assert not cache_dir.startswith(("gs://", "s3://", "azure://", "gcs://")), (
-            "cache_dir must be local storage"
-        )
+        assert not cache_dir.startswith(("gs://", "s3://", "azure://", "gcs://")), "cache_dir must be local storage"
 
         # Save can be either (local or remote)
         if real_bm.session_info.save_dir:

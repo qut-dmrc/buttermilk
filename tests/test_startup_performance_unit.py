@@ -114,12 +114,12 @@ class TestLazyRouteManager:
         from fastapi import FastAPI
 
         from buttermilk.api.lazy_routes import LazyRouteManager
-        
+
         app = FastAPI()
         lazy_manager = LazyRouteManager(app)
-        
+
         lazy_manager.register_core_routes()
-        
+
         assert lazy_manager._core_routes_registered
         # Should have health check route
         route_paths = [route.path for route in app.routes]
@@ -130,15 +130,15 @@ class TestLazyRouteManager:
         from fastapi import APIRouter, FastAPI
 
         from buttermilk.api.lazy_routes import LazyRouteManager
-        
+
         app = FastAPI()
         lazy_manager = LazyRouteManager(app)
-        
+
         test_router = APIRouter()
         test_router.get("/test")(lambda: {"test": "response"})
-        
+
         lazy_manager.defer_router(test_router, prefix="/api")
-        
+
         assert len(lazy_manager._deferred_routers) == 1
         assert lazy_manager._deferred_routers[0]["prefix"] == "/api"
         assert lazy_manager._deferred_routers[0]["router"] is test_router
@@ -148,21 +148,21 @@ class TestLazyRouteManager:
         from fastapi import APIRouter, FastAPI
 
         from buttermilk.api.lazy_routes import LazyRouteManager
-        
+
         app = FastAPI()
         lazy_manager = LazyRouteManager(app)
-        
+
         test_router = APIRouter()
         test_router.get("/heavy")(lambda: {"heavy": "route"})
-        
+
         lazy_manager.defer_router(test_router, prefix="/api")
-        
+
         # Initially should not be loaded
         assert not lazy_manager._heavy_routes_registered
-        
+
         # Load on demand
         await lazy_manager.load_heavy_routes_on_demand()
-        
+
         assert lazy_manager._heavy_routes_registered
         # Should now have the heavy route
         route_paths = [route.path for route in app.routes]
@@ -294,19 +294,19 @@ class TestStartupTiming:
         start_time = time.time()
 
         import_time = time.time() - start_time
-        
+
         # Core imports should be under 1 second
         assert import_time < 1.0, f"Core imports took {import_time:.3f}s, expected <1.0s"
 
     def test_fastapi_app_creation_is_fast(self):
         """Test that FastAPI app creation is reasonably fast."""
         from fastapi import FastAPI
-        
+
         start_time = time.time()
-        
+
         FastAPI()
-        
+
         creation_time = time.time() - start_time
-        
+
         # FastAPI creation should be very fast
         assert creation_time < 0.05, f"FastAPI creation took {creation_time:.3f}s, expected <0.05s"

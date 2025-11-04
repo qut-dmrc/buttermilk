@@ -31,7 +31,7 @@ def get_sessions_dir() -> Path:
 
 class SessionStorageService:
     """Service for persisting and retrieving session messages.
-    
+
     This service handles:
     - Saving messages to JSON files organized by session ID
     - Loading historical messages for session restoration
@@ -51,10 +51,10 @@ class SessionStorageService:
 
     def _get_session_file(self, session_id: str) -> Path:
         """Get the file path for a session.
-        
+
         Args:
             session_id: The session identifier
-            
+
         Returns:
             Path to the session JSON file
         """
@@ -62,19 +62,19 @@ class SessionStorageService:
 
     def _get_or_create_session_data(self, session_id: str) -> dict:
         """Get existing session data or create new session data structure.
-        
+
         This helper method consolidates the logic for loading session files,
         handling potential JSON decode errors, and creating new session data
         if the file doesn't exist or is corrupted.
-        
+
         Args:
             session_id: The session identifier
-            
+
         Returns:
             Dictionary containing session data
         """
         session_file = self._get_session_file(session_id)
-        
+
         # Try to load existing session data
         if session_file.exists():
             try:
@@ -82,21 +82,21 @@ class SessionStorageService:
                     return json.load(f)
             except json.JSONDecodeError:
                 logger.warning("Corrupted session file, creating new", session_file=session_file)
-        
+
         # Create new session data if file doesn't exist or is corrupted
         return self._create_new_session_data(session_id)
 
     def save_message(self, session_id: str, message: ChatMessage) -> None:
         """Save a message to the session file.
-        
+
         Messages are appended to the existing session file if it exists,
-        or a new file is created. Duplicate messages are automatically 
+        or a new file is created. Duplicate messages are automatically
         detected and skipped to prevent session log corruption.
-        
+
         Deduplication logic:
         - For record messages: Skip if same record_id already exists
         - For all messages: Skip if same message_id already exists
-        
+
         Args:
             session_id: The session identifier
             message: The ChatMessage to persist
@@ -106,11 +106,11 @@ class SessionStorageService:
             return
 
         session_file = self._get_session_file(session_id)
-        
+
         try:
             # Use helper method to get/create session data
             session_data = self._get_or_create_session_data(session_id)
-            
+
             # Check for duplicate messages to prevent corruption
             message_dict = scrub_serializable(message.model_dump())
 
@@ -430,10 +430,10 @@ class SessionStorageService:
 
     def archive_to_gcs(self, session_id: str) -> bool:
         """Archive a session to GCS if BM is configured with a GCS save_dir.
-        
+
         Args:
             session_id: The session identifier to archive
-            
+
         Returns:
             bool: True if archival was successful, False otherwise
         """
@@ -442,7 +442,7 @@ class SessionStorageService:
             if not self.session_exists(session_id):
                 logger.warning("Cannot archive non-existent session", session_id=session_id)
                 return False
-                
+
             # Try to get BM instance to access save_dir
             try:
                 # Check if save_dir is configured and points to GCS
@@ -453,18 +453,18 @@ class SessionStorageService:
                 if not bm.session_info.save_dir.startswith(("gs://", "gcs://")):
                     logger.debug("save_dir is not GCS path, skipping archival for session", session_id=session_id)
                     return False
-                    
+
             except Exception as e:
                 logger.warning("Could not access BM instance for session archival", error=e)
                 return False
-            
+
             # Get session data
             session_data = self._get_or_create_session_data(session_id)
-            
+
             # Add archival metadata
             session_data["archived_at"] = datetime.now(UTC).isoformat()
             session_data["archived_from"] = str(self._get_session_file(session_id))
-            
+
             # Use BM's save method to archive to GCS
             archive_filename = f"session_{session_id}_archived.json"
             saved_path = bm.save(
@@ -472,24 +472,24 @@ class SessionStorageService:
                 basename=f"sessions/{archive_filename}",
                 extension="",  # Already included in basename
             )
-            
+
             if saved_path:
                 logger.info("Successfully archived session to GCS", session_id=session_id, saved_path=saved_path)
                 return True
             else:
                 logger.error("Failed to archive session to GCS", session_id=session_id)
                 return False
-                
+
         except Exception as e:
             logger.error("Error archiving session to GCS", session_id=session_id, error=e)
             return False
 
     def finalize_session(self, session_id: str, final_status: str) -> None:
         """Finalize a session and archive it to GCS.
-        
+
         Called when a session reaches a terminal state (completed/failed).
         Updates the session with completion metadata and archives to GCS if configured.
-        
+
         Args:
             session_id: The session identifier
             final_status: Final session status (completed or failed)
@@ -501,20 +501,20 @@ class SessionStorageService:
             session_data["completed_at"] = datetime.now(UTC).isoformat()
             session_data["last_updated"] = datetime.now(UTC).isoformat()
             session_data["last_activity"] = datetime.now(UTC).isoformat()
-            
+
             # Write the finalized session data
             session_file = self._get_session_file(session_id)
             with open(session_file, "w", encoding="utf-8") as f:
                 json.dump(session_data, f, indent=2)
-            
+
             logger.info("Finalized session", session_id=session_id, status=final_status)
-            
+
             # Always attempt archival for terminal states
             archive_success = self.archive_to_gcs(session_id)
             if archive_success:
                 logger.info("Session archived to GCS after finalization", session_id=session_id)
             else:
                 logger.debug("Session not archived (GCS not configured or archival failed)", session_id=session_id)
-                    
+
         except Exception as e:
             logger.error("Error finalizing session", session_id=session_id, error=e)

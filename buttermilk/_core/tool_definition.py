@@ -14,12 +14,12 @@ from pydantic import BaseModel, Field, field_validator
 
 class AgentToolDefinition(BaseModel):
     """Base class for agent tool definitions that implements the Tool protocol.
-    
+
     Each agent can generate its own structured tool definition that serves multiple purposes:
     - LLM tool definition for structured invocation
     - Input validation schema
     - Documentation and description
-    
+
     This class implements the autogen Tool protocol, making it directly usable
     with LLM create() calls while remaining non-executable (execution is handled
     by the host agent routing to actual agents).
@@ -78,17 +78,17 @@ class AgentToolDefinition(BaseModel):
 
     async def run_json(self, args_json: str, cancellation_token: CancellationToken) -> str:
         """This method should never be called.
-        
+
         The host agent intercepts tool calls before execution.
         """
         raise NotImplementedError(
-            f"AgentToolDefinition '{self.name}' is not directly executable. "
-            "Tool calls should be intercepted and routed by the host agent.",
+            f"AgentToolDefinition '{self.name}' is not directly executable. " "Tool calls should be intercepted and routed by the host agent.",
         )
 
     def return_value_as_string(self, value: Any) -> str:
         """Convert return value to string."""
         import json
+
         if isinstance(value, str):
             return value
         return json.dumps(value)

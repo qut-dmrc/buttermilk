@@ -42,7 +42,7 @@ const UI = ({ url }: Props) => {
         if (message.type === 'ui_message') {
           console.log('🔍 Raw UI message received:', JSON.stringify(message, null, 2));
         }
-        
+
         // Track UI messages with options for confirmation handling
         if (message.type === 'ui_message' && (message as any).outputs?.options) {
           const options = (message as any).outputs.options;
@@ -70,9 +70,9 @@ const UI = ({ url }: Props) => {
 
         // Debug all ui_messages
         if (message.type === 'ui_message') {
-          console.log('📨 UI Message received:', { 
-            content: (message as any).outputs?.content, 
-            options: (message as any).outputs?.options, 
+          console.log('📨 UI Message received:', {
+            content: (message as any).outputs?.content,
+            options: (message as any).outputs?.options,
             hasOptions: !!(message as any).outputs?.options,
             optionsType: typeof (message as any).outputs?.options,
             isArray: Array.isArray((message as any).outputs?.options)
@@ -126,9 +126,9 @@ const UI = ({ url }: Props) => {
 
   const handleSubmit = (text: string) => {
     if (!connection) return;
-    
+
     console.log('🎯 handleSubmit called:', { text, hasUIOptions: !!lastUIMessageOptions, options: lastUIMessageOptions });
-    
+
     // Handle empty input (ENTER key) for confirmation
     if (!text.trim() && lastUIMessageOptions) {
       // Empty input means confirm/accept (first option)
@@ -142,15 +142,15 @@ const UI = ({ url }: Props) => {
         }
       };
       setMessages(prev => [...prev, userMessage]);
-      connection.send({ 
-        type: 'manager_response', 
+      connection.send({
+        type: 'manager_response',
         content: confirmOption,
         confirm: confirmOption.toLowerCase() === 'confirm'
       } as any);
       setLastUIMessageOptions(null);
       return;
     }
-    
+
     if (!text.trim()) return;
 
     // Add local echo of user input
@@ -163,13 +163,13 @@ const UI = ({ url }: Props) => {
     };
     setMessages(prev => [...prev, userMessage]);
     setLastUserInput(text);
-    
+
     // Check if this is a response to a UIMessage with options
     if (lastUIMessageOptions) {
       console.log('🔍 Checking response against options:', { text, options: lastUIMessageOptions });
       const lowerText = text.trim().toLowerCase();
       let selectedOption = null;
-      
+
       // Check for single letter match or full option match
       for (const option of lastUIMessageOptions) {
         if (lowerText === option[0].toLowerCase() || lowerText === option.toLowerCase()) {
@@ -177,7 +177,7 @@ const UI = ({ url }: Props) => {
           break;
         }
       }
-      
+
       // Common aliases for confirm/reject
       if (!selectedOption && lastUIMessageOptions.includes('confirm') && lastUIMessageOptions.includes('reject')) {
         if (['y', 'yes', 'ok'].includes(lowerText)) {
@@ -186,11 +186,11 @@ const UI = ({ url }: Props) => {
           selectedOption = 'reject';
         }
       }
-      
+
       if (selectedOption) {
         console.log('✅ Sending selected option:', selectedOption);
-        connection.send({ 
-          type: 'manager_response', 
+        connection.send({
+          type: 'manager_response',
           content: selectedOption,
           confirm: selectedOption.toLowerCase() === 'confirm'
         } as any);
@@ -238,7 +238,7 @@ Regular text is sent as user_message to the current flow.`
       const parts = text.split(' ');
       const flowName = parts[1];
       const prompt = parts.slice(2).join(' ');
-      
+
       if (!flowName) {
         setMessages(prev => [...prev, {
           type: 'system_error',
@@ -271,12 +271,12 @@ Regular text is sent as user_message to the current flow.`
       connectionState === 'disconnected' || connectionState === 'error' ? 'disconnected' :
       'reconnecting'
     );
-    
-    const statusColor = 
+
+    const statusColor =
       connectionState === 'connected' ? retroIRCTheme.colors.connected :
       connectionState === 'disconnected' || connectionState === 'error' ? retroIRCTheme.colors.disconnected :
       retroIRCTheme.colors.reconnecting;
-    
+
     switch (connectionState) {
       case 'connecting':
         return <Text color={statusColor}><Spinner /> Connecting to server...</Text>;
@@ -294,8 +294,8 @@ Regular text is sent as user_message to the current flow.`
   return (
     <Box flexDirection="column">
       {/* Terminal header */}
-      <Box 
-        borderStyle="single" 
+      <Box
+        borderStyle="single"
         borderColor={retroIRCTheme.colors.border}
         marginBottom={1}
       >
@@ -308,20 +308,20 @@ Regular text is sent as user_message to the current flow.`
           </Box>
         </Box>
       </Box>
-      
+
       {/* Progress indicator */}
-      <ProgressIndicator 
+      <ProgressIndicator
         activeAgents={activeAgents.size}
         currentStep={currentStep}
         status={flowStatus}
         waitingOn={waitingOn}
       />
-      
+
       {/* Message area */}
       <Box flexDirection="column" flexGrow={1}>
         <MessageList messages={messages} />
       </Box>
-      
+
       {/* Input area - only show when connected */}
       {connectionState === 'connected' && (
         <Box borderStyle="single" borderColor={retroIRCTheme.colors.border} marginTop={1}>

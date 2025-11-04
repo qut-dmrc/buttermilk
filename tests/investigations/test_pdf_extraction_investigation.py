@@ -7,12 +7,14 @@ Created: 2025-10-24
 Related Issues: L5BK5MEM.pdf PDFObjRef error, widespread extraction issues
 """
 
-import pytest
-import urllib.request
 import tempfile
+import urllib.request
 from pathlib import Path
-from buttermilk.utils.utils import get_pdf_text
+
+import pytest
+
 from buttermilk._core.exceptions import ProcessingError
+from buttermilk.utils.utils import get_pdf_text
 
 
 class TestPDFExtractionBaseline:
@@ -27,7 +29,7 @@ class TestPDFExtractionBaseline:
         # Use a simple public domain test PDF
         test_url = "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
 
-        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp:
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
             tmp_path = tmp.name
 
         try:
@@ -123,7 +125,7 @@ class TestProductionPDFFailures:
 
         # Log findings (not assertions - this is investigative)
         print(f"\n{'='*60}")
-        print(f"PDF Extraction Survey Results")
+        print("PDF Extraction Survey Results")
         print(f"{'='*60}")
         print(f"Total PDFs tested: {total}")
         print(f"Successful (>50 chars): {success_count} ({success_count/total*100:.1f}%)")
@@ -131,13 +133,13 @@ class TestProductionPDFFailures:
         print(f"Extraction errors: {fail_count} ({fail_count/total*100:.1f}%)")
 
         if error_details:
-            print(f"\nError breakdown:")
+            print("\nError breakdown:")
             pdfobjref_count = sum(1 for _, t in error_details if t == "PDFObjRef")
             other_count = sum(1 for _, t in error_details if t == "Other")
             print(f"  PDFObjRef errors: {pdfobjref_count}")
             print(f"  Other errors: {other_count}")
 
-            print(f"\nFirst 5 failed PDFs:")
+            print("\nFirst 5 failed PDFs:")
             for name, err_type in error_details[:5]:
                 print(f"  - {name}: {err_type}")
 
@@ -175,7 +177,7 @@ class TestPDFExtractionErrorHandling:
         """Verify PDFObjRef errors are caught and wrapped properly."""
         from unittest.mock import patch
 
-        with patch('buttermilk.utils.utils.extract_text') as mock_extract:
+        with patch("buttermilk.utils.utils.extract_text") as mock_extract:
             # Simulate the PDFObjRef error from production
             mock_extract.side_effect = TypeError("'PDFObjRef' object is not iterable")
 

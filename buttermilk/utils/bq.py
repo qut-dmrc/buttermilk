@@ -32,6 +32,7 @@ try:
     from google.cloud.bigquery_storage_v1.types import (  # Types for Storage Write API
         ProtoRows,
     )
+
     BIGQUERY_AVAILABLE = True
 except ImportError:
     # BigQuery not available - create placeholder types
@@ -59,7 +60,7 @@ def construct_dict_from_schema(
     remove_extra_fields: bool = True,
 ) -> dict[str, Any]:
     """Recursively constructs a dictionary that conforms to a BigQuery schema.
-    
+
     This function takes a data dictionary and a BigQuery schema definition.
     It processes the dictionary to:
     1.  Include only keys present in the schema (if `remove_extra_fields` is True).
@@ -71,7 +72,7 @@ def construct_dict_from_schema(
         "NULL" or empty string after punctuation removal).
 
     Args:
-        schema (list): A list representing the BigQuery schema. Each item can be a 
+        schema (list): A list representing the BigQuery schema. Each item can be a
             SchemaField object or a dictionary with keys like 'name', 'type', and optionally
             'fields' (for nested schemas) and 'mode' (for REPEATED fields).
         data_dict (dict[str, Any]): The input data dictionary to transform.
@@ -97,10 +98,7 @@ def construct_dict_from_schema(
     transformed_dict: dict[str, Any] = {}
 
     # Create a set of schema field names for efficient lookup if removing extra fields
-    schema_field_names = {
-        (field.name if hasattr(field, "name") and field.name else field["name"])
-        for field in schema
-    }
+    schema_field_names = {(field.name if hasattr(field, "name") and field.name else field["name"]) for field in schema}
 
     for key, value in data_dict.items():
         if remove_extra_fields and key not in schema_field_names:
@@ -116,15 +114,14 @@ def construct_dict_from_schema(
 
         if not field_schema:  # Should not happen if remove_extra_fields is False and key is present
             if not remove_extra_fields:  # Pass through if not removing extra and no schema found (should be rare)
-                 transformed_dict[key] = value
+                transformed_dict[key] = value
             continue
 
         field_type_upper = field_schema["type"].upper()
         is_repeated = field_schema.get("mode", "").upper() == "REPEATED"
 
         # Handle NULL-like string values for non-repeated fields
-        if not is_repeated and isinstance(value, str) and \
-           (remove_punctuation(value).upper() == "NULL" or not remove_punctuation(value)):
+        if not is_repeated and isinstance(value, str) and (remove_punctuation(value).upper() == "NULL" or not remove_punctuation(value)):
             logger.debug(f"Field '{key}' has NULL-like string value ('{value}'), skipping.")
             continue  # Skip (effectively treating as NULL by not adding to dict)
 
@@ -140,7 +137,7 @@ def construct_dict_from_schema(
                 if nested_schema_fields and isinstance(item, dict):  # Array of STRUCTs
                     transformed_array_items.append(construct_dict_from_schema(nested_schema_fields, item, remove_extra_fields))
                 elif nested_schema_fields:  # Expected dict for struct, got something else
-                     logger.warning(f"REPEATED field '{key}' contains non-dict item '{item}' for a STRUCT type. Skipping item.")
+                    logger.warning(f"REPEATED field '{key}' contains non-dict item '{item}' for a STRUCT type. Skipping item.")
                 else:  # Array of simple types
                     # Apply type conversion to individual array items if needed (simplified here)
                     # For simplicity, this example assumes basic types in arrays don't need deep conversion here
@@ -154,8 +151,8 @@ def construct_dict_from_schema(
             if isinstance(value, dict) and nested_schema_fields:
                 transformed_dict[key] = construct_dict_from_schema(nested_schema_fields, value, remove_extra_fields)
             elif isinstance(value, dict) and not nested_schema_fields:
-                 logger.warning(f"Field '{key}' is STRUCT but schema has no 'fields'. Value: {value}. Storing as is.")
-                 transformed_dict[key] = value  # Or handle as error
+                logger.warning(f"Field '{key}' is STRUCT but schema has no 'fields'. Value: {value}. Storing as is.")
+                transformed_dict[key] = value  # Or handle as error
             else:  # Value is not a dict for a STRUCT field
                 logger.warning(f"Field '{key}' is STRUCT but value is not a dict (type: {type(value)}). Skipping.")
                 continue
@@ -190,7 +187,8 @@ def construct_dict_from_schema(
                     transformed_dict[key] = float(numeric_value)
                 else:  # NUMERIC, BIGNUMERIC or if NaN (let BigQuery handle potential type issues for these)
                     transformed_dict[key] = numeric_value if not pd.isna(numeric_value) else None  # Convert NaN to None
-                    if transformed_dict[key] is None: continue  # Skip if it became None
+                    if transformed_dict[key] is None:
+                        continue  # Skip if it became None
             except ValueError as e_num:
                 logger.warning(f"Could not convert '{value}' to numeric for field '{key}': {e_num!s}. Skipping.")
                 continue
@@ -292,7 +290,7 @@ class TableWriter(BaseModel):
                If already a list (presumably of `SchemaField`), it's passed through.
 
         Returns:
-            list | Any: The loaded schema as a list of SchemaField objects, 
+            list | Any: The loaded schema as a list of SchemaField objects,
             or the original value if not a string path.
 
         Raises:
@@ -303,6 +301,7 @@ class TableWriter(BaseModel):
             try:
                 # Use BM's cached BigQuery client instead of creating new one
                 from buttermilk import bm
+
                 return bm.bq.schema_from_json(v)
             except Exception as e:
                 raise TypeError(f"Failed to load BigQuery schema from JSON file path '{v}': {e!s}") from e
@@ -362,7 +361,9 @@ class TableWriter(BaseModel):
                 else:
                     raise ValueError("`destination` must be in 'project.dataset.table' or 'dataset.table' format.")
             except Exception as e:
-                raise ValueError(f"Invalid `destination` format ('{destination}'). Expected 'project.dataset.table' or 'dataset.table'. Error: {e!s}") from e
+                raise ValueError(
+                    f"Invalid `destination` format ('{destination}'). Expected 'project.dataset.table' or 'dataset.table'. Error: {e!s}"
+                ) from e
 
         # Now, ensure all components are present to build table_path
         # project_id can be None if using default project for BigQuery client
@@ -415,14 +416,14 @@ class TableWriter(BaseModel):
         elif isinstance(rows, list) and all(isinstance(r, dict) for r in rows):
             prepared_batch = [r.copy() for r in rows]  # List of dicts
         elif isinstance(rows, dict):  # Single dict row
-             prepared_batch = [rows.copy()]
+            prepared_batch = [rows.copy()]
         else:
             raise TypeError(f"Unsupported 'rows' type for append_rows: {type(rows)}. Expected DataFrame, list of dicts, or dict.")
 
         # Apply schema transformations and ensure serializability
         if self.bq_schema:
             if bigquery is not None and not (isinstance(self.bq_schema, list) and all(isinstance(sf, bigquery.SchemaField) for sf in self.bq_schema)):
-                 raise TypeError(f"TableWriter.bq_schema must be a list of bigquery.SchemaField. Got: {type(self.bq_schema)}")
+                raise TypeError(f"TableWriter.bq_schema must be a list of bigquery.SchemaField. Got: {type(self.bq_schema)}")
             prepared_batch = [construct_dict_from_schema(self.bq_schema, row) for row in prepared_batch]
 
         serializable_batch = make_serialisable(prepared_batch)
@@ -494,7 +495,7 @@ class TableWriter(BaseModel):
             for chunk_of_rows in chunks(serializable_batch, 100):  # Example chunk size
                 proto_data = bigquery_storage_v1beta2.types.ProtoData()
                 proto_data.rows.serialized_rows.extend(
-                     [json.dumps(row).encode("utf-8") for row in chunk_of_rows],  # Serialize each dict to JSON bytes
+                    [json.dumps(row).encode("utf-8") for row in chunk_of_rows],  # Serialize each dict to JSON bytes
                 )
                 # If you have a .proto schema, you'd define writer_schema here.
                 # For schemaless JSON append (default stream), this might be okay or need adjustment.
@@ -520,7 +521,9 @@ class TableWriter(BaseModel):
                     logger.error(f"Row errors appending to {self.table_path}: {response_item.row_errors}")
                     all_response_errors.extend(response_item.row_errors)
                 else:
-                    logger.debug(f"Successfully appended a chunk to {self.table_path}. Response offset: {getattr(response_item, 'append_result', {}).get('offset', {}).get('value', 'N/A')}")
+                    logger.debug(
+                        f"Successfully appended a chunk to {self.table_path}. Response offset: {getattr(response_item, 'append_result', {}).get('offset', {}).get('value', 'N/A')}"
+                    )
 
         except Exception as e:
             logger.error(f"Exception during append_rows stream processing for {self.table_path}: {e!s}", exc_info=True)

@@ -179,7 +179,7 @@
 
 <style>
 	.score-messages-display {
-		
+
 	}
 
 	.messages-container {

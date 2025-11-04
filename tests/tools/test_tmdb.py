@@ -9,10 +9,7 @@ from autogen_core.tools import FunctionTool
 from buttermilk.tools.catalog_test import THEMOVIEDB_AVAILABLE, Observation, Title, TitleType, TMDBTool
 
 # Skip entire module if themoviedb is not installed
-pytestmark = pytest.mark.skipif(
-    not THEMOVIEDB_AVAILABLE,
-    reason="themoviedb package not installed - install with: pip install themoviedb.py"
-)
+pytestmark = pytest.mark.skipif(not THEMOVIEDB_AVAILABLE, reason="themoviedb package not installed - install with: pip install themoviedb.py")
 
 
 # Test Fixtures
@@ -113,7 +110,7 @@ class TestTMDBSearchMovie:
             mock_movie.id = 550
             mock_movie.title = "Fight Club"
             mock_movie.release_date = "1999-10-15"
-            
+
             mock_search = AsyncMock()
             mock_search.movies = AsyncMock(return_value=[mock_movie])
             mock_tmdb.search.return_value = mock_search
@@ -130,34 +127,20 @@ class TestTMDBGetAvailability:
     async def test_get_availability_with_providers(self, tmdb_tool):
         """Test get_availability returns observations for available providers."""
         # Create a Title object
-        title = Title(
-            record_id="550",
-            title="Fight Club",
-            year=1999,
-            metadata={"original_title": "Fight Club"}
-        )
+        title = Title(record_id="550", title="Fight Club", year=1999, metadata={"original_title": "Fight Club"})
 
         with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
             # Mock watch providers response
             mock_providers = {
                 "results": {
                     "US": {
-                        "flatrate": [
-                            {"provider_id": 8, "provider_name": "Netflix"},
-                            {"provider_id": 9, "provider_name": "Amazon Prime Video"}
-                        ],
-                        "rent": [
-                            {"provider_id": 2, "provider_name": "Apple TV"}
-                        ]
+                        "flatrate": [{"provider_id": 8, "provider_name": "Netflix"}, {"provider_id": 9, "provider_name": "Amazon Prime Video"}],
+                        "rent": [{"provider_id": 2, "provider_name": "Apple TV"}],
                     },
-                    "GB": {
-                        "flatrate": [
-                            {"provider_id": 8, "provider_name": "Netflix"}
-                        ]
-                    }
+                    "GB": {"flatrate": [{"provider_id": 8, "provider_name": "Netflix"}]},
                 }
             }
-            
+
             # Mock the movie(id) method to return an object with watch_providers
             mock_movie_obj = AsyncMock()
             mock_movie_obj.watch_providers = AsyncMock(return_value=mock_providers)
@@ -173,7 +156,7 @@ class TestTMDBGetAvailability:
             # Check US has providers
             us_observations = [r for r in results if r.region == "US"]
             assert len(us_observations) >= 2  # Netflix and Amazon Prime at minimum
-            
+
             netflix_us = next((r for r in us_observations if r.provider_name == "Netflix"), None)
             assert netflix_us is not None
             assert netflix_us.available is True
@@ -183,7 +166,7 @@ class TestTMDBGetAvailability:
             # Check GB has Netflix
             gb_observations = [r for r in results if r.region == "GB"]
             assert len(gb_observations) >= 1
-            
+
             # Check AU has null observation (no providers)
             au_observations = [r for r in results if r.region == "AU"]
             assert len(au_observations) == 1
@@ -193,17 +176,12 @@ class TestTMDBGetAvailability:
     @pytest.mark.anyio
     async def test_get_availability_no_providers_returns_null_observations(self, tmdb_tool):
         """Test that regions with no providers get null observations."""
-        title = Title(
-            record_id="550",
-            title="Fight Club",
-            year=1999,
-            metadata={}
-        )
+        title = Title(record_id="550", title="Fight Club", year=1999, metadata={})
 
         with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
             # Mock empty providers response
             mock_providers = {"results": {}}
-            
+
             # Mock the movie(id) method to return an object with watch_providers
             mock_movie_obj = AsyncMock()
             mock_movie_obj.watch_providers = AsyncMock(return_value=mock_providers)
@@ -293,7 +271,7 @@ class TestTMDBDiscoverMovies:
                 backup_dir=tmp_path,
                 include_adult=True,
                 include_video=True,
-                resume=False
+                resume=False,
             )
 
             # Verify we get Title objects
@@ -333,13 +311,7 @@ class TestTMDBDiscoverMovies:
             mock_discover.movie = mock_movie_func
             mock_tmdb.discover.return_value = mock_discover
 
-            await tmdb_tool.get_all_movies(
-                start_year=1999,
-                end_year=1999,
-                max_concurrent=1,
-                backup_dir=tmp_path,
-                resume=False
-            )
+            await tmdb_tool.get_all_movies(start_year=1999, end_year=1999, max_concurrent=1, backup_dir=tmp_path, resume=False)
 
             # Check period backup files were created
             period_files = list(tmp_path.glob("period_*.json"))
@@ -368,13 +340,7 @@ class TestTMDBDiscoverMovies:
             mock_discover.movie = mock_movie_func
             mock_tmdb.discover.return_value = mock_discover
 
-            results = await tmdb_tool.get_all_movies(
-                start_year=1999,
-                end_year=1999,
-                max_concurrent=1,
-                backup_dir=tmp_path,
-                resume=False
-            )
+            results = await tmdb_tool.get_all_movies(start_year=1999, end_year=1999, max_concurrent=1, backup_dir=tmp_path, resume=False)
 
             # Should return empty list on error (periods that fail return empty lists)
             assert results == []
@@ -391,8 +357,8 @@ class TestTMDBDiscoverMovies:
                 ]
 
             period_responses = {
-                "2020-01": create_period_movies(1),   # Jan: movies 1-5
-                "2020-02": create_period_movies(6),   # Feb: movies 6-10
+                "2020-01": create_period_movies(1),  # Jan: movies 1-5
+                "2020-02": create_period_movies(6),  # Feb: movies 6-10
                 "2020-03": create_period_movies(11),  # Mar: movies 11-15
             }
 
@@ -418,13 +384,7 @@ class TestTMDBDiscoverMovies:
             mock_tmdb.discover.return_value = mock_discover
 
             # Fetch first quarter of 2020
-            results = await tmdb_tool.get_all_movies(
-                start_year=2020,
-                end_year=2020,
-                max_concurrent=2,
-                backup_dir=tmp_path,
-                resume=False
-            )
+            results = await tmdb_tool.get_all_movies(start_year=2020, end_year=2020, max_concurrent=2, backup_dir=tmp_path, resume=False)
 
             # Should return movies from multiple periods
             # 12 months * 5 movies = 60 movies total for 2020
@@ -455,12 +415,7 @@ class TestTMDBDiscoverMovies:
             mock_tmdb.discover.return_value = mock_discover
 
             # Call without backup_dir to test default
-            results = await tmdb_tool.get_all_movies(
-                start_year=2020,
-                end_year=2020,
-                max_concurrent=1,
-                resume=False
-            )
+            results = await tmdb_tool.get_all_movies(start_year=2020, end_year=2020, max_concurrent=1, resume=False)
 
             # Verify we get results (which means default directory worked)
             assert len(results) >= 0  # Could be empty, just need no errors
@@ -484,30 +439,17 @@ class TestTMDBDiscoverMovies:
             mock_tmdb.discover.return_value = mock_discover
 
             # First call - should fetch and save progress
-            results1 = await tmdb_tool.get_all_movies(
-                start_year=2020,
-                end_year=2020,
-                max_concurrent=1,
-                backup_dir=tmp_path,
-                resume=True
-            )
+            results1 = await tmdb_tool.get_all_movies(start_year=2020, end_year=2020, max_concurrent=1, backup_dir=tmp_path, resume=True)
 
             # Verify progress file was created
             progress_file = tmp_path / "fetch_progress.json"
             assert progress_file.exists()
 
             # Second call with resume=True - should skip completed periods
-            results2 = await tmdb_tool.get_all_movies(
-                start_year=2020,
-                end_year=2020,
-                max_concurrent=1,
-                backup_dir=tmp_path,
-                resume=True
-            )
+            results2 = await tmdb_tool.get_all_movies(start_year=2020, end_year=2020, max_concurrent=1, backup_dir=tmp_path, resume=True)
 
             # Should get same results from cached data
             assert len(results2) == len(results1)
-
 
 
 class TestTMDBUnitTests:
@@ -526,14 +468,18 @@ class TestTMDBUnitTests:
         # Mock fetch_single_page to return 3 pages of results
         with patch.object(tmdb_tool, "fetch_single_page") as mock_fetch:
             mock_fetch.side_effect = [
-                ([Title(record_id=f"{i}", title=f"Movie {i}", type=TitleType.MOVIE) for i in range(1, 21)], True),  # Page 1: 20 movies, more available
-                ([Title(record_id=f"{i}", title=f"Movie {i}", type=TitleType.MOVIE) for i in range(21, 41)], True),  # Page 2: 20 movies, more available
+                (
+                    [Title(record_id=f"{i}", title=f"Movie {i}", type=TitleType.MOVIE) for i in range(1, 21)],
+                    True,
+                ),  # Page 1: 20 movies, more available
+                (
+                    [Title(record_id=f"{i}", title=f"Movie {i}", type=TitleType.MOVIE) for i in range(21, 41)],
+                    True,
+                ),  # Page 2: 20 movies, more available
                 ([Title(record_id=f"{i}", title=f"Movie {i}", type=TitleType.MOVIE) for i in range(41, 51)], False),  # Page 3: 10 movies, no more
             ]
 
-            results = await tmdb_tool._fetch_period_movies(
-                period, True, False, tmp_path, progress
-            )
+            results = await tmdb_tool._fetch_period_movies(period, True, False, tmp_path, progress)
 
             # Should have called fetch_single_page 3 times
             assert mock_fetch.call_count == 3
@@ -574,10 +520,7 @@ class TestTMDBUnitTests:
         # Create a checkpoint file with 40 movies
         checkpoint_file = progress.get_checkpoint_file(period)
         tmp_path.mkdir(parents=True, exist_ok=True)
-        checkpoint_data = [
-            {"record_id": str(i), "title": f"Movie {i}", "type": "movie", "year": 2020, "metadata": {}}
-            for i in range(1, 41)
-        ]
+        checkpoint_data = [{"record_id": str(i), "title": f"Movie {i}", "type": "movie", "year": 2020, "metadata": {}} for i in range(1, 41)]
         with open(checkpoint_file, "w") as f:
             json.dump(checkpoint_data, f)
 
@@ -587,9 +530,7 @@ class TestTMDBUnitTests:
                 ([Title(record_id=f"{i}", title=f"Movie {i}", type=TitleType.MOVIE) for i in range(41, 51)], False),  # Page 3: 10 movies, no more
             ]
 
-            results = await tmdb_tool._fetch_period_movies(
-                period, True, False, tmp_path, progress
-            )
+            results = await tmdb_tool._fetch_period_movies(period, True, False, tmp_path, progress)
 
             # Should have called fetch_single_page only once (page 3)
             assert mock_fetch.call_count == 1
@@ -626,8 +567,7 @@ class TestTMDBUnitTests:
         with patch.object(tmdb_tool, "_fetch_period_movies", side_effect=mock_fetch_period):
             start_time = time.time()
             results = await tmdb_tool._fetch_periods_parallel(
-                periods, max_concurrent=3, include_adult=True, include_video=False,
-                backup_dir=tmp_path, progress=progress
+                periods, max_concurrent=3, include_adult=True, include_video=False, backup_dir=tmp_path, progress=progress
             )
             total_time = time.time() - start_time
 
@@ -735,12 +675,7 @@ class TestTMDBToolConfiguration:
         assert tmdb_tool.region == "AU"
 
         # Test with custom configuration
-        custom_tool = TMDBTool(
-            api_key="another-fake-key",
-            base_url="https://custom.tmdb.api/v3",
-            language="fr-FR",
-            region="FR"
-        )
+        custom_tool = TMDBTool(api_key="another-fake-key", base_url="https://custom.tmdb.api/v3", language="fr-FR", region="FR")
         assert custom_tool.base_url == "https://custom.tmdb.api/v3"
         assert custom_tool.language == "fr-FR"
         assert custom_tool.region == "FR"

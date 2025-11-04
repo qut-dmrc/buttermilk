@@ -1,6 +1,6 @@
 /**
  * Centralized backend connectivity utilities
- * 
+ *
  * Provides reusable functions for checking backend availability
  * with caching to avoid repeated network calls.
  */
@@ -20,7 +20,7 @@ let healthCache: BackendHealthCache | null = null;
 /**
  * Check if backend is available by testing the session endpoint
  * This is the most reliable health check as it verifies core functionality
- * 
+ *
  * @param useCache - Whether to use cached result if available (default: true)
  * @param fetchFn - Custom fetch function (for SvelteKit server-side use event.fetch)
  * @returns Promise resolving to true if backend is available
@@ -42,7 +42,7 @@ export async function checkBackendHealth(useCache: boolean = true, fetchFn?: typ
 		});
 
 		const available = response.ok;
-		
+
 		// Update cache
 		healthCache = {
 			available,
@@ -53,7 +53,7 @@ export async function checkBackendHealth(useCache: boolean = true, fetchFn?: typ
 		return available;
 	} catch (error) {
 		const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-		
+
 		// Update cache with error
 		healthCache = {
 			available: false,
@@ -68,7 +68,7 @@ export async function checkBackendHealth(useCache: boolean = true, fetchFn?: typ
 /**
  * Synchronously check if backend is available using cached data
  * Returns null if no cached data available - use checkBackendHealth() first
- * 
+ *
  * @returns boolean if cached data available, null otherwise
  */
 export function isBackendAvailable(): boolean | null {
@@ -81,7 +81,7 @@ export function isBackendAvailable(): boolean | null {
 /**
  * Get the last known backend error message
  * Useful for logging purposes
- * 
+ *
  * @returns Error message if backend is unavailable, null if available or no cache
  */
 export function getBackendError(): string | null {
@@ -101,7 +101,7 @@ export function clearBackendHealthCache(): void {
 
 /**
  * Log backend connectivity status in a consistent, concise format
- * 
+ *
  * @param context - Context string for the log message (e.g., "WebSocket connection", "API call")
  * @param available - Whether backend is available
  */
@@ -118,7 +118,7 @@ export function logBackendStatus(context: string, available: boolean): void {
 /**
  * Get the configured sessions directory from environment variable
  * Falls back to default path if not configured
- * 
+ *
  * @returns Configured sessions directory path
  */
 export function getSessionsDir(): string {

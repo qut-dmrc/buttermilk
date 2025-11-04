@@ -247,23 +247,23 @@ class Orchestrator(OrchestratorProtocol, ABC):
 
     def set_bm(self, bm: Any) -> None:
         """Set a session-scoped BM instance for this orchestrator.
-        
+
         This method is called automatically by FlowRunner when creating orchestrators
         to provide session-level observability isolation. The session-scoped BM is
         automatically passed to all agents created by this orchestrator.
-        
+
         Args:
             bm: Session-scoped BM instance containing unique session context.
                 Used for tracing, storage access, and observability that's isolated
                 per session rather than shared globally.
-                
+
         Note:
             This is typically called automatically by the orchestration framework.
             Manual calls are rarely needed unless implementing custom orchestration logic.
         """
         self._bm = bm
         logger.debug(f"Set session-scoped BM for orchestrator '{self.name}' with session_id: {bm.session_info.session_id}")
-    
+
     def get_effective_bm(self) -> Any:
         """Get the effective BM instance (session-scoped if available, otherwise global singleton).
 
@@ -284,6 +284,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
             return self._bm
         else:
             from buttermilk._core.dmrc import get_bm
+
             return get_bm()
 
     async def run(self, request: RunRequest) -> None:
@@ -313,10 +314,10 @@ class Orchestrator(OrchestratorProtocol, ABC):
         orchestrator_trace = None
         op = None
         _weave_mod = None  # Holds the lazily imported weave module if available
-        
+
         # Get OTEL tracer for business logic spans
         tracer = trace.get_tracer("buttermilk.orchestrator")
-        
+
         weave_client = await bm.get_weave_client()
         if weave_client is not None:
             try:

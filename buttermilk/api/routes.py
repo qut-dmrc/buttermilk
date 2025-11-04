@@ -4,7 +4,6 @@ import uuid
 from pathlib import Path
 from typing import Annotated, Any
 
-from buttermilk.utils import scrub_serializable
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
@@ -13,6 +12,7 @@ from buttermilk._core.log import logger
 from buttermilk.api.job_queue import JobQueueClient
 from buttermilk.api.services.data_service import DataService
 from buttermilk.api.services.session_storage import SessionStorageService
+from buttermilk.utils import scrub_serializable
 
 FlowRunner = Any
 
@@ -128,34 +128,34 @@ async def get_session_messages_endpoint(
     session_id: str = Path(..., description="The session ID"),
 ):
     """Get all messages for a session for restoration.
-    
+
     Returns stored messages for the session to allow clients to restore
     previous conversation state when loading a session URL.
-    
+
     Args:
         session_id: The session identifier
-        
+
     Returns:
         JSON response with messages array and session metadata or 404 if session not found
     """
     storage_service = SessionStorageService()
-    
+
     if not storage_service.session_exists(session_id):
         logger.debug(f"Session {session_id} not found for restoration")
         raise HTTPException(status_code=404, detail="Session not found")
-    
+
     try:
         messages = storage_service.get_session_messages(session_id)
         flow_status = storage_service.get_flow_status(session_id)
         is_stale = storage_service.is_session_stale(session_id)
         parameters = storage_service.get_session_parameters(session_id)
-        
+
         # Determine if session is resumable
         is_resumable = flow_status == "running" and not is_stale
-        
+
         # Convert ChatMessage objects to dicts for JSON response
         message_dicts = [scrub_serializable(msg.model_dump) for msg in messages]
-        
+
         response_data = {
             "messages": message_dicts,
             "session_metadata": {
@@ -163,13 +163,13 @@ async def get_session_messages_endpoint(
                 "is_stale": is_stale,
                 "is_resumable": is_resumable,
                 "message_count": len(message_dicts),
-                "parameters": parameters
-            }
+                "parameters": parameters,
+            },
         }
-        
+
         logger.info(f"Returning {len(message_dicts)} messages for session {session_id} (status: {flow_status}, resumable: {is_resumable})")
         return JSONResponse(response_data)
-        
+
     except Exception as e:
         logger.error(f"Error retrieving session messages for {session_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to retrieve session messages")
@@ -664,47 +664,41 @@ async def _get_score_page_impl(
 
 # --- Admin Configuration Management Endpoints ---
 
+
 @flow_data_router.post("/api/admin/reload-config")
 async def reload_configuration_endpoint(
     flows: Annotated[FlowRunner, Depends(get_flows)],
 ):
     """Reload flow configurations from the config directory.
-    
+
     This endpoint triggers a reload of all configuration files, allowing
-    for dynamic updates without restarting the server. 
-    
+    for dynamic updates without restarting the server.
+
     Returns:
         JSON response with reload status and details
     """
     logger.info("Configuration reload requested via API")
-    
+
     try:
         # Call the reload method on FlowRunner
         reload_result = await flows.reload_configurations()
-        
+
         # Determine HTTP status code based on success
         status_code = 200 if reload_result["success"] else 500
-        
+
         # Log the result
         if reload_result["success"]:
             logger.info(f"Configuration reload successful: {len(reload_result['flows_loaded'])} flows loaded")
         else:
             logger.error(f"Configuration reload failed: {reload_result['errors']}")
-        
-        return JSONResponse(
-            content=reload_result,
-            status_code=status_code
-        )
-        
+
+        return JSONResponse(content=reload_result, status_code=status_code)
+
     except Exception as e:
         logger.error(f"Unexpected error during configuration reload: {e}", exc_info=True)
         return JSONResponse(
-            content={
-                "success": False,
-                "errors": [f"Unexpected error: {str(e)}"],
-                "timestamp": datetime.datetime.now(datetime.UTC).isoformat()
-            },
-            status_code=500
+            content={"success": False, "errors": [f"Unexpected error: {str(e)}"], "timestamp": datetime.datetime.now(datetime.UTC).isoformat()},
+            status_code=500,
         )
 
 
@@ -713,17 +707,16 @@ async def get_configuration_status_endpoint(
     flows: Annotated[FlowRunner, Depends(get_flows)],
 ):
     """Get current configuration status and metadata.
-    
+
     Returns information about the currently loaded flows and configuration
     source for monitoring and debugging purposes.
-    
+
     Returns:
         JSON response with configuration status
     """
     try:
-        
         config_dir = Path("/src/buttermilk/buttermilk/conf")
-        
+
         # Get config file timestamps
         config_timestamps = {}
         try:
@@ -732,24 +725,21 @@ async def get_configuration_status_endpoint(
                 config_timestamps["config.yaml"] = config_yaml.stat().st_mtime
         except Exception as e:
             logger.debug(f"Could not get config timestamps: {e}")
-        
+
         status = {
             "flows_loaded": list(flows.flows.keys()),
             "flow_count": len(flows.flows),
             "config_directory": str(config_dir),
             "config_exists": config_dir.exists(),
             "config_timestamps": config_timestamps,
-            "timestamp": datetime.datetime.now(datetime.UTC).isoformat()
+            "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
         }
-        
+
         return JSONResponse(content=status)
-        
+
     except Exception as e:
         logger.error(f"Error getting configuration status: {e}", exc_info=True)
         return JSONResponse(
-            content={
-                "error": f"Failed to get configuration status: {str(e)}",
-                "timestamp": datetime.datetime.now(datetime.UTC).isoformat()
-            },
-            status_code=500
+            content={"error": f"Failed to get configuration status: {str(e)}", "timestamp": datetime.datetime.now(datetime.UTC).isoformat()},
+            status_code=500,
         )

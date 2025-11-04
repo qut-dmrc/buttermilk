@@ -325,6 +325,7 @@ def test_startup(flow, timeout, output, verbose):
 #         sys.exit(1)
 #
 
+
 @debug.command()
 @click.option("--minutes-back", default=30, help="How many minutes back to analyze logs")
 @click.option("--project-id", help="GCP project ID (auto-detected if not provided)")
@@ -631,15 +632,16 @@ def validate_config(config_path, output, verbose):
 @click.option("--port", default=8000, type=int, help="WebSocket server port")
 def websocket(host, port):
     """Interactive WebSocket debug client (no MCP required).
-    
+
     This provides a standalone interactive CLI for debugging flows via WebSocket.
     It connects directly to the Buttermilk API without requiring MCP.
-    
+
     Example:
         buttermilk debug websocket --host localhost --port 8000
 
     """
     import asyncio
+
     client = InteractiveDebugClient(host, port)
 
     try:

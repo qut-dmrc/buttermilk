@@ -14,20 +14,20 @@ RUNTIME_GID=${RUNTIME_GID:-$DEFAULT_GID}
 # Check if user already exists
 if ! id "$RUNTIME_USERNAME" &>/dev/null; then
     echo "Creating user: $RUNTIME_USERNAME (UID: $RUNTIME_UID, GID: $RUNTIME_GID)"
-    
+
     # Create group if it doesn't exist
     if ! getent group "$RUNTIME_GID" &>/dev/null; then
         groupadd --gid "$RUNTIME_GID" "$RUNTIME_USERNAME"
     fi
-    
+
     # Create user
     useradd --uid "$RUNTIME_UID" --gid "$RUNTIME_GID" -m -s /bin/bash "$RUNTIME_USERNAME"
-    
+
     # Add to sudo group if not already
     if command -v sudo &>/dev/null; then
         echo "$RUNTIME_USERNAME ALL=NOPASSWD: ALL" | tee -a /etc/sudoers
     fi
-    
+
     # Set up home directory permissions
     chown -R "$RUNTIME_UID:$RUNTIME_GID" "/home/$RUNTIME_USERNAME"
 else
@@ -58,7 +58,7 @@ if [ -n "$DOTFILES_REPO" ]; then
     if [ ! -d "$DOTFILES_DIR" ]; then
         echo "Cloning dotfiles from $DOTFILES_REPO..."
         sudo -u "$RUNTIME_USERNAME" git clone "$DOTFILES_REPO" "$DOTFILES_DIR"
-        
+
         # Look for common setup scripts
         if [ -f "$DOTFILES_DIR/install.sh" ]; then
             echo "Running dotfiles install script..."

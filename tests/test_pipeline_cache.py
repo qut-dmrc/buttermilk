@@ -7,16 +7,16 @@ This test suite verifies that:
 4. Cache paths include both project name and parameter hash
 """
 
-import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
 from typing import AsyncGenerator
+from unittest.mock import MagicMock, patch
+
+import pytest
+from pydantic import BaseModel, Field
 
 from buttermilk._core.hashing import compute_processor_config_hash
 from buttermilk._core.record_cache import RecordCache
 from buttermilk._core.types import BaseRecord
 from buttermilk.pipeline import PipelineOrchestrator
-from pydantic import BaseModel, Field
 
 
 # Mock processor for testing
@@ -27,14 +27,10 @@ class MockProcessor(BaseModel):
     template: str = Field(default="summarize", description="Template name")
     temperature: float = Field(default=0.7, description="Temperature")
 
-    async def process(
-        self, record: BaseRecord, *, processor_stage: str, **kwargs
-    ) -> AsyncGenerator[BaseRecord, None]:
+    async def process(self, record: BaseRecord, *, processor_stage: str, **kwargs) -> AsyncGenerator[BaseRecord, None]:
         """Process record by adding a field based on config."""
         # Add a field that depends on processor config
-        updated = record.model_copy(
-            update={"output": f"Processed with {self.model} at {self.temperature}"}
-        )
+        updated = record.model_copy(update={"output": f"Processed with {self.model} at {self.temperature}"})
         yield updated
 
 
@@ -205,7 +201,9 @@ class TestPipelineProcessorStageNames:
 
         # Create second processor with DIFFERENT config (different model)
         processor2 = MockProcessor(
-            model="claude-3", template="summarize", temperature=0.7  # Changed model!
+            model="claude-3",
+            template="summarize",
+            temperature=0.7,  # Changed model!
         )
 
         # Get the param hash for processor2

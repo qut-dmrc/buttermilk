@@ -13,15 +13,18 @@ This is the only debugging guide you need - all commands have been validated and
 **⚠️ CRITICAL: Use Only Valid Parameters**
 
 **Available Flows**:
+
 - `trans` - Transgender journalist ethics research flow
 - Other flows from `/buttermilk/conf/flows/`
 
 **Valid Criteria Templates**:
+
 - `tja` - Trans Journalists Association stylebook criteria
 - `glaad` - GLAAD media reference criteria
 - Other criteria from `/buttermilk/conf/flows/criteria/` and template files
 
 **Record ID Requirements**:
+
 - **MUST** use actual record IDs from your data sources
 - **NEVER** use placeholder values like 'demo_record', 'demo', 'test_record'
 - **Recommended valid records**: 'betoota_snape_trans', 'kerri_colby_children_transitioning'
@@ -30,11 +33,13 @@ This is the only debugging guide you need - all commands have been validated and
 **❌ CRITICAL**: Flows WILL NOT run with arbitrary parameters. All parameters (record_id, criteria, flow) MUST match live data configuration. This applies to both puppet mode and NonInteractiveDebugClient usage.
 
 **❌ INVALID EXAMPLES** (DO NOT USE):
+
 - Flows: 'simple', 'test hashing', 'demo_flow'
 - Records: 'demo_record', 'demo', 'test_record'
 - Criteria: 'test', 'demo_criteria'
 
 **✅ VALID EXAMPLES** (CONFIRMED WORKING):
+
 - Flow: 'trans'
 - Records: 'betoota_snape_trans', 'kerri_colby_children_transitioning'
 - Criteria: 'tja', 'glaad'
@@ -44,21 +49,22 @@ This is the only debugging guide you need - all commands have been validated and
 **Two Core Approaches, Validated Workflow:**
 
 1. **Log Analysis**: Use `ws_debug_cli` infrastructure commands for structured log access (✅ Validated)
-2. **Live Flow Debugging**: Use DebugAgent puppet mode or NonInteractiveDebugClient (✅ Validated)
+1. **Live Flow Debugging**: Use DebugAgent puppet mode or NonInteractiveDebugClient (✅ Validated)
 
 **Validated debugging loop:**
 
-1.  **Start the Server**: Launch the backend API (✅ `make debug` confirmed working)
-2.  **Check Logs First**: Use structured log tools (✅ `/tmp/bm_*.jsonl` created)
-3.  **Test Connectivity**: Verify API health endpoints (✅ Returns `{"status":"ok","message":"Core routes loaded"}`)
-4.  **Debug Live Flows**: Execute flows using puppet mode with full message capture (✅ 0 to 20+ messages)
-5.  **Stop the Server**: Terminate the backend process (✅ `make kill_api`)
+1. **Start the Server**: Launch the backend API (✅ `make debug` confirmed working)
+1. **Check Logs First**: Use structured log tools (✅ `/tmp/bm_*.jsonl` created)
+1. **Test Connectivity**: Verify API health endpoints (✅ Returns `{"status":"ok","message":"Core routes loaded"}`)
+1. **Debug Live Flows**: Execute flows using puppet mode with full message capture (✅ 0 to 20+ messages)
+1. **Stop the Server**: Terminate the backend process (✅ `make kill_api`)
 
----
+______________________________________________________________________
 
 ## 1. Start the Server
 
 ### For Standard Debugging (Most Agents)
+
 Use the `make debug` command to start the Buttermilk API server in the background:
 
 ```bash
@@ -68,6 +74,7 @@ make debug
 This command handles killing any old processes and starts a new one, logging output to a file in `/tmp/`.
 
 ### For Advanced Debugging (Agents with Background Process Capability)
+
 Agents capable of running background processes (like Claude Code) should launch the server directly to monitor stdio in real-time:
 
 ```bash
@@ -76,18 +83,20 @@ uv run python -m buttermilk.runner.cli "+flows=[trans,zot,osb]" run=api llms=deb
 
 **⚠️ WARNING**: This command does not time out. Only use if your agent can manage background processes. Other agents should use `make debug` instead.
 
----
+______________________________________________________________________
 
 ## 2. Check Logs First
 
 **✅ VALIDATED: ConfigurationBootstrapper creates structured logs**
 
 **Canonical command (VALIDATED):**
+
 ```bash
 uv run python -m buttermilk.debug.ws_debug_cli logs -n 20
 ```
 
 **Alternative log levels (VALIDATED):**
+
 ```bash
 # Show only errors and warnings
 uv run python -m buttermilk.debug.ws_debug_cli logs -n 20 -l ERROR
@@ -101,7 +110,7 @@ uv run python -m buttermilk.debug.ws_debug_cli logs -n 50 -l DEBUG
 **Two primary approaches for interactive flow debugging:**
 
 1. **CLI Commands** (Simple, JSON-based, LLM-optimized) - **RECOMMENDED for most cases**
-2. **DebugAgent Puppet Mode** (Advanced programmatic control)
+1. **DebugAgent Puppet Mode** (Advanced programmatic control)
 
 ### 3a. CLI Commands (Recommended for LLMs)
 
@@ -110,6 +119,7 @@ uv run python -m buttermilk.debug.ws_debug_cli logs -n 50 -l DEBUG
 All commands output JSON by default for easy parsing. Use `--pretty` flag for human-readable output.
 
 **Start a flow and capture all messages:**
+
 ```bash
 # JSON output (default - optimized for LLMs)
 uv run python -m buttermilk.debug.ws_debug_cli start trans \
@@ -123,6 +133,7 @@ uv run python -m buttermilk.debug.ws_debug_cli --pretty start trans \
 ```
 
 **Send a message to the current session:**
+
 ```bash
 # Send manager response (JSON output)
 uv run python -m buttermilk.debug.ws_debug_cli send "approved"
@@ -133,6 +144,7 @@ uv run python -m buttermilk.debug.ws_debug_cli send "approved" \
 ```
 
 **Wait for and collect messages:**
+
 ```bash
 # Wait 30 seconds for messages containing "conclusion"
 uv run python -m buttermilk.debug.ws_debug_cli wait \
@@ -146,6 +158,7 @@ uv run python -m buttermilk.debug.ws_debug_cli wait \
 ```
 
 **Session management:**
+
 ```bash
 # Show current session info (JSON)
 uv run python -m buttermilk.debug.ws_debug_cli session
@@ -155,6 +168,7 @@ uv run python -m buttermilk.debug.ws_debug_cli clear-session
 ```
 
 **Key Features:**
+
 - **JSON by default**: All output is structured JSON unless `--pretty` is used
 - **Session persistence**: Sessions are automatically saved and reused
 - **Complete message capture**: No truncation in JSON output
@@ -166,6 +180,7 @@ uv run python -m buttermilk.debug.ws_debug_cli clear-session
 The DebugAgent provides "puppet mode" - a continuous WebSocket client that acts as a UI replacement, allowing programmatic control of flows in real-time with full message capture.
 
 **When to use puppet mode:**
+
 - Need continuous connection across multiple operations
 - Building automated testing workflows
 - Require event-driven message handling
@@ -174,12 +189,14 @@ The DebugAgent provides "puppet mode" - a continuous WebSocket client that acts 
 ### Using DebugAgent Puppet Mode
 
 **Step 1: Start Puppet Mode**
+
 ```python
 # In an LLM agent context with access to DebugAgent tools
 await debug_agent.start_puppet_mode(host="localhost", port=8000)
 ```
 
 **Step 2: Start a Flow**
+
 ```python
 # CRITICAL: Use ONLY validated record IDs and criteria combinations
 # Example with confirmed working live data:
@@ -192,6 +209,7 @@ await debug_agent.puppet_start_flow(
 ```
 
 **Step 3: Monitor Messages**
+
 ```python
 # Get recent UI messages
 messages = debug_agent.puppet_get_messages(last_n=5, message_type="ui_message")
@@ -201,12 +219,14 @@ summary = debug_agent.puppet_get_summary()
 ```
 
 **Step 4: Send Responses**
+
 ```python
 # Send manager responses to the flow
 await debug_agent.puppet_send_response("your response to the flow")
 ```
 
 **Step 5: Clean Up**
+
 ```python
 await debug_agent.stop_puppet_mode()
 ```
@@ -237,6 +257,7 @@ print(f"Total messages: {len(result['messages'])}")
 ### SUCCESS CRITERIA: Complete Flow Execution
 
 **✅ VALIDATED EVIDENCE**:
+
 - **ConfigurationBootstrapper**: Creates `/tmp/bm_*.jsonl` structured logs ✓
 - **API Infrastructure**: Health endpoint returns `{"status":"ok","message":"Core routes loaded"}` ✓
 - **Debugging Framework**: Infrastructure commands (`logs`, `list-logs`, `test-connection`) operational ✓
@@ -246,6 +267,7 @@ print(f"Total messages: {len(result['messages'])}")
 - **Infrastructure Initialization**: Vertex AI, cloud services, core routes loaded ✓
 
 **✅ REQUIRED (End-to-End Completion)**:
+
 - Flow runs through ALL agents sequentially ✓
 - fetch agent retrieves real data ✓
 - judge agent processes and scores data ✓
@@ -260,90 +282,110 @@ print(f"Total messages: {len(result['messages'])}")
 
 **✅ ALL COMMANDS AVAILABLE** (Flow commands restored in Issue #274 resolution)
 
-*   **Test Connection (VALIDATED):**
-    ```bash
-    uv run python -m buttermilk.debug.ws_debug_cli test-connection
-    ```
-    **Expected Output**: `Successfully connected to WebSocket at ws://localhost:8000/ws`
+- **Test Connection (VALIDATED):**
 
-*   **Check API Health (VALIDATED):**
-    ```bash
-    curl -s http://localhost:8000/health
-    ```
-    **Expected Output**: `{"status":"ok","message":"Core routes loaded"}` (Issue #233 evidence)
+  ```bash
+  uv run python -m buttermilk.debug.ws_debug_cli test-connection
+  ```
 
-*   **List Recent Log Files (VALIDATED):**
-    ```bash
-    uv run python -m buttermilk.debug.ws_debug_cli list-logs -n 5
-    ```
-    **Expected Evidence**: Shows the 5 most recent Buttermilk log files with timestamps and sizes
+  **Expected Output**: `Successfully connected to WebSocket at ws://localhost:8000/ws`
 
-*   **View Recent Logs (VALIDATED):**
-    ```bash
-    # Default: reads from most recent bm_*.jsonl file
-    uv run python -m buttermilk.debug.ws_debug_cli logs -n 20
+- **Check API Health (VALIDATED):**
 
-    # Specify a specific log file
-    uv run python -m buttermilk.debug.ws_debug_cli logs -n 20 --file /tmp/bm_project_session-id.jsonl
+  ```bash
+  curl -s http://localhost:8000/health
+  ```
 
-    # Filter by log level
-    uv run python -m buttermilk.debug.ws_debug_cli logs -n 50 -l ERROR
-    ```
-    **Expected Evidence**: Shows structured JSONL log entries from `/tmp/bm_*.jsonl` files
+  **Expected Output**: `{"status":"ok","message":"Core routes loaded"}` (Issue #233 evidence)
 
-    **Note**: Log files use the prefix `bm_` and follow the format: `bm_{project_name}_{execution_context_id}.jsonl`
+- **List Recent Log Files (VALIDATED):**
 
-*   **Monitor Structured Logs Directly (VALIDATED):**
-    ```bash
-    tail -f /tmp/bm_*.jsonl
-    ```
-    **Expected Evidence**: Real-time JSONL log entries with proper timestamps
+  ```bash
+  uv run python -m buttermilk.debug.ws_debug_cli list-logs -n 5
+  ```
+
+  **Expected Evidence**: Shows the 5 most recent Buttermilk log files with timestamps and sizes
+
+- **View Recent Logs (VALIDATED):**
+
+  ```bash
+  # Default: reads from most recent bm_*.jsonl file
+  uv run python -m buttermilk.debug.ws_debug_cli logs -n 20
+
+  # Specify a specific log file
+  uv run python -m buttermilk.debug.ws_debug_cli logs -n 20 --file /tmp/bm_project_session-id.jsonl
+
+  # Filter by log level
+  uv run python -m buttermilk.debug.ws_debug_cli logs -n 50 -l ERROR
+  ```
+
+  **Expected Evidence**: Shows structured JSONL log entries from `/tmp/bm_*.jsonl` files
+
+  **Note**: Log files use the prefix `bm_` and follow the format: `bm_{project_name}_{execution_context_id}.jsonl`
+
+- **Monitor Structured Logs Directly (VALIDATED):**
+
+  ```bash
+  tail -f /tmp/bm_*.jsonl
+  ```
+
+  **Expected Evidence**: Real-time JSONL log entries with proper timestamps
 
 **Flow Control Commands** (Restored after Issue #274):
 
-*   **Start Flow (VALIDATED):**
-    ```bash
-    # Start a flow with JSON output (default)
-    uv run python -m buttermilk.debug.ws_debug_cli start trans \
-      --record betoota_snape_trans --criteria tja
+- **Start Flow (VALIDATED):**
 
-    # With human-readable output
-    uv run python -m buttermilk.debug.ws_debug_cli --pretty start trans \
-      --record betoota_snape_trans --criteria tja
-    ```
-    **Expected Output**: Complete JSON object with session_id, messages array, flow completion status
+  ```bash
+  # Start a flow with JSON output (default)
+  uv run python -m buttermilk.debug.ws_debug_cli start trans \
+    --record betoota_snape_trans --criteria tja
 
-*   **Send Message (VALIDATED):**
-    ```bash
-    # Send manager response to current session
-    uv run python -m buttermilk.debug.ws_debug_cli send "approved"
+  # With human-readable output
+  uv run python -m buttermilk.debug.ws_debug_cli --pretty start trans \
+    --record betoota_snape_trans --criteria tja
+  ```
 
-    # Send to specific session
-    uv run python -m buttermilk.debug.ws_debug_cli send "approved" --session abc-123
-    ```
-    **Expected Output**: JSON with session_id and all new messages
+  **Expected Output**: Complete JSON object with session_id, messages array, flow completion status
 
-*   **Wait for Messages (VALIDATED):**
-    ```bash
-    # Wait and collect all messages
-    uv run python -m buttermilk.debug.ws_debug_cli wait --wait 30
+- **Send Message (VALIDATED):**
 
-    # Filter by pattern
-    uv run python -m buttermilk.debug.ws_debug_cli wait --pattern "conclusion" --wait 10
-    ```
-    **Expected Output**: JSON with filtered messages array
+  ```bash
+  # Send manager response to current session
+  uv run python -m buttermilk.debug.ws_debug_cli send "approved"
 
-*   **Session Info (VALIDATED):**
-    ```bash
-    uv run python -m buttermilk.debug.ws_debug_cli session
-    ```
-    **Expected Output**: JSON with session_id, host, port, timestamp
+  # Send to specific session
+  uv run python -m buttermilk.debug.ws_debug_cli send "approved" --session abc-123
+  ```
 
-*   **Clear Session (VALIDATED):**
-    ```bash
-    uv run python -m buttermilk.debug.ws_debug_cli clear-session
-    ```
-    **Expected Output**: JSON with status message
+  **Expected Output**: JSON with session_id and all new messages
+
+- **Wait for Messages (VALIDATED):**
+
+  ```bash
+  # Wait and collect all messages
+  uv run python -m buttermilk.debug.ws_debug_cli wait --wait 30
+
+  # Filter by pattern
+  uv run python -m buttermilk.debug.ws_debug_cli wait --pattern "conclusion" --wait 10
+  ```
+
+  **Expected Output**: JSON with filtered messages array
+
+- **Session Info (VALIDATED):**
+
+  ```bash
+  uv run python -m buttermilk.debug.ws_debug_cli session
+  ```
+
+  **Expected Output**: JSON with session_id, host, port, timestamp
+
+- **Clear Session (VALIDATED):**
+
+  ```bash
+  uv run python -m buttermilk.debug.ws_debug_cli clear-session
+  ```
+
+  **Expected Output**: JSON with status message
 
 **For Advanced Programmatic Control**: Use DebugAgent puppet mode (see section above) or the NonInteractiveDebugClient class.
 
@@ -357,23 +399,23 @@ make kill_api
 
 This ensures no orphaned processes are left running.
 
----
+______________________________________________________________________
 
 ## Troubleshooting Common Issues
 
 ### Log Analysis Tips
 
-**Problem**: Log outputs are too verbose for analysis.
-**Solution**: 
+**Problem**: Log outputs are too verbose for analysis. **Solution**:
+
 - Use level filtering: `uv run python -m buttermilk.debug.ws_debug_cli logs -n 50 -l ERROR`
 - Limit output with `-n` parameter: `logs -n 20` for recent entries
 - Focus on specific timeframes when issues occurred
 - **Follow OUTPUT RULE**: Summarize findings instead of dumping raw logs
 
-
 ### Simplified Debugging Rules
 
 **✅ DO (VALIDATED WORKFLOW):**
+
 - Use `ws_debug_cli list-logs` to see recent log files (✅ Shows 5 most recent `bm_*.jsonl` files)
 - Use `ws_debug_cli logs` for log access (✅ Accesses `/tmp/bm_*.jsonl` files with `bm_` prefix)
 - Use `ws_debug_cli logs --file <path>` to read specific log files (✅ Accepts file parameter)
@@ -386,6 +428,7 @@ This ensures no orphaned processes are left running.
 - Monitor flow execution via message count increases (✅ 0 to 20+ messages confirmed)
 
 **❌ DON'T:**
+
 - Create standalone debugging scripts (use existing validated tools)
 - Ignore structured log evidence from ConfigurationBootstrapper
 - Use CLI commands or puppet mode without valid record IDs and criteria (flows will fail)
@@ -394,6 +437,7 @@ This ensures no orphaned processes are left running.
 ### Output Conciseness Guidelines
 
 When using debugging tools, agents must:
+
 - **Extract key findings** instead of showing full command output
 - **Limit excerpts** to 10-15 lines maximum per tool invocation
 - **Summarize patterns** rather than listing individual log entries

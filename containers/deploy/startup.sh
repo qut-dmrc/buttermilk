@@ -21,10 +21,10 @@ is_mounted() {
 # Function to mount GCS bucket
 mount_gcs_config() {
     echo "Mounting GCS bucket '$GCS_CONFIG_BUCKET' to '$MOUNT_POINT'..."
-    
+
     # Create mount point if it doesn't exist
     mkdir -p "$MOUNT_POINT"
-    
+
     # Mount with gcsfuse
     gcsfuse \
         --implicit-dirs \
@@ -34,9 +34,9 @@ mount_gcs_config() {
         --file-mode=644 \
         --dir-mode=755 \
         "$GCS_CONFIG_BUCKET" "$MOUNT_POINT"
-    
+
     echo "GCS bucket mounted successfully"
-    
+
     # Verify mount has configuration files
     if [ -f "$MOUNT_POINT/config.yaml" ]; then
         echo "Configuration files found in mounted GCS bucket"
@@ -53,7 +53,7 @@ setup_configuration() {
         echo "GCS configuration mode enabled"
         echo "Bucket: $GCS_CONFIG_BUCKET"
         echo "Path: $GCS_CONFIG_PATH"
-        
+
         # Check if already mounted
         if is_mounted "$MOUNT_POINT"; then
             echo "GCS bucket already mounted at $MOUNT_POINT"
@@ -75,13 +75,13 @@ setup_configuration() {
 # Cleanup function for graceful shutdown
 cleanup() {
     echo "Shutting down container..."
-    
+
     # Unmount GCS if mounted
     if [ -n "$GCS_CONFIG_BUCKET" ] && is_mounted "$MOUNT_POINT"; then
         echo "Unmounting GCS bucket..."
         fusermount -u "$MOUNT_POINT" || echo "Warning: Could not unmount GCS bucket"
     fi
-    
+
     echo "Cleanup complete"
 }
 

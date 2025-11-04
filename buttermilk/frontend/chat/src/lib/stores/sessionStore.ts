@@ -6,22 +6,22 @@ import { writable } from 'svelte/store';
 function createSessionStore() {
     // Default empty session ID
     const defaultValue = '';
-    
+
     // Read initial value from localStorage if available
-    const initialValue = browser ? 
-        window.localStorage.getItem('sessionId') || defaultValue : 
+    const initialValue = browser ?
+        window.localStorage.getItem('sessionId') || defaultValue :
         defaultValue;
-    
+
     // Create writable store with the initial value
     const sessionStore = writable<string>(initialValue);
-    
+
     // Subscribe to changes and update localStorage + URL
     if (browser) {
         sessionStore.subscribe(value => {
             if (value) {
                 // Save to localStorage as fallback
                 window.localStorage.setItem('sessionId', value);
-                
+
                 // Update URL if we're on a terminal session page and ID changed
                 const currentPath = window.location.pathname;
                 if (currentPath.startsWith('/terminal/')) {
@@ -36,7 +36,7 @@ function createSessionStore() {
             }
         });
     }
-    
+
     return {
         ...sessionStore,
         // Method to clear the session

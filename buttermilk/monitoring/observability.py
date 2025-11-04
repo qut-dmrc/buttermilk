@@ -22,6 +22,7 @@ from .metrics_collector import MetricsCollector, get_metrics_collector
 
 class HealthStatus(Enum):
     """Basic health status levels."""
+
     HEALTHY = "healthy"
     DEGRADED = "degraded"
     UNHEALTHY = "unhealthy"
@@ -31,6 +32,7 @@ class HealthStatus(Enum):
 @dataclass
 class SystemStatus:
     """Simple system status information."""
+
     overall_status: HealthStatus
     timestamp: datetime
     components: Dict[str, Any]
@@ -40,12 +42,11 @@ class SystemStatus:
 class SimpleHealthMonitor:
     """Simplified health monitoring for basic error detection and flow responsiveness."""
 
-    def __init__(self, metrics_collector: Optional[MetricsCollector] = None,
-                 health_monitor: Optional[HealthMonitor] = None):
+    def __init__(self, metrics_collector: Optional[MetricsCollector] = None, health_monitor: Optional[HealthMonitor] = None):
         """Initialize simplified health monitor."""
         self.metrics_collector = metrics_collector or get_metrics_collector()
         self.health_monitor = health_monitor or HealthMonitor()
-        
+
         # Simple state tracking
         self.last_check: Optional[datetime] = None
         self.fatal_error_detected = False
@@ -68,7 +69,7 @@ class SimpleHealthMonitor:
     def check_flow_responsiveness(self, flow_name: str, timeout_seconds: int = 300) -> bool:
         """
         Check if a flow is responsive within timeout.
-        
+
         Returns True if responsive, False if potentially stuck.
         This is a placeholder for future implementation.
         """
@@ -80,7 +81,7 @@ class SimpleHealthMonitor:
     def check_interactive_flow_ui_timeout(self, session_id: str, timeout_seconds: int = 1800) -> bool:
         """
         Check if interactive flow has been without UI for too long.
-        
+
         Returns True if okay, False if stuck without UI.
         This is a placeholder for future implementation.
         """
@@ -100,21 +101,21 @@ class SimpleHealthMonitor:
     def get_basic_health_status(self) -> SystemStatus:
         """Get basic system health status."""
         self.last_check = datetime.now()
-        
+
         # Check for fatal errors first
         if self.fatal_error_detected:
             return SystemStatus(
                 overall_status=HealthStatus.UNHEALTHY,
                 timestamp=self.last_check,
                 components={"fatal_error": {"detected": True, "message": self.fatal_error_message}},
-                error_message=self.fatal_error_message
+                error_message=self.fatal_error_message,
             )
-        
+
         # Get basic health information
         try:
             health_summary = self.health_monitor.get_health_summary()
             overall_status_str = health_summary.get("overall_status", "unknown")
-            
+
             # Convert to our simplified enum
             if overall_status_str == "healthy":
                 overall_status = HealthStatus.HEALTHY
@@ -124,21 +125,18 @@ class SimpleHealthMonitor:
                 overall_status = HealthStatus.UNHEALTHY
             else:
                 overall_status = HealthStatus.UNKNOWN
-            
+
             return SystemStatus(
-                overall_status=overall_status,
-                timestamp=self.last_check,
-                components=health_summary.get("components", {}),
-                error_message=None
+                overall_status=overall_status, timestamp=self.last_check, components=health_summary.get("components", {}), error_message=None
             )
-            
+
         except Exception as e:
             logger.error("Error getting health status", error=e)
             return SystemStatus(
                 overall_status=HealthStatus.UNKNOWN,
                 timestamp=self.last_check,
                 components={"error": str(e)},
-                error_message=f"Health check failed: {e}"
+                error_message=f"Health check failed: {e}",
             )
 
     async def start_monitoring(self):
@@ -152,20 +150,17 @@ class SimpleHealthMonitor:
         try:
             flow_metrics = self.metrics_collector.get_flow_metrics()
             system_metrics = self.metrics_collector.get_system_metrics()
-            
+
             return {
                 "total_flows": len(flow_metrics),
                 "system_uptime_seconds": (datetime.now() - system_metrics["start_time"]).total_seconds(),
                 "memory_mb": system_metrics.get("total_memory_mb", 0),
                 "active_sessions": system_metrics.get("active_sessions", 0),
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
         except Exception as e:
             logger.error("Error getting metrics summary", error=e)
-            return {
-                "error": str(e),
-                "timestamp": datetime.now().isoformat()
-            }
+            return {"error": str(e), "timestamp": datetime.now().isoformat()}
 
 
 # Global health monitor instance

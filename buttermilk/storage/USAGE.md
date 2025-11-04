@@ -19,7 +19,7 @@ storage = bm.get_bigquery_storage("my_dataset")
 # Custom configuration via BM factory
 from buttermilk.storage import StorageConfig
 config = StorageConfig(
-    type="bigquery", 
+    type="bigquery",
     dataset_name="my_dataset",
     randomize=False,
     batch_size=500
@@ -43,16 +43,19 @@ storage = BigQueryStorage(config, bm=None)  # Missing BM integration
 ## When to Use Each Pattern
 
 ### Use `bm.get_bigquery_storage(dataset_name)` when:
+
 - Simple BigQuery operations with default settings
 - Dataset name is the only required parameter
 - You want the simplest API
 
 ### Use `bm.get_storage(config)` when:
+
 - Custom configuration is needed
 - Advanced parameters like filtering, batch sizes, etc.
 - Cross-backend compatibility (files, BigQuery, etc.)
 
 ### Use direct `StorageConfig` instantiation when:
+
 - Creating configuration objects to pass to BM factory methods
 - Testing or library development
 - Need to validate configuration without creating storage instances
@@ -60,14 +63,14 @@ storage = BigQueryStorage(config, bm=None)  # Missing BM integration
 ## Benefits of BM Factory Pattern
 
 1. **Integrated Cloud Clients**: Automatic access to BigQuery, GCS clients via BM
-2. **Default Configuration**: Inherits project-level storage defaults
-3. **Resource Management**: Proper client lifecycle and connection pooling
-4. **Configuration Merging**: Combines user config with BM defaults
-5. **Session Context**: Access to run IDs, logging, tracing integration
+1. **Default Configuration**: Inherits project-level storage defaults
+1. **Resource Management**: Proper client lifecycle and connection pooling
+1. **Configuration Merging**: Combines user config with BM defaults
+1. **Session Context**: Access to run IDs, logging, tracing integration
 
 ## Agent Independence Principle
 
-- **Agent configuration is STRICTLY independent from flow configuration**. 
+- **Agent configuration is STRICTLY independent from flow configuration**.
 - Required flow configuration should be passed in through composable configuration at run time.
 - This separation allows agents to be reused across different flows.
 
@@ -85,7 +88,7 @@ for record in storage:
 
 # Read from file with filtering
 config = StorageConfig(
-    type="file", 
+    type="file",
     path="data.jsonl",
     limit=100
 )

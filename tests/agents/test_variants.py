@@ -114,14 +114,14 @@ def test_only_sequential_variants(base_variant_config):
         {"base_param": "base_value", "criteria": "c2", "temp": 0.5},
         {"base_param": "base_value", "criteria": "c2", "temp": 0.8},
     ]
-    
+
     actual_parameters = []
     for agent_class, config in configs:
         assert agent_class is MockAgent
         assert isinstance(config, AgentConfig)
         assert isinstance(config.agent_id, str)  # Auto-generated shortuuid
         actual_parameters.append(config.parameters)
-    
+
     # Convert to set of tuples for order-independent comparison
     assert set(tuple(sorted(d.items())) for d in actual_parameters) == set(tuple(sorted(d.items())) for d in expected_combinations)
 
@@ -144,7 +144,7 @@ def test_both_parallel_and_sequential_variants(base_variant_config):
         {"base_param": "base_value", "model": "m2", "temp": 0.1},
         {"base_param": "base_value", "model": "m2", "temp": 0.9},
     ]
-    
+
     actual_parameters = []
     for agent_class, config in configs:
         assert agent_class is MockAgent
@@ -154,7 +154,7 @@ def test_both_parallel_and_sequential_variants(base_variant_config):
         assert config.parameters["base_param"] == "base_value"
         assert isinstance(config.agent_id, str)  # shortuuid
         actual_parameters.append(config.parameters)
-    
+
     # Convert to set of tuples for order-independent comparison
     assert set(tuple(sorted(d.items())) for d in actual_parameters) == set(tuple(sorted(d.items())) for d in expected_combinations)
 
@@ -249,7 +249,7 @@ def test_omegaconf_conversion(base_variant_config):
     # Check that parameters contain both parallel and sequential variant values
     for agent_class, config in configs:
         assert "model" in config.parameters  # From parallel variants
-        assert "temp" in config.parameters   # From sequential tasks
+        assert "temp" in config.parameters  # From sequential tasks
         assert config.parameters["model"] in ["m1", "m2"]
         assert config.parameters["temp"] in [0.1, 0.9]
 
@@ -299,7 +299,8 @@ def run_request_params() -> RunRequest:
 
 
 def test_step_config_get_configs_structure_and_ids(
-    run_request_params: RunRequest, base_variant_config,
+    run_request_params: RunRequest,
+    base_variant_config,
 ):
     """Verify that .get_configs returns tuples (AgentClass, AgentConfig)
     and that IDs are unique across all returned configs
@@ -322,24 +323,22 @@ def test_step_config_get_configs_structure_and_ids(
 
         # Check types
         assert isinstance(agent_cls, type), "First element should be a class type"
-        assert isinstance(agent_config, (AgentConfig, MockAgentConfig)), \
-            "Second element should be an AgentConfig instance (or mock)"
+        assert isinstance(agent_config, (AgentConfig, MockAgentConfig)), "Second element should be an AgentConfig instance (or mock)"
 
         # Check attributes exist
         assert hasattr(agent_config, "agent_id"), "AgentConfig should have an 'agent_id' attribute"
         # AgentConfig no longer has unique_identifier field
-        assert not hasattr(agent_config, "unique_identifier"), \
-            "AgentConfig should not have 'unique_identifier' attribute (removed)"
+        assert not hasattr(agent_config, "unique_identifier"), "AgentConfig should not have 'unique_identifier' attribute (removed)"
 
         # Check attribute types
         assert isinstance(agent_config.agent_id, str), "AgentConfig.agent_id should be a string"
         # Check agent_id instead of unique_identifier
-        assert isinstance(agent_config.agent_id, str), \
-            "AgentConfig.agent_id should be a string"
+        assert isinstance(agent_config.agent_id, str), "AgentConfig.agent_id should be a string"
 
         # Collect IDs for uniqueness check across configs
         all_config_ids.append(agent_config.agent_id)
 
     # Check the core requirement: IDs must be unique across all returned configs
-    assert len(all_config_ids) == len(set(all_config_ids)), \
-        f"AgentConfig.agent_id values are not unique across returned configs. Found IDs: {all_config_ids}"
+    assert len(all_config_ids) == len(
+        set(all_config_ids)
+    ), f"AgentConfig.agent_id values are not unique across returned configs. Found IDs: {all_config_ids}"

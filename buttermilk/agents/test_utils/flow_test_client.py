@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 class MessageType(str, Enum):
     """Known message types in the WebSocket protocol."""
+
     RUN_FLOW = "run_flow"
     MANAGER_RESPONSE = "manager_response"
     UI_MESSAGE = "ui_message"
@@ -39,6 +40,7 @@ class MessageType(str, Enum):
 @dataclass
 class CollectedMessage:
     """A message collected during flow execution."""
+
     type: str
     data: dict
     timestamp: datetime
@@ -102,12 +104,7 @@ class MessageCollector:
 
     def add_message(self, msg_type: str, data: dict, raw: str):
         """Add a message to the collection."""
-        message = CollectedMessage(
-            type=msg_type,
-            data=data,
-            timestamp=datetime.now(),
-            raw=raw
-        )
+        message = CollectedMessage(type=msg_type, data=data, timestamp=datetime.now(), raw=raw)
 
         self.all_messages.append(message)
 
@@ -141,10 +138,7 @@ class FlowEventWaiter:
         self.collector = collector
 
     async def wait_for_ui_message(
-        self,
-        pattern: Optional[str | Pattern] = None,
-        timeout: float = 30.0,
-        poll_interval: float = 0.1
+        self, pattern: Optional[str | Pattern] = None, timeout: float = 30.0, poll_interval: float = 0.1
     ) -> CollectedMessage:
         """Wait for a UI message matching the pattern."""
         start_time = time.time()
@@ -169,11 +163,7 @@ class FlowEventWaiter:
             f"{[msg.content[:50] + '...' for msg in self.collector.ui_messages[-3:]]}"
         )
 
-    async def wait_for_agent_announcement(
-        self,
-        agent_role: str,
-        timeout: float = 30.0
-    ) -> CollectedMessage:
+    async def wait_for_agent_announcement(self, agent_role: str, timeout: float = 30.0) -> CollectedMessage:
         """Wait for a specific agent to announce itself."""
         start_time = time.time()
 
@@ -187,16 +177,9 @@ class FlowEventWaiter:
 
             await asyncio.sleep(0.1)
 
-        raise TimeoutError(
-            f"Timed out waiting for {agent_role} announcement. "
-            f"Announced agents: {self.collector.get_agents_announced()}"
-        )
+        raise TimeoutError(f"Timed out waiting for {agent_role} announcement. " f"Announced agents: {self.collector.get_agents_announced()}")
 
-    async def wait_for_agents(
-        self,
-        expected_agents: list[str],
-        timeout: float = 60.0
-    ) -> dict[str, CollectedMessage]:
+    async def wait_for_agents(self, expected_agents: list[str], timeout: float = 60.0) -> dict[str, CollectedMessage]:
         """Wait for multiple agents to announce themselves."""
         results = {}
         for agent in expected_agents:
@@ -204,10 +187,7 @@ class FlowEventWaiter:
             results[agent] = msg
         return results
 
-    async def wait_for_completion(
-        self,
-        timeout: float = 300.0
-    ) -> list[CollectedMessage]:
+    async def wait_for_completion(self, timeout: float = 300.0) -> list[CollectedMessage]:
         """Wait for flow completion."""
         start_time = time.time()
 
@@ -228,21 +208,13 @@ class FlowEventWaiter:
 
             await asyncio.sleep(0.1)
 
-        raise TimeoutError(
-            f"Timed out waiting for flow completion after {timeout}s. "
-            f"Received {len(self.collector.all_messages)} messages total."
-        )
+        raise TimeoutError(f"Timed out waiting for flow completion after {timeout}s. " f"Received {len(self.collector.all_messages)} messages total.")
 
 
 class FlowTestClient:
     """WebSocket client for testing Buttermilk flows."""
 
-    def __init__(
-        self,
-        base_url: str = "http://localhost:8000",
-        ws_url: str = "ws://localhost:8000/ws",
-        direct_ws_url: Optional[str] = None
-    ):
+    def __init__(self, base_url: str = "http://localhost:8000", ws_url: str = "ws://localhost:8000/ws", direct_ws_url: Optional[str] = None):
         self.base_url = base_url
         self.ws_url = ws_url
         self.direct_ws_url = direct_ws_url  # For direct WebSocket connection without session
@@ -281,9 +253,7 @@ class FlowTestClient:
                 except aiohttp.ClientConnectionError as e:
                     ws_retry_count += 1
                     if ws_retry_count >= max_ws_retries:
-                        raise ConnectionRefusedError(
-                            f"Could not connect to WebSocket after {max_ws_retries} retries"
-                        ) from e
+                        raise ConnectionRefusedError(f"Could not connect to WebSocket after {max_ws_retries} retries") from e
                     logger.info(f"WebSocket connection refused, retry {ws_retry_count}/{max_ws_retries}...")
                     await asyncio.sleep(0.5)
         else:
@@ -304,9 +274,7 @@ class FlowTestClient:
                 except aiohttp.ClientConnectionError as e:
                     session_retry_count += 1
                     if session_retry_count >= max_session_retries:
-                        raise ConnectionRefusedError(
-                            f"Could not get session ID after {max_session_retries} retries"
-                        ) from e
+                        raise ConnectionRefusedError(f"Could not get session ID after {max_session_retries} retries") from e
                     logger.info(f"Session endpoint connection refused, retry {session_retry_count}/{max_session_retries}...")
                     await asyncio.sleep(0.5)
 
@@ -321,9 +289,7 @@ class FlowTestClient:
                 except aiohttp.ClientConnectionError as e:
                     ws_retry_count += 1
                     if ws_retry_count >= max_ws_retries:
-                        raise ConnectionRefusedError(
-                            f"Could not connect to WebSocket after {max_ws_retries} retries"
-                        ) from e
+                        raise ConnectionRefusedError(f"Could not connect to WebSocket after {max_ws_retries} retries") from e
                     logger.info(f"WebSocket connection refused, retry {ws_retry_count}/{max_ws_retries}...")
                     await asyncio.sleep(0.5)
 
@@ -376,12 +342,8 @@ class FlowTestClient:
 
     async def start_flow(self, flow_name: str, prompt: str = "", record_id: str = "", criteria: str = ""):
         """Start a flow."""
-        message = {
-            "type": MessageType.RUN_FLOW,
-            "flow": flow_name,
-            "prompt": prompt
-        }
-        
+        message = {"type": MessageType.RUN_FLOW, "flow": flow_name, "prompt": prompt}
+
         # Add optional parameters if provided
         if record_id:
             message["record_id"] = record_id
@@ -393,10 +355,7 @@ class FlowTestClient:
 
     async def send_manager_response(self, content: str):
         """Send a manager response message."""
-        message = {
-            "type": MessageType.MANAGER_RESPONSE,
-            "content": content
-        }
+        message = {"type": MessageType.MANAGER_RESPONSE, "content": content}
 
         logger.info(f"Sending response: {content}")
         await self.ws.send_json(message)
@@ -411,11 +370,7 @@ class FlowTestClient:
         msg = await self.waiter.wait_for_ui_message(timeout=timeout)
         return msg.content
 
-    async def wait_for_flow_event(
-        self,
-        event_content: str,
-        timeout: float = 30.0
-    ) -> CollectedMessage:
+    async def wait_for_flow_event(self, event_content: str, timeout: float = 30.0) -> CollectedMessage:
         """Wait for a specific flow event."""
         start_time = time.time()
 
@@ -428,20 +383,13 @@ class FlowTestClient:
 
         # Timeout - provide helpful error
         received_events = [msg.content for msg in self.collector.flow_events]
-        raise TimeoutError(
-            f"Timed out waiting for flow event '{event_content}'. "
-            f"Received events: {received_events}"
-        )
+        raise TimeoutError(f"Timed out waiting for flow event '{event_content}'. " f"Received events: {received_events}")
 
     async def wait_for_orchestrator_ready(self, timeout: float = 30.0) -> CollectedMessage:
         """Wait for orchestrator to be ready."""
         return await self.wait_for_flow_event("orchestrator_ready", timeout)
 
-    async def wait_for_agent_results(
-        self,
-        expected_agents: list[str],
-        timeout: float = 120.0
-    ) -> list[CollectedMessage]:
+    async def wait_for_agent_results(self, expected_agents: list[str], timeout: float = 120.0) -> list[CollectedMessage]:
         """Wait for specific agents to provide results."""
         # First wait for agents to announce
         await self.waiter.wait_for_agents(expected_agents, timeout / 2)
@@ -462,10 +410,7 @@ class FlowTestClient:
 
         # Timeout
         actual_agents = list(set(msg.agent_role for msg in self.collector.agent_traces if msg.agent_role))
-        raise TimeoutError(
-            f"Timed out waiting for results from {expected_agents}. "
-            f"Got results from: {actual_agents}"
-        )
+        raise TimeoutError(f"Timed out waiting for results from {expected_agents}. " f"Got results from: {actual_agents}")
 
     async def wait_for_completion(self, timeout: float = 300.0) -> list[CollectedMessage]:
         """Wait for flow completion and return all messages."""
@@ -480,5 +425,5 @@ class FlowTestClient:
             "agent_traces": len(self.collector.agent_traces),
             "flow_events": len(self.collector.flow_events),
             "errors": len(self.collector.errors),
-            "agents_active": self.collector.get_agents_announced()
+            "agents_active": self.collector.get_agents_announced(),
         }

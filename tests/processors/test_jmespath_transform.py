@@ -2,8 +2,8 @@
 
 import pytest
 from pydantic import ValidationError
+
 from buttermilk._core.types import BaseRecord
-from buttermilk._core.contract import ExecutionTrace
 from buttermilk.processors.jmespath_transform import JMESPathTransform
 
 
@@ -14,15 +14,10 @@ class TestJMESPathTransform:
     async def test_simple_field_extraction(self):
         """Test extraction of a single field from record."""
         # Create a record with nested output data
-        record = BaseRecord(
-            record_id="test_1",
-            metadata={"outputs": {"result": "test_value"}}
-        )
+        record = BaseRecord(record_id="test_1", metadata={"outputs": {"result": "test_value"}})
 
         # Define mapping to extract result field
-        processor = JMESPathTransform(
-            mappings={"answer": "metadata.outputs.result"}
-        )
+        processor = JMESPathTransform(mappings={"answer": "metadata.outputs.result"})
 
         # Process the record
         results = []
@@ -46,18 +41,12 @@ class TestJMESPathTransform:
         # Create an ExecutionTrace-like record
         record = BaseRecord(
             record_id="trace_1",
-            metadata={
-                "agent_info": {"agent_id": "agent_123"},
-                "outputs": {"conclusion": "test conclusion"},
-                "call_id": "call_456"
-            }
+            metadata={"agent_info": {"agent_id": "agent_123"}, "outputs": {"conclusion": "test conclusion"}, "call_id": "call_456"},
         )
 
         # Define mapping to construct nested object
         processor = JMESPathTransform(
-            mappings={
-                "answers": "{agent_id: metadata.agent_info.agent_id, result: metadata.outputs, answer_id: metadata.call_id}"
-            }
+            mappings={"answers": "{agent_id: metadata.agent_info.agent_id, result: metadata.outputs, answer_id: metadata.call_id}"}
         )
 
         # Process the record
@@ -79,15 +68,10 @@ class TestJMESPathTransform:
     async def test_missing_field_handling(self):
         """Test graceful handling of missing fields."""
         # Create a record without the expected field
-        record = BaseRecord(
-            record_id="test_2",
-            metadata={"other_field": "value"}
-        )
+        record = BaseRecord(record_id="test_2", metadata={"other_field": "value"})
 
         # Define mapping to non-existent field
-        processor = JMESPathTransform(
-            mappings={"value": "metadata.nonexistent.field"}
-        )
+        processor = JMESPathTransform(mappings={"value": "metadata.nonexistent.field"})
 
         # Process the record
         results = []
@@ -107,23 +91,14 @@ class TestJMESPathTransform:
     async def test_multiple_mappings(self):
         """Test applying multiple transformations."""
         # Create a record with multiple fields
-        record = BaseRecord(
-            record_id="test_3",
-            metadata={
-                "data": {
-                    "name": "test_name",
-                    "value": 42,
-                    "nested": {"key": "nested_value"}
-                }
-            }
-        )
+        record = BaseRecord(record_id="test_3", metadata={"data": {"name": "test_name", "value": 42, "nested": {"key": "nested_value"}}})
 
         # Define multiple mappings
         processor = JMESPathTransform(
             mappings={
                 "extracted_name": "metadata.data.name",
                 "extracted_value": "metadata.data.value",
-                "extracted_nested": "metadata.data.nested.key"
+                "extracted_nested": "metadata.data.nested.key",
             }
         )
 
@@ -150,16 +125,11 @@ class TestJMESPathTransform:
         """Test that original fields remain intact."""
         # Create a record with existing fields
         record = BaseRecord(
-            record_id="test_4",
-            dataset_name="test_dataset",
-            split_type="train",
-            metadata={"source": "test", "data": {"value": "extracted"}}
+            record_id="test_4", dataset_name="test_dataset", split_type="train", metadata={"source": "test", "data": {"value": "extracted"}}
         )
 
         # Define mapping to add new field
-        processor = JMESPathTransform(
-            mappings={"new_field": "metadata.data.value"}
-        )
+        processor = JMESPathTransform(mappings={"new_field": "metadata.data.value"})
 
         # Process the record
         results = []

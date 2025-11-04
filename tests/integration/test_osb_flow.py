@@ -27,42 +27,39 @@ logger = logging.getLogger(__name__)
 
 class FlowTestServer:
     """Manages the test API server lifecycle."""
-    
+
     def __init__(self, config_name: str = "test/test_osb_api"):
         self.config_name = config_name
         self.process = None
         self.log_file = None
-        
+
     async def start(self):
         """Start the API server."""
         # Create log file
         log_dir = Path("/tmp/buttermilk_test/logs")
         log_dir.mkdir(parents=True, exist_ok=True)
         self.log_file = log_dir / f"api_server_{int(time.time())}.log"
-        
+
         # Start server
-        cmd = [
-            "uv", "run", "python", "-m", "buttermilk.runner.cli",
-            f"--config-name={self.config_name}"
-        ]
-        
+        cmd = ["uv", "run", "python", "-m", "buttermilk.runner.cli", f"--config-name={self.config_name}"]
+
         logger.info("Starting test server", command=" ".join(cmd))
-        
+
         with open(self.log_file, "w") as f:
             self.process = subprocess.Popen(
                 cmd,
                 stdout=f,
                 stderr=subprocess.STDOUT,
-                cwd=Path(__file__).parent.parent.parent  # Project root
+                cwd=Path(__file__).parent.parent.parent,  # Project root
             )
-        
+
         # Wait for server to be ready
         await self._wait_for_ready()
-    
+
     async def _wait_for_ready(self, timeout: float = 30.0):
         """Wait for server to be ready."""
         import aiohttp
-        
+
         start_time = time.time()
         while time.time() - start_time < timeout:
             try:
@@ -73,18 +70,18 @@ class FlowTestServer:
                             return
             except Exception:
                 pass
-            
+
             # Check if process died
             if self.process.poll() is not None:
                 with open(self.log_file, "r") as f:
                     logs = f.read()
                 logger.error("Server process died", logs=logs[-1000:])
                 raise RuntimeError(f"Server process died. Logs:\n{logs[-1000:]}")
-            
+
             await asyncio.sleep(0.5)
-        
+
         raise TimeoutError("Server failed to start within timeout")
-    
+
     async def stop(self):
         """Stop the API server."""
         if self.process:
@@ -95,7 +92,7 @@ class FlowTestServer:
             except subprocess.TimeoutExpired:
                 self.process.kill()
                 self.process.wait()
-            
+
             # Print last few lines of log on failure
             if self.process.returncode != 0 and self.log_file and self.log_file.exists():
                 with open(self.log_file, "r") as f:
@@ -116,47 +113,47 @@ async def test_server():
 @pytest.mark.anyio
 async def test_osb_hate_speech_query(test_server):
     """Test OSB flow with a hate speech policy query."""
-    
+
     async with FlowTestClient.create() as client:
         # Start the OSB flow
         await client.start_flow("osb", "What is Meta's hate speech policy?")
-        
+
         # Wait for the host's greeting and initial prompt
         # The host typically asks for confirmation to proceed
         logger.info("Waiting for initial prompt...")
         prompt = await client.wait_for_prompt(timeout=60)
         logger.info("Got prompt", prompt=prompt)
-        
+
         # Confirm to proceed
         await client.send_manager_response("Yes, please proceed")
-        
+
         # Wait for agents to work
         # OSB flow typically uses researcher and policy_analyst agents
         logger.info("Waiting for agent results...")
         results = await client.wait_for_agent_results(
             expected_agents=["researcher", "policy_analyst"],
-            timeout=180  # 3 minutes for agents to work
+            timeout=180,  # 3 minutes for agents to work
         )
-        
+
         # Verify we got meaningful results
         assert len(results) > 0, "No agent results received"
-        
+
         # Check that at least one agent mentioned hate speech
         found_hate_speech = False
         for result in results:
             if "hate speech" in result.content.lower():
                 found_hate_speech = True
                 break
-        
+
         assert found_hate_speech, "No agent mentioned hate speech in their results"
-        
+
         # Wait for flow completion
         logger.info("Waiting for flow completion...")
         all_messages = await client.wait_for_completion(timeout=300)
-        
+
         # Verify we got a reasonable number of messages
         assert len(all_messages) > 10, f"Too few messages: {len(all_messages)}"
-        
+
         # Log summary
         logger.info("Flow completed successfully", num_messages=len(all_messages))
         logger.info("Agents involved", agents=client.collector.get_agents_announced())
@@ -168,52 +165,38 @@ async def test_osb_hate_speech_query(test_server):
 @pytest.mark.anyio
 async def test_osb_flow_with_followup(test_server):
     """Test OSB flow with follow-up questions."""
-    
+
     async with FlowTestClient.create() as client:
         # Start the flow
         await client.start_flow("osb", "Tell me about content moderation")
-        
+
         # Handle initial confirmation
         await client.wait_for_prompt(timeout=60)
         await client.send_manager_response("yes")
-        
+
         # Wait for initial results
-        await client.wait_for_agent_results(
-            expected_agents=["researcher"],
-            timeout=120
-        )
-        
+        await client.wait_for_agent_results(expected_agents=["researcher"], timeout=120)
+
         # The host might ask if we want more details or have follow-up questions
         # This tests multi-turn conversation
         try:
-            followup_prompt = await client.wait_for_ui_message(
-                pattern="follow-up|more|another|continue",
-                timeout=30
-            )
-            
+            followup_prompt = await client.wait_for_ui_message(pattern="follow-up|more|another|continue", timeout=30)
+
             if followup_prompt:
                 # Send a follow-up question
-                await client.send_manager_response(
-                    "Yes, can you explain how AI is used in content moderation?"
-                )
-                
+                await client.send_manager_response("Yes, can you explain how AI is used in content moderation?")
+
                 # Wait for additional agent work
-                await client.wait_for_agent_results(
-                    expected_agents=["researcher", "policy_analyst"],
-                    timeout=120
-                )
+                await client.wait_for_agent_results(expected_agents=["researcher", "policy_analyst"], timeout=120)
         except TimeoutError:
             # Not all flows support follow-up questions
             logger.info("No follow-up prompt received, continuing...")
-        
+
         # Complete the flow
         await client.wait_for_completion(timeout=300)
-        
+
         # Verify the conversation included moderation topics
-        moderation_mentioned = any(
-            "moderation" in msg.content.lower()
-            for msg in client.collector.all_messages
-        )
+        moderation_mentioned = any("moderation" in msg.content.lower() for msg in client.collector.all_messages)
         assert moderation_mentioned, "Content moderation not discussed"
 
 
@@ -221,18 +204,18 @@ async def test_osb_flow_with_followup(test_server):
 @pytest.mark.anyio
 async def test_osb_error_handling(test_server):
     """Test OSB flow error handling with invalid input."""
-    
+
     async with FlowTestClient.create() as client:
         # Start flow with empty prompt
         await client.start_flow("osb", "")
-        
+
         # The flow should still handle this gracefully
         await client.wait_for_prompt(timeout=60)
-        
+
         # Send a very long response to test limits
         long_response = "x" * 10000
         await client.send_manager_response(long_response)
-        
+
         # Flow should continue or error gracefully
         # We don't expect specific behavior, just no crashes
         try:

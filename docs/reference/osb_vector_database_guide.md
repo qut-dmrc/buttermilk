@@ -1,6 +1,6 @@
 # OSB Vector Database Guide
 
-The Oversight Board (OSB)  dataset contains case summaries and decisions related to online safety, content moderation, and platform responsibility. This guide provides comprehensive documentation for working with the Oversight Board dataset using Buttermilk's vector database infrastructure.
+The Oversight Board (OSB) dataset contains case summaries and decisions related to online safety, content moderation, and platform responsibility. This guide provides comprehensive documentation for working with the Oversight Board dataset using Buttermilk's vector database infrastructure.
 
 ## Quick Start
 
@@ -67,7 +67,7 @@ osb:
   steps:
     - name: search
       _target_: LLMAgent
-      parameters: 
+      parameters:
         template: osb
         formatting: json
       variants:

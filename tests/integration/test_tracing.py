@@ -57,49 +57,49 @@ async def test_weave_tracing_initialised_and_creates_calls(real_bm: BM):
 @pytest.mark.anyio
 async def test_unified_tracing_config_integration(real_bm: BM):
     """Verify that unified tracing configuration works with existing BM infrastructure.
-    
+
     This test validates that the recent changes to unified tracing configuration
     under infrastructure.tracing work correctly with the existing BM.get_weave_client()
     delegation pattern.
     """
     if weave is None:
         pytest.skip("Weave library is not installed in this environment.")
-    
+
     try:
         client = await real_bm.get_weave_client()
     except Exception as e:
         pytest.skip(f"Weave client is not available or not configured: {e}")
-    
+
     if client is None:
         pytest.skip("Weave client is not configured (get_weave_client returned None).")
-    
+
     # Verify that the client has the expected methods (fixes NoneType error)
     assert hasattr(client, "create_call"), "Weave client should have create_call method"
     assert hasattr(client, "finish_call"), "Weave client should have finish_call method"
     assert hasattr(client, "get_call"), "Weave client should have get_call method"
-    
+
     # Test that we can use the client for tracing operations
     def test_unified_config_op(value: str) -> str:
         return f"processed: {value}"
-    
+
     op = weave.op(test_unified_config_op, call_display_name="test-unified-config")
-    
+
     # Create a call to test the unified configuration
     call = client.create_call(
         op,
         inputs={"value": "unified-config-test"},
         display_name="test-unified-tracing-config",
-        attributes={"config_type": "unified", "test": "integration"}
+        attributes={"config_type": "unified", "test": "integration"},
     )
-    
+
     # Verify call was created successfully
     assert call is not None, "Call should be created successfully with unified config"
     assert getattr(call, "id", None), "Call should have an ID"
     assert getattr(call, "trace_id", None), "Call should have a trace_id"
-    
+
     # Finish the call
     client.finish_call(call, output={"result": "processed: unified-config-test"}, op=op)
-    
+
     # Verify we can retrieve the call
     retrieved_call = client.get_call(call.id)
     assert retrieved_call is not None, "Should be able to retrieve the completed call"

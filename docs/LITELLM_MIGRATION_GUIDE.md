@@ -8,12 +8,7 @@ The LiteLLM integration provides a drop-in replacement for Autogen's ChatComplet
 
 ## Benefits
 
-✅ **Provider flexibility**: Support for 100+ providers out of the box
-✅ **Simplified configuration**: Uniform interface across all providers
-✅ **Better cost tracking**: Already using LiteLLM for pricing
-✅ **Gradual migration**: Test per-model without breaking existing flows
-✅ **Zero breaking changes**: Existing API stays fully intact
-✅ **Reduced custom code**: Less provider-specific credential handling
+✅ **Provider flexibility**: Support for 100+ providers out of the box ✅ **Simplified configuration**: Uniform interface across all providers ✅ **Better cost tracking**: Already using LiteLLM for pricing ✅ **Gradual migration**: Test per-model without breaking existing flows ✅ **Zero breaking changes**: Existing API stays fully intact ✅ **Reduced custom code**: Less provider-specific credential handling
 
 ## Quick Start
 
@@ -180,16 +175,16 @@ result = await client.create(
 
 Both `AutoGenWrapper` and `LiteLLMWrapper` support:
 
-| Feature | AutoGenWrapper | LiteLLMWrapper | Notes |
-|---------|----------------|----------------|-------|
-| Basic completions | ✅ | ✅ | Full parity |
-| Structured output (Pydantic) | ✅ | ✅ | Full parity |
-| Tool/function calling | ✅ | ✅ | Full parity |
-| Retry logic | ✅ | ✅ | Exponential backoff |
-| Pricing calculation | ✅ | ✅ | Uses LiteLLM |
-| Weave tracing | ✅ | ✅ | `@weave.op` decorators |
-| OpenTelemetry spans | ✅ | ✅ | Full observability |
-| ExecutionTrace | ✅ | ✅ | Identical metadata |
+| Feature                      | AutoGenWrapper | LiteLLMWrapper | Notes                  |
+| ---------------------------- | -------------- | -------------- | ---------------------- |
+| Basic completions            | ✅             | ✅             | Full parity            |
+| Structured output (Pydantic) | ✅             | ✅             | Full parity            |
+| Tool/function calling        | ✅             | ✅             | Full parity            |
+| Retry logic                  | ✅             | ✅             | Exponential backoff    |
+| Pricing calculation          | ✅             | ✅             | Uses LiteLLM           |
+| Weave tracing                | ✅             | ✅             | `@weave.op` decorators |
+| OpenTelemetry spans          | ✅             | ✅             | Full observability     |
+| ExecutionTrace               | ✅             | ✅             | Identical metadata     |
 
 ## Migration Strategy
 
@@ -198,27 +193,27 @@ Both `AutoGenWrapper` and `LiteLLMWrapper` support:
 Start by enabling LiteLLM for a single, low-risk model:
 
 1. Choose a model that is not mission-critical (e.g., `gemini25flash`)
-2. Add `"use_litellm": true` to its configuration
-3. Run your existing flows and monitor for any issues
-4. Verify that ExecutionTrace metadata looks correct
-5. Check that pricing calculations are accurate
+1. Add `"use_litellm": true` to its configuration
+1. Run your existing flows and monitor for any issues
+1. Verify that ExecutionTrace metadata looks correct
+1. Check that pricing calculations are accurate
 
 ### Phase 2: Gradual Rollout
 
 Once confident with one model:
 
 1. Enable LiteLLM for 2-3 more models
-2. Monitor production usage and observability
-3. Gradually expand to more models
-4. Document any provider-specific quirks
+1. Monitor production usage and observability
+1. Gradually expand to more models
+1. Document any provider-specific quirks
 
 ### Phase 3: Complete Migration (Optional)
 
 Eventually migrate all models:
 
 1. Enable LiteLLM for all remaining models
-2. Verify all flows work correctly
-3. Consider deprecating AutoGenWrapper (optional)
+1. Verify all flows work correctly
+1. Consider deprecating AutoGenWrapper (optional)
 
 ## Troubleshooting
 
@@ -239,8 +234,8 @@ uv sync
 If you encounter authentication errors:
 
 1. **OpenAI/Azure**: Verify `api_key` is set correctly
-2. **Vertex AI**: Ensure GCP credentials are available via `bm.gcp_credentials`
-3. **Anthropic**: Check that `ANTHROPIC_API_KEY` environment variable is set
+1. **Vertex AI**: Ensure GCP credentials are available via `bm.gcp_credentials`
+1. **Anthropic**: Check that `ANTHROPIC_API_KEY` environment variable is set
 
 ### Model Name Resolution
 
@@ -253,7 +248,7 @@ LiteLLM uses specific model name formats. The `litellm_model` field in config al
     "configs": {
       "model": "gpt-4"
     },
-    "litellm_model": "azure/gpt-4",  // Override for pricing
+    "litellm_model": "azure/gpt-4",  // Override model name for both API calls and pricing
     "use_litellm": true
   }
 }
@@ -264,8 +259,8 @@ LiteLLM uses specific model name formats. The `litellm_model` field in config al
 Some models don't support native structured output. LiteLLMWrapper will:
 
 1. Try `response_format` if `model_info.structured_output` is true
-2. Fall back to JSON mode parsing if not supported
-3. Return error in `result.error_message` if parsing fails
+1. Fall back to JSON mode parsing if not supported
+1. Return error in `result.error_message` if parsing fails
 
 ## Observability
 
@@ -383,6 +378,7 @@ results = await asyncio.gather(*tasks)
 The migration maintains 100% backward compatibility:
 
 ❌ **No changes required to**:
+
 - Existing agent code
 - LLMCore implementation
 - ExecutionTrace structure
@@ -391,6 +387,7 @@ The migration maintains 100% backward compatibility:
 - Observability integrations
 
 ✅ **Only change needed**:
+
 - Add `"use_litellm": true` to model configuration
 
 ## Related Documentation
@@ -404,5 +401,5 @@ The migration maintains 100% backward compatibility:
 For issues or questions:
 
 1. Check [Issue #289](https://github.com/qut-dmrc/buttermilk/issues/289) for latest updates
-2. Review LiteLLM documentation for provider-specific details
-3. Open a new issue if you encounter problems during migration
+1. Review LiteLLM documentation for provider-specific details
+1. Open a new issue if you encounter problems during migration

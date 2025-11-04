@@ -19,10 +19,10 @@
   } from '$lib/stores/apiStore';
   import { runFlowAction } from '$lib/stores/terminalActionsStore';
   import { onMount } from 'svelte';
-  
+
   $: isTerminalPage = $page.route.id === '/terminal' || $page.route.id === '/terminal/[sessionId]';
   $: isScorePage = $page.route.id?.startsWith('/score');
-  
+
   // Track if a matching session is available for the current parameters
   let hasMatchingSession = false;
 
@@ -47,18 +47,18 @@
   let records: any[] = [];
   let loading = false;
   let error: string | null = null;
-  
+
   // Set the flow and fetch records with scores for score pages
   async function loadRecordsForFlow(flow: string, dataset?: string) {
     if (flow && $flowChoices.data.includes(flow)) {
       selectedFlow.set(flow);
-      
+
       if (isScorePage) {
         // For score pages, fetch records with scores
         try {
           loading = true;
           error = null;
-          
+
           let url;
           if (dataset) {
             url = `/api/flows/${encodeURIComponent(flow)}/datasets/${encodeURIComponent(dataset)}/records?include_scores=true`;
@@ -78,12 +78,12 @@
               throw new Error('Failed to fetch flow info');
             }
           }
-          
+
           const response = await fetch(url);
           if (!response.ok) {
             throw new Error(`Failed to fetch records: ${response.statusText}`);
           }
-          
+
           const data = await response.json();
           records = data;
         } catch (err) {
@@ -95,7 +95,7 @@
       }
     }
   }
-  
+
   // Initialize app data (but only if not on a session page where it's already handled)
   onMount(() => {
     // Don't initialize if on a session page - the session page handles initialization
@@ -103,9 +103,9 @@
       initializeApp();
     }
   });
-  
+
   // For score pages: Don't auto-select flow, let user choose
-  
+
   let initialDatasetSet = false;
 
   // Auto-select first dataset when datasets become available
@@ -114,14 +114,14 @@
     selectedDataset.set($datasetsStore.data[0]);
     initialDatasetSet = true;
   }
-  
+
   // For terminal pages: use the recordsStore
   $: if (isTerminalPage) {
     console.debug('Terminal page - full recordsStore:', $recordsStore);
     console.debug('Terminal page - recordsStore.data:', $recordsStore.data);
     console.debug('Terminal page - recordsStore.data type:', typeof $recordsStore.data);
     console.debug('Terminal page - recordsStore.data isArray:', Array.isArray($recordsStore.data));
-    
+
     if ($recordsStore.data && Array.isArray($recordsStore.data)) {
       records = $recordsStore.data;
       console.debug('Terminal page - local records assigned:', records);
@@ -136,13 +136,13 @@
       console.debug('Terminal page - no valid records data, clearing records');
     }
   }
-  
+
   // Handle flow change
   function handleFlowChange(event: Event) {
     const target = event.target as HTMLSelectElement;
     const newFlow = target.value;
     selectedFlow.set(newFlow);
-    
+
     if (isScorePage) {
       loadRecordsForFlow(newFlow);
     } else if (isTerminalPage && !$isDemoMode) {
@@ -151,14 +151,14 @@
       selectedRecord.set('');
     }
   }
-  
+
   // Handle dataset change
   function handleDatasetChange(event: Event) {
     const target = event.target as HTMLSelectElement;
     const newDataset = target.value;
     console.log('Dataset changed to:', newDataset);
     selectedDataset.set(newDataset);
-    
+
     if (isScorePage && $selectedFlow) {
       loadRecordsForFlow($selectedFlow, newDataset);
     } else if (isTerminalPage && !$isDemoMode) {
@@ -168,7 +168,7 @@
       // refetchRecords() is now handled by the store subscriber
     }
   }
-  
+
   function runFlow() {
     flowRunning.set(true);
     $runFlowAction && $runFlowAction();
@@ -185,7 +185,7 @@
       });
 
       const matchingSessionId = await findMatchingSession($selectedFlow, $selectedDataset, $selectedRecord, $selectedCriteria);
-      
+
       if (matchingSessionId) {
         console.log(`Demo reload: Found session ${matchingSessionId}, navigating...`);
         // Navigate to the correct session using SvelteKit
@@ -336,7 +336,7 @@
 		<div class="admin-panel">
 			<div class="admin-content">
 				<!-- Configuration Reload -->
-				<div class="admin-section">					
+				<div class="admin-section">
 					{#if $configReloadStore.loading}
 						<div class="terminal-loading">Reloading configuration...</div>
 					{:else if $configReloadStore.error}
@@ -344,7 +344,7 @@
 					{:else if $configReloadStore.lastResult}
 						<div class="reload-result">
 							<div class="status-item">
-								<strong>Last Reload:</strong> 
+								<strong>Last Reload:</strong>
 								<span class:reload-success={$configReloadStore.lastResult.success}
 										class:reload-failure={!$configReloadStore.lastResult.success}>
 									{$configReloadStore.lastResult.success ? 'SUCCESS' : 'FAILED'}
@@ -360,9 +360,9 @@
 							{/if}
 						</div>
 					{/if}
-					
-					<button 
-						class="btn admin-button reload-button" 
+
+					<button
+						class="btn admin-button reload-button"
 						onclick={handleConfigReload}
 						disabled={$configReloadStore.loading}
 					>
@@ -511,7 +511,7 @@
 	.terminal-selector,
 	.score-sidebar {
 		padding: 1rem;
-		
+
 		min-height: 80vh;
 	}
 
@@ -544,7 +544,7 @@
 		background-color: rgba(0, 0, 0, 0.5);
 		border: 1px solid rgba(255, 255, 255, 0.3);
 		color: #fff;
-		
+
 		font-size: 0.9rem;
 	}
 
@@ -565,7 +565,7 @@
 		background-color: rgba(0, 255, 0, 0.1);
 		border: 1px solid #00ff00;
 		color: #00ff00;
-		
+
 		font-weight: bold;
 		text-transform: uppercase;
 		width: 100%;

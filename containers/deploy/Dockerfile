@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-ARG APP_PATH="/src/buttermilk" 
+ARG APP_PATH="/src/buttermilk"
 ARG VENV_PATH="${APP_PATH}/.venv"
 
 ################################
@@ -23,7 +23,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       curl less wget gnupg apt-transport-https ca-certificates ssh git lsb-release \
     && echo "deb https://packages.cloud.google.com/apt gcsfuse-$(lsb_release -c -s) main" | tee /etc/apt/sources.list.d/gcsfuse.list \
     && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - \
-    && apt-get update && apt-get install -y gcsfuse 
+    && apt-get update && apt-get install -y gcsfuse
 
 ##### INSTALL NODE.JS AND NPM #######
 RUN curl -fsSL https://deb.nodesource.com/setup_current.x | bash - && \
@@ -46,7 +46,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy only requirements to leverage layer caching
 COPY ./containers/deploy/requirements.txt /tmp/requirements.txt
 
-# Exclude editable -e . 
+# Exclude editable -e .
 RUN sed -E '/^[[:space:]]*-e[[:space:]]+\.[[:space:]]*$/d' /tmp/requirements.txt > /tmp/requirements.txt
 
 # Prefetch/build wheels to speed up final install
@@ -74,7 +74,7 @@ COPY . ${APP_PATH}
 # Copy wheelhouse
 COPY --link --from=builder-base /wheels /wheels
 
-# Exclude editable -e . 
+# Exclude editable -e .
 RUN sed -E '/^[[:space:]]*-e[[:space:]]+\.[[:space:]]*$/d' /tmp/requirements.txt > /tmp/requirements.txt
 
 # Create venv and install; prefer wheels, allow network fallback

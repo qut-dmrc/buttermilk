@@ -16,7 +16,7 @@
 		initializeApp
 	} from '$lib/stores/apiStore';
 	import { runFlowAction } from '$lib/stores/terminalActionsStore';
-	
+
 	$: isTerminalPage = $page.route.id === '/terminal' || $page.route.id === '/terminal/[sessionId]';
 
 	import { flowRunning } from '$lib/stores/apiStore';

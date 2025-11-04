@@ -4,6 +4,7 @@ These tests demonstrate how to use standalone tracing for batch processes
 and scripts running outside of orchestrator contexts. They ensure
 the examples in our documentation remain accurate.
 """
+
 import asyncio
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -31,7 +32,7 @@ class TestStandaloneTraceExamples:
         async def get_mock_client():
             return mock_client
 
-        with patch('buttermilk._core.standalone_trace.bm') as mock_bm:
+        with patch("buttermilk._core.standalone_trace.bm") as mock_bm:
             mock_bm.get_weave_client = AsyncMock(return_value=mock_client)
             mock_bm.weave = Mock()
             mock_bm.weave.finish_call = Mock()
@@ -194,6 +195,7 @@ class TestStandaloneTraceEdgeCases:
         mock_client = Mock()
         # Return different call IDs for nested traces
         call_counter = [0]
+
         def create_call_side_effect(*args, **kwargs):
             call_counter[0] += 1
             call = Mock()
@@ -207,7 +209,7 @@ class TestStandaloneTraceEdgeCases:
         async def get_mock_client():
             return mock_client
 
-        with patch('buttermilk._core.standalone_trace.bm') as mock_bm:
+        with patch("buttermilk._core.standalone_trace.bm") as mock_bm:
             mock_bm.get_weave_client = AsyncMock(return_value=mock_client)
             mock_bm.weave = Mock()
             mock_bm.weave.finish_call = Mock()

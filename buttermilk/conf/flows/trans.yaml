@@ -5,36 +5,32 @@
 defaults:
   - _self_
   # Agents are defined separately and reused across flows
-  - /agents@agents: 
-    - fetch
-    - judge
-    - synth 
-    - differences
+  - /agents@agents:
+      - fetch
+      - judge
+      - synth
+      - differences
   # Observer agents
-  - /agents@observers: 
-    - spy
-    - owl
-    - scorer
-    - host/sequence_host
+  - /agents@observers:
+      - spy
+      - owl
+      - scorer
+      - host/sequence_host
   # Data source configuration
   - /storage@storage.tja: tja
   # Trace storage configuration
   - /storage@storage.traces: traces
-
 # Core flow configuration
 orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
 name: "trans"
 description: "Journalism quality assessment for trans issues reporting"
-
 parameters:
   criteria:
     - tja
     - glaad
     - trans_simplified
     - apc
-
 storage: {}
-
 # These will be populated by the defaults
 agents: {}
 observers: {}

@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 /**
  * Playwright Configuration for Buttermilk Terminal Interface Testing
- * 
+ *
  * Comprehensive E2E testing configuration supporting:
  * - Multiple browser engines (Chromium, Firefox, WebKit)
  * - Mobile device simulation
@@ -14,25 +14,25 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   // Test directory
   testDir: '.',
-  
+
   // Run tests in files matching this pattern
   testMatch: '**/*.spec.ts',
-  
+
   // Timeout for each test
   timeout: 60000,
-  
+
   // Global setup and teardown
   expect: {
     // Timeout for expect() assertions
     timeout: 10000,
   },
-  
+
   // Test execution configuration
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 1,
   workers: process.env.CI ? 1 : undefined,
-  
+
   // Reporting configuration
   reporter: [
     ['html', { outputFolder: 'playwright-report' }],
@@ -40,22 +40,22 @@ export default defineConfig({
     ['junit', { outputFile: 'junit-results.xml' }],
     ['list']
   ],
-  
+
   // Global test settings
   use: {
     // Base URL for the frontend application
     baseURL: process.env.FRONTEND_URL || 'http://localhost:5173',
-    
+
     // Browser context options
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
-    
+
     // Network settings
     extraHTTPHeaders: {
       'Accept': 'application/json',
     },
-    
+
     // Ignore HTTPS errors in development
     ignoreHTTPSErrors: true,
   },
@@ -65,7 +65,7 @@ export default defineConfig({
     // Desktop Browsers
     {
       name: 'chromium',
-      use: { 
+      use: {
         ...devices['Desktop Chrome'],
         // Additional Chrome-specific settings
         launchOptions: {
@@ -73,10 +73,10 @@ export default defineConfig({
         },
       },
     },
-    
+
     {
       name: 'firefox',
-      use: { 
+      use: {
         ...devices['Desktop Firefox'],
         // Firefox-specific settings
         launchOptions: {
@@ -86,10 +86,10 @@ export default defineConfig({
         },
       },
     },
-    
+
     {
       name: 'webkit',
-      use: { 
+      use: {
         ...devices['Desktop Safari'],
         // WebKit-specific settings
       },
@@ -98,14 +98,14 @@ export default defineConfig({
     // Mobile Browsers
     {
       name: 'Mobile Chrome',
-      use: { 
+      use: {
         ...devices['Pixel 5'],
       },
     },
-    
+
     {
       name: 'Mobile Safari',
-      use: { 
+      use: {
         ...devices['iPhone 12'],
       },
     },
@@ -145,7 +145,7 @@ export default defineConfig({
       url: 'http://localhost:5173',
       cwd: '../../buttermilk/frontend/chat',
       // reuseExistingServer: !process.env.CI,
-      reuseExistingServer: true, 
+      reuseExistingServer: true,
       timeout: 120000,
       env: {
         NODE_ENV: 'test',
@@ -168,7 +168,7 @@ export default defineConfig({
 
   // Test output directories
   outputDir: 'test-results/',
-  
+
   // Global test setup
   globalSetup: require.resolve('./global-setup.ts'),
   globalTeardown: require.resolve('./global-teardown.ts'),

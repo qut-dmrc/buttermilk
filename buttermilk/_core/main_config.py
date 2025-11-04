@@ -14,7 +14,6 @@ from buttermilk._core.bm_init import SessionInfo
 from buttermilk._core.cloud_config import CloudProvider, LoggerConfig
 from buttermilk._core.run_config import RunConfig
 from buttermilk._core.storage_config import BaseStorageConfig
-from buttermilk import logger
 
 
 class TracingProviderConfig(BaseModel):

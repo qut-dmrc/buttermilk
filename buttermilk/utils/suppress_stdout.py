@@ -9,7 +9,6 @@ import os
 import sys
 import warnings
 from contextlib import contextmanager
-from typing import TextIO
 
 
 def redirect_stdout_to_stderr() -> None:
@@ -30,7 +29,8 @@ def redirect_stdout_to_stderr() -> None:
     sys.stdout = sys.stderr
 
     # Also redirect warnings to stderr (they go to stdout by default)
-    warnings.simplefilter('default')  # Reset to default
+    warnings.simplefilter("default")  # Reset to default
+
     # Override the warning handler to use stderr
     def warning_on_stderr(message, category, filename, lineno, file=None, line=None):
         """Custom warning handler that always writes to stderr."""
@@ -55,7 +55,7 @@ def suppress_stdout_completely() -> None:
         >>> print("This will be silently discarded")
     """
     # Open /dev/null for writing
-    devnull = open(os.devnull, 'w')
+    devnull = open(os.devnull, "w")
 
     # Redirect stdout to /dev/null
     sys.stdout = devnull
@@ -96,7 +96,7 @@ def stdout_suppressed():
         >>> print("This prints normally")
     """
     old_stdout = sys.stdout
-    devnull = open(os.devnull, 'w')
+    devnull = open(os.devnull, "w")
     try:
         sys.stdout = devnull
         yield
@@ -128,14 +128,14 @@ def configure_for_mcp() -> None:
 
     # Set environment variables to suppress common third-party noise
     # Suppress TensorFlow warnings (if used)
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+    os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
     # Suppress tokenizers parallelism warning
-    os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
     # Suppress asyncio debug output
-    os.environ['PYTHONASYNCIODEBUG'] = '0'
+    os.environ["PYTHONASYNCIODEBUG"] = "0"
 
     # Configure Python warnings
-    warnings.filterwarnings('ignore', category=DeprecationWarning)
-    warnings.filterwarnings('ignore', category=PendingDeprecationWarning)
+    warnings.filterwarnings("ignore", category=DeprecationWarning)
+    warnings.filterwarnings("ignore", category=PendingDeprecationWarning)

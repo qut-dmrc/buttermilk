@@ -4,10 +4,7 @@ Tests the resolve_config_dir() function that determines where to find
 configuration files based on the provided config_dir argument.
 """
 
-import os
 from pathlib import Path
-
-import pytest
 
 from buttermilk._core.config_bootstrap import resolve_config_dir
 

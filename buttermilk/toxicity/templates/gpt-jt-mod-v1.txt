@@ -18,4 +18,4 @@ Input: Something tells me that you're sitting in the wrong section of the Stormf
 Output: needs caution
 
 Input: {content}
-Output: 
+Output:

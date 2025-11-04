@@ -1,6 +1,5 @@
 """Test RAG Zotero agent with actual LLM calls and structured outputs."""
 
-
 import pytest
 from autogen_core.tools import FunctionTool
 from pydantic import BaseModel
@@ -57,7 +56,7 @@ async def test_rag_zotero_with_structured_output(model_name, real_bm):
             ),
         },
     )
-    
+
     # Create input
     agent_input = AgentInput(
         inputs={
@@ -83,6 +82,7 @@ async def test_rag_zotero_with_structured_output(model_name, real_bm):
         elif isinstance(result.outputs, str):
             # Some models might return JSON string
             import json
+
             try:
                 data = json.loads(result.outputs)
                 research_result = ZoteroResearchResult(**data)

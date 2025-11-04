@@ -1,7 +1,7 @@
 """File storage implementation for unified storage operations."""
 
 import json
-from typing import TYPE_CHECKING, Iterator, Any
+from typing import TYPE_CHECKING, Any, Iterator
 
 from cloudpathlib import AnyPath  # For handling local and cloud paths
 
@@ -13,19 +13,18 @@ from buttermilk.utils.utils import scrub_serializable
 from .base import Storage
 
 if TYPE_CHECKING:
-
     from .._core.storage_config import StorageConfig
 
 
 class FileStorage(Storage):
     """Unified file storage supporting both read and write operations.
-    
+
     Supports local files and cloud storage paths (GCS, S3) for JSON/JSONL formats.
     """
 
     def __init__(self, config: "StorageConfig"):
         """Initialize file storage.
-        
+
         Args:
             config: Storage configuration with file path
             bm: Buttermilk instance (optional for file operations)
@@ -127,7 +126,7 @@ class FileStorage(Storage):
                         logger.error(f"Could not serialize record at index {idx}: {e2}. Skipping.")
                         continue
 
-            if getattr(self.config, 'append', False) and self.exists():
+            if getattr(self.config, "append", False) and self.exists():
                 # Append mode
                 if self.path.suffix == ".jsonl":
                     # JSONL format - append new records directly
@@ -173,7 +172,7 @@ class FileStorage(Storage):
 
     def count(self) -> int:
         """Count total records in file.
-        
+
         Returns:
             Number of records in the file
         """
@@ -182,7 +181,7 @@ class FileStorage(Storage):
 
     def exists(self) -> bool:
         """Check if the file exists.
-        
+
         Returns:
             True if file exists, False otherwise
         """
@@ -222,7 +221,7 @@ class FileStorage(Storage):
             index: Record index for error reporting
 
         Returns:
-            BaseRecord object 
+            BaseRecord object
         """
         try:
             # Apply column mapping if configured
@@ -287,8 +286,9 @@ class FileStorage(Storage):
                 # But preserve unmapped fields and target fields
 
                 # Get all direct mapping source fields (not nested metadata)
-                direct_source_fields = [old_key for new_key, old_key in self.config.columns.items()
-                                      if new_key != "metadata" and isinstance(old_key, str)]
+                direct_source_fields = [
+                    old_key for new_key, old_key in self.config.columns.items() if new_key != "metadata" and isinstance(old_key, str)
+                ]
 
                 # Get all metadata source fields
                 metadata_source_fields = []
@@ -344,9 +344,16 @@ class FileStorage(Storage):
             # This ensures all non-standard fields go into metadata dict
             # instead of being stored as direct attributes
             known_record_fields = {
-                "record_id", "dataset_name", "split_type", "content",
-                "metadata", "error", "ground_truth", "response",
-                "record_hash", "record_class"
+                "record_id",
+                "dataset_name",
+                "split_type",
+                "content",
+                "metadata",
+                "error",
+                "ground_truth",
+                "response",
+                "record_hash",
+                "record_class",
             }
 
             # Collect fields that should go into metadata
@@ -373,7 +380,7 @@ class FileStorage(Storage):
                     split_type=str(data.get("split_type", "default")),
                     metadata=data.get("metadata", {}),
                     content=str(data),  # Store full data as content for debugging
-                    error=data.get("error", [])
+                    error=data.get("error", []),
                 )
 
         except Exception as e:
@@ -383,18 +390,10 @@ class FileStorage(Storage):
                 safe_data = str(data)[:1000]  # Limit length to avoid huge error messages
                 safe_metadata = {"parse_error": str(e)}
                 # Don't include original_data as it might not be serializable
-                return Record(
-                    record_id=f"error_{index}",
-                    content=safe_data,
-                    metadata=safe_metadata
-                )
+                return Record(record_id=f"error_{index}", content=safe_data, metadata=safe_metadata)
             except Exception as e2:
                 # Ultimate fallback
-                return Record(
-                    record_id=f"error_{index}",
-                    content=f"Failed to parse record: {str(e2)}",
-                    metadata={"critical_error": True}
-                )
+                return Record(record_id=f"error_{index}", content=f"Failed to parse record: {str(e2)}", metadata={"critical_error": True})
 
     @staticmethod
     def _record_to_dict(record: BaseRecord | dict) -> dict:

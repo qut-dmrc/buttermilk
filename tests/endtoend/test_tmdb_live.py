@@ -6,13 +6,13 @@ They are marked as integration tests and will be skipped if no API key is availa
 Usage:
     # Run all unit tests (no API key needed)
     pytest tests/tools/test_tmdb.py
-    
+
     # Run integration tests (API key required)
     TMDB_API_KEY=your_key pytest tests/integration/test_tmdb_live.py
-    
+
     # Run only integration tests
     pytest -m integration
-    
+
     # Skip integration tests
     pytest -m "not integration"
 """
@@ -28,10 +28,7 @@ from buttermilk.tools.catalog_test import THEMOVIEDB_AVAILABLE, Observation, Tit
 pytestmark = [
     pytest.mark.integration,
     pytest.mark.endtoend,
-    pytest.mark.skipif(
-        not THEMOVIEDB_AVAILABLE,
-        reason="themoviedb package not installed - install with: pip install themoviedb.py"
-    )
+    pytest.mark.skipif(not THEMOVIEDB_AVAILABLE, reason="themoviedb package not installed - install with: pip install themoviedb.py"),
 ]
 
 
@@ -80,7 +77,7 @@ class TestTMDBLiveAPI:
             title="Batman",
             year=1989,
             type=TitleType.MOVIE,
-            metadata={"known_movie": True}
+            metadata={"known_movie": True},
         )
 
         # Test availability checking for multiple regions
@@ -120,7 +117,7 @@ class TestTMDBLiveAPI:
             title="Batman Azteca: Choque de Imperios",
             year=2025,
             type=TitleType.MOVIE,
-            metadata={"known_movie": True}
+            metadata={"known_movie": True},
         )
 
         # Test availability (this is a very new/upcoming movie)
@@ -145,20 +142,10 @@ class TestTMDBLiveAPI:
     async def test_live_availability_multiple_batman_movies(self, tmdb_tool_live: TMDBTool) -> None:
         """Test availability checking for multiple Batman movies to compare results."""
         # Create Title objects for both Batman movies
-        batman_1989 = Title(
-            record_id="268",
-            title="Batman",
-            year=1989,
-            type=TitleType.MOVIE,
-            metadata={"era": "classic"}
-        )
+        batman_1989 = Title(record_id="268", title="Batman", year=1989, type=TitleType.MOVIE, metadata={"era": "classic"})
 
         batman_2025 = Title(
-            record_id="987400",
-            title="Batman Azteca: Choque de Imperios",
-            year=2025,
-            type=TitleType.MOVIE,
-            metadata={"era": "modern"}
+            record_id="987400", title="Batman Azteca: Choque de Imperios", year=2025, type=TitleType.MOVIE, metadata={"era": "modern"}
         )
 
         # Get availability for both movies in US region
@@ -214,9 +201,7 @@ class TestTMDBLiveAPI:
     @pytest.mark.anyio
     async def test_live_search_nonexistent_movie(self, tmdb_tool_live: TMDBTool) -> None:
         """Test searching for a movie that definitely doesn't exist."""
-        title = await tmdb_tool_live.search_movie(
-            title="Absolutely Nonexistent Movie Title 9999"
-        )
+        title = await tmdb_tool_live.search_movie(title="Absolutely Nonexistent Movie Title 9999")
 
         # Should return None when movie not found
         assert title is None
@@ -229,7 +214,7 @@ class TestTMDBLiveAPI:
 
         # Search for the movie
         title = await tmdb_tool_live.search_movie(title=movie_title, year=year)
-        
+
         # Verify movie was found
         assert title is not None
         assert title.title is not None
@@ -239,11 +224,11 @@ class TestTMDBLiveAPI:
 
         # Should return observations for both regions
         assert isinstance(results, list)
-        
+
         # Separate results by region
         us_results = [r for r in results if r.region == "US"]
         gb_results = [r for r in results if r.region == "GB"]
-        
+
         # Should have at least one observation per region (even if null)
         assert len(us_results) >= 1
         assert len(gb_results) >= 1
@@ -263,14 +248,14 @@ class TestTMDBLiveAPI:
         # Both should find movies
         assert recent_title is not None
         assert year_filtered_title is not None
-        
+
         # Both should have Batman in the title
         assert "Batman" in recent_title.title
         assert "Batman" in year_filtered_title.title
-        
+
         # The 1989 result should have that year
         assert year_filtered_title.year == 1989
-        
+
         # The two results might be different movies
         # (Recent could be The Batman 2022, while 1989 is the Tim Burton film)
 
@@ -280,7 +265,7 @@ class TestTMDBLiveAPI:
         # First search for the movie
         title = await tmdb_tool_live.search_movie(title="The Matrix")
         assert title is not None
-        
+
         # Try to get availability for invalid region
         results = await tmdb_tool_live.get_availability(title, regions=["INVALID"])
 
@@ -299,13 +284,13 @@ class TestTMDBLiveAPI:
         """Test that live API responses match our expected data structure."""
         # First search for movie
         title = await tmdb_tool_live.search_movie(title="Inception", year=2010)
-        
+
         assert isinstance(title, Title)
         assert title.record_id is not None
         assert title.title is not None
         assert title.year == 2010
         assert isinstance(title.metadata, dict)
-        
+
         # Now get availability
         results = await tmdb_tool_live.get_availability(title, regions=["US"])
 
@@ -314,7 +299,7 @@ class TestTMDBLiveAPI:
 
         for result in results:
             assert isinstance(result, Observation)
-            
+
             # Required fields
             assert result.record_id is not None
             assert result.call_id is not None
@@ -350,7 +335,7 @@ class TestTMDBLiveAPI:
         ]
 
         titles = []
-        
+
         # Make multiple search requests in sequence
         for movie_title, year in movies:
             title = await tmdb_tool_live.search_movie(title=movie_title, year=year)
@@ -359,11 +344,11 @@ class TestTMDBLiveAPI:
 
         # All searches should succeed (no rate limit errors)
         assert len(titles) == len(movies)
-        
+
         # Now get availability for all movies
         for title in titles:
             results = await tmdb_tool_live.get_availability(title, regions=["US"])
-            
+
             # Should get results without rate limiting errors
             assert isinstance(results, list)
             for result in results:
@@ -477,27 +462,27 @@ class TestTMDBLiveAPI:
 
 @pytest.mark.anyio
 async def test_fetch_single_page_date_range_validation(tmdb_tool_live: TMDBTool) -> None:
-        """Test that fetch_single_page respects date range parameters."""
-        from datetime import date
+    """Test that fetch_single_page respects date range parameters."""
+    from datetime import date
 
-        from buttermilk.tools.catalog_test import DatePeriod
+    from buttermilk.tools.catalog_test import DatePeriod
 
-        # Fetch from a single day in 1969 for minimal data but likely results
-        period = DatePeriod(date(1969, 3, 20), date(1969, 3, 20))  # Single day in March 1969
-        titles, has_more = await tmdb_tool_live.fetch_single_page(period, page=1)
+    # Fetch from a single day in 1969 for minimal data but likely results
+    period = DatePeriod(date(1969, 3, 20), date(1969, 3, 20))  # Single day in March 1969
+    titles, has_more = await tmdb_tool_live.fetch_single_page(period, page=1)
 
-        # Verify that returned movies are from the correct date range
-        assert isinstance(titles, list), "Should return a list"
+    # Verify that returned movies are from the correct date range
+    assert isinstance(titles, list), "Should return a list"
 
-        # Check a few movies have reasonable dates (around 1969) if any exist
-        for title in titles[:5]:  # Check first 5 movies
-            if title.year:
-                assert 1960 <= title.year <= 1975, f"Movie year {title.year} should be near 1969"
+    # Check a few movies have reasonable dates (around 1969) if any exist
+    for title in titles[:5]:  # Check first 5 movies
+        if title.year:
+            assert 1960 <= title.year <= 1975, f"Movie year {title.year} should be near 1969"
 
-            # Verify movie has basic required fields
-            assert title.record_id
-            assert title.title
-            assert title.type == TitleType.MOVIE
+        # Verify movie has basic required fields
+        assert title.record_id
+        assert title.title
+        assert title.type == TitleType.MOVIE
 
 
 @pytest.mark.skipif(not os.getenv("TMDB_API_KEY"), reason="No TMDB API key provided")
@@ -508,7 +493,7 @@ class TestTMDBConfigurationLive:
         """Test that tool initializes correctly with valid API key."""
         api_key = os.getenv("TMDB_API_KEY")
         tool = TMDBTool(api_key=api_key)
-        
+
         assert tool.api_key == api_key
         assert tool.base_url == "https://api.themoviedb.org/3"
         assert tool.language == "en-US"
@@ -517,12 +502,8 @@ class TestTMDBConfigurationLive:
     def test_live_tool_custom_configuration(self) -> None:
         """Test tool with custom configuration parameters."""
         api_key = os.getenv("TMDB_API_KEY")
-        tool = TMDBTool(
-            api_key=api_key,
-            language="fr-FR",
-            region="FR"
-        )
-        
+        tool = TMDBTool(api_key=api_key, language="fr-FR", region="FR")
+
         assert tool.language == "fr-FR"
         assert tool.region == "FR"
 
@@ -530,7 +511,7 @@ class TestTMDBConfigurationLive:
         """Test that tool picks up API key from environment."""
         # This test relies on TMDB_API_KEY being set
         tool = TMDBTool()  # Should use env var
-        
+
         assert tool.api_key == os.getenv("TMDB_API_KEY")
 
 

@@ -17,11 +17,7 @@ def test_citator_initialization():
 
 def test_citator_initialization_with_defaults():
     """Test that Citator can be initialized with minimal parameters."""
-    citator = Citator(
-        parameters={
-            "model": "gemini-1.5-flash-latest"
-        }
-    )
+    citator = Citator(parameters={"model": "gemini-1.5-flash-latest"})
 
     # Check that agent_id is generated (not empty)
     assert citator.agent_id
@@ -33,11 +29,7 @@ def test_citator_initialization_with_defaults():
 
 def test_formatted_citation_model():
     """Test FormattedCitation model creation."""
-    citation = FormattedCitation(
-        title="Example Article",
-        citation="Smith, J. (2023). Example Article. Journal of Examples, 1(1), 1-10.",
-        style="APA"
-    )
+    citation = FormattedCitation(title="Example Article", citation="Smith, J. (2023). Example Article. Journal of Examples, 1(1), 1-10.", style="APA")
 
     assert citation.title == "Example Article"
     assert citation.citation == "Smith, J. (2023). Example Article. Journal of Examples, 1(1), 1-10."
@@ -45,12 +37,7 @@ def test_formatted_citation_model():
     assert citation.error is None
 
     # Test with error
-    citation_with_error = FormattedCitation(
-        title="Unknown",
-        citation="",
-        style="Unknown",
-        error="Failed to generate citation"
-    )
+    citation_with_error = FormattedCitation(title="Unknown", citation="", style="Unknown", error="Failed to generate citation")
     assert citation_with_error.error == "Failed to generate citation"
 
 
@@ -75,5 +62,5 @@ def test_citator_process_signature():
     # Check return type is AsyncGenerator
     return_annotation = sig.return_annotation
     # The annotation is AsyncGenerator[Record, None]
-    assert hasattr(return_annotation, '__origin__')
+    assert hasattr(return_annotation, "__origin__")
     assert return_annotation.__origin__ is AsyncGenerator

@@ -11,22 +11,22 @@ interface Props {
 // Helper to check if we should filter out a message
 const shouldFilterMessage = (message: Message): boolean => {
   const msg = message as any;
-  
+
   // Filter out TaskProcessingComplete messages that appear as system_update
-  if (msg.type === 'system_update' && 
-      (msg.status === 'complete' || 
+  if (msg.type === 'system_update' &&
+      (msg.status === 'complete' ||
        msg.task_status === 'complete' ||
        msg.message?.includes('TaskProcessingComplete'))) {
     return true;
   }
-  
+
   return false;
 };
 
 const MessageList = ({ messages }: Props) => {
   // Filter out messages we don't want to display
   const filteredMessages = messages.filter(msg => !shouldFilterMessage(msg));
-  
+
   // Show a welcome message if no messages yet
   if (filteredMessages.length === 0) {
     return (

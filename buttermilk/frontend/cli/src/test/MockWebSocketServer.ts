@@ -26,11 +26,11 @@ export class MockWebSocketServer {
   async start(): Promise<void> {
     return new Promise((resolve) => {
       this.wss = new WebSocketServer({ port: this.options.port });
-      
+
       this.wss.on('connection', (ws, req) => {
         console.log(`[MockServer] Client connected to ${req.url}`);
         this.clients.add(ws);
-        
+
         // Send initial connection message
         this.sendMessage(ws, {
           type: 'system_message',
@@ -42,7 +42,7 @@ export class MockWebSocketServer {
             const message = JSON.parse(data.toString()) as Message;
             this.logMessage('received', message);
             console.log('[MockServer] Received:', message);
-            
+
             // Process message and generate responses
             await this.handleMessage(ws, message);
           } catch (error) {
@@ -75,15 +75,15 @@ export class MockWebSocketServer {
       case 'run_flow':
         await this.handleRunFlow(ws, message);
         break;
-      
+
       case 'ui_message':
         await this.handleUIMessage(ws, message);
         break;
-      
+
       case 'manager_response':
         await this.handleManagerResponse(ws, message);
         break;
-      
+
       default:
         // Check for auto-responses
         const responses = this.autoResponses.get(message.type);
@@ -98,7 +98,7 @@ export class MockWebSocketServer {
   private async handleRunFlow(ws: WebSocket, message: Message): Promise<void> {
     const flowName = message.payload?.flow;
     const prompt = message.payload?.prompt;
-    
+
     // Send flow start acknowledgment
     await this.sendMessage(ws, {
       type: 'flow_progress_update',
@@ -114,11 +114,11 @@ export class MockWebSocketServer {
       case 'test':
         await this.runTestFlow(ws);
         break;
-      
+
       case 'osb':
         await this.runOSBFlow(ws, prompt);
         break;
-      
+
       default:
         await this.sendMessage(ws, {
           type: 'system_error',
@@ -185,7 +185,7 @@ export class MockWebSocketServer {
 
   private async handleManagerResponse(ws: WebSocket, message: Message): Promise<void> {
     const response = message.payload?.text || message.payload?.response;
-    
+
     if (response?.toLowerCase() === 'yes') {
       // Continue OSB flow
       await this.sendMessage(ws, {
@@ -229,7 +229,7 @@ export class MockWebSocketServer {
       ws.send(JSON.stringify(message));
       this.logMessage('sent', message);
       console.log('[MockServer] Sent:', message);
-      
+
       // Add delay between messages
       await new Promise(resolve => setTimeout(resolve, this.delayMs));
     }
@@ -273,7 +273,7 @@ import http from 'http';
 
 export class MockHTTPServer {
   private server: http.Server | null = null;
-  
+
   constructor(private port: number, private sessionId: string) {}
 
   start(): Promise<void> {

@@ -2,10 +2,11 @@
 """Test multi-processor pipeline orchestrator."""
 
 import asyncio
-from buttermilk.pipeline import PipelineOrchestrator
-from buttermilk.tools.catalog_test import Title, Observation
+
 from buttermilk._core.types import BaseRecord
-from unittest.mock import MagicMock
+from buttermilk.pipeline import PipelineOrchestrator
+from buttermilk.tools.catalog_test import Observation, Title
+
 
 # Create mock processors
 class MockTMDBProcessor:
@@ -16,23 +17,12 @@ class MockTMDBProcessor:
         print(f"  TMDB processing: {record.title}")
         # Yield 2 observations for each title
         yield Observation(
-            record_id=record.record_id,
-            title=record.title,
-            year=record.year,
-            provider_name="Netflix",
-            region="US",
-            available=True,
-            source="TMDB"
+            record_id=record.record_id, title=record.title, year=record.year, provider_name="Netflix", region="US", available=True, source="TMDB"
         )
         yield Observation(
-            record_id=record.record_id,
-            title=record.title,
-            year=record.year,
-            provider_name="Amazon",
-            region="US",
-            available=True,
-            source="TMDB"
+            record_id=record.record_id, title=record.title, year=record.year, provider_name="Amazon", region="US", available=True, source="TMDB"
         )
+
 
 class MockUploader:
     """Mock uploader that passes through records."""
@@ -48,6 +38,7 @@ class MockUploader:
 
     def shutdown(self):
         print(f"  Uploader shutdown: {len(self.uploaded)} records uploaded")
+
 
 async def test_multi_processor_pipeline():
     """Test pipeline with multiple processors."""
@@ -70,7 +61,7 @@ async def test_multi_processor_pipeline():
         stage_name="test_pipeline",
         source=source(),
         processors=[tmdb, uploader],  # Chain of processors
-        concurrency=2
+        concurrency=2,
     )
 
     # Run pipeline
@@ -83,12 +74,13 @@ async def test_multi_processor_pipeline():
     # Shutdown
     uploader.shutdown()
 
-    print(f"\nPipeline complete!")
-    print(f"Input: 2 Titles")
+    print("\nPipeline complete!")
+    print("Input: 2 Titles")
     print(f"Output: {len(results)} Observations")
     print(f"Uploaded: {len(uploader.uploaded)} records")
 
     return results
+
 
 if __name__ == "__main__":
     results = asyncio.run(test_multi_processor_pipeline())

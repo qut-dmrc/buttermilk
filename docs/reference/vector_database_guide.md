@@ -7,11 +7,11 @@ This guide demonstrates how to create vector databases from any JSON dataset usi
 Buttermilk provides a complete pipeline for creating and using vector databases:
 
 1. **Data Loading**: Load JSON data using flexible field mapping
-2. **Text Processing**: Chunk documents for optimal embedding
-3. **Embedding Generation**: Create vector embeddings using Vertex AI models
-4. **Vector Storage**: Store embeddings in ChromaDB with metadata
-5. **Semantic Search**: Query the vector database using natural language
-6. **RAG Integration**: Use generic RAG agents for question answering
+1. **Text Processing**: Chunk documents for optimal embedding
+1. **Embedding Generation**: Create vector embeddings using Vertex AI models
+1. **Vector Storage**: Store embeddings in ChromaDB with metadata
+1. **Semantic Search**: Query the vector database using natural language
+1. **RAG Integration**: Use generic RAG agents for question answering
 
 ## Quick Start
 
@@ -26,7 +26,7 @@ my_data_json:
   field_mapping:
     record_id: id
     content: text_field
-    metadata: 
+    metadata:
       title: title
       category: category
 
@@ -110,21 +110,25 @@ uv run python -m buttermilk.runner.cli +flow=my_rag run=api
 ### Components
 
 #### 1. ChromaDBEmbeddings
+
 - **Purpose**: Core vector database management
 - **Features**: Embedding generation, ChromaDB integration, GCS support
 - **Configuration**: Model selection, chunking parameters, storage paths
 
 #### 2. RagAgent
+
 - **Purpose**: Generic RAG functionality for any vector database
 - **Features**: Semantic search, result filtering, LLM integration
 - **Inheritance**: Base class for specialized agents like RagZot
 
 #### 3. Data Loaders
+
 - **JsonDataLoader**: Flexible JSON data loading with field mapping
 - **Support**: Local files, GCS URIs, streaming for large datasets
 - **Mapping**: Configurable field mapping for any JSON structure
 
 #### 4. Text Processing
+
 - **SemanticSplitter**: Intelligent document chunking
 - **Configuration**: Chunk size, overlap, splitting strategies
 - **Preservation**: Metadata and document relationships

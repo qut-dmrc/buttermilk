@@ -8,7 +8,6 @@ import uuid
 
 import pytest
 
-
 DEBUG_TEXT = "this should not show up in the log" + str(uuid.uuid1())
 LOG_TEXT = "logging appears to be working" + str(uuid.uuid1())
 

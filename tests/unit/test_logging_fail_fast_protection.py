@@ -38,6 +38,7 @@ class TestSetupConsoleLoggingFailFast:
         """Reset global state before each test."""
         # Reset console logging state
         import buttermilk._core.log as log_module
+
         log_module._console_logging_configured = False
 
         # Clear any existing handlers from both root and buttermilk loggers
@@ -56,6 +57,7 @@ class TestSetupConsoleLoggingFailFast:
 
         # Verify logging is configured
         import buttermilk._core.log as log_module
+
         assert log_module._console_logging_configured is True
 
         # Verify handlers were added to buttermilk logger
@@ -66,11 +68,11 @@ class TestSetupConsoleLoggingFailFast:
         """Test that second call to setup_console_logging raises RuntimeError."""
         # First call should succeed
         setup_console_logging(verbose=False)
-        
+
         # Second call should fail fast
         with pytest.raises(RuntimeError) as exc_info:
             setup_console_logging(verbose=True)
-            
+
         error_msg = str(exc_info.value)
         assert "Console logging has already been configured" in error_msg
         assert "Multiple calls to setup_console_logging()" in error_msg
@@ -81,10 +83,10 @@ class TestSetupConsoleLoggingFailFast:
         """Test that verbose settings are properly configured on first call."""
         # Test verbose=True
         setup_console_logging(verbose=True)
-        
+
         buttermilk_logger = logging.getLogger("buttermilk")
         root_logger = logging.getLogger()
-        
+
         # Verify DEBUG level is set for verbose mode
         assert buttermilk_logger.getEffectiveLevel() == logging.DEBUG
         assert root_logger.getEffectiveLevel() == logging.DEBUG
@@ -93,12 +95,12 @@ class TestSetupConsoleLoggingFailFast:
         """Test that non-verbose settings are properly configured."""
         # Reset state
         self.setup_method()
-        
+
         # Test verbose=False
         setup_console_logging(verbose=False)
-        
+
         buttermilk_logger = logging.getLogger("buttermilk")
-        
+
         # Verify INFO level is set for non-verbose mode
         assert buttermilk_logger.getEffectiveLevel() == logging.INFO
 
@@ -110,6 +112,7 @@ class TestSetupFileLoggingFailFast:
         """Reset global state before each test."""
         # Reset file logging state
         import buttermilk._core.log as log_module
+
         log_module._file_logging_configured = False
 
         # Clear any existing handlers from both root and buttermilk loggers
@@ -130,6 +133,7 @@ class TestSetupFileLoggingFailFast:
 
         # Verify logging is configured
         import buttermilk._core.log as log_module
+
         assert log_module._file_logging_configured is True
 
         # Verify log file was created
@@ -227,11 +231,7 @@ class TestSetupFileLoggingFailFast:
         execution_context_id = f"test_bm_prefix_{uuid.uuid4().hex[:8]}"
         project_name = "test_project"
 
-        log_files = setup_file_logging(
-            execution_context_id=execution_context_id,
-            verbose=False,
-            project_name=project_name
-        )
+        log_files = setup_file_logging(execution_context_id=execution_context_id, verbose=False, project_name=project_name)
 
         # Verify file was created
         assert len(log_files) == 1
@@ -260,6 +260,7 @@ class TestCloudLoggingDeduplication:
         """Reset global state before each test."""
         # Reset cloud logging sessions
         import buttermilk._core.log as log_module
+
         log_module._cloud_logging_sessions.clear()
 
         # Clear any existing handlers from both root and buttermilk loggers
@@ -300,11 +301,13 @@ class TestExecutionContextFailFast:
         """Reset global ExecutionContext state before each test."""
         # Reset execution context state
         import buttermilk._core.execution_context as ec_module
+
         ec_module._global_execution_context = None
         ec_module._execution_context_initialized = False
 
         # Reset logging state to avoid interference
         import buttermilk._core.log as log_module
+
         log_module._console_logging_configured = False
         log_module._file_logging_configured = False
 
@@ -323,14 +326,14 @@ class TestExecutionContextFailFast:
         """Test that first call to create_execution_context succeeds."""
         mock_setup_console.return_value = None
         mock_setup_file.return_value = ["/tmp/test.log"]
-        
+
         # Should work without error
         context = create_execution_context()
-        
+
         # Verify context was created
         assert context is not None
         assert isinstance(context, ExecutionContext)
-        
+
         # Verify logging setup was called
         mock_setup_console.assert_called_once()
         mock_setup_file.assert_called_once()
@@ -341,14 +344,14 @@ class TestExecutionContextFailFast:
         """Test that second call to create_execution_context raises RuntimeError."""
         mock_setup_console.return_value = None
         mock_setup_file.return_value = ["/tmp/test.log"]
-        
+
         # First call should succeed
         create_execution_context()
-        
+
         # Second call should fail fast
         with pytest.raises(RuntimeError) as exc_info:
             create_execution_context()
-            
+
         error_msg = str(exc_info.value)
         assert "ExecutionContext has already been initialized" in error_msg
         assert "Creating multiple ExecutionContext instances will break logging configuration" in error_msg
@@ -362,15 +365,15 @@ class TestExecutionContextFailFast:
         """Test that get_or_create_execution_context is safe for multiple calls."""
         mock_setup_console.return_value = None
         mock_setup_file.return_value = ["/tmp/test.log"]
-        
+
         # First call should create context
         context1 = get_or_create_execution_context()
         assert context1 is not None
-        
+
         # Second call should return existing context
         context2 = get_or_create_execution_context()
         assert context2 is context1  # Same object
-        
+
         # Verify logging setup was only called once
         mock_setup_console.assert_called_once()
         mock_setup_file.assert_called_once()
@@ -381,11 +384,11 @@ class TestExecutionContextFailFast:
         """Test that get_or_create_execution_context ignores kwargs on subsequent calls."""
         mock_setup_console.return_value = None
         mock_setup_file.return_value = ["/tmp/test.log"]
-        
+
         # First call with specific kwargs
         context1 = get_or_create_execution_context(clouds=[])
         assert context1 is not None
-        
+
         # Second call with different kwargs should return same context
         context2 = get_or_create_execution_context(clouds=["different"])
         assert context2 is context1  # Same object, kwargs ignored
@@ -398,6 +401,7 @@ class TestLoggingValidation:
         """Reset global state before each test."""
         # Reset logging state
         import buttermilk._core.log as log_module
+
         log_module._console_logging_configured = False
         log_module._file_logging_configured = False
 
@@ -413,7 +417,7 @@ class TestLoggingValidation:
     def test_validate_logging_state_unconfigured(self):
         """Test validation when logging is not configured."""
         validation = validate_logging_state()
-        
+
         assert validation["console_configured"] is False
         assert validation["file_configured"] is False
         assert validation["valid"] is False
@@ -424,13 +428,14 @@ class TestLoggingValidation:
         """Test validation when logging is properly configured."""
         # Set up logging properly
         setup_console_logging(verbose=True)
-        
+
         # Mock file logging configured
         import buttermilk._core.log as log_module
+
         log_module._file_logging_configured = True
-        
+
         validation = validate_logging_state(verbose_expected=True)
-        
+
         assert validation["console_configured"] is True
         assert validation["file_configured"] is True
         assert validation["valid"] is True
@@ -440,14 +445,15 @@ class TestLoggingValidation:
         """Test validation detects verbose level mismatches."""
         # Set up console logging with verbose=False
         setup_console_logging(verbose=False)
-        
+
         # Mock file logging configured
         import buttermilk._core.log as log_module
+
         log_module._file_logging_configured = True
-        
+
         # Validate expecting verbose=True (should find mismatch)
         validation = validate_logging_state(verbose_expected=True)
-        
+
         assert validation["valid"] is False
         assert any("Verbose mode expected but root logger level is" in issue for issue in validation["issues"])
         assert any("Verbose mode expected but buttermilk logger level is" in issue for issue in validation["issues"])
@@ -456,19 +462,20 @@ class TestLoggingValidation:
         """Test validation detects excessive number of handlers."""
         # Set up normal logging
         setup_console_logging(verbose=False)
-        
+
         # Add many dummy handlers to trigger the threshold
         root_logger = logging.getLogger()
         for i in range(6):  # Add 6 more handlers (threshold is >5)
             dummy_handler = logging.StreamHandler()
             root_logger.addHandler(dummy_handler)
-        
+
         # Mock file logging configured
         import buttermilk._core.log as log_module
+
         log_module._file_logging_configured = True
-        
+
         validation = validate_logging_state()
-        
+
         assert validation["valid"] is False
         assert any("Unusually high number of handlers" in issue for issue in validation["issues"])
         assert any("duplicate handler registration" in issue for issue in validation["issues"])
@@ -477,22 +484,23 @@ class TestLoggingValidation:
         """Test ensure_logging_properly_initialized with valid state."""
         # Set up logging properly
         setup_console_logging(verbose=False)
-        
+
         # Mock file logging configured
         import buttermilk._core.log as log_module
+
         log_module._file_logging_configured = True
-        
+
         # Should not raise any exception
         ensure_logging_properly_initialized()
 
     def test_ensure_logging_properly_initialized_invalid_state_fails_fast(self):
         """Test ensure_logging_properly_initialized fails fast with invalid state."""
         # Leave logging unconfigured
-        
+
         # Should raise RuntimeError
         with pytest.raises(RuntimeError) as exc_info:
             ensure_logging_properly_initialized()
-            
+
         error_msg = str(exc_info.value)
         assert "Logging system is not properly initialized" in error_msg
         assert "Issues found:" in error_msg
@@ -507,12 +515,14 @@ class TestIntegrationScenarios:
         """Reset all global state before each test."""
         # Reset logging state
         import buttermilk._core.log as log_module
+
         log_module._console_logging_configured = False
         log_module._file_logging_configured = False
         log_module._cloud_logging_sessions.clear()
 
         # Reset execution context state
         import buttermilk._core.execution_context as ec_module
+
         ec_module._global_execution_context = None
         ec_module._execution_context_initialized = False
 
@@ -529,7 +539,7 @@ class TestIntegrationScenarios:
         """Test that creating multiple sessions doesn't break logging."""
         # This test simulates the scenario that was causing issues:
         # Multiple BM sessions trying to set up logging
-        
+
         # First session setup (should succeed)
         setup_console_logging(verbose=True)
         execution_context_id_1 = f"session1_{uuid.uuid4().hex[:8]}"
@@ -548,7 +558,7 @@ class TestIntegrationScenarios:
         with pytest.raises(RuntimeError) as exc_info:
             setup_file_logging(execution_context_id="session2", verbose=True, project_name="test_project")
         assert "File logging has already been configured" in str(exc_info.value)
-        
+
         # But validation should still pass for the original setup
         validation_2 = validate_logging_state(verbose_expected=True)
         assert validation_2["valid"] is True
@@ -559,22 +569,22 @@ class TestIntegrationScenarios:
         """Test that ExecutionContext protection prevents logging corruption."""
         mock_setup_console.return_value = None
         mock_setup_file.return_value = ["/tmp/test.log"]
-        
+
         # First ExecutionContext creation should succeed
         create_execution_context()
-        
+
         # Verify logging was set up once
         assert mock_setup_console.call_count == 1
         assert mock_setup_file.call_count == 1
-        
+
         # Second ExecutionContext creation should fail fast
         with pytest.raises(RuntimeError) as exc_info:
             create_execution_context()
-            
+
         # Verify logging setup wasn't called again (preventing corruption)
         assert mock_setup_console.call_count == 1
         assert mock_setup_file.call_count == 1
-        
+
         error_msg = str(exc_info.value)
         assert "break logging configuration" in error_msg
 
@@ -634,25 +644,27 @@ class TestIntegrationScenarios:
         assert "break verbose logging functionality" in file_error
         assert "conflicting log file handlers" in file_error
         assert "problematic initialization sequence" in file_error
-        
+
         # Test ExecutionContext error message
         import buttermilk._core.execution_context as ec_module
+
         ec_module._execution_context_initialized = True
-        
+
         with pytest.raises(RuntimeError) as exc_info:
             create_execution_context()
-            
+
         context_error = str(exc_info.value)
         assert "ExecutionContext has already been initialized" in context_error
         assert "break logging configuration" in context_error
         assert "reset verbose logging settings" in context_error
         assert "get_or_create_execution_context()" in context_error
-        
+
         # Test validation error message
         ec_module._execution_context_initialized = False  # Reset for validation test
 
         # Clear logging configuration to make validation fail
         import buttermilk._core.log as log_module
+
         log_module._console_logging_configured = False
         log_module._file_logging_configured = False
 
@@ -682,12 +694,14 @@ class TestFailFastProtectionExamples:
         """Reset all global state before each test."""
         # Reset logging state
         import buttermilk._core.log as log_module
+
         log_module._console_logging_configured = False
         log_module._file_logging_configured = False
         log_module._cloud_logging_sessions.clear()
 
         # Reset execution context state
         import buttermilk._core.execution_context as ec_module
+
         ec_module._global_execution_context = None
         ec_module._execution_context_initialized = False
 
@@ -726,17 +740,17 @@ class TestFailFastProtectionExamples:
         """Example of safe ExecutionContext usage pattern."""
         mock_setup_console.return_value = None
         mock_setup_file.return_value = ["/tmp/test.log"]
-        
+
         # Safe pattern: Use get_or_create_execution_context
         context1 = get_or_create_execution_context()
-        
+
         # This is safe to call multiple times
         context2 = get_or_create_execution_context()
         context3 = get_or_create_execution_context()
-        
+
         # All should return the same context
         assert context1 is context2 is context3
-        
+
         # Logging setup should only happen once
         assert mock_setup_console.call_count == 1
         assert mock_setup_file.call_count == 1
@@ -757,14 +771,15 @@ class TestFailFastProtectionExamples:
         # 2. Trying to reconfigure file logging
         with pytest.raises(RuntimeError, match="File logging has already been configured"):
             setup_file_logging(execution_context_id="different", verbose=False, project_name="test_project")
-        
+
         # 3. Trying to create multiple ExecutionContexts
         import buttermilk._core.execution_context as ec_module
+
         ec_module._execution_context_initialized = True
-        
+
         with pytest.raises(RuntimeError, match="ExecutionContext has already been initialized"):
             create_execution_context()
-        
+
         # 4. Validation should still pass for the original setup
         ec_module._execution_context_initialized = False  # Reset for validation
         validation = validate_logging_state(verbose_expected=True)
@@ -774,21 +789,21 @@ class TestFailFastProtectionExamples:
         """Example of how to debug broken logging using validation functions."""
         # Simulate broken logging state (no setup)
         validation = validate_logging_state()
-        
+
         # Validation should reveal the issues
         assert validation["valid"] is False
         assert "Console logging not configured" in validation["issues"]
         assert "File logging not configured" in validation["issues"]
-        
+
         # ensure_logging_properly_initialized should fail fast with helpful message
         with pytest.raises(RuntimeError) as exc_info:
             ensure_logging_properly_initialized()
-        
+
         error_msg = str(exc_info.value)
         assert "Logging system is not properly initialized" in error_msg
         assert "Console logging not configured" in error_msg
         assert "File logging not configured" in error_msg
-        
+
         # After fixing the logging setup
         setup_console_logging(verbose=True)
         execution_context_id = f"debug_fixed_{uuid.uuid4().hex[:8]}"

@@ -6,13 +6,13 @@ from typing import TYPE_CHECKING, Any, AsyncGenerator, AsyncIterator, Iterator, 
 
 from pydantic import BaseModel
 
+from buttermilk import bm, logger
 from buttermilk._core.constants import BQ_SCHEMA_DIR
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.types import BaseRecord
 from buttermilk.utils.validators import import_class_from_path
-from buttermilk import bm, logger
-if TYPE_CHECKING:
 
+if TYPE_CHECKING:
     from .._core.storage_config import StorageConfig
 
 # Generic type for any Pydantic model

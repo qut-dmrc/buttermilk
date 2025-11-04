@@ -3,11 +3,13 @@
 This test reproduces the PDFObjRef error encountered with Zotero item L5BK5MEM.
 """
 
-import pytest
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
-from buttermilk.utils.utils import get_pdf_text
+from unittest.mock import patch
+
+import pytest
+
 from buttermilk._core.exceptions import ProcessingError
+from buttermilk.utils.utils import get_pdf_text
 
 
 class TestPDFExtractionErrors:
@@ -16,7 +18,7 @@ class TestPDFExtractionErrors:
     def test_pdf_objref_error_is_caught_and_reraised_as_processing_error(self):
         """Test that PDFObjRef iteration errors are caught and re-raised as ProcessingError."""
         # Mock the pdfminer extract_text to raise the error we saw in production
-        with patch('buttermilk.utils.utils.extract_text') as mock_extract:
+        with patch("buttermilk.utils.utils.extract_text") as mock_extract:
             # Simulate the exact error from the logs
             mock_extract.side_effect = TypeError("'PDFObjRef' object is not iterable")
 
@@ -55,7 +57,7 @@ class TestPDFExtractionErrors:
 
     def test_pdf_extraction_error_includes_full_context(self):
         """Test that PDF extraction errors include full context for debugging."""
-        with patch('buttermilk.utils.utils.extract_text') as mock_extract:
+        with patch("buttermilk.utils.utils.extract_text") as mock_extract:
             # Create a mock exception with args
             error = TypeError("'PDFObjRef' object is not iterable")
             error.args = ("'PDFObjRef' object is not iterable",)

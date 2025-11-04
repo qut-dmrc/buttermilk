@@ -66,12 +66,9 @@ async def test_slack_ui_agent_initialization(slack_ui_agent):
     callback_to_groupchat = AsyncMock()
 
     # Mock the register_chat_thread_handler to avoid deep mocking of Slack app
-    with patch.object(slack_ui_agent, 'register_chat_thread_handler'):
+    with patch.object(slack_ui_agent, "register_chat_thread_handler"):
         # The agent registers handlers internally during initialization
-        await slack_ui_agent.initialize(
-            callback_to_groupchat=callback_to_groupchat,
-            session_id="test-session-123"
-        )
+        await slack_ui_agent.initialize(callback_to_groupchat=callback_to_groupchat, session_id="test-session-123")
 
     # Verify callback was set
     assert slack_ui_agent.callback_to_groupchat == callback_to_groupchat

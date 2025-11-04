@@ -45,9 +45,7 @@ class CloudManager:
             if location:
                 os.environ["GOOGLE_CLOUD_LOCATION"] = os.environ.get("GOOGLE_CLOUD_LOCATION", location)
             if quota_project_id:
-                os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = os.environ.get(
-                    "GOOGLE_CLOUD_QUOTA_PROJECT", quota_project_id
-                )
+                os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = os.environ.get("GOOGLE_CLOUD_QUOTA_PROJECT", quota_project_id)
 
     def _needs_credentials_refresh(self, credentials: GoogleCredentials) -> bool:
         """Check if credentials need to be refreshed."""
@@ -231,7 +229,7 @@ class CloudManager:
 
         # Get vertex service configuration
         vertex_config = cloud.get_client_config("vertex")
-        
+
         project_id = vertex_config.get("project_id")
         location = vertex_config.get("location")
         bucket = vertex_config.get("bucket")

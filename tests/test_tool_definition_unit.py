@@ -19,7 +19,7 @@ from buttermilk._core.tool_definition import (
 
 class TestAgentToolDefinition:
     """Test AgentToolDefinition class."""
-    
+
     def test_basic_tool_definition(self):
         """Test creating a basic tool definition."""
         tool_def = AgentToolDefinition(
@@ -28,11 +28,11 @@ class TestAgentToolDefinition:
             input_schema={"type": "object", "properties": {"input": {"type": "string"}}},
             output_schema={"type": "object", "properties": {"output": {"type": "string"}}},
         )
-        
+
         assert tool_def.name == "test_tool"
         assert tool_def.description == "A test tool"
         assert tool_def.permissions == []
-    
+
     def test_tool_definition_with_mcp_route(self):
         """Test tool definition with MCP route."""
         tool_def = AgentToolDefinition(
@@ -44,25 +44,22 @@ class TestAgentToolDefinition:
         )
 
         assert tool_def.permissions == ["read:data"]
-    
+
     def test_to_autogen_schema(self):
         """Test conversion to Autogen tool schema."""
         tool_def = AgentToolDefinition(
             name="test_tool",
             description="A test tool",
-            input_schema={
-                "type": "object",
-                "properties": {"text": {"type": "string"}},
-                "required": ["text"]
-            },
+            input_schema={"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]},
             output_schema={"type": "string"},
         )
-        
+
         schema = tool_def.schema
         schema = tool_def.schema
         assert schema["name"] == "test_tool"
         assert schema["description"] == "A test tool"
         assert schema["parameters"] == tool_def.input_schema
+
 
 class TestSchemaValidation:
     """Test schema validation utilities."""

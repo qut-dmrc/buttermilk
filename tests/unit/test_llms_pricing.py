@@ -11,27 +11,16 @@ from buttermilk._core.types import UserMessage
 
 class TestModelOutputPricing:
     """Test that ModelOutput properly includes pricing information."""
-    
+
     def test_model_output_with_pricing_metadata(self):
         """Test ModelOutput can store pricing in metadata."""
         usage = RequestUsage(prompt_tokens=100, completion_tokens=50)
-        
-        model_output = ModelOutput(
-            content="Test response",
-            finish_reason="stop",
-            usage=usage,
-            cached=False
-        )
-        
+
+        model_output = ModelOutput(content="Test response", finish_reason="stop", usage=usage, cached=False)
+
         # Add pricing to metadata
-        model_output.metadata = {
-            "pricing": {
-                "prompt_tokens": 100,
-                "completion_tokens": 50,
-                "total_cost": 0.003
-            }
-        }
-        
+        model_output.metadata = {"pricing": {"prompt_tokens": 100, "completion_tokens": 50, "total_cost": 0.003}}
+
         assert model_output.metadata["pricing"]["total_cost"] == 0.003
         assert model_output.usage.prompt_tokens == 100
         assert model_output.usage.completion_tokens == 50
@@ -48,6 +37,7 @@ class TestAutoGenWrapperPricing:
 
         # Create mock client that inherits from ChatCompletionClient
         from autogen_core.models import ChatCompletionClient
+
         mock_client = MagicMock(spec=ChatCompletionClient)
         mock_result = MagicMock()
         mock_result.content = "Test response"
@@ -58,25 +48,15 @@ class TestAutoGenWrapperPricing:
         mock_client.create.return_value = mock_result
 
         # Create proper model info
-        model_info = ModelInfo(
-            family="gpt-4",
-            vision=False,
-            function_calling=True,
-            json_output=True,
-            structured_output=False
-        )
+        model_info = ModelInfo(family="gpt-4", vision=False, function_calling=True, json_output=True, structured_output=False)
 
         # Create wrapper with proper model info
-        wrapper = AutoGenWrapper(
-            client_factory=lambda: mock_client,
-            model_info=model_info,
-            litellm_model_name="openai/gpt-4"
-        )
-        
+        wrapper = AutoGenWrapper(client_factory=lambda: mock_client, model_info=model_info, litellm_model_name="openai/gpt-4")
+
         # Call create
         messages = [UserMessage(content="Hello", source="user")]
         result = await wrapper.create(messages)
-        
+
         # Verify result is ModelOutput with pricing
         assert isinstance(result, ModelOutput)
         assert hasattr(result, "metadata")
@@ -91,17 +71,16 @@ class TestAutoGenWrapperPricing:
         """Test that call_chat() aggregates tokens from multiple calls."""
         # First call (with tools): 100 prompt, 50 completion
         # Second call (synthesis): 150 prompt, 75 completion
-        mock_calculate_cost.side_effect = [
-            (100, 50, 0.003),
-            (150, 75, 0.004)
-        ]
-        
+        mock_calculate_cost.side_effect = [(100, 50, 0.003), (150, 75, 0.004)]
+
         # Create mock client that inherits from ChatCompletionClient
         from autogen_core.models import ChatCompletionClient
+
         mock_client = MagicMock(spec=ChatCompletionClient)
 
         # First result (tool call)
         from autogen_core import FunctionCall
+
         tool_call = FunctionCall(id="1", name="test_tool", arguments="{}")
         mock_result1 = MagicMock()
         mock_result1.content = [tool_call]
@@ -121,23 +100,14 @@ class TestAutoGenWrapperPricing:
         mock_client.create.side_effect = [mock_result1, mock_result2]
 
         # Create proper model info
-        model_info = ModelInfo(
-            family="gpt-4",
-            vision=False,
-            function_calling=True,
-            json_output=True,
-            structured_output=False
-        )
+        model_info = ModelInfo(family="gpt-4", vision=False, function_calling=True, json_output=True, structured_output=False)
 
         # Create wrapper
-        wrapper = AutoGenWrapper(
-            client_factory=lambda: mock_client,
-            model_info=model_info,
-            litellm_model_name="openai/gpt-4"
-        )
-        
+        wrapper = AutoGenWrapper(client_factory=lambda: mock_client, model_info=model_info, litellm_model_name="openai/gpt-4")
+
         # Mock tool execution
         from autogen_core.models import FunctionExecutionResult
+
         mock_tool = MagicMock()
         mock_tool.name = "test_tool"
         mock_tool.run_json = AsyncMock(return_value="tool result")
@@ -146,12 +116,8 @@ class TestAutoGenWrapperPricing:
         with patch.object(wrapper, "_execute_tools", return_value=[FunctionExecutionResult(call_id="1", name="test_tool", content="tool result")]):
             # Call call_chat with tools
             messages = [UserMessage(content="Hello", source="user")]
-            result = await wrapper.call_chat(
-                messages=messages,
-                cancellation_token=None,
-                tools_list=[mock_tool]
-            )
-        
+            result = await wrapper.call_chat(messages=messages, cancellation_token=None, tools_list=[mock_tool])
+
         # Verify aggregated pricing
         assert isinstance(result, ModelOutput)
         assert result.metadata["pricing"]["prompt_tokens"] == 250  # 100 + 150
@@ -163,6 +129,7 @@ class TestAutoGenWrapperPricing:
         """Test create() handles responses without usage data gracefully."""
         # Create mock client that inherits from ChatCompletionClient
         from autogen_core.models import ChatCompletionClient
+
         mock_client = MagicMock(spec=ChatCompletionClient)
         mock_result = MagicMock()
         mock_result.content = "Test response"
@@ -173,25 +140,15 @@ class TestAutoGenWrapperPricing:
         mock_client.create.return_value = mock_result
 
         # Create proper model info
-        model_info = ModelInfo(
-            family="gpt-4",
-            vision=False,
-            function_calling=True,
-            json_output=True,
-            structured_output=False
-        )
+        model_info = ModelInfo(family="gpt-4", vision=False, function_calling=True, json_output=True, structured_output=False)
 
         # Create wrapper
-        wrapper = AutoGenWrapper(
-            client_factory=lambda: mock_client,
-            model_info=model_info,
-            litellm_model_name="openai/gpt-4"
-        )
-        
+        wrapper = AutoGenWrapper(client_factory=lambda: mock_client, model_info=model_info, litellm_model_name="openai/gpt-4")
+
         # Call create
         messages = [UserMessage(content="Hello", source="user")]
         result = await wrapper.create(messages)
-        
+
         # Verify result has empty pricing
         assert isinstance(result, ModelOutput)
         assert result.metadata["pricing"]["prompt_tokens"] == 0
@@ -327,8 +284,7 @@ class TestLiteLLMIntegration:
     """Test that generated model names actually work with litellm cost_per_token."""
 
     @pytest.mark.skipif(
-        not hasattr(__import__("litellm.cost_calculator", fromlist=["cost_per_token"]), "cost_per_token"),
-        reason="litellm not available"
+        not hasattr(__import__("litellm.cost_calculator", fromlist=["cost_per_token"]), "cost_per_token"), reason="litellm not available"
     )
     def test_gemini_vertex_openai_litellm_compatibility(self):
         """Test that generated model names work with actual litellm cost_per_token."""
@@ -354,8 +310,7 @@ class TestLiteLLMIntegration:
             pytest.fail(f"litellm cost_per_token failed for {resolved_name}: {e}")
 
     @pytest.mark.skipif(
-        not hasattr(__import__("litellm.cost_calculator", fromlist=["cost_per_token"]), "cost_per_token"),
-        reason="litellm not available"
+        not hasattr(__import__("litellm.cost_calculator", fromlist=["cost_per_token"]), "cost_per_token"), reason="litellm not available"
     )
     def test_gemini_models_litellm_compatibility(self):
         """Test multiple gemini model variations with litellm."""
@@ -383,8 +338,7 @@ class TestLiteLLMIntegration:
                 pytest.fail(f"litellm cost_per_token failed for {resolved_name} (from {model_name}+{client_type}): {e}")
 
     @pytest.mark.skipif(
-        not hasattr(__import__("litellm.cost_calculator", fromlist=["cost_per_token"]), "cost_per_token"),
-        reason="litellm not available"
+        not hasattr(__import__("litellm.cost_calculator", fromlist=["cost_per_token"]), "cost_per_token"), reason="litellm not available"
     )
     def test_bad_model_names_should_fail(self):
         """Test that malformed model names properly fail with litellm."""

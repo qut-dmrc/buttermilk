@@ -103,6 +103,7 @@ wait for further input, or await the completion of another process.
 
 import os
 
+
 def get_base_cache_dir() -> Path:
     """Get the base cache directory for Buttermilk.
 
@@ -143,6 +144,7 @@ class cache:
 
     RECORDS = "records"
     """Pipeline record cache for processor outputs."""
+
 
 # Add any other constants used across the codebase here.
 # Ensure they are well-documented with their purpose and usage context.

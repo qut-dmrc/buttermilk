@@ -7,8 +7,10 @@ These are unit tests that directly test the size validation logic
 without requiring full BM initialization.
 """
 
-import pytest
 from pathlib import Path
+
+import pytest
+
 from buttermilk._core.exceptions import ProcessingError
 
 
@@ -27,6 +29,7 @@ def validate_pdf_size(pdf_path: Path, min_size_kb: int = 50) -> None:
     # This is a placeholder - the real implementation will be in zotero.py
     # For now, import it to make the test fail correctly
     from buttermilk.libs.zotero import validate_pdf_size as real_validate
+
     return real_validate(pdf_path, min_size_kb)
 
 
