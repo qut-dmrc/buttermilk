@@ -51,16 +51,21 @@ def test_image_generation_processors_config():
 
 
 def test_image_generation_testing_override():
-    """Test that testing override reduces scenarios and repetitions."""
-    config_path = Path(__file__).parent.parent.parent / "buttermilk" / "conf" / "pipelines" / "image_generation.yaml"
-    cfg = OmegaConf.load(config_path)
+    """Test that testing.yaml contains overrides for image generation pipeline."""
+    testing_config_path = Path(__file__).parent.parent.parent / "buttermilk" / "conf" / "testing.yaml"
+    cfg = OmegaConf.load(testing_config_path)
 
-    # Verify testing override exists
-    assert "testing" in cfg
-    assert "pipeline" in cfg.testing
+    # Verify testing overrides exist for image_generation pipeline
+    assert "pipelines" in cfg
+    assert "image_generation" in cfg.pipelines
 
-    # Verify testing reduces scenarios
-    assert len(cfg.testing.pipeline.source.scenarios) == 2
+    # Verify testing reduces scenarios (2 instead of 5)
+    assert len(cfg.pipelines.image_generation.source.scenarios) == 2
+    assert "working in an office" in cfg.pipelines.image_generation.source.scenarios
+    assert "at a coffee shop" in cfg.pipelines.image_generation.source.scenarios
 
-    # Verify testing reduces repetitions
-    assert cfg.testing.pipeline.processors[0].repetitions == 2
+    # Verify testing reduces repetitions (2 instead of 3)
+    assert cfg.pipelines.image_generation.processors[0].repetitions == 2
+
+    # Verify testing uses only one model (VertexImagen3Fast)
+    assert len(cfg.pipelines.image_generation.processors[0].models) == 1

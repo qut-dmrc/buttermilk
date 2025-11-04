@@ -127,3 +127,16 @@ pipeline:
       embedding_cooldown_seconds: 0.1
     # 4. Store in ChromaDB
     - ${vectoriser}
+# Testing overrides for image generation pipeline
+# Apply with: --config-name=testing +pipeline=image_generation
+pipelines:
+  image_generation:
+    source:
+      scenarios:
+        - "working in an office"
+        - "at a coffee shop"
+    processors:
+      0: # Override first processor (BatchExpansionProcessor)
+        repetitions: 2
+        models:
+          - _target_: buttermilk.agents.imagegen.VertexImagen3Fast
