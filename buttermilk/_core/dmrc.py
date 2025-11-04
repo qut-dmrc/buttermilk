@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from .bm_init import BM
-from .execution_context import ExecutionContext, get_or_create_execution_context
 
 # This is a singleton pattern for the BM class.
 # The bm variable is initialized to None and will be set to an instance of BM

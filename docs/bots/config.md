@@ -1,11 +1,13 @@
 # Buttermilk Configuration System
 
 ## Overview
+
 Buttermilk uses Hydra with OmegaConf for configuration management. All configuration is done through YAML files - **NEVER** use manual dictionary configuration.
 
 ## Critical Rules
 
 ### DO
+
 - ✅ Use YAML files exclusively
 - ✅ Leverage interpolation
 - ✅ Validate early with Pydantic
@@ -13,6 +15,7 @@ Buttermilk uses Hydra with OmegaConf for configuration management. All configura
 - ✅ Document complex configurations
 
 ### DON'T
+
 - ❌ Create manual dictionaries
 - ❌ Hardcode values in code
 - ❌ Change validation to suppress errors
@@ -24,12 +27,14 @@ Remember: Configuration drives behavior. When debugging, always check the compos
 ## Core Concepts
 
 ### 1. Hydra Basics
+
 - **Composition**: Build configs from multiple files
-- **Overrides**: Modify any value from command line 
+- **Overrides**: Modify any value from command line
 - **Interpolation**: Reference other config values with `${}`
 - **Validation**: Early fail with clear error messages
 
 ### 2. Configuration Structure
+
 ```
 conf/
 ├── config.yaml          # Base configuration
@@ -44,6 +49,7 @@ conf/
 ### 3. Configuration Issues
 
 #### Check Composed Configuration
+
 ```bash
 # View full configuration
 uv run python -m buttermilk.runner.cli -c job
@@ -55,9 +61,6 @@ uv run python -m buttermilk.runner.cli -c job | grep -A 10 "agents:"
 ## LLM Configuration Details
 
 The LLM configuration is loaded from a GCP Secret named `models.json`. Authentication with GCP is required for tests to run correctly.
-
-
-
 
 ## Storage configuration
 
@@ -72,13 +75,13 @@ storage:
         schema_path: "conf/schemas/my_schema.json"
 ```
 
-Storage configs are automatically converted to Pydantic models (BigQueryStorageConfig) when loaded by Hydra. 
+Storage configs are automatically converted to Pydantic models (BigQueryStorageConfig) when loaded by Hydra.
 
 ## How to access configured storage objects in your code
 
-- The Hydra configurations are accessed through Pydantic models. 
+- The Hydra configurations are accessed through Pydantic models.
 - The `buttermilk._core.storage_config.BigQueryStorageConfig` class is the Pydantic model that represents the BigQuery storage configuration.
-- When Hydra loads the configuration, it uses this Pydantic model to validate and create a `BigQueryStorageConfig` object. 
+- When Hydra loads the configuration, it uses this Pydantic model to validate and create a `BigQueryStorageConfig` object.
 - The `buttermilk._core.storage_config.StorageFactory` class is responsible for instantiating storage objects from the configuration. Its `create_storage` method takes a configuration object and returns the appropriate storage implementation.
 
 ### Example: saving data to bigquery from within an orchestrated flow
@@ -98,6 +101,7 @@ storage:
         auto_create: true
         schema_path: "conf/schemas/my_schema.json"
 ```
+
 Within a flow, storage objects can be accessed through the orchestrator:
 
 ```python
@@ -115,8 +119,7 @@ from buttermilk._core.storage_config import StorageFactory
 storage = StorageFactory.create_storage(storage_config)
 ```
 
-The `buttermilk.storage.bigquery.BigQueryStorage` class provides a `save` method to write data to BigQuery. This method takes a list of Pydantic models or dictionaries and handles the serialization and upload
-process. To save to BigQuery, use the storage object's save method:
+The `buttermilk.storage.bigquery.BigQueryStorage` class provides a `save` method to write data to BigQuery. This method takes a list of Pydantic models or dictionaries and handles the serialization and upload process. To save to BigQuery, use the storage object's save method:
 
 ```python
 # Save Pydantic models or dictionaries
@@ -126,8 +129,7 @@ storage.save(records)
 
 ### Example: Initialization with init()
 
-The pattern is: init() → bm object → get_storage() → use storage for operations.
-Use the main init() function to bootstrap a Buttermilk session:
+The pattern is: init() → bm object → get_storage() → use storage for operations. Use the main init() function to bootstrap a Buttermilk session:
 
 ```python
 from buttermilk._core.config_bootstrap import init

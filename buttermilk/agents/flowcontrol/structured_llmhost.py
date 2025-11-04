@@ -98,10 +98,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
             msg = f"StructuredLLMHost {self.agent_name} has no tools available after waiting {max_wait}s. This may indicate the participants have not advertised their capabilities."
             logger.error(msg)
             # Send as ErrorEvent for error broadcasting
-            error_event = ErrorEvent(
-                source=self.agent_id,
-                content="Unable to process request: no tools available."
-            )
+            error_event = ErrorEvent(source=self.agent_id, content="Unable to process request: no tools available.")
             await self._publish(error_event)
             return  # Skip processing if no tools are available
 
@@ -155,7 +152,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
                 return tool.name  # Tool object
             else:
                 return tool["name"]  # ToolSchema dict
-        
+
         tools_list = list({get_tool_name(tool): tool for tool in tools}.values())
 
         logger.debug(f"StructuredLLMHost calling LLM with {len(tools_list)} tools: {[get_tool_name(tool) for tool in tools_list]}")
@@ -268,17 +265,17 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
 
     async def wait_check_current_step_completions(self) -> bool:
         """Override to disable error threshold logic for structured LLM hosts.
-        
+
         Unlike sequence-based hosts, structured LLM hosts make dynamic decisions
         about which agents to call and should not terminate flows based on error rates.
         Individual agent failures are part of the LLM's decision-making process.
-        
+
         Returns:
             bool: Always True, unless manually halted by user.
         """
         # Wait for pending tasks to complete but don't check error thresholds
         last_step_successful = await self._wait_for_all_tasks_complete()
-        
+
         # Clear error tracking for the next step (but don't evaluate thresholds)
         async with self._tasks_condition:
             total_failed = sum(self._failed_tasks_by_agent.values())

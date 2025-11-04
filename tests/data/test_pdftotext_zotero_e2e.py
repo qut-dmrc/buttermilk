@@ -9,8 +9,9 @@ This TRUE end-to-end test:
 NO MOCKS of internal code.
 """
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 
 @pytest.mark.anyio
@@ -23,9 +24,10 @@ async def test_pdftotext_extracts_from_real_zotero_pdf(real_bm):
     3. Text extraction works with real academic PDFs
     4. Pipeline continues to downstream processors
     """
-    from buttermilk.libs.zotero import ZoteroSource, ZoteroDownloadProcessor
-    from buttermilk.processors.bash import PDFToTextProcessor
     import os
+
+    from buttermilk.libs.zotero import ZoteroDownloadProcessor, ZoteroSource
+    from buttermilk.processors.bash import PDFToTextProcessor
 
     # Get Zotero library ID from environment
     library_id = os.environ.get("ZOTERO_LIBRARY_ID")
@@ -51,7 +53,8 @@ async def test_pdftotext_extracts_from_real_zotero_pdf(real_bm):
     for base_record in records:
         try:
             downloaded_records = [
-                rec async for rec in downloader.process(
+                rec
+                async for rec in downloader.process(
                     base_record,
                     processor_stage="download",
                 )
@@ -82,7 +85,8 @@ async def test_pdftotext_extracts_from_real_zotero_pdf(real_bm):
     pdftotext_processor = PDFToTextProcessor()
 
     pdftotext_records = [
-        rec async for rec in pdftotext_processor.process(
+        rec
+        async for rec in pdftotext_processor.process(
             pdf_record,
             processor_stage="pdftotext",
         )
@@ -98,7 +102,7 @@ async def test_pdftotext_extracts_from_real_zotero_pdf(real_bm):
     # Log comparison for manual verification
     pdftotext_length = len(result.content)
     print(f"\n{'='*60}")
-    print(f"PDF Extraction Comparison")
+    print("PDF Extraction Comparison")
     print(f"{'='*60}")
     print(f"Record ID: {result.record_id}")
     print(f"PDF: {pdf_path.name}")
@@ -106,7 +110,7 @@ async def test_pdftotext_extracts_from_real_zotero_pdf(real_bm):
     print(f"\npdfminer length: {pdfminer_length:,} chars")
     print(f"pdftotext length: {pdftotext_length:,} chars")
     print(f"Difference: {pdftotext_length - pdfminer_length:+,} chars")
-    print(f"\nFirst 200 chars of pdftotext output:")
+    print("\nFirst 200 chars of pdftotext output:")
     print(result.content[:200])
     print(f"{'='*60}\n")
 
@@ -126,9 +130,9 @@ async def test_pdftotext_handles_problematic_pdfs_gracefully(real_bm):
 
     This tests the small PDFs we identified earlier that caused issues.
     """
-    from buttermilk.processors.bash import PDFToTextProcessor
-    from buttermilk._core.types import Record
     from buttermilk._core.exceptions import ProcessingError
+    from buttermilk._core.types import Record
+    from buttermilk.processors.bash import PDFToTextProcessor
 
     # Use one of the tiny PDFs we found earlier
     tiny_pdfs = [
@@ -187,12 +191,12 @@ async def test_full_pipeline_with_pdftotext(real_bm):
 
     This is the ultimate integration test.
     """
-    from buttermilk.pipeline import PipelineOrchestrator
-    from hydra.utils import instantiate
-    import os
 
     # Check if pdftotext is available
     import subprocess
+
+    from hydra.utils import instantiate
+
     try:
         subprocess.run(["pdftotext", "-v"], capture_output=True, check=True)
     except (FileNotFoundError, subprocess.CalledProcessError):
@@ -213,14 +217,14 @@ async def test_full_pipeline_with_pdftotext(real_bm):
     # Verify results
     assert results is not None
     print(f"\n{'='*60}")
-    print(f"Pipeline E2E Test Results")
+    print("Pipeline E2E Test Results")
     print(f"{'='*60}")
     print(f"Records processed: {results.get('records_processed', 'unknown')}")
     print(f"Status: {results.get('status', 'unknown')}")
-    if 'errors' in results and results['errors']:
+    if "errors" in results and results["errors"]:
         print(f"Errors: {results['errors']}")
     print(f"{'='*60}\n")
 
     # Basic assertions
-    assert results.get('status') in ['completed', 'success'], f"Pipeline failed: {results}"
-    assert results.get('records_processed', 0) > 0, "No records were processed"
+    assert results.get("status") in ["completed", "success"], f"Pipeline failed: {results}"
+    assert results.get("records_processed", 0) > 0, "No records were processed"

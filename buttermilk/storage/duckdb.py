@@ -1,13 +1,13 @@
 """DuckDB storage implementation for unified storage operations."""
 
-from typing import TYPE_CHECKING, Iterator
+from typing import Iterator
 
 from buttermilk._core.exceptions import StorageError
 from buttermilk._core.log import logger
 from buttermilk._core.types import BaseRecord
 
-from .base import Storage
 from .._core.storage_config import DuckDBStorageConfig
+from .base import Storage
 
 
 class DuckDBStorage(Storage):
@@ -203,11 +203,12 @@ class DuckDBStorage(Storage):
             True if database file exists
         """
         from pathlib import Path
+
         return Path(self.database).exists()
 
     def close(self):
         """Close DuckDB connection."""
-        if hasattr(self, '_conn') and self._conn:
+        if hasattr(self, "_conn") and self._conn:
             self._conn.close()
             self._conn = None
             logger.debug(f"Closed DuckDB connection to {self.database}")
@@ -215,5 +216,5 @@ class DuckDBStorage(Storage):
     def __del__(self):
         """Cleanup connection on deletion."""
         # Only close if object was fully initialized
-        if hasattr(self, '_conn'):
+        if hasattr(self, "_conn"):
             self.close()

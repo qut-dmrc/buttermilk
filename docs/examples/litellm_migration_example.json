@@ -1,0 +1,130 @@
+{
+  "_comment": "Example model configuration showing LiteLLM migration",
+  "_migration_strategy": "Add 'use_litellm': true to any model to enable LiteLLM wrapper",
+
+  "gemini25flash": {
+    "_comment": "MIGRATED: Using LiteLLMWrapper for Gemini via Vertex",
+    "client_type": "gemini_vertex",
+    "model_info": {
+      "vision": true,
+      "function_calling": true,
+      "json_output": true,
+      "structured_output": false,
+      "family": "gemini-2.5-flash"
+    },
+    "configs": {
+      "model": "gemini-2.5-flash-preview-05-20",
+      "temperature": 0.7,
+      "region": "us-central1",
+      "project_id": "your-project-id"
+    },
+    "litellm_model": "vertex_ai/gemini-2.5-flash-preview-05-20",
+    "use_litellm": true
+  },
+
+  "gpt4_autogen": {
+    "_comment": "NOT MIGRATED: Still using AutoGenWrapper (default behavior)",
+    "client_type": "azure",
+    "api_key": "${AZURE_OPENAI_API_KEY}",
+    "base_url": "https://your-resource.openai.azure.com/",
+    "model_info": {
+      "vision": false,
+      "function_calling": true,
+      "json_output": true,
+      "structured_output": true,
+      "family": "gpt-4"
+    },
+    "configs": {
+      "model": "gpt-4",
+      "api_version": "2024-02-15-preview",
+      "temperature": 0.7
+    }
+  },
+
+  "gpt4_litellm": {
+    "_comment": "MIGRATED: Same Azure config but using LiteLLM",
+    "client_type": "azure",
+    "api_key": "${AZURE_OPENAI_API_KEY}",
+    "base_url": "https://your-resource.openai.azure.com/",
+    "model_info": {
+      "vision": false,
+      "function_calling": true,
+      "json_output": true,
+      "structured_output": true,
+      "family": "gpt-4"
+    },
+    "configs": {
+      "model": "gpt-4",
+      "api_version": "2024-02-15-preview",
+      "temperature": 0.7
+    },
+    "use_litellm": true
+  },
+
+  "claude_direct": {
+    "_comment": "MIGRATED: Anthropic direct API via LiteLLM",
+    "client_type": "anthropic",
+    "api_key": "${ANTHROPIC_API_KEY}",
+    "model_info": {
+      "vision": false,
+      "function_calling": true,
+      "json_output": false,
+      "structured_output": false,
+      "family": "claude-3"
+    },
+    "configs": {
+      "model": "claude-3-5-sonnet-20241022",
+      "max_tokens": 4096,
+      "temperature": 0.7
+    },
+    "use_litellm": true
+  },
+
+  "claude_vertex": {
+    "_comment": "MIGRATED: Anthropic via Vertex AI using LiteLLM",
+    "client_type": "anthropic_vertex",
+    "model_info": {
+      "vision": false,
+      "function_calling": true,
+      "json_output": false,
+      "structured_output": false,
+      "family": "claude-3"
+    },
+    "configs": {
+      "model": "claude-3-5-sonnet-v2@20241022",
+      "region": "us-central1",
+      "project_id": "your-project-id",
+      "max_tokens": 4096
+    },
+    "litellm_model": "vertex_ai/claude-3-5-sonnet-v2@20241022",
+    "use_litellm": true
+  },
+
+  "openai_direct": {
+    "_comment": "MIGRATED: OpenAI direct API via LiteLLM",
+    "client_type": "openai",
+    "api_key": "${OPENAI_API_KEY}",
+    "model_info": {
+      "vision": false,
+      "function_calling": true,
+      "json_output": true,
+      "structured_output": true,
+      "family": "gpt-4"
+    },
+    "configs": {
+      "model": "gpt-4-turbo-preview",
+      "temperature": 0.7,
+      "max_tokens": 4096
+    },
+    "use_litellm": true
+  },
+
+  "_migration_notes": {
+    "phase_1": "Start with 1 low-risk model (e.g., gemini25flash)",
+    "phase_2": "Gradually enable for 2-3 more models after validation",
+    "phase_3": "Complete migration once confident",
+    "backward_compatibility": "Both wrappers can run side-by-side",
+    "zero_code_changes": "No code changes required - just config flag",
+    "observability": "ExecutionTrace metadata identical between wrappers"
+  }
+}

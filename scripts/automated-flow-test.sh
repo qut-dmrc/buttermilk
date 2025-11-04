@@ -13,7 +13,7 @@ if ! curl -s http://localhost:8000/health > /dev/null 2>&1; then
     SERVER_PID=$!
     echo "   ⏳ Waiting for server to start (PID: $SERVER_PID)..."
     echo "   📝 Server logs: /tmp/buttermilk-debug.log"
-    
+
     # Wait for server to be ready
     for i in {1..30}; do
         if curl -s http://localhost:8000/health > /dev/null 2>&1; then
@@ -63,20 +63,20 @@ const getSession = () => new Promise((resolve, reject) => {
 async function runTest() {
   const sessionId = await getSession();
   console.log(`   Session: ${sessionId}`);
-  
+
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://localhost:8000/ws/${sessionId}`);
     const messages = [];
-    
+
     ws.on('open', () => {
       console.log('   Connected to WebSocket');
-      
+
       const msg = {
         type: 'run_flow',
         flow: 'zot',
         prompt: 'What are the latest AI research trends?'
       };
-      
+
       console.log('   Sending zot flow request...');
       ws.send(JSON.stringify(msg));
     });
@@ -85,7 +85,7 @@ async function runTest() {
       const msg = JSON.parse(data.toString());
       messages.push(msg);
       console.log(`   Received: ${msg.type}`);
-      
+
       if (msg.type === 'system_error' || msg.payload?.error) {
         console.log(`   ❌ Error: ${JSON.stringify(msg.payload)}`);
       }

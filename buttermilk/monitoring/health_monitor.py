@@ -19,6 +19,7 @@ from buttermilk import logger
 
 class HealthStatus(Enum):
     """System component health status."""
+
     HEALTHY = "healthy"
     DEGRADED = "degraded"
     UNHEALTHY = "unhealthy"
@@ -28,6 +29,7 @@ class HealthStatus(Enum):
 @dataclass
 class ComponentHealth:
     """Simplified health status for individual system component."""
+
     component_name: str
     status: HealthStatus = HealthStatus.UNKNOWN
     last_check: Optional[datetime] = None
@@ -48,7 +50,7 @@ class HealthMonitor:
     def __init__(self):
         """Initialize simplified health monitor."""
         self.component_health: Dict[str, ComponentHealth] = {}
-        
+
         # Initialize basic system health check
         self._register_basic_system_check()
 
@@ -80,32 +82,29 @@ class HealthMonitor:
         """Get basic health summary."""
         overall_status = self.get_overall_health_status()
 
-        components_by_status = {
-            "healthy": [],
-            "degraded": [],
-            "unhealthy": [],
-            "unknown": []
-        }
+        components_by_status = {"healthy": [], "degraded": [], "unhealthy": [], "unknown": []}
 
         for component_name, health in self.component_health.items():
-            components_by_status[health.status.value].append({
-                "name": component_name,
-                "last_check": health.last_check.isoformat() if health.last_check else None,
-                "error_message": health.error_message
-            })
+            components_by_status[health.status.value].append(
+                {
+                    "name": component_name,
+                    "last_check": health.last_check.isoformat() if health.last_check else None,
+                    "error_message": health.error_message,
+                }
+            )
 
         return {
             "overall_status": overall_status.value,
             "components": components_by_status,
             "total_components": len(self.component_health),
-            "last_check": datetime.now().isoformat()
+            "last_check": datetime.now().isoformat(),
         }
 
     def check_basic_system_health(self):
         """Perform basic system health check."""
         try:
             import psutil
-            
+
             # Basic memory check
             memory = psutil.virtual_memory()
             memory_percent = memory.percent
@@ -134,35 +133,28 @@ class HealthMonitor:
 
             # Update component health
             if "system_resources" not in self.component_health:
-                self.component_health["system_resources"] = ComponentHealth(
-                    component_name="system_resources"
-                )
+                self.component_health["system_resources"] = ComponentHealth(component_name="system_resources")
 
             self.component_health["system_resources"].update_health(
                 status=status,
                 error_message="; ".join(issues) if issues else None,
                 memory_percent=memory_percent,
                 cpu_percent=cpu_percent,
-                memory_mb=memory.used / 1024 / 1024
+                memory_mb=memory.used / 1024 / 1024,
             )
 
         except Exception as e:
             if "system_resources" not in self.component_health:
-                self.component_health["system_resources"] = ComponentHealth(
-                    component_name="system_resources"
-                )
-            
+                self.component_health["system_resources"] = ComponentHealth(component_name="system_resources")
+
             self.component_health["system_resources"].update_health(
-                status=HealthStatus.UNKNOWN,
-                error_message=f"Failed to check system resources: {e}"
+                status=HealthStatus.UNKNOWN, error_message=f"Failed to check system resources: {e}"
             )
             logger.error("System health check failed", error=e)
 
     def _register_basic_system_check(self):
         """Register basic system health component."""
-        self.component_health["system_resources"] = ComponentHealth(
-            component_name="system_resources"
-        )
+        self.component_health["system_resources"] = ComponentHealth(component_name="system_resources")
         # Perform initial check
         self.check_basic_system_health()
 

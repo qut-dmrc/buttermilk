@@ -7,7 +7,7 @@ const colors = {
   text: '#00dd00',           // Lime green
   textDim: '#00aa00',        // Darker green for timestamps
   textBright: '#00ff00',     // Brighter green for hover/active
-  
+
   // IRC nick colors (cycling through for different agents)
   nicks: [
     '#00dd00', // Default lime green
@@ -19,19 +19,19 @@ const colors = {
     '#9999ff', // Light blue
     '#ff6666', // Light red
   ],
-  
+
   // Message type colors
   system: '#888888',
   error: '#cc0000',
   success: '#00cc00',
   warning: '#ff9900',
   info: '#00ffff',
-  
+
   // Status colors
   connected: '#00cc00',
   disconnected: '#cc0000',
   reconnecting: '#ff9900',
-  
+
   // UI elements
   border: '#333333',
   scrollbar: '#008800',
@@ -70,7 +70,7 @@ const getAgentColor = (agentId: string): string => {
 export const retroIRCTheme = {
   // Base colors
   colors,
-  
+
   // Layout constants
   layout: {
     nickWidth: 15,        // Characters width for nickname column
@@ -79,7 +79,7 @@ export const retroIRCTheme = {
     messageIndent: 2,     // Spaces after separator
     maxNickLength: 14,    // Leave room for separator
   },
-  
+
   // Agent display configuration
   agents: {
     // Map agent types/models to consistent colors
@@ -87,7 +87,7 @@ export const retroIRCTheme = {
     // Get color for agent
     getColor: getAgentColor
   },
-  
+
   // Format helpers
   format: {
     // Format nickname with padding and alignment
@@ -97,7 +97,7 @@ export const retroIRCTheme = {
       }
       return nick.padStart(maxWidth);
     },
-    
+
     // Format timestamp
     timestamp(date: Date | string): string {
       const d = typeof date === 'string' ? new Date(date) : date;
@@ -106,12 +106,12 @@ export const retroIRCTheme = {
       const secs = d.getSeconds().toString().padStart(2, '0');
       return `${hours}:${mins}:${secs}`;
     },
-    
+
     // Format button text
     button(text: string): string {
       return `[ ${text} ]`;
     },
-    
+
     // Format status indicator
     status(status: 'connected' | 'disconnected' | 'reconnecting'): string {
       switch (status) {

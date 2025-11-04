@@ -9,14 +9,12 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any
 
 import yaml
 from hydra import compose, initialize_config_dir
 from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig
 
-from buttermilk._core.execution_context import ExecutionContext
 from buttermilk.utils.utils import load_dotenv
 
 
@@ -256,7 +254,6 @@ class ConfigurationBootstrapper:
             os.environ[key] = str(value)
 
 
-
 def create_configuration_bootstrapper(
     config_path: str = "conf", config_name: str = "config", overrides: list[str] | None = None, config: DictConfig | None = None
 ) -> ConfigurationBootstrapper:
@@ -458,8 +455,9 @@ async def bootstrap_session_with_config_async(
         Tuple of (Buttermilk instance, typed ButtermilkConfig)
     """
     from pathlib import Path
+
     from buttermilk._core.dmrc import set_bm
-    from buttermilk._core.execution_context import from_config_async, create_session_from_context_async
+    from buttermilk._core.execution_context import create_session_from_context_async, from_config_async
 
     # Phase 1: Load typed config (single instantiation via Pydantic)
     if config is None:
@@ -473,12 +471,7 @@ async def bootstrap_session_with_config_async(
         bootstrap_overrides.append(f"++job={job}")
 
     # Load config - single instantiation pathway via Pydantic
-    bootstrapper = ConfigurationBootstrapper(
-        config_path=config_dir,
-        config_name=config_name,
-        overrides=bootstrap_overrides,
-        config=config
-    )
+    bootstrapper = ConfigurationBootstrapper(config_path=config_dir, config_name=config_name, overrides=bootstrap_overrides, config=config)
     typed_config = bootstrapper.config  # Already ButtermilkConfig from _load_configuration()
 
     # Resolve template paths
@@ -498,17 +491,11 @@ async def bootstrap_session_with_config_async(
     typed_config.session.template_paths = resolved_template_paths
 
     # Phase 2: Create or get ExecutionContext (singleton)
-    execution_context = await from_config_async(
-        typed_config.infrastructure,
-        project_name=typed_config.session.project_name
-    )
+    execution_context = await from_config_async(typed_config.infrastructure, project_name=typed_config.session.project_name)
 
     # Phase 3: Create session BM instance
     bm = await create_session_from_context_async(
-        execution_context=execution_context,
-        session=typed_config.session,
-        storage_configs=typed_config.storage,
-        full_config=typed_config
+        execution_context=execution_context, session=typed_config.session, storage_configs=typed_config.storage, full_config=typed_config
     )
 
     # Set singleton

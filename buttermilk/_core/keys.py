@@ -4,6 +4,7 @@ import json
 try:
     from azure.identity import DefaultAzureCredential
     from azure.keyvault.secrets import SecretClient
+
     AZURE_AVAILABLE = True
 except ImportError:
     DefaultAzureCredential = None
@@ -13,15 +14,18 @@ except ImportError:
 # Optional Google Cloud imports - fail gracefully if not available
 try:
     from google.cloud import secretmanager
+
     GCP_SECRETS_AVAILABLE = True
 except ImportError:
     secretmanager = None
     GCP_SECRETS_AVAILABLE = False
 
+import os
+
 from buttermilk._core.config import CloudProviderCfg
 from buttermilk._core.utils.lazy_loading import cached_property
 from buttermilk.utils.utils import load_json_flexi
-import os
+
 
 class SecretsManager(CloudProviderCfg):
     _path: str = ""

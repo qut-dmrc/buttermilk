@@ -23,9 +23,10 @@ The UI system follows a proxy pattern:
 
 1. **UIProxyAgent**: Acts as an intermediary between the flow orchestrator and the actual UI implementation. It dynamically connects to a specific UI implementation at runtime based on configuration.
 
-2. **UI Registry**: Maintains a mapping of UI types to their implementations, allowing dynamic registration/lookup.
+1. **UI Registry**: Maintains a mapping of UI types to their implementations, allowing dynamic registration/lookup.
 
-3. **Concrete UI Implementations**:
+1. **Concrete UI Implementations**:
+
    - `WebUIAgent`: Handles web interface interactions via WebSockets
    - `ConsoleUIAgent`: Provides a terminal-based interface
    - `SlackThreadChatUIAgent`: Integrates with Slack for chat-based interaction
@@ -82,11 +83,11 @@ from buttermilk.agents.ui.generic import UIAgent
 
 class MyCustomUIAgent(UIAgent):
     """Custom UI implementation."""
-    
+
     async def _process(self, *, inputs, cancellation_token=None, **kwargs):
         # Implementation...
         pass
-        
+
     # Other required methods...
 ```
 

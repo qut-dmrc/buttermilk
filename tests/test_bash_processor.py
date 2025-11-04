@@ -5,10 +5,9 @@ in the data processing pipeline.
 """
 
 import pytest
-from pathlib import Path
-import tempfile
-from buttermilk._core.types import Record
+
 from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.types import Record
 
 
 class TestBashProcessorBasics:
@@ -148,8 +147,9 @@ class TestPDFToTextProcessor:
 
         This is a convenience class that wraps BashProcessor with pdftotext configuration.
         """
-        from buttermilk.processors.bash import PDFToTextProcessor
         import urllib.request
+
+        from buttermilk.processors.bash import PDFToTextProcessor
 
         # Download a test PDF
         test_url = "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
@@ -175,8 +175,9 @@ class TestPDFToTextProcessor:
     @pytest.mark.anyio
     async def test_pdftotext_processor_raises_on_missing_pdftotext(self, tmp_path, monkeypatch):
         """PDFToTextProcessor should raise helpful error if pdftotext not installed."""
-        from buttermilk.processors.bash import PDFToTextProcessor
         import asyncio
+
+        from buttermilk.processors.bash import PDFToTextProcessor
 
         # Mock asyncio.create_subprocess_shell to simulate pdftotext not found
         original_create_subprocess = asyncio.create_subprocess_shell
@@ -204,7 +205,7 @@ class TestPDFToTextProcessor:
 
         error_msg = str(exc_info.value).lower()
         assert "pdftotext" in error_msg
-        assert ("not found" in error_msg or "not installed" in error_msg or "install poppler" in error_msg)
+        assert "not found" in error_msg or "not installed" in error_msg or "install poppler" in error_msg
 
 
 class TestBashProcessorCaching:

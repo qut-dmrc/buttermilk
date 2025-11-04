@@ -7,7 +7,6 @@ import pytest
 
 from buttermilk._core.constants import END
 from buttermilk._core.contract import ConductorRequest, StepRequest, TaskProcessingComplete, TaskProcessingStarted
-from buttermilk._core.exceptions import FatalError
 from buttermilk.agents.flowcontrol.host import HostAgent
 
 
@@ -40,7 +39,7 @@ class TestHostAgentErrorHandling:
         assert hasattr(host_agent, "_failed_tasks_by_agent")
         assert hasattr(host_agent, "_total_tasks_in_step")
         assert hasattr(host_agent, "_error_threshold")
-        
+
         assert isinstance(host_agent._failed_tasks_by_agent, defaultdict)
         assert host_agent._total_tasks_in_step == 0
         assert host_agent._error_threshold == 0.5
@@ -50,13 +49,9 @@ class TestHostAgentErrorHandling:
         """Test that task start events properly increment counters."""
         # Simulate 3 tasks starting
         for i in range(3):
-            start_msg = TaskProcessingStarted(
-                agent_id=f"agent_{i}",
-                role="WORKER",
-                task_index=0
-            )
+            start_msg = TaskProcessingStarted(agent_id=f"agent_{i}", role="WORKER", task_index=0)
             await host_agent.handle_task_started(start_msg, mock_message_context)
-        
+
         # Check that counters are properly updated
         assert host_agent._total_tasks_in_step == 3
         assert sum(host_agent._pending_tasks_by_agent.values()) == 3
@@ -66,32 +61,18 @@ class TestHostAgentErrorHandling:
         """Test that task completion properly tracks errors."""
         # Start 3 tasks
         for i in range(3):
-            start_msg = TaskProcessingStarted(
-                agent_id=f"agent_{i}",
-                role="WORKER",
-                task_index=0
-            )
+            start_msg = TaskProcessingStarted(agent_id=f"agent_{i}", role="WORKER", task_index=0)
             await host_agent.handle_task_started(start_msg, mock_message_context)
-        
+
         # Complete 2 tasks with errors
         for i in range(2):
-            complete_msg = TaskProcessingComplete(
-                agent_id=f"agent_{i}",
-                role="WORKER",
-                task_index=0,
-                is_error=True
-            )
+            complete_msg = TaskProcessingComplete(agent_id=f"agent_{i}", role="WORKER", task_index=0, is_error=True)
             await host_agent.handle_task_complete(complete_msg, mock_message_context)
-        
+
         # Complete 1 task successfully
-        complete_msg = TaskProcessingComplete(
-            agent_id="agent_2",
-            role="WORKER",
-            task_index=0,
-            is_error=False
-        )
+        complete_msg = TaskProcessingComplete(agent_id="agent_2", role="WORKER", task_index=0, is_error=False)
         await host_agent.handle_task_complete(complete_msg, mock_message_context)
-        
+
         # Check error tracking
         assert sum(host_agent._failed_tasks_by_agent.values()) == 2
         assert host_agent._total_tasks_in_step == 3
@@ -101,11 +82,11 @@ class TestHostAgentErrorHandling:
         """Test that flow stops when error threshold is exceeded."""
         # Mock the _wait_for_all_tasks_complete method to return True (tasks completed)
         host_agent._wait_for_all_tasks_complete = AsyncMock(return_value=True)
-        
+
         # Simulate scenario: 3 out of 5 tasks failed (60% > 50% threshold)
         host_agent._total_tasks_in_step = 5
         host_agent._failed_tasks_by_agent = defaultdict(int, {"agent_1": 2, "agent_2": 1})
-        
+
         # Should return False (stop flow)
         result = await host_agent.wait_check_current_step_completions()
         assert result is False
@@ -115,11 +96,11 @@ class TestHostAgentErrorHandling:
         """Test that flow continues when error threshold is not exceeded."""
         # Mock the _wait_for_all_tasks_complete method to return True (tasks completed)
         host_agent._wait_for_all_tasks_complete = AsyncMock(return_value=True)
-        
+
         # Simulate scenario: 2 out of 5 tasks failed (40% < 50% threshold)
         host_agent._total_tasks_in_step = 5
         host_agent._failed_tasks_by_agent = defaultdict(int, {"agent_1": 1, "agent_2": 1})
-        
+
         # Should return True (continue flow)
         result = await host_agent.wait_check_current_step_completions()
         assert result is True
@@ -129,7 +110,7 @@ class TestHostAgentErrorHandling:
         """Test that error tracking is cleared after successful step completion."""
         # Mock the _wait_for_all_tasks_complete method to return True
         host_agent._wait_for_all_tasks_complete = AsyncMock(return_value=True)
-        
+
         # Set up some error tracking data
         host_agent._total_tasks_in_step = 5
         host_agent._failed_tasks_by_agent = defaultdict(int, {"agent_1": 1})
@@ -138,7 +119,7 @@ class TestHostAgentErrorHandling:
         # Call wait_check_current_step_completions
         result = await host_agent.wait_check_current_step_completions()
         assert result is True
-        
+
         # Check that tracking is cleared
         assert host_agent._total_tasks_in_step == 0
         assert len(host_agent._failed_tasks_by_agent) == 0
@@ -154,22 +135,22 @@ class TestHostAgentErrorHandling:
             parameters={"human_in_loop": False, "error_threshold": 0.25},
             unique_identifier="strict_host",
         )
-        
+
         # Mock the _wait_for_all_tasks_complete method
         strict_host._wait_for_all_tasks_complete = AsyncMock(return_value=True)
-        
+
         # Simulate scenario: 2 out of 10 tasks failed (20% < 25% threshold)
         strict_host._total_tasks_in_step = 10
         strict_host._failed_tasks_by_agent = defaultdict(int, {"agent_1": 1, "agent_2": 1})
-        
+
         # Should continue (below threshold)
         result = await strict_host.wait_check_current_step_completions()
         assert result is True
-        
+
         # Now test with 3 out of 10 tasks failed (30% > 25% threshold)
         strict_host._total_tasks_in_step = 10
         strict_host._failed_tasks_by_agent = defaultdict(int, {"agent_1": 2, "agent_2": 1})
-        
+
         # Should stop (above threshold)
         result = await strict_host.wait_check_current_step_completions()
         assert result is False
@@ -179,11 +160,11 @@ class TestHostAgentErrorHandling:
         """Test edge case where no tasks were started."""
         # Mock the _wait_for_all_tasks_complete method
         host_agent._wait_for_all_tasks_complete = AsyncMock(return_value=True)
-        
+
         # No tasks scenario
         host_agent._total_tasks_in_step = 0
         host_agent._failed_tasks_by_agent = defaultdict(int)
-        
+
         # Should continue (no tasks means no errors)
         result = await host_agent.wait_check_current_step_completions()
         assert result is True

@@ -27,8 +27,8 @@
 			 {#if message.agent_info?.parameters?.model}<i class="bi bi-cpu"></i>{message.agent_info
 						.parameters.model}{/if}
 			<slot name="messagePrefix">
-				
-				
+
+
 			</slot>
 			{#if message.tracing_link}<a
 					href={message.tracing_link}

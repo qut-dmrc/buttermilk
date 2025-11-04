@@ -1,34 +1,26 @@
 name: '📋 Gemini Scheduled Issue Triage'
-
 on:
   schedule:
     - cron: '20 18 * * *' # Runs every day
   workflow_dispatch:
-
 concurrency:
   group: '${{ github.workflow }}'
   cancel-in-progress: true
-
 defaults:
   run:
     shell: 'bash'
-
 permissions:
   contents: 'read'
   id-token: 'write'
   issues: 'write'
   statuses: 'write'
-
 jobs:
   triage-issues:
     timeout-minutes: 5
     runs-on: 'ubuntu-latest'
-
     steps:
       - name: 'Checkout repository'
         uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
-
-
       - name: Authenticate to Google Cloud
         uses: 'google-github-actions/auth@v2'
         with:
@@ -42,7 +34,6 @@ jobs:
         with:
           app-id: '${{ vars.APP_ID }}'
           private-key: '${{ secrets.APP_PRIVATE_KEY }}'
-
       - name: 'Find untriaged issues'
         id: 'find_issues'
         env:
@@ -68,7 +59,6 @@ jobs:
 
           ISSUE_COUNT="$(echo "${ISSUES}" | jq 'length')"
           echo "✅ Found ${ISSUE_COUNT} issues to triage! 🎯"
-
       - name: 'Run Gemini Issue Triage'
         if: |-
           ${{ steps.find_issues.outputs.issues_to_triage != '[]' }}
@@ -101,7 +91,7 @@ jobs:
               "telemetry": {
                 "enabled": true,
                 "target": "gcp"
-              }   
+              }
             }
           prompt: |-
             ## Role

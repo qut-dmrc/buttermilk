@@ -10,7 +10,7 @@ interface Props {
 
 const UserInput = ({ onSubmit }: Props) => {
   const [value, setValue] = useState('');
-  
+
   const handleSubmit = (text: string) => {
     if (text.trim()) {
       onSubmit(text);

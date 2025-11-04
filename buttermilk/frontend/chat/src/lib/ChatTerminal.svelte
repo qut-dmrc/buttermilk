@@ -45,8 +45,8 @@
 	}
 
 	// Compute unified status that combines connection and flow status
-	$: displayStatus = !isConnected && !readonly && sessionStatus !== 'demo' 
-		? (connectionError?.includes('terminated') ? 'terminated' : 
+	$: displayStatus = !isConnected && !readonly && sessionStatus !== 'demo'
+		? (connectionError?.includes('terminated') ? 'terminated' :
 		   isReconnecting ? 'reconnecting' : 'disconnected')
 		: (sessionStatus === 'unknown' ? 'idle' : sessionStatus);
 
@@ -135,7 +135,7 @@
 	onMount(async () => {
 		// Make the callback async
 		console.debug('Attempting direct WebSocket connection to:', wsUrl);
-		
+
 		// If a session ID was provided via props (from URL), use that
 		if (currentSessionId) {
 			console.debug('Using session ID from URL prop:', currentSessionId);
@@ -379,11 +379,11 @@
 		// Check if backend is available before attempting WebSocket connection
 		const isBackendHealthy = await checkBackendHealth(false); // Don't use cache for WebSocket connections
 		logBackendStatus('WebSocket connection', isBackendHealthy);
-		
+
 		if (!isBackendHealthy) {
 			connectionError = 'Backend service unavailable';
 			isReconnecting = false; // Stop reconnection attempts when backend is down
-			
+
 			// Schedule a health check retry with exponential backoff instead of WebSocket retry
 			const backoffDelay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
 			console.debug(`Will retry backend health check in ${backoffDelay}ms`);
@@ -541,7 +541,7 @@
 				// Check if this is a session termination by the backend
 				const isSessionTerminated = event.code === 1000 && event.reason?.includes('TERMINATED');
 				const isServerShutdown = event.code === 1001 || event.code === 1006;
-				
+
 				if (isSessionTerminated) {
 					console.log('Session terminated by backend, stopping reconnection attempts');
 					connectionError = 'Session terminated by server';

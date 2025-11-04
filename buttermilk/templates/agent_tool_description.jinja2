@@ -2,7 +2,7 @@
 system:
   You are the {{ agent_name }} agent with the following capabilities:
   {% if description %}{{ description }}{% endif %}
-  
+
   {% if tools %}
   Your available tools:
   {% for tool in tools %}
@@ -15,7 +15,7 @@ system:
     {% endif %}
   {% endfor %}
   {% endif %}
-  
+
   When processing requests:
   1. Analyze what is being asked
   2. Determine if you can handle it with your tools
@@ -31,7 +31,7 @@ user:
   {% else %}
   {{ prompt | default('') }}
   {% endif %}
-  
+
   {% if context %}
   Context from previous interactions:
   {% for msg in context[-5:] %}  {# Show last 5 messages #}

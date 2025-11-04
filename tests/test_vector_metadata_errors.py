@@ -4,7 +4,7 @@ This test reproduces the dict_items error encountered with record B7ZX9ISZ.
 """
 
 import pytest
-from unittest.mock import Mock, MagicMock, AsyncMock, patch
+
 from buttermilk.data.vector import _get_chunk_field, _sanitize_metadata_for_chroma
 
 
@@ -72,7 +72,11 @@ class TestMetadataHandling:
             enhanced = {
                 "content_type": chunk_metadata.get("content_type", "unknown") if isinstance(chunk_metadata, dict) else "unknown",
                 "chunk_type": chunk_metadata.get("chunk_type", "unknown") if isinstance(chunk_metadata, dict) else "unknown",
-                **{k: v for k, v in (chunk_metadata.items() if isinstance(chunk_metadata, dict) else {}.items()) if k not in ["content_type", "chunk_type"]},  # type: ignore
+                **{
+                    k: v
+                    for k, v in (chunk_metadata.items() if isinstance(chunk_metadata, dict) else {}.items())
+                    if k not in ["content_type", "chunk_type"]
+                },  # type: ignore
             }
 
         # The isinstance check passes False, so we go to the else branch
@@ -159,7 +163,7 @@ class TestMetadataErrorReproduction:
             "embedding": [0.1, 0.2, 0.3],
         }
 
-        chunk_metadata = _get_chunk_field(bad_chunk, 'metadata', {})
+        chunk_metadata = _get_chunk_field(bad_chunk, "metadata", {})
 
         # Verify it's dict_items
         assert type(chunk_metadata).__name__ == "dict_items"

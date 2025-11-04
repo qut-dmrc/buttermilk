@@ -15,7 +15,7 @@ from hydra.plugins.search_path_plugin import SearchPathPlugin
 
 class ButtermilkSearchPathPlugin(SearchPathPlugin):
     """Plugin to automatically discover Buttermilk configuration directories.
-    
+
     This plugin adds the following search paths in order:
     1. Core buttermilk configurations (highest priority for base configs)
     2. User-specific configurations from environment variables
@@ -25,7 +25,7 @@ class ButtermilkSearchPathPlugin(SearchPathPlugin):
 
     def manipulate_search_path(self, search_path: ConfigSearchPath) -> None:
         """Add configuration search paths for Buttermilk.
-        
+
         Args:
             search_path: Hydra's ConfigSearchPath to modify
         """
@@ -54,24 +54,19 @@ class ButtermilkSearchPathPlugin(SearchPathPlugin):
 
     def _discover_external_packages(self) -> List[tuple[str, str]]:
         """Discover external packages that provide Buttermilk configurations.
-        
+
         Looks for packages with naming patterns like:
         - buttermilk_*_configs
         - *_buttermilk_flows
         - research_*_configs
-        
+
         Returns:
             List of (package_name, package_path) tuples
         """
         external_packages = []
 
         # Common patterns for research configuration packages
-        patterns = [
-            "buttermilk_*_configs",
-            "*_buttermilk_flows",
-            "research_*_configs",
-            "*_research_flows"
-        ]
+        patterns = ["buttermilk_*_configs", "*_buttermilk_flows", "research_*_configs", "*_research_flows"]
 
         try:
             import importlib.util
@@ -96,4 +91,5 @@ class ButtermilkSearchPathPlugin(SearchPathPlugin):
     def _matches_pattern(self, name: str, pattern: str) -> bool:
         """Check if a module name matches a wildcard pattern."""
         import fnmatch
+
         return fnmatch.fnmatch(name, pattern)

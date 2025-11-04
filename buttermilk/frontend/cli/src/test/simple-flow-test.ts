@@ -42,12 +42,12 @@ async function runFlowTest() {
     // 2. Connect WebSocket
     console.log('2️⃣  Connecting WebSocket...');
     const ws = new WebSocket(`ws://${HOST}:${PORT}/ws/${sessionId}`);
-    
+
     const messages: any[] = [];
-    
+
     ws.on('open', () => {
       console.log('   ✅ WebSocket connected\n');
-      
+
       // 3. Send test flow command
       console.log('3️⃣  Starting test flow...');
       ws.send(JSON.stringify({
@@ -60,9 +60,9 @@ async function runFlowTest() {
     ws.on('message', (data) => {
       const msg = JSON.parse(data.toString());
       messages.push(msg);
-      
+
       console.log(`   📨 Received: ${msg.type}`);
-      
+
       // Log specific message details
       switch (msg.type) {
         case 'flow_progress_update':
@@ -79,11 +79,11 @@ async function runFlowTest() {
           console.log(`      Message: ${msg.payload?.message || JSON.stringify(msg.payload).substring(0, 100)}`);
           break;
       }
-      
+
       // Check for completion
       if (msg.type === 'flow_progress_update' && msg.payload?.status === 'COMPLETED') {
         console.log('\n4️⃣  Flow completed successfully! 🎉');
-        
+
         // 5. Try OSB flow with interaction
         console.log('\n5️⃣  Starting OSB flow...');
         ws.send(JSON.stringify({
@@ -93,12 +93,12 @@ async function runFlowTest() {
         }));
         console.log('   📤 Sent: run_flow osb with prompt\n');
       }
-      
+
       // Handle UI messages that need response
       if (msg.type === 'ui_message' && msg.payload?.requires_response) {
         console.log('\n6️⃣  UI is asking for confirmation...');
         console.log(`   Question: ${msg.payload?.message}`);
-        
+
         setTimeout(() => {
           console.log('   📤 Sending: yes');
           ws.send(JSON.stringify({
@@ -116,18 +116,18 @@ async function runFlowTest() {
     ws.on('close', () => {
       console.log('\n🔌 WebSocket closed');
       console.log(`\n📊 Total messages received: ${messages.length}`);
-      
+
       // Summary of message types
       const typeCounts = messages.reduce((acc, msg) => {
         acc[msg.type] = (acc[msg.type] || 0) + 1;
         return acc;
       }, {} as Record<string, number>);
-      
+
       console.log('\n📈 Message type breakdown:');
       Object.entries(typeCounts).forEach(([type, count]) => {
         console.log(`   ${type}: ${count}`);
       });
-      
+
       process.exit(0);
     });
 

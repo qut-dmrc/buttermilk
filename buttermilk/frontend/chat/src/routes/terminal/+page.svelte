@@ -18,7 +18,7 @@
           }
           const data = await response.json();
           const newSessionId = data.session_id;
-          
+
           // Redirect to the session-specific route
           await goto(`/terminal/${newSessionId}`, { replaceState: true });
         } catch (error) {

@@ -35,17 +35,17 @@ class MediaDescription(BaseModel):
         le=1.0,
         description="Confidence level in the description accuracy",
     )
-    
+
     def as_markdown(self, agent_id: str = None, call_id: str = None) -> str:
         """Returns a Markdown formatted string for insertion into templates.
-        
+
         Format follows the standard: agent identifier on first line, followed by
         content-specific fields without empty lines between components.
-        
+
         Args:
             agent_id: The agent identifier (e.g., "DESC-gpt4")
             call_id: The call identifier for this execution
-            
+
         Returns:
             str: Formatted markdown string suitable for template insertion
         """
@@ -54,27 +54,22 @@ class MediaDescription(BaseModel):
             # Use only the last 8 characters of call_id for brevity
             short_call_id = call_id[-8:] if len(call_id) > 8 else call_id
             header = f"**{agent_id} #{short_call_id}**\n"
-        
-        return (
-            f"{header}"
-            f"{self.description}\n"
-            f"Type: {self.media_type}\n"
-            f"Confidence: {self.confidence:.2f}"
-        )
-    
+
+        return f"{header}" f"{self.description}\n" f"Type: {self.media_type}\n" f"Confidence: {self.confidence:.2f}"
+
     def __str__(self) -> str:
         """Returns a Markdown formatted string representation.
-        
+
         When agent context is available (via _agent_id and _call_id attributes),
         includes the full header. Otherwise returns just the description.
         """
         # Check if agent context is available (set by ExecutionTrace)
         agent_id = getattr(self, "_agent_id", None)
         call_id = getattr(self, "_call_id", None)
-        
+
         if agent_id and call_id:
             return self.as_markdown(agent_id, call_id)
-        
+
         # Fallback to just the description
         return self.description
 
@@ -133,11 +128,7 @@ class Describer(LLMAgent):
         record = message.record
 
         # Check if alt_text already exists in metadata
-        if (
-            hasattr(record, "metadata")
-            and isinstance(record.metadata, dict)
-            and record.metadata.get("alt_text")
-        ):
+        if hasattr(record, "metadata") and isinstance(record.metadata, dict) and record.metadata.get("alt_text"):
             logger.debug("Record already has alt_text", alt_text=record.metadata["alt_text"][:50])
             # Return structured output even for existing alt text
             existing_description = MediaDescription(

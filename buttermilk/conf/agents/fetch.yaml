@@ -2,15 +2,12 @@
 
 fetch:
   name: "🔍 Fetch"
-  role: FETCH  
+  role: FETCH
   description: "Data fetcher that retrieves records from configured data sources"
   agent_obj: FetchAgent
-
   num_runs: 1
-
   parameters:
-    batch_size: 100  # Default batch size
-
+    batch_size: 100 # Default batch size
     # Data source will be determined by flow configuration
     storage: ${....storage}
   inputs:

@@ -307,23 +307,23 @@ export async function loadParametersFromSessions() {
         if (!response.ok) {
             throw new Error(`Failed to fetch sessions: ${response.statusText}`);
         }
-        
+
         const data = await response.json() as { sessions?: SessionInfo[] };
         const sessions: SessionInfo[] = data.sessions || [];
-        
+
         // Extract unique values for each parameter type
         const flows = new Set<string>();
         const datasets = new Set<string>();
         const records = new Set<string>();
         const criteriaSet = new Set<string>();
-        
+
         sessions.forEach(session => {
             if (session.parameters?.flow) flows.add(session.parameters.flow);
             if (session.parameters?.dataset) datasets.add(session.parameters.dataset);
             if (session.parameters?.record_id) records.add(session.parameters.record_id);
             if (session.parameters?.criteria) criteriaSet.add(session.parameters.criteria);
         });
-        
+
         // Update the stores with demo data
         initialFlowConfigStore._store.update(state => ({
             ...state,
@@ -332,7 +332,7 @@ export async function loadParametersFromSessions() {
             error: null,
             timestamp: Date.now()
         }));
-        
+
         // Create mock flow info with available criteria, datasets, and records
         const mockFlowInfo = {
             criteria: Array.from(criteriaSet),
@@ -340,7 +340,7 @@ export async function loadParametersFromSessions() {
             datasets: Array.from(datasets),
             record_ids: Array.from(records).map(id => ({ id, name: id }))
         };
-        
+
         flowInfoStore._store.update(state => ({
             ...state,
             data: mockFlowInfo,
@@ -348,7 +348,7 @@ export async function loadParametersFromSessions() {
             error: null,
             timestamp: Date.now()
         }));
-        
+
         // Update records store with demo data
         const recordItems = Array.from(records).map(record_id => ({
             record_id,
@@ -356,7 +356,7 @@ export async function loadParametersFromSessions() {
             content: `Demo record: ${record_id}`,
             metadata: {}
         }));
-        
+
         recordsStore._store.update(state => ({
             ...state,
             data: recordItems,
@@ -364,9 +364,9 @@ export async function loadParametersFromSessions() {
             error: null,
             timestamp: Date.now()
         }));
-        
+
         console.log('Demo mode: Loaded parameters from sessions', { flows: flows.size, datasets: datasets.size, records: records.size, criteria: criteriaSet.size });
-        
+
     } catch (error) {
         console.error('Failed to load parameters from sessions:', error);
         // Set empty data if loading fails
@@ -385,18 +385,18 @@ export async function findMatchingSession(flow: string, dataset: string, record_
     try {
         const response = await fetch('/api/sessions');
         if (!response.ok) return null;
-        
+
         const data = await response.json() as { sessions?: SessionInfo[] };
         const sessions: SessionInfo[] = data.sessions || [];
-        
+
         // Find a session with matching parameters
-        const matchingSession = sessions.find(session => 
+        const matchingSession = sessions.find(session =>
             session.parameters?.flow === flow &&
             session.parameters?.dataset === dataset &&
             session.parameters?.record_id === record_id &&
             session.parameters?.criteria === criteria
         );
-        
+
         return matchingSession?.session_id || null;
     } catch (error) {
         console.error('Failed to find matching session:', error);
@@ -412,7 +412,7 @@ let lastInitializedSession = '';
 
 export async function initializeApp(sessionId?: string) {
     const currentSession = sessionId || 'default';
-    
+
     if (lastInitializedSession === currentSession) {
         console.log(`>>> initializeApp called but already initialized for session ${currentSession}, using cache`);
         // Check if we're already in demo mode, if so don't try API again
@@ -424,16 +424,16 @@ export async function initializeApp(sessionId?: string) {
         initialFlowConfigStore.fetchWithCache();
         return;
     }
-    
+
     console.log(">>> initializeApp called for session:", currentSession);
     console.log("Initializing app data: fetching flow choices...");
     lastInitializedSession = currentSession;
-    
+
     // Try to fetch from backend first
     try {
         console.log("Attempting to connect to backend...");
         const response = await fetch('/api/flows', { signal: AbortSignal.timeout(5000) });
-        
+
         if (response.ok) {
             console.log("Backend available - using live mode");
             isDemoMode.set(false);
@@ -511,7 +511,7 @@ selectedFlow.subscribe(async (flowValue) => {
 selectedDataset.subscribe((datasetValue) => {
 	const currentFlow = get(selectedFlow);
 	const currentDemoMode = get(isDemoMode);
-	
+
 	if (currentFlow && !currentDemoMode) {
 		console.log(
 			`Selected dataset changed to: ${datasetValue}. Refetching records with dataset filter...`
@@ -564,7 +564,7 @@ export const configReloadStore = writable<{
 // Function to reload configuration
 export async function reloadConfiguration(): Promise<ConfigReloadResponse | null> {
 	configReloadStore.update(state => ({ ...state, loading: true, error: null }));
-	
+
 	try {
 		const response = await fetch('/api/admin/reload-config', {
 			method: 'POST',
@@ -572,22 +572,22 @@ export async function reloadConfiguration(): Promise<ConfigReloadResponse | null
 				'Content-Type': 'application/json'
 			}
 		});
-		
+
 		const result: ConfigReloadResponse = await response.json();
-		
+
 		configReloadStore.update(state => ({
 			...state,
 			loading: false,
 			lastResult: result,
 			error: result.success ? null : result.errors.join(', ')
 		}));
-		
+
 		// If reload was successful, refresh flow choices and other data
 		if (result.success) {
 			console.log('Configuration reload successful, refreshing data...');
 			initialFlowConfigStore.reset();
 			await initialFlowConfigStore.fetch();
-			
+
 			// If there's a currently selected flow and it was updated, refresh its info
 			const currentFlow = get(selectedFlow);
 			if (currentFlow && result.flows_updated.includes(currentFlow)) {
@@ -595,7 +595,7 @@ export async function reloadConfiguration(): Promise<ConfigReloadResponse | null
 				// await refetchFlowInfo();
 			}
 		}
-		
+
 		return result;
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';

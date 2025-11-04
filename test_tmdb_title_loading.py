@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 """Quick test to verify Title objects are loaded from BigQuery storage."""
 
-import asyncio
-from buttermilk._core.storage_config import StorageFactory
 from omegaconf import OmegaConf
+
+from buttermilk._core.storage_config import StorageFactory
 
 
 def test_title_loading():
@@ -30,9 +30,9 @@ def test_title_loading():
         print(f"  Record ID: {record.record_id}")
 
         # Check Title-specific attributes
-        if hasattr(record, 'title'):
+        if hasattr(record, "title"):
             print(f"  Title: {record.title}")
-        if hasattr(record, 'year'):
+        if hasattr(record, "year"):
             print(f"  Year: {record.year}")
 
         # Show first 3 records only

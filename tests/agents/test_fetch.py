@@ -60,11 +60,7 @@ class TestFetch:
         from buttermilk._core.storage_config import FileStorageConfig
 
         mock_storage = MagicMock()
-        test_config = FileStorageConfig(
-            type="file",
-            path="test.jsonl",
-            dataset_name="test_data"
-        )
+        test_config = FileStorageConfig(type="file", path="test.jsonl", dataset_name="test_data")
         fetch.data = {"test_data": test_config}
 
         # Mock the get_storage method using patch
@@ -106,7 +102,7 @@ class TestFetch:
     async def test_fetch_nonexistent_id_raises_processing_error(self, fetch: FetchAgent):
         """Test fetch raises ProcessingError when a record ID is not found."""
         record_id_to_test = "nonexistent_id_123"
-        
+
         # Mock storage to return None for the record ID
         mock_storage = MagicMock()
         mock_storage.get_record_by_id.return_value = None
@@ -174,9 +170,10 @@ async def test_run_record_agent(
         mock_r.fulltext = f"Mock content for {record_id_to_lookup}"
         return mock_r
 
-    with patch("buttermilk.utils.media.download_and_convert", side_effect=mock_download_and_convert_conditional) as mock_d_and_c, \
-         patch.object(FetchAgent, "fetch_record", side_effect=mock_get_record_dataset_conditional) as mock_get_rec_dataset:
-
+    with (
+        patch("buttermilk.utils.media.download_and_convert", side_effect=mock_download_and_convert_conditional) as mock_d_and_c,
+        patch.object(FetchAgent, "fetch_record", side_effect=mock_get_record_dataset_conditional) as mock_get_rec_dataset,
+    ):
         agent_id = await FetchAgent.register(
             runtime,
             DefaultTopicId().type,

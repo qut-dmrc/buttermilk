@@ -216,14 +216,7 @@ def setup_console_logging(verbose: bool = False, enable_console: bool = True) ->
     # Create Rich handler for beautiful console output (write to stderr, not stdout)
     # This follows Python best practices and is required for MCP servers
     stderr_console = Console(stderr=True)
-    rich_handler = StructlogRichHandler(
-        console=stderr_console,
-        show_time=True,
-        show_level=True,
-        show_path=False,
-        markup=True,
-        rich_tracebacks=True
-    )
+    rich_handler = StructlogRichHandler(console=stderr_console, show_time=True, show_level=True, show_path=False, markup=True, rich_tracebacks=True)
 
     # Keep buttermilk logger at INFO level
     console_level = logging.INFO  # logging.DEBUG if verbose else logging.INFO
@@ -312,7 +305,7 @@ def setup_file_logging(execution_context_id: str, verbose: bool = False, project
     logger.info(f"Log file created at {log_path}", log_path=str(log_path), verbose=verbose)
     if verbose:
         logger.debug(f"Verbose logging enabled for {log_path}.", log_path=str(log_path), verbose=verbose)
-    
+
     # Mark file logging as configured
     _file_logging_configured = True
 
@@ -331,15 +324,11 @@ def setup_cloud_logging(logger_cfg, cloud_manager, session_info) -> None:
         session_info: Session information
     """
     global _cloud_logging_sessions
-    
+
     # Check if cloud logging is already configured for this session
     session_key = f"{session_info.session_id}:{logger_cfg.project_id}"
     if session_key in _cloud_logging_sessions:
-        logger.debug(
-            "Cloud logging already configured for this session",
-            session_id=session_info.session_id,
-            project_id=logger_cfg.project_id
-        )
+        logger.debug("Cloud logging already configured for this session", session_id=session_info.session_id, project_id=logger_cfg.project_id)
         return
     if logger_cfg and logger_cfg.type == "gcp" and cloud_manager:
         try:
@@ -357,7 +346,7 @@ def setup_cloud_logging(logger_cfg, cloud_manager, session_info) -> None:
             # Filter out None values from labels as protobuf doesn't accept them
             raw_labels = session_info.model_dump(include={"session_id", "project_name", "job", "platform"})
             labels = {k: str(v) for k, v in raw_labels.items() if v is not None}
-            
+
             cloud_handler = CloudLoggingHandler(
                 client=cloud_manager.gcs_log_client(logger_cfg),
                 resource=cloud_logging_resource,
@@ -383,7 +372,7 @@ def setup_cloud_logging(logger_cfg, cloud_manager, session_info) -> None:
                 context_vars["session_id"] = session_info.session_id[-12:]  # Last 12 chars for brevity
             if session_info.batch_id:
                 context_vars["batch_id"] = session_info.batch_id[-12:]  # Last 12 chars
-                
+
             structlog.contextvars.bind_contextvars(**context_vars)
 
             # Check for existing cloud handlers to prevent duplicates
@@ -391,22 +380,18 @@ def setup_cloud_logging(logger_cfg, cloud_manager, session_info) -> None:
             existing_cloud_handlers = [
                 h for h in root_logger.handlers if isinstance(h, CloudLoggingHandler) and getattr(h, "name", "") == session_info.project_name
             ]
-            
+
             if existing_cloud_handlers:
                 logger.debug(
                     "Cloud logging handler already exists for this session",
                     session_id=session_info.session_id,
-                    existing_handlers=len(existing_cloud_handlers)
+                    existing_handlers=len(existing_cloud_handlers),
                 )
             else:
                 # Add handler only to buttermilk logger for structured logs
                 logging.getLogger(_LOGGER_NAME).addHandler(cloud_handler)
-                logger.info(
-                    "Cloud logging handler added",
-                    session_id=session_info.session_id,
-                    project_id=logger_cfg.project_id
-                )
-            
+                logger.info("Cloud logging handler added", session_id=session_info.session_id, project_id=logger_cfg.project_id)
+
             # Mark this session as having cloud logging configured
             _cloud_logging_sessions.add(session_key)
 
@@ -424,36 +409,36 @@ def setup_cloud_logging(logger_cfg, cloud_manager, session_info) -> None:
 
 def validate_logging_state(verbose_expected: bool = None) -> dict[str, Any]:
     """Validate the current logging configuration state.
-    
+
     This function checks that logging is properly configured and hasn't been
     tampered with in ways that would break verbose logging functionality.
-    
+
     Args:
         verbose_expected: If provided, validates that verbose logging is configured correctly
-        
+
     Returns:
         dict: Validation results with status and details
-        
+
     Raises:
         RuntimeError: If critical logging configuration issues are detected
     """
     global _console_logging_configured, _file_logging_configured
-    
+
     validation_results = {
         "console_configured": _console_logging_configured,
         "file_configured": _file_logging_configured,
         "root_logger_level": logging.getLogger().getEffectiveLevel(),
         "buttermilk_logger_level": logging.getLogger(_LOGGER_NAME).getEffectiveLevel(),
-        "issues": []
+        "issues": [],
     }
-    
+
     # Check if basic logging setup has been done
     if not _console_logging_configured:
         validation_results["issues"].append("Console logging not configured")
-        
+
     if not _file_logging_configured:
         validation_results["issues"].append("File logging not configured")
-    
+
     # Check root logger level for verbose mode
     root_level = logging.getLogger().getEffectiveLevel()
     if verbose_expected is True and root_level > logging.DEBUG:
@@ -461,7 +446,7 @@ def validate_logging_state(verbose_expected: bool = None) -> dict[str, Any]:
             f"Verbose mode expected but root logger level is {logging.getLevelName(root_level)}, "
             "should be DEBUG. This will prevent DEBUG messages from being logged."
         )
-    
+
     # Check buttermilk logger level
     buttermilk_level = logging.getLogger(_LOGGER_NAME).getEffectiveLevel()
     if verbose_expected is True and buttermilk_level > logging.DEBUG:
@@ -469,7 +454,7 @@ def validate_logging_state(verbose_expected: bool = None) -> dict[str, Any]:
             f"Verbose mode expected but buttermilk logger level is {logging.getLevelName(buttermilk_level)}, "
             "should be DEBUG. This will prevent verbose logging from working."
         )
-    
+
     # Check for handler count anomalies on buttermilk logger (where handlers are actually added)
     root_handlers = len(logging.getLogger().handlers)
     buttermilk_handlers = len(logging.getLogger(_LOGGER_NAME).handlers)
@@ -479,45 +464,44 @@ def validate_logging_state(verbose_expected: bool = None) -> dict[str, Any]:
         validation_results["issues"].append("No logging handlers configured on root logger")
     elif root_handlers > 5:  # Arbitrary threshold for too many handlers
         validation_results["issues"].append(
-            f"Unusually high number of handlers ({root_handlers}) on root logger, "
-            "may indicate duplicate handler registration"
+            f"Unusually high number of handlers ({root_handlers}) on root logger, " "may indicate duplicate handler registration"
         )
 
     validation_results["handler_count"] = root_handlers
     validation_results["buttermilk_handler_count"] = buttermilk_handlers
     validation_results["valid"] = len(validation_results["issues"]) == 0
-    
+
     # Log validation results
     if validation_results["issues"]:
         logger.warning(
             "Logging configuration validation failed",
             issues=validation_results["issues"],
             root_level=logging.getLevelName(root_level),
-            buttermilk_level=logging.getLevelName(buttermilk_level)
+            buttermilk_level=logging.getLevelName(buttermilk_level),
         )
     else:
         logger.debug(
             "Logging configuration validation passed",
             root_level=logging.getLevelName(root_level),
             buttermilk_level=logging.getLevelName(buttermilk_level),
-            handler_count=root_handlers
+            handler_count=root_handlers,
         )
-    
+
     return validation_results
 
 
 def ensure_logging_properly_initialized() -> None:
     """Ensure logging is properly initialized and fail fast if not.
-    
+
     This function should be called at critical points to ensure the logging
     system is in a valid state before proceeding with operations that depend
     on proper logging functionality.
-    
+
     Raises:
         RuntimeError: If logging is not properly initialized or is in an invalid state
     """
     validation = validate_logging_state()
-    
+
     if not validation["valid"]:
         error_msg = (
             "Logging system is not properly initialized or is in an invalid state. "
@@ -530,10 +514,10 @@ def ensure_logging_properly_initialized() -> None:
 
 def reset_logging_configuration() -> None:
     """Reset logging configuration state for testing.
-    
+
     This function resets all global logging state and removes handlers,
     allowing tests to call setup functions multiple times without conflicts.
-    
+
     WARNING: This is intended for testing only and should not be used in
     production code as it can break the fail-fast logging protection.
     """
@@ -544,11 +528,11 @@ def reset_logging_configuration() -> None:
     _file_logging_configured = False
     _structlog_configured = False
     _cloud_logging_sessions.clear()
-    
+
     # Remove all handlers from buttermilk logger
     buttermilk_logger = logging.getLogger(_LOGGER_NAME)
     for handler in buttermilk_logger.handlers[:]:
         buttermilk_logger.removeHandler(handler)
-    
+
     # Reset structlog configuration to default state
     structlog.reset_defaults()

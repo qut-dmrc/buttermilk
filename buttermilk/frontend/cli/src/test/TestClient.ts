@@ -40,7 +40,7 @@ export class TestClient {
     this.process.stdout?.on('data', (data) => {
       const output = data.toString();
       this.output.push(output);
-      
+
       if (this.options.debug) {
         console.log('[TestClient stdout]:', output);
       }
@@ -59,7 +59,7 @@ export class TestClient {
     this.process.stderr?.on('data', (data) => {
       const error = data.toString();
       this.errorOutput.push(error);
-      
+
       if (this.options.debug) {
         console.error('[TestClient stderr]:', error);
       }

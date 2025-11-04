@@ -2,19 +2,17 @@
 """Simple test to verify the pipeline works with TMDBTool and uploader."""
 
 import asyncio
+from unittest.mock import MagicMock
+
 from buttermilk.tools.catalog_test import Title, TMDBTool
 from buttermilk.utils.uploader import AsyncDataUploader
-from unittest.mock import MagicMock, AsyncMock
+
 
 async def test_pipeline():
     """Test that TMDBTool yields observations and uploader passes them through."""
 
     # Create a test Title
-    title = Title(
-        record_id="123",
-        title="Test Movie",
-        year=2024
-    )
+    title = Title(record_id="123", title="Test Movie", year=2024)
 
     # Create TMDBTool with mocked API
     tool = TMDBTool(api_key="fake_key", region="US")
@@ -31,7 +29,7 @@ async def test_pipeline():
             "source": "TMDB",
             "provider_name": None,
             "provider_id": None,
-            "provider_type": None
+            "provider_type": None,
         }
 
     tool.get_availability = mock_get_availability
@@ -58,6 +56,7 @@ async def test_pipeline():
     uploader.shutdown()
 
     return observations
+
 
 if __name__ == "__main__":
     results = asyncio.run(test_pipeline())

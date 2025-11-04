@@ -1,6 +1,6 @@
 /**
  * Playwright Global Setup
- * 
+ *
  * Sets up the test environment before running E2E tests including:
  * - Backend API health verification
  * - Test data preparation
@@ -12,15 +12,15 @@ import { chromium, FullConfig } from '@playwright/test';
 
 async function globalSetup(config: FullConfig) {
   console.log('🚀 Starting Playwright Global Setup...');
-  
+
   const baseURL = config.projects[0].use.baseURL || 'http://localhost:5173';
   const apiURL = 'http://localhost:8000';
-  
+
   // Launch browser for setup tasks
   const browser = await chromium.launch();
   const context = await browser.newContext();
   const page = await context.newPage();
-  
+
   try {
     // 1. Verify backend API is running
     console.log('⏳ Verifying backend API health...');
@@ -29,11 +29,11 @@ async function globalSetup(config: FullConfig) {
       throw new Error(`Backend API health check failed: ${apiResponse.status()}`);
     }
     console.log('✅ Backend API is healthy');
-    
+
     // 2. Verify frontend is accessible
     console.log('⏳ Verifying frontend accessibility...');
     await page.goto(baseURL, { waitUntil: 'networkidle' });
-    
+
     // Check if terminal interface loads
     const terminalContainer = page.locator('[data-testid="terminal-container"]');
     if (!(await terminalContainer.isVisible())) {
@@ -41,7 +41,7 @@ async function globalSetup(config: FullConfig) {
     } else {
       console.log('✅ Frontend terminal interface is accessible');
     }
-    
+
     // 3. Verify WebSocket connectivity
     console.log('⏳ Testing WebSocket connectivity...');
     try {
@@ -54,7 +54,7 @@ async function globalSetup(config: FullConfig) {
     } catch (error) {
       console.warn('⚠️  WebSocket test failed:', error);
     }
-    
+
     // 4. Verify flow configurations are available
     console.log('⏳ Verifying flow configurations...');
     try {
@@ -66,7 +66,7 @@ async function globalSetup(config: FullConfig) {
           strict_validation: false
         }
       });
-      
+
       if (flowTestResponse.ok()) {
         console.log('✅ Flow configurations are accessible');
       } else {
@@ -75,18 +75,18 @@ async function globalSetup(config: FullConfig) {
     } catch (error) {
       console.warn('⚠️  Flow configuration verification failed:', error);
     }
-    
+
     // 5. Set up test data (if needed)
     console.log('⏳ Setting up test data...');
-    
+
     // Create any necessary test sessions or data
     // This could include creating mock vector store data, test users, etc.
-    
+
     console.log('✅ Test data setup complete');
-    
+
     // 6. Performance monitoring setup
     console.log('⏳ Initializing performance monitoring...');
-    
+
     // Store baseline performance metrics
     const performanceData = {
       setupTime: Date.now(),
@@ -94,7 +94,7 @@ async function globalSetup(config: FullConfig) {
       apiURL,
       testStartTime: new Date().toISOString()
     };
-    
+
     // Store in a file for tests to access
     const fs = require('fs');
     const path = require('path');
@@ -102,9 +102,9 @@ async function globalSetup(config: FullConfig) {
       path.join(__dirname, 'test-performance-baseline.json'),
       JSON.stringify(performanceData, null, 2)
     );
-    
+
     console.log('✅ Performance monitoring initialized');
-    
+
   } catch (error) {
     console.error('❌ Global setup failed:', error);
     throw error;
@@ -112,7 +112,7 @@ async function globalSetup(config: FullConfig) {
     await context.close();
     await browser.close();
   }
-  
+
   console.log('🎉 Playwright Global Setup completed successfully!');
 }
 

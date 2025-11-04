@@ -44,10 +44,8 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        """Lifespan event handler for startup and shutdown events.
-        """
+        """Lifespan event handler for startup and shutdown events."""
         try:
-
             # API functions might take a few more seconds
             asyncio.get_event_loop().slow_callback_duration = 2
 
@@ -57,6 +55,7 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
 
             # Initialize and start monitoring infrastructure
             from buttermilk.monitoring import get_observability_manager
+
             observability = get_observability_manager()
             app.state.observability = observability
             await observability.start_monitoring()
@@ -170,9 +169,7 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
                 websocket_connections = len(request.app.state.flow_runner.session_manager.sessions)
 
             metrics_collector.update_system_metrics(
-                memory_mb=memory.used / 1024 / 1024,
-                cpu_percent=cpu_percent,
-                websocket_connections=websocket_connections
+                memory_mb=memory.used / 1024 / 1024, cpu_percent=cpu_percent, websocket_connections=websocket_connections
             )
         except Exception as e:
             logger.debug(f"Error updating system metrics: {e}")
@@ -211,6 +208,7 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
 
         # Start session metrics tracking
         from buttermilk.monitoring import get_metrics_collector
+
         metrics_collector = get_metrics_collector()
         flow_name = getattr(session, "flow_name", "unknown")
         metrics_collector.start_session_tracking(session_id, flow_name)
@@ -219,12 +217,12 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
         # Listen for messages from the client
         token = session_id_var.set(session_id)
         logger.debug(f"[WEBSOCKET] Monitoring UI for session {session_id}")
-        
+
         # Store the current task reference in the session for cancellation
         current_task = asyncio.current_task()
         session.monitor_ui_task = current_task
         logger.debug(f"[WEBSOCKET] Assigned monitor_ui task {id(current_task)} to session {session_id}")
-        
+
         try:
             async for run_request in session.monitor_ui():
                 try:
@@ -258,12 +256,14 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
                     # Set the session-scoped BM for this flow execution
                     flow_runner.set_session_bm(session_bm)
                     logger.debug(f"Created session-scoped BM for session {session_id} with session_id: {session_bm.session_info.session_id}")
-                    
-                    task = asyncio.create_task(flow_runner.run_flow(
-                        run_request=run_request,
-                        wait_for_completion=False,
-                    ))
-                    
+
+                    task = asyncio.create_task(
+                        flow_runner.run_flow(
+                            run_request=run_request,
+                            wait_for_completion=False,
+                        )
+                    )
+
                     # Add callback to handle unhandled task exceptions
                     def handle_task_exception(task_future):
                         if task_future.exception() is not None:
@@ -311,11 +311,7 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
             # Try to notify the client
             try:
                 if websocket.client_state == WebSocketState.CONNECTED:
-                    await websocket.send_json({
-                        "type": "error",
-                        "message": f"Fatal error: {str(e)}",
-                        "fatal": True
-                    })
+                    await websocket.send_json({"type": "error", "message": f"Fatal error: {str(e)}", "fatal": True})
             except Exception:
                 pass  # Best effort notification
             # Close the websocket cleanly
@@ -361,7 +357,7 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
     @app.get("/api/session/{session_id}/status")
     async def get_session_status(session_id: str, request: Request):
         """Get the status of a specific session.
-        
+
         Returns:
             Dict with session status information
         """
@@ -378,7 +374,7 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
                 "flow_name": session.flow_name,
                 "created_at": session.created_at.isoformat(),
                 "last_activity": session.last_activity.isoformat(),
-                "is_expired": session.is_expired()
+                "is_expired": session.is_expired(),
             }
         else:
             raise HTTPException(status_code=404, detail="Session not found")
@@ -386,7 +382,7 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
     @app.delete("/api/session/{session_id}")
     async def cleanup_session(session_id: str, request: Request):
         """Manually clean up a specific session.
-        
+
         Returns:
             Dict confirming cleanup
         """
@@ -404,7 +400,7 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
     @app.get("/api/sessions")
     async def list_sessions(request: Request):
         """List all active sessions.
-        
+
         Returns:
             Dict with list of session information
         """
@@ -415,14 +411,16 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
 
         sessions_info = []
         for session_id, session in flow_runner.session_manager.sessions.items():
-            sessions_info.append({
-                "session_id": session_id,
-                "status": session.status,
-                "flow_name": session.flow_name,
-                "created_at": session.created_at.isoformat(),
-                "last_activity": session.last_activity.isoformat(),
-                "is_expired": session.is_expired()
-            })
+            sessions_info.append(
+                {
+                    "session_id": session_id,
+                    "status": session.status,
+                    "flow_name": session.flow_name,
+                    "created_at": session.created_at.isoformat(),
+                    "last_activity": session.last_activity.isoformat(),
+                    "is_expired": session.is_expired(),
+                }
+            )
         return {"sessions": sessions_info, "total": len(sessions_info)}
 
     # --- Defer heavy routes for Phase 2 optimization ---

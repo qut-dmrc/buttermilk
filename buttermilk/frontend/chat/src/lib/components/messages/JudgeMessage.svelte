@@ -176,7 +176,7 @@
 			{#if showAssessments}
 				<div class="assessment-list assessment-content tiny-text" transition:slide>
 					{#each assessments as assessment}
-				
+
 						<div class="assessment-item">
 							<div class="assessment-agent" style="color: {getModelColor(assessment.agent_info?.parameters?.model)}">
 								{assessment.agent_info?.agent_name}	<span

@@ -5,7 +5,7 @@ export interface Message {
 
 // Base message types from Buttermilk
 export interface ChatMessage extends Message {
-  type: 'chat_message' | 'record' | 'ui_message' | 'manager_response' | 
+  type: 'chat_message' | 'record' | 'ui_message' | 'manager_response' |
         'system_message' | 'system_update' | 'system_error' | 'user_message' |
         'assessments' | 'research_result' | 'differences' | 'judge_reasons';
   message_id?: string;
@@ -18,7 +18,7 @@ export interface ChatMessage extends Message {
 
 // Flow event types
 export interface FlowEvent extends Message {
-  type: 'flow_event' | 'error_event' | 'flow_progress_update' | 
+  type: 'flow_event' | 'error_event' | 'flow_progress_update' |
         'task_processing_started' | 'task_processing_complete' | 'agent_announcement';
   source?: string;
   timestamp?: string;
@@ -41,7 +41,7 @@ export interface AgentAnnouncement extends FlowEvent {
 
 // Agent communication messages
 export interface AgentMessage extends Message {
-  type: 'agent_input' | 'agent_output' | 'agent_trace' | 'step_request' | 
+  type: 'agent_input' | 'agent_output' | 'agent_trace' | 'step_request' |
         'conductor_request' | 'tool_output';
   agent_id?: string;
   session_id?: string;
@@ -75,18 +75,18 @@ export interface ControlMessage extends Message {
 
 // Type guards
 export const isChatMessage = (msg: Message): msg is ChatMessage => {
-  return ['chat_message', 'record', 'ui_message', 'manager_response', 
+  return ['chat_message', 'record', 'ui_message', 'manager_response',
           'system_message', 'system_update', 'system_error', 'user_message',
           'assessments', 'research_result', 'differences', 'judge_reasons'].includes(msg.type);
 };
 
 export const isFlowEvent = (msg: Message): msg is FlowEvent => {
-  return ['flow_event', 'error_event', 'flow_progress_update', 
+  return ['flow_event', 'error_event', 'flow_progress_update',
           'task_processing_started', 'task_processing_complete', 'agent_announcement'].includes(msg.type);
 };
 
 export const isAgentMessage = (msg: Message): msg is AgentMessage => {
-  return ['agent_input', 'agent_output', 'agent_trace', 'step_request', 
+  return ['agent_input', 'agent_output', 'agent_trace', 'step_request',
           'conductor_request', 'tool_output'].includes(msg.type);
 };
 

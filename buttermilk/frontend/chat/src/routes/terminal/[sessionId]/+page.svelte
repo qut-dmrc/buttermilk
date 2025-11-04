@@ -25,13 +25,13 @@
 	let messagesProcessed = false; // Track if messages have been processed to prevent duplicates
 	let sessionMetadata: any = null;
 	let lastInitializedSessionId = ''; // Track last initialized session to avoid re-initialization
-	
+
 	// Message duplicate tracking
 	let processedMessageIds = new Set<string>();
 
 	// WebSocket terminal instance
 	let websocketTerminal: ChatTerminal | null = null;
-	
+
 	// Helper function to filter out duplicate messages
 	function filterDuplicateMessages(messages: any[]): any[] {
 		const uniqueMessages = [];
@@ -45,11 +45,11 @@
 				uniqueMessages.push(message);
 			}
 		}
-		
+
 		if (uniqueMessages.length !== messages.length) {
 			console.log(`Filtered out ${messages.length - uniqueMessages.length} duplicate messages`);
 		}
-		
+
 		return uniqueMessages;
 	}
 
@@ -68,7 +68,7 @@
 		if ($isDemoMode && browser) {
 			console.log('Demo mode parameter selection:', {
 				flow: $selectedFlow || 'not selected',
-				dataset: $selectedDataset || 'not selected', 
+				dataset: $selectedDataset || 'not selected',
 				record: $selectedRecord || 'not selected',
 				criteria: $selectedCriteria || 'not selected',
 				allSelected: !!(($selectedFlow && $selectedDataset && $selectedRecord && $selectedCriteria))
@@ -84,7 +84,7 @@
 	async function initializeSession(sessionId: string) {
 		// Track this session as initialized to avoid re-initialization
 		lastInitializedSessionId = sessionId;
-		
+
 		// Reset state
 		isLoading = true;
 		error = '';
@@ -92,17 +92,17 @@
 		isDemoModeInitialized = false;
 		messagesProcessed = false;
 		restorationComplete = false;
-		
+
 		// Reset message duplicate tracking for new session
 		processedMessageIds.clear();
 		pendingMessages = [];
-		
+
 		// Update session store
 		sessionIdStore.set(sessionId);
 
 		// Initialize the application and wait for demo mode detection to complete
 		await initializeApp(sessionId);
-		
+
 		// Demo mode detection is now complete
 		isDemoModeInitialized = true;
 
@@ -153,7 +153,7 @@
 				if (messages.length > 0 && !messagesProcessed) {
 					// Filter out any duplicate messages before storing
 					const filteredMessages = filterDuplicateMessages(messages);
-					
+
 					if (filteredMessages.length > 0) {
 						if (websocketTerminal) {
 							// Terminal component exists, but in demo/readonly mode we need to wait for it to be fully ready

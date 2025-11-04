@@ -7,14 +7,14 @@ import { checkBackendHealth, logBackendStatus, getSessionsDir } from '$lib/utils
 
 export const GET: RequestHandler = async ({ params, url, fetch }) => {
   const { sessionId } = params;
-  
+
   // Get backend URL from environment
   const backendUrl = env.BACKEND_API_URL || 'http://localhost:8000';
-  
+
   // Check if backend is available using centralized health check
   const isBackendHealthy = await checkBackendHealth(true, fetch);
   logBackendStatus('API messages endpoint', isBackendHealthy);
-  
+
   if (isBackendHealthy) {
     try {
       // Backend is available, try to get the actual messages
@@ -25,14 +25,14 @@ export const GET: RequestHandler = async ({ params, url, fetch }) => {
         },
         signal: AbortSignal.timeout(3000) // 3 second timeout
       });
-    
+
       if (backendResponse.ok) {
         const data = await backendResponse.json();
         return json(data);
       }
-    
+
       console.log(`Backend unavailable (${backendResponse.status}), falling back to file system`);
-    
+
     } catch (error) {
       // Log backend connection errors concisely - these are expected in development
       if (error instanceof Error && error.message.includes('fetch failed')) {
@@ -42,7 +42,7 @@ export const GET: RequestHandler = async ({ params, url, fetch }) => {
       }
     }
   }
-  
+
   // Fallback: Read directly from file system (demo mode)
   try {
     // Get configured sessions directory from environment variable
@@ -50,10 +50,10 @@ export const GET: RequestHandler = async ({ params, url, fetch }) => {
     // Sessions directory is relative to project root
     const sessionsDir = join(process.cwd(), configuredSessionsDir);
     const sessionFile = join(sessionsDir, `${sessionId}.json`);
-    
+
     const fileContent = await readFile(sessionFile, 'utf-8');
     const sessionData = JSON.parse(fileContent);
-    
+
     // Transform to match backend API format
     const response = {
       messages: sessionData.messages || [],
@@ -65,9 +65,9 @@ export const GET: RequestHandler = async ({ params, url, fetch }) => {
         parameters: sessionData.parameters || {}
       }
     };
-    
+
     return json(response);
-    
+
   } catch (fileError) {
     // Log file errors concisely - ENOENT is expected for non-existent sessions
     if (fileError instanceof Error && 'code' in fileError && fileError.code === 'ENOENT') {
@@ -76,7 +76,7 @@ export const GET: RequestHandler = async ({ params, url, fetch }) => {
       console.error('Error reading session file:', fileError);
     }
     return json(
-      { error: 'Session not found' }, 
+      { error: 'Session not found' },
       { status: 404 }
     );
   }

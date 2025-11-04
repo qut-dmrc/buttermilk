@@ -5,23 +5,20 @@ It can be swapped out for different embedding models or strategies.
 """
 
 import asyncio
-from enum import auto
-from posixpath import dirname
-from pyexpat import model
 import time
 from typing import Any, AsyncGenerator
+
 import pydantic
+from chromadb import Documents, EmbeddingFunction, Embeddings
+from google import genai
 from pydantic import BaseModel, Field, PrivateAttr
-from buttermilk import bm, logger
-from buttermilk._core.types import BaseRecord
-from buttermilk.data.vector import ChunkedDocument
 from vertexai.language_models import (
     TextEmbeddingInput,
 )
-from buttermilk.utils.utils import scrub_serializable
 
-from google import genai
-from chromadb import Collection, Documents, EmbeddingFunction, Embeddings
+from buttermilk import bm, logger
+from buttermilk._core.types import BaseRecord
+from buttermilk.utils.utils import scrub_serializable
 
 
 class GeminiEmbeddingFunction(EmbeddingFunction):
@@ -58,6 +55,8 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
             embeddings.append(scrub_serializable(embedding.values))
 
         return embeddings
+
+
 class EmbeddingGenerator(BaseModel):
     """Generate embeddings for chunked documents.
 
@@ -115,7 +114,7 @@ class EmbeddingGenerator(BaseModel):
             record_id=record.record_id,
             has_chunks=hasattr(record, "chunks"),
             chunks_count=chunks_count,
-            processor_stage=processor_stage
+            processor_stage=processor_stage,
         )
 
         if not hasattr(record, "chunks") or not record.chunks:
@@ -172,7 +171,7 @@ class EmbeddingGenerator(BaseModel):
         embeddings_input: list[tuple[int, TextEmbeddingInput]] = []
         for i, chunk in enumerate(chunks):
             # Support both ChunkedDocument objects and dicts
-            if hasattr(chunk, 'chunk_text'):
+            if hasattr(chunk, "chunk_text"):
                 # ChunkedDocument object
                 embeddings_input.append(
                     (
@@ -190,7 +189,7 @@ class EmbeddingGenerator(BaseModel):
                     (
                         i,
                         TextEmbeddingInput(
-                            text=chunk['chunk_text'],
+                            text=chunk["chunk_text"],
                             task_type=self.task,
                             title=f"{chunk['document_title']}_{chunk['chunk_index']}",
                         ),
@@ -207,13 +206,13 @@ class EmbeddingGenerator(BaseModel):
             if embedding is not None and idx < len(chunks):
                 chunk = chunks[idx]
                 # Set embedding based on chunk type
-                if hasattr(chunk, 'embedding'):
+                if hasattr(chunk, "embedding"):
                     # ChunkedDocument object - set attribute
                     chunk.embedding = embedding
                     success_count += 1
                 elif isinstance(chunk, dict):
                     # Dict - set key
-                    chunk['embedding'] = embedding
+                    chunk["embedding"] = embedding
                     success_count += 1
 
         if success_count == 0:
@@ -224,10 +223,10 @@ class EmbeddingGenerator(BaseModel):
             logger.warning("Partial embedding failure", succeeded=success_count, total=len(chunks))
             # Clear embeddings so we don't have partial state
             for c in chunks:
-                if hasattr(c, 'embedding'):
+                if hasattr(c, "embedding"):
                     c.embedding = None
                 elif isinstance(c, dict):
-                    c['embedding'] = None
+                    c["embedding"] = None
             return False
 
         logger.debug("Generated embeddings", count=success_count)

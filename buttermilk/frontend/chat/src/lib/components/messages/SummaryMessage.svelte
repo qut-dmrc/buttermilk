@@ -274,7 +274,7 @@
 		border-radius: 4px;
 		padding: 8px;
 		margin-top: 5px;
-		
+
 	}
 
 	.summary-title {
@@ -312,7 +312,7 @@
 		color: #aaa;
 		cursor: pointer;
 		padding: 2px 4px;
-		
+
 		font-size: 0.85em;
 		transition: color 0.1s ease;
 	}

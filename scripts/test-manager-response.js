@@ -11,9 +11,9 @@ class TestClient {
   connect() {
     return new Promise((resolve, reject) => {
       console.log(`🔌 Connecting to ${this.url}...`);
-      
+
       this.ws = new WebSocket(this.url);
-      
+
       this.ws.on('open', () => {
         console.log('✅ Connected to WebSocket');
         resolve();
@@ -56,8 +56,8 @@ class TestClient {
       await this.connect();
 
       console.log('\n🧪 Test 1: Correct manager_response format');
-      this.sendMessage({ 
-        type: 'manager_response', 
+      this.sendMessage({
+        type: 'manager_response',
         content: 'Hello from test script using correct format!'
       });
 
@@ -65,8 +65,8 @@ class TestClient {
       await new Promise(resolve => setTimeout(resolve, 3000));
 
       console.log('\n🧪 Test 2: Start a flow with manager_response');
-      this.sendMessage({ 
-        type: 'run_flow', 
+      this.sendMessage({
+        type: 'run_flow',
         flow: 'zot',
         prompt: 'What is AI?'
       });
@@ -75,8 +75,8 @@ class TestClient {
       await new Promise(resolve => setTimeout(resolve, 5000));
 
       console.log('\n🧪 Test 3: Send user input to flow');
-      this.sendMessage({ 
-        type: 'manager_response', 
+      this.sendMessage({
+        type: 'manager_response',
         content: 'Tell me more about machine learning'
       });
 
@@ -95,18 +95,18 @@ class TestClient {
 async function main() {
   // Get session first
   const fetch = (await import('node-fetch')).default;
-  
+
   try {
     const response = await fetch('http://localhost:8000/api/session');
     const data = await response.json();
     const sessionId = data.session_id;
-    
+
     console.log(`🆔 Got session ID: ${sessionId}`);
-    
+
     const wsUrl = `ws://localhost:8000/ws/${sessionId}`;
     const client = new TestClient(wsUrl);
     await client.runTests();
-    
+
   } catch (error) {
     console.error('❌ Failed to get session:', error.message);
     process.exit(1);

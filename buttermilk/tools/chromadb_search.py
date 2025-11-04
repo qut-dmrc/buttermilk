@@ -27,7 +27,7 @@ class SearchResult(BaseModel):
 
 class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
     """Standalone ChromaDB search tool.
-    
+
     This tool provides vector search capabilities for any ChromaDB instance.
     It inherits all configuration from ChromaDBEmbeddings to ensure compatibility
     with the same YAML configs used for embedding creation.
@@ -59,11 +59,11 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
 
     async def search(self, query: str, n_results: int = 10) -> list[SearchResult]:
         """Search the ChromaDB collection.
-        
+
         Args:
             query: Natural language search query
             n_results: Number of results to return
-            
+
         Returns:
             List of SearchResult objects
         """
@@ -80,25 +80,24 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
         if results["ids"] and results["ids"][0]:
             seen_docs = set()
 
-            for i, (doc_id, doc, metadata, distance) in enumerate(zip(
-                results["ids"][0],
-                results["documents"][0],
-                results["metadatas"][0],
-                results["distances"][0]
-            )):
+            for i, (doc_id, doc, metadata, distance) in enumerate(
+                zip(results["ids"][0], results["documents"][0], results["metadatas"][0], results["distances"][0])
+            ):
                 # Filter duplicates if requested
                 parent_doc_id = metadata.get("document_id", doc_id)
 
                 seen_docs.add(parent_doc_id)
 
-                search_results.append(SearchResult(
-                    id=doc_id,
-                    content=doc,
-                    document_id=parent_doc_id,
-                    document_title=metadata.get("document_title"),
-                    metadata=metadata,
-                    score=1.0 - distance  # Convert distance to similarity
-                ))
+                search_results.append(
+                    SearchResult(
+                        id=doc_id,
+                        content=doc,
+                        document_id=parent_doc_id,
+                        document_title=metadata.get("document_title"),
+                        metadata=metadata,
+                        score=1.0 - distance,  # Convert distance to similarity
+                    )
+                )
 
                 if len(search_results) >= num_results:
                     break
@@ -107,10 +106,10 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
 
     async def search_with_output(self, query: str) -> str:
         """Search and return formatted results as a string.
-        
+
         Args:
             query: Natural language search query
-            
+
         Returns:
             Formatted string with search results
         """
@@ -126,7 +125,7 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
 
     def get_tool(self) -> FunctionTool:
         """Get this as an autogen FunctionTool.
-        
+
         Returns:
             FunctionTool that can be used by agents
         """
@@ -137,7 +136,7 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
                 "Returns text chunks that match the query semantically."
             ),
             func=self.search_with_output,
-            strict=True
+            strict=True,
         )
 
     @property

@@ -2,7 +2,7 @@
 
 This module provides centralized hash computation for:
 - Record content hashes
-- Ground truth data hashes  
+- Ground truth data hashes
 - Template content hashes
 - Flow configuration hashes
 
@@ -18,10 +18,10 @@ from typing import Any
 
 def compute_sha256_hash(content: str) -> str:
     """Core SHA256 computation used by all hash functions.
-    
+
     Args:
         content: String content to hash
-        
+
     Returns:
         SHA256 hexdigest of the content
     """
@@ -30,10 +30,10 @@ def compute_sha256_hash(content: str) -> str:
 
 def compute_record_hash(record_markdown: str) -> str:
     """Compute hash of record's markdown representation.
-    
+
     Args:
         record_markdown: The as_markdown() output from a Record
-        
+
     Returns:
         SHA256 hash of the markdown content
     """
@@ -42,16 +42,16 @@ def compute_record_hash(record_markdown: str) -> str:
 
 def compute_ground_truth_hash(ground_truth: dict[str, Any] | list[Any] | None) -> str | None:
     """Compute hash of ground truth data.
-    
+
     Args:
         ground_truth: Ground truth data (dict, list, or None)
-        
+
     Returns:
         SHA256 hash of JSON-serialized ground truth, or None if input is None
     """
     if ground_truth is None:
         return None
-        
+
     # Convert to consistent JSON string for hashing
     # Sort keys to ensure consistent hash for same data
     gt_json = json.dumps(ground_truth, sort_keys=True, separators=(",", ":"))
@@ -60,10 +60,10 @@ def compute_ground_truth_hash(ground_truth: dict[str, Any] | list[Any] | None) -
 
 def compute_template_hash(template_content: str) -> str:
     """Compute hash of template content.
-    
+
     Args:
         template_content: The raw template file content
-        
+
     Returns:
         SHA256 hash of the template content (no prefix)
     """
@@ -72,10 +72,10 @@ def compute_template_hash(template_content: str) -> str:
 
 def compute_flow_hash(flow_config: dict[str, Any]) -> str:
     """Compute hash of flow configuration.
-    
+
     Args:
         flow_config: Flow configuration dictionary
-        
+
     Returns:
         SHA256 hash of normalized flow configuration
     """
@@ -87,35 +87,35 @@ def compute_flow_hash(flow_config: dict[str, Any]) -> str:
 
 def normalize_flow_config(flow_config: dict[str, Any]) -> dict[str, Any]:
     """Extract relevant parts of flow config for hashing.
-    
+
     Includes components that affect flow behavior for A/B testing:
     - Flow name, description, orchestrator
     - Parameters and criteria
     - Agent configurations (names, roles)
     - Storage configurations that affect behavior
-    
+
     Excludes runtime and session-specific data:
     - Session IDs, timestamps
     - Local environment configuration
     - Runtime parameters
-    
+
     Args:
         flow_config: Raw flow configuration
-        
+
     Returns:
         Normalized configuration dictionary for consistent hashing
     """
     normalized = {}
-    
+
     # Include core flow identification
     for field in ["name", "description", "orchestrator"]:
         if field in flow_config:
             normalized[field] = flow_config[field]
-    
+
     # Include parameters that affect flow behavior
     if "parameters" in flow_config:
         normalized["parameters"] = flow_config["parameters"]
-    
+
     # Include agent configurations (names and core config, not runtime params)
     if "agents" in flow_config:
         agents = flow_config["agents"]
@@ -136,11 +136,11 @@ def normalize_flow_config(flow_config: dict[str, Any]) -> dict[str, Any]:
                     normalized_agents[agent_name] = agent_config
             if normalized_agents:
                 normalized["agents"] = normalized_agents
-    
+
     # Include observer configurations if present
     if "observers" in flow_config:
         normalized["observers"] = flow_config["observers"]
-    
+
     # Include storage configurations that affect flow behavior
     # Exclude save configurations that are just for output routing
     if "storage" in flow_config:
@@ -155,7 +155,7 @@ def normalize_flow_config(flow_config: dict[str, Any]) -> dict[str, Any]:
                     normalized_storage[key] = value
             if normalized_storage:
                 normalized["storage"] = normalized_storage
-    
+
     return normalized
 
 

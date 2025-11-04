@@ -22,7 +22,7 @@ class SchemaValidator:
 
     def __init__(self, schema: dict[str, Any]):
         """Initialize validator with a JSON schema.
-        
+
         Args:
             schema: JSON schema dictionary following Draft 7 specification.
         """
@@ -31,10 +31,10 @@ class SchemaValidator:
 
     def validate(self, data: Any) -> None:
         """Validate data against the schema.
-        
+
         Args:
             data: Data to validate.
-            
+
         Raises:
             SchemaValidationError: If validation fails.
         """
@@ -45,17 +45,14 @@ class SchemaValidator:
                 path = ".".join(str(p) for p in error.path) if error.path else "root"
                 error_messages.append(f"{path}: {error.message}")
 
-            raise SchemaValidationError(
-                f"Schema validation failed: {'; '.join(error_messages)}",
-                errors=errors
-            )
+            raise SchemaValidationError(f"Schema validation failed: {'; '.join(error_messages)}", errors=errors)
 
     def is_valid(self, data: Any) -> bool:
         """Check if data is valid against the schema.
-        
+
         Args:
             data: Data to validate.
-            
+
         Returns:
             True if valid, False otherwise.
         """
@@ -63,12 +60,12 @@ class SchemaValidator:
 
     def validate_partial(self, data: dict[str, Any]) -> None:
         """Validate a partial object (ignoring required fields).
-        
+
         Useful for validating updates where not all fields are provided.
-        
+
         Args:
             data: Partial data to validate.
-            
+
         Raises:
             SchemaValidationError: If validation fails.
         """
@@ -86,25 +83,19 @@ class SchemaValidator:
                 path = ".".join(str(p) for p in error.path) if error.path else "root"
                 error_messages.append(f"{path}: {error.message}")
 
-            raise SchemaValidationError(
-                f"Partial schema validation failed: {'; '.join(error_messages)}",
-                errors=errors
-            )
+            raise SchemaValidationError(f"Partial schema validation failed: {'; '.join(error_messages)}", errors=errors)
 
 
-def validate_tool_input(
-    tool_schema: dict[str, Any],
-    input_data: dict[str, Any]
-) -> dict[str, Any]:
+def validate_tool_input(tool_schema: dict[str, Any], input_data: dict[str, Any]) -> dict[str, Any]:
     """Validate input data against a tool's input schema.
-    
+
     Args:
         tool_schema: The tool's input schema.
         input_data: Input data to validate.
-        
+
     Returns:
         The validated input data.
-        
+
     Raises:
         SchemaValidationError: If validation fails.
     """
@@ -113,19 +104,16 @@ def validate_tool_input(
     return input_data
 
 
-def validate_tool_output(
-    tool_schema: dict[str, Any],
-    output_data: Any
-) -> Any:
+def validate_tool_output(tool_schema: dict[str, Any], output_data: Any) -> Any:
     """Validate output data against a tool's output schema.
-    
+
     Args:
         tool_schema: The tool's output schema.
         output_data: Output data to validate.
-        
+
     Returns:
         The validated output data.
-        
+
     Raises:
         SchemaValidationError: If validation fails.
     """
@@ -134,19 +122,16 @@ def validate_tool_output(
     return output_data
 
 
-def coerce_to_schema(
-    schema: dict[str, Any],
-    data: dict[str, Any]
-) -> dict[str, Any]:
+def coerce_to_schema(schema: dict[str, Any], data: dict[str, Any]) -> dict[str, Any]:
     """Attempt to coerce data to match schema types.
-    
+
     This function tries to convert data types to match the schema where possible.
     For example, converting string "123" to integer 123 if schema expects integer.
-    
+
     Args:
         schema: JSON schema to coerce to.
         data: Data to coerce.
-        
+
     Returns:
         Coerced data.
     """
@@ -226,13 +211,13 @@ def _coerce_value(schema: dict[str, Any], value: Any) -> Any:
 
 def merge_schemas(*schemas: dict[str, Any]) -> dict[str, Any]:
     """Merge multiple JSON schemas into one.
-    
+
     Useful for combining schemas from multiple tools or creating
     composite schemas.
-    
+
     Args:
         *schemas: Variable number of schema dictionaries to merge.
-        
+
     Returns:
         Merged schema.
     """
@@ -250,12 +235,7 @@ def merge_schemas(*schemas: dict[str, Any]) -> dict[str, Any]:
         if "type" in schema:
             if "type" in merged and merged["type"] != schema["type"]:
                 # Different types - use anyOf
-                merged = {
-                    "anyOf": [
-                        {"type": merged["type"]},
-                        {"type": schema["type"]}
-                    ]
-                }
+                merged = {"anyOf": [{"type": merged["type"]}, {"type": schema["type"]}]}
             else:
                 merged["type"] = schema["type"]
 
@@ -269,10 +249,7 @@ def merge_schemas(*schemas: dict[str, Any]) -> dict[str, Any]:
         if "required" in schema:
             if "required" not in merged:
                 merged["required"] = []
-            merged["required"].extend(
-                field for field in schema["required"]
-                if field not in merged["required"]
-            )
+            merged["required"].extend(field for field in schema["required"] if field not in merged["required"])
 
         # Merge other fields
         for key, value in schema.items():
@@ -284,12 +261,12 @@ def merge_schemas(*schemas: dict[str, Any]) -> dict[str, Any]:
 
 def generate_example_from_schema(schema: dict[str, Any]) -> Any:
     """Generate an example value that matches the given schema.
-    
+
     Useful for documentation and testing.
-    
+
     Args:
         schema: JSON schema to generate example for.
-        
+
     Returns:
         Example value matching the schema.
     """
@@ -318,10 +295,7 @@ def generate_example_from_schema(schema: dict[str, Any]) -> Any:
     elif schema_type == "array":
         items_schema = schema.get("items", {"type": "string"})
         min_items = schema.get("minItems", 1)
-        return [
-            generate_example_from_schema(items_schema)
-            for _ in range(min_items)
-        ]
+        return [generate_example_from_schema(items_schema) for _ in range(min_items)]
 
     elif schema_type == "object":
         example = {}

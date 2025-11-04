@@ -14,7 +14,6 @@ import pytest
 from buttermilk.api.services.message_service import ChatMessage
 from buttermilk.api.services.session_storage import SessionStorageService
 
-
 # Force all tests in this module to run in same worker due to global mocking
 pytestmark = pytest.mark.xdist_group("session_storage_serial")
 
@@ -367,6 +366,7 @@ class TestSessionGCSArchival:
         real_bm.session_info.save_dir = "gs://my-bucket/sessions"
         # Mock the save method to simulate GCS save
         from unittest.mock import Mock
+
         real_bm.save = Mock(return_value="gs://my-bucket/sessions/session_test-session_archived.json")
 
         result = self.storage_service.archive_to_gcs(session_id)
@@ -387,6 +387,7 @@ class TestSessionGCSArchival:
         # Set up real_bm to test archival is attempted
         real_bm.session_info.save_dir = "gs://my-bucket/sessions"
         from unittest.mock import Mock
+
         real_bm.save = Mock(return_value="gs://my-bucket/sessions/session_test-session_archived.json")
 
         self.storage_service.finalize_session(session_id, "completed")
@@ -409,6 +410,7 @@ class TestSessionGCSArchival:
         # Set up real_bm
         real_bm.session_info.save_dir = "gs://my-bucket/sessions"
         from unittest.mock import Mock
+
         real_bm.save = Mock(return_value="gs://my-bucket/sessions/session_test-session_archived.json")
 
         self.storage_service.finalize_session(session_id, "failed")

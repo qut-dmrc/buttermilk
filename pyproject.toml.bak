@@ -181,9 +181,9 @@ extend-include = ["*.ipynb"]
 select = ["E", "F", "W", "Q", "I", "PL"]
 ignore = [
     "RET504",  # Unnecessary variable assignment before return
-    "RET503",  # Multiple returns 
-    "E501",    # Line too long 
-    "TRY003", 
+    "RET503",  # Multiple returns
+    "E501",    # Line too long
+    "TRY003",
     "D401",     # First line of docstring must be in imperative mood
     "EM101",   # No f-strings or string literals in exceptions
     "RET505",  # Unnecessary else after return
@@ -214,12 +214,12 @@ markers = [
 norecursedirs = ["docs", "*.egg-info", "*.egg", "bin", "demo", ".git", "appdir", ".tox", "mediamarkets", "scrapers"]
 timeout = 600
 #default_async_timeout = 300
-addopts = [ 
-    "--capture=fd", 
+addopts = [
+    "--capture=fd",
     "--continue-on-collection-errors",
-    "--durations=10", 
-    "-n 24", 
-    "-v", # show name of tests 
+    "--durations=10",
+    "-n 24",
+    "-v", # show name of tests
     "-rfEX", # show extra summary info, including for failed, eXpected failures, and Errors
     "-s",
     "--tb=auto",
@@ -228,9 +228,9 @@ addopts = [
     "-m not integration",
 ]
 
-#  "--timeout_method=thread", 
+#  "--timeout_method=thread",
 # "--with-integration"
-# 
+#
 
 filterwarnings = [
     "ignore:Deprecated call to `pkg_resources.declare_namespace:DeprecationWarning",

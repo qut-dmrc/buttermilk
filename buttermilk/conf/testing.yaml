@@ -30,6 +30,7 @@ storage:
     embedding_model: gemini-embedding-001
     dimensionality: 3072
 session:
+  llm_wrapper: litellm
   template_paths: []
   sessions_dir: "data/sessions"
   cache_dir: "~/.cache/buttermilk"

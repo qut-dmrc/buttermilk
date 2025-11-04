@@ -46,24 +46,16 @@ class TestOSBWebSocketIntegration:
                 "case_number": "OSB-2025-001",
                 "priority": "high",
                 "content_type": "social_media_post",
-                "metadata": {
-                    "platform": "twitter",
-                    "timestamp": "2025-01-17T10:30:00Z",
-                    "user_context": "public_figure"
-                }
+                "metadata": {"platform": "twitter", "timestamp": "2025-01-17T10:30:00Z", "user_context": "public_figure"},
             },
-            "parameters": {
-                "enable_multi_agent_synthesis": True,
-                "enable_cross_validation": True,
-                "include_precedent_analysis": True
-            }
+            "parameters": {"enable_multi_agent_synthesis": True, "enable_cross_validation": True, "include_precedent_analysis": True},
         }
 
     @pytest.mark.anyio
     async def test_osb_websocket_message_validation(self, osb_query_message):
         """
         FAILING TEST: OSB WebSocket should validate message structure.
-        
+
         This test currently fails because:
         1. No OSB message validation logic exists
         2. Missing OSB-specific message schema
@@ -71,11 +63,11 @@ class TestOSBWebSocketIntegration:
         """
         # Test message validation for OSB queries
         from buttermilk.api.websocket.osb_handler import validate_osb_message  # TO BE IMPLEMENTED
-        
+
         # Valid OSB message should pass validation
         is_valid, error_msg = validate_osb_message(osb_query_message)
         assert is_valid, f"Valid OSB message failed validation: {error_msg}"
-        
+
         # Invalid message should fail validation
         invalid_message = {"type": "osb_query"}  # Missing required fields
         is_valid, error_msg = validate_osb_message(invalid_message)
@@ -86,36 +78,29 @@ class TestOSBWebSocketIntegration:
     async def test_osb_session_creation_via_websocket(self, mock_websocket, real_flow_runner):
         """
         FAILING TEST: OSB sessions should be created with specific configuration.
-        
+
         This test currently fails because:
         1. No OSB-specific session creation logic
         2. Missing integration with enhanced osb.yaml configuration
         3. No OSB session parameters handling
         """
         session_id = "test-osb-session-12345"
-        
+
         # Mock session creation with OSB configuration
         osb_session_config = {
             "flow_name": "osb",
             "parameters": {
-                "session_management": {
-                    "enable_websocket_sessions": True,
-                    "session_timeout": 3600,
-                    "enable_session_isolation": True
-                },
-                "osb_features": {
-                    "enable_case_tracking": True,
-                    "enable_policy_references": True
-                }
-            }
+                "session_management": {"enable_websocket_sessions": True, "session_timeout": 3600, "enable_session_isolation": True},
+                "osb_features": {"enable_case_tracking": True, "enable_policy_references": True},
+            },
         }
-        
+
         # This should create OSB-specific session but currently fails
         from buttermilk.runner.osb_session_manager import create_osb_session  # TO BE IMPLEMENTED
-        
+
         with pytest.raises(NotImplementedError, match="OSB session creation not implemented"):
             session = await create_osb_session(session_id, mock_websocket, osb_session_config)
-            
+
             # Validate OSB session properties
             assert session.flow_name == "osb"
             assert session.session_id == session_id
@@ -126,7 +111,7 @@ class TestOSBWebSocketIntegration:
     async def test_osb_multi_agent_query_routing(self, osb_query_message, real_flow_runner):
         """
         FAILING TEST: OSB queries should route to appropriate agents in sequence.
-        
+
         This test currently fails because:
         1. No OSB-specific agent routing logic
         2. Missing integration with enhanced RAG agents
@@ -134,19 +119,19 @@ class TestOSBWebSocketIntegration:
         """
         # Expected agent processing order for OSB queries
         expected_agent_sequence = ["researcher", "policy_analyst", "fact_checker", "explorer"]
-        
+
         # Mock agent responses
-        
+
         # This should process query through all OSB agents but currently fails
         from buttermilk.api.websocket.osb_processor import process_osb_query  # TO BE IMPLEMENTED
-        
+
         with pytest.raises(NotImplementedError, match="OSB multi-agent processing not implemented"):
             result = await process_osb_query(osb_query_message, real_flow_runner)
-            
+
             # Validate multi-agent processing
             assert "agent_responses" in result
             assert len(result["agent_responses"]) == len(expected_agent_sequence)
-            
+
             for agent_name in expected_agent_sequence:
                 assert agent_name in result["agent_responses"]
                 agent_response = result["agent_responses"][agent_name]
@@ -157,24 +142,24 @@ class TestOSBWebSocketIntegration:
     async def test_osb_websocket_response_streaming(self, osb_query_message, mock_websocket):
         """
         FAILING TEST: OSB should stream partial responses during long queries.
-        
+
         This test currently fails because:
         1. No response streaming implementation for OSB
         2. Missing WebSocket streaming infrastructure
         3. No partial response formatting for OSB queries
         """
         # Expected streaming messages during OSB query processing
-        
+
         # This should stream responses but currently fails
         from buttermilk.api.websocket.osb_streamer import stream_osb_response  # TO BE IMPLEMENTED
-        
+
         with pytest.raises(NotImplementedError, match="OSB response streaming not implemented"):
             async for message in stream_osb_response(osb_query_message, mock_websocket):
                 # Validate streaming message format
                 assert "type" in message
                 assert message["type"].startswith("osb_")
                 assert "timestamp" in message
-                
+
                 # Verify WebSocket sends streaming updates
                 mock_websocket.send_json.assert_called()
 
@@ -182,7 +167,7 @@ class TestOSBWebSocketIntegration:
     async def test_osb_session_isolation(self):
         """
         FAILING TEST: OSB sessions should be properly isolated.
-        
+
         This test currently fails because:
         1. No session isolation implementation for OSB
         2. Missing concurrent session handling
@@ -191,28 +176,26 @@ class TestOSBWebSocketIntegration:
         # Test concurrent OSB sessions don't interfere
         session_1_id = "osb-session-user1-12345"
         session_2_id = "osb-session-user2-67890"
-        
+
         # Both users submit queries simultaneously
         query_1 = {"type": "osb_query", "query": "Policy analysis for content A"}
         query_2 = {"type": "osb_query", "query": "Policy analysis for content B"}
-        
+
         # This should handle concurrent sessions but currently fails
         from buttermilk.api.websocket.osb_session_isolator import handle_concurrent_osb_sessions  # TO BE IMPLEMENTED
-        
+
         with pytest.raises(NotImplementedError, match="OSB session isolation not implemented"):
             # Process both queries concurrently
             results = await asyncio.gather(
-                handle_concurrent_osb_sessions(session_1_id, query_1),
-                handle_concurrent_osb_sessions(session_2_id, query_2),
-                return_exceptions=True
+                handle_concurrent_osb_sessions(session_1_id, query_1), handle_concurrent_osb_sessions(session_2_id, query_2), return_exceptions=True
             )
-            
+
             # Validate sessions are isolated
             result_1, result_2 = results
             assert result_1["session_id"] == session_1_id
             assert result_2["session_id"] == session_2_id
             assert result_1["query"] != result_2["query"]
-            
+
             # Verify no cross-session data leakage
             assert "user1" not in str(result_2)
             assert "user2" not in str(result_1)
@@ -225,20 +208,20 @@ class TestOSBWebSocketErrorHandling:
     async def test_osb_websocket_connection_recovery(self):
         """
         FAILING TEST: OSB should handle WebSocket disconnections gracefully.
-        
+
         This test currently fails because:
         1. No OSB-specific connection recovery logic
         2. Missing session state persistence during reconnection
         3. No graceful degradation for OSB queries
         """
         session_id = "osb-recovery-test-session"
-        
+
         # Simulate WebSocket disconnection during OSB query processing
         from buttermilk.api.websocket.osb_recovery import handle_osb_disconnection  # TO BE IMPLEMENTED
-        
+
         with pytest.raises(NotImplementedError, match="OSB connection recovery not implemented"):
             recovery_info = await handle_osb_disconnection(session_id)
-            
+
             # Validate recovery information
             assert "session_state" in recovery_info
             assert "pending_queries" in recovery_info
@@ -249,7 +232,7 @@ class TestOSBWebSocketErrorHandling:
     async def test_osb_agent_failure_handling(self):
         """
         FAILING TEST: OSB should handle individual agent failures gracefully.
-        
+
         This test currently fails because:
         1. No graceful degradation for failed OSB agents
         2. Missing fallback strategies for agent errors
@@ -257,18 +240,18 @@ class TestOSBWebSocketErrorHandling:
         """
         # Simulate researcher agent failure during OSB query
         from buttermilk.api.websocket.osb_error_handler import handle_osb_agent_failure  # TO BE IMPLEMENTED
-        
+
         failed_agent = "researcher"
         error_context = {
             "agent": failed_agent,
             "error_type": "vector_store_timeout",
             "query": "Policy analysis request",
-            "session_id": "test-session"
+            "session_id": "test-session",
         }
-        
+
         with pytest.raises(NotImplementedError, match="OSB agent failure handling not implemented"):
             recovery_response = await handle_osb_agent_failure(error_context)
-            
+
             # Validate graceful degradation
             assert recovery_response["status"] == "degraded_mode"
             assert recovery_response["available_agents"] == ["policy_analyst", "fact_checker", "explorer"]
@@ -276,6 +259,7 @@ class TestOSBWebSocketErrorHandling:
 
 
 # Mock functions that document the expected API for Phase 1 implementation
+
 
 async def validate_osb_message(message: dict) -> tuple[bool, str]:
     """Validate OSB WebSocket message structure - TO BE IMPLEMENTED."""

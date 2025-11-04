@@ -1,8 +1,8 @@
 # validators.py
+import importlib
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal, TypeVar
-import importlib
 
 import httpx
 import pydantic
@@ -155,9 +155,7 @@ def import_class_from_path(class_path: str, expected_base_class: type | None = N
     # Verify inheritance if expected_base_class is provided
     if expected_base_class is not None:
         if not issubclass(cls, expected_base_class):
-            raise ValueError(
-                f"Class '{class_path}' is not a subclass of {expected_base_class.__name__}"
-            )
+            raise ValueError(f"Class '{class_path}' is not a subclass of {expected_base_class.__name__}")
 
     return cls
 

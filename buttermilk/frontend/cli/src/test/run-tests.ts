@@ -57,7 +57,7 @@ async function runTests(config: TestConfig = defaultConfig) {
 
       for (const scenario of suite.scenarios) {
         totalTests++;
-        
+
         // Create new client for each test
         const client = new TestClient({
           cliPath: path.join(__dirname, '../../dist/cli.js'),
@@ -71,9 +71,9 @@ async function runTests(config: TestConfig = defaultConfig) {
         try {
           console.log(`\n🏃 Running: ${scenario.name}`);
           await client.start();
-          
+
           const result = await runner.runScenario(scenario);
-          
+
           if (result.success) {
             console.log(`✅ PASSED: ${scenario.name}`);
             passedTests++;
@@ -81,7 +81,7 @@ async function runTests(config: TestConfig = defaultConfig) {
             console.log(`❌ FAILED: ${scenario.name}`);
             result.errors.forEach(error => console.log(`   - ${error}`));
             failedTests++;
-            
+
             if (config.debug) {
               console.log('\n📝 Output:');
               console.log(result.output);
@@ -110,13 +110,13 @@ async function runTests(config: TestConfig = defaultConfig) {
       console.log('─'.repeat(40));
       const messageLog = wsServer.getMessageLog();
       console.log(`Total messages: ${messageLog.length}`);
-      
+
       const messageTypes = new Map<string, number>();
       messageLog.forEach(entry => {
         const type = entry.message.type;
         messageTypes.set(type, (messageTypes.get(type) || 0) + 1);
       });
-      
+
       console.log('\nMessage type breakdown:');
       messageTypes.forEach((count, type) => {
         console.log(`  ${type}: ${count}`);

@@ -94,7 +94,7 @@ Regular text is sent as user_message to the current flow.`
       const parts = text.split(' ');
       const flowName = parts[1];
       const prompt = parts.slice(2).join(' ');
-      
+
       if (!flowName) {
         setMessages(prev => [...prev, {
           type: 'system_error',
@@ -135,9 +135,9 @@ Regular text is sent as user_message to the current flow.`
       // Clear the line to prevent duplicate display
       readline.moveCursor(process.stdout, 0, -1);
       readline.clearLine(process.stdout, 0);
-      
+
       handleSubmit(input);
-      
+
       // Show prompt again
       setTimeout(() => rl.prompt(), 100);
     });
@@ -157,12 +157,12 @@ Regular text is sent as user_message to the current flow.`
       connectionState === 'disconnected' || connectionState === 'error' ? 'disconnected' :
       'reconnecting'
     );
-    
-    const statusColor = 
+
+    const statusColor =
       connectionState === 'connected' ? retroIRCTheme.colors.connected :
       connectionState === 'disconnected' || connectionState === 'error' ? retroIRCTheme.colors.disconnected :
       retroIRCTheme.colors.reconnecting;
-    
+
     switch (connectionState) {
       case 'connecting':
         return <Text color={statusColor}><Spinner /> Connecting to server...</Text>;
@@ -180,8 +180,8 @@ Regular text is sent as user_message to the current flow.`
   return (
     <Box flexDirection="column">
       {/* Terminal header */}
-      <Box 
-        borderStyle="single" 
+      <Box
+        borderStyle="single"
         borderColor={retroIRCTheme.colors.border}
         marginBottom={1}
       >
@@ -194,7 +194,7 @@ Regular text is sent as user_message to the current flow.`
           </Box>
         </Box>
       </Box>
-      
+
       {/* Message area */}
       <Box flexDirection="column" flexGrow={1}>
         <MessageList messages={messages} />

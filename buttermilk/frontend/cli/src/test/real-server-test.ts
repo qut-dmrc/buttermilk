@@ -69,7 +69,7 @@ async function runRealServerTests() {
 
   const host = process.env.BUTTERMILK_HOST || 'localhost';
   const port = parseInt(process.env.BUTTERMILK_PORT || '8000');
-  
+
   console.log(`📡 Testing against server at ${host}:${port}`);
   console.log('   (Set BUTTERMILK_HOST and BUTTERMILK_PORT to test different servers)\n');
 
@@ -90,12 +90,12 @@ async function runRealServerTests() {
           reject(new Error(`Server returned status ${res.statusCode}`));
         }
       });
-      
+
       req.on('error', reject);
       req.on('timeout', () => reject(new Error('Connection timeout')));
       req.end();
     });
-    
+
     console.log('✅ Server is reachable\n');
   } catch (error) {
     console.error('❌ Cannot reach server:', error);
@@ -109,10 +109,10 @@ async function runRealServerTests() {
 
   for (const scenario of realServerScenarios) {
     totalTests++;
-    
+
     console.log(`\n🏃 Running: ${scenario.name}`);
     console.log('─'.repeat(50));
-    
+
     const client = new TestClient({
       cliPath: path.join(__dirname, '../../dist/cli.js'),
       host,
@@ -125,19 +125,19 @@ async function runRealServerTests() {
     try {
       await client.start();
       const startTime = Date.now();
-      
+
       const result = await runner.runScenario(scenario);
       const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-      
+
       if (result.success) {
         console.log(`✅ PASSED in ${duration}s`);
         passedTests++;
-        
+
         if (process.argv.includes('--verbose')) {
           console.log('\n📝 Key messages:');
           const output = result.output;
           // Extract interesting messages
-          const lines = output.split('\n').filter(line => 
+          const lines = output.split('\n').filter(line =>
             line.includes('Connected') ||
             line.includes('flow') ||
             line.includes('agent') ||
@@ -150,7 +150,7 @@ async function runRealServerTests() {
         console.log(`❌ FAILED in ${duration}s`);
         result.errors.forEach(error => console.log(`   - ${error}`));
         failedTests++;
-        
+
         if (process.argv.includes('--debug')) {
           console.log('\n📝 Full output:');
           console.log(result.output);
@@ -162,7 +162,7 @@ async function runRealServerTests() {
     } finally {
       await client.stop();
     }
-    
+
     // Small delay between tests
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
@@ -174,12 +174,12 @@ async function runRealServerTests() {
   console.log(`✅ Passed: ${passedTests}`);
   console.log(`❌ Failed: ${failedTests}`);
   console.log(`Success Rate: ${((passedTests / totalTests) * 100).toFixed(1)}%`);
-  
+
   console.log('\n💡 Tips:');
   console.log('   - Use --debug to see all CLI output');
   console.log('   - Use --verbose to see key messages from passed tests');
   console.log('   - Set BUTTERMILK_HOST and BUTTERMILK_PORT for remote servers');
-  
+
   process.exit(failedTests === 0 ? 0 : 1);
 }
 

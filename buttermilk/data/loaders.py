@@ -23,7 +23,7 @@ class DataLoaderWrapper:
 
     def __init__(self, storage):
         """Initialize wrapper with storage instance.
-        
+
         Args:
             storage: Storage instance to wrap
         """
@@ -62,19 +62,19 @@ class DataLoaderProtocol(Protocol):
 
 class DataLoader(ABC):
     """Abstract base class for all data loaders.
-    
+
     Data loaders support column mapping via the 'columns' field in DataSourceConfig.
     The 'columns' field is a mapping dictionary where:
     - Keys: Target field names (Record field names)
     - Values: Source field names (original data field names)
-    
+
     Example:
         columns = {
             "content": "text",           # Maps source "text" to Record "content"
             "ground_truth": "expected",  # Maps source "expected" to Record "ground_truth"
             "title": "name"             # Maps source "name" to metadata "title"
         }
-    
+
     The columns mapping can be empty ({}) if no field renaming is needed.
     """
 
@@ -103,6 +103,7 @@ class HuggingFaceDataLoader(DataLoader):
         super().__init__(config)
         try:
             from datasets import load_dataset
+
             self._load_dataset = load_dataset
         except ImportError:
             raise ImportError("datasets package required for HuggingFace loader")
@@ -116,10 +117,7 @@ class HuggingFaceDataLoader(DataLoader):
 
         # Load with streaming for large datasets
         dataset = self._load_dataset(
-            self.config.path,
-            name=getattr(self.config, "name", None),
-            split=getattr(self.config, "split", "train"),
-            streaming=True
+            self.config.path, name=getattr(self.config, "name", None), split=getattr(self.config, "split", "train"), streaming=True
         )
 
         for idx, item in enumerate(dataset):
@@ -334,23 +332,13 @@ class PlaintextDataLoader(DataLoader):
                         "record_id": str(file_path.name),
                         "content": content,
                         "uri": str(file_path),
-                        "metadata": {
-                            "source": str(file_path),
-                            "loader_type": "plaintext",
-                            "filename": file_path.name,
-                            "file_size": len(content)
-                        }
+                        "metadata": {"source": str(file_path), "loader_type": "plaintext", "filename": file_path.name, "file_size": len(content)},
                     }
 
                     # Apply column mapping if specified
                     if self.config.columns:
                         mapped_kwargs = {}
-                        original_data = {
-                            "filename": file_path.name,
-                            "content": content,
-                            "path": str(file_path),
-                            "size": len(content)
-                        }
+                        original_data = {"filename": file_path.name, "content": content, "path": str(file_path), "size": len(content)}
 
                         for new_name, old_name in self.config.columns.items():
                             if old_name in original_data:
@@ -372,7 +360,7 @@ class PlaintextDataLoader(DataLoader):
 
 def create_data_loader(config: "DataSourceConfig") -> DataLoader:
     """Factory function to create appropriate DataLoader for given config.
-    
+
     DEPRECATED: Use bm.get_storage() with StorageConfig instead for unified data access.
     This function is provided for backwards compatibility during migration.
 
@@ -386,11 +374,12 @@ def create_data_loader(config: "DataSourceConfig") -> DataLoader:
         ValueError: If data source type is not supported
     """
     import warnings
+
     warnings.warn(
         "create_data_loader() is deprecated. Use bm.get_storage() with StorageConfig instead. "
         "This provides unified data access with both read and write capabilities.",
         DeprecationWarning,
-        stacklevel=2
+        stacklevel=2,
     )
 
     # Try to use new storage system first
@@ -453,10 +442,7 @@ def create_data_loader(config: "DataSourceConfig") -> DataLoader:
         from buttermilk._core.storage_config import StorageConfig
 
         # Convert DataSourceConfig to StorageConfig
-        storage_config = StorageConfig(
-            type="bigquery",
-            **config.model_dump(exclude={"type"})
-        )
+        storage_config = StorageConfig(type="bigquery", **config.model_dump(exclude={"type"}))
 
         storage = bm.get_storage(storage_config)
         return DataLoaderWrapper(storage)

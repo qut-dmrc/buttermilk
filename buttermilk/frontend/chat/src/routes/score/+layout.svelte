@@ -9,7 +9,7 @@
 
 <style>
 	.score-layout {
-		
+
 	}
 
 	.score-content {

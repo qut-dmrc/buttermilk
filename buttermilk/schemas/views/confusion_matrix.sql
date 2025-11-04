@@ -66,7 +66,7 @@ COMPARISON AS (
     p.timestamp >= '2025-05-01'
     AND (s.timestamp IS NULL OR s.timestamp >= '2025-05-01')
     AND (s.timestamp IS NULL OR s.timestamp >= p.timestamp)
-    AND NOT p.judge_hash IS NULL 
+    AND NOT p.judge_hash IS NULL
     AND NOT s.scoring_hash IS NULL
 )
 -- Final aggregation to get the metrics grouped by model, template, etc.

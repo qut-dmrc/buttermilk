@@ -1,5 +1,4 @@
 name: Test Suite
-
 on:
   push:
     branches: [stable]
@@ -12,14 +11,11 @@ on:
         required: false
         default: false
         type: boolean
-
 env:
   PYTHON_VERSION: '3.12'
-
 concurrency:
   group: tests-${{ github.ref }}
   cancel-in-progress: true
-
 jobs:
   unit-tests:
     name: Unit Tests
@@ -27,28 +23,22 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-
       - name: Install uv
         uses: astral-sh/setup-uv@v4
         with:
           version: "latest"
-
       - name: Install dependencies
         run: uv sync --dev
-
       - name: Run linting
         run: |
           uv run ruff check .
           uv run ruff format --check .
-
       - name: Run type checking
         run: uv run mypy buttermilk --ignore-missing-imports
-
       - name: Run unit tests
         run: |
           uv run pytest tests/ \
@@ -57,39 +47,33 @@ jobs:
             --cov-report=xml \
             --cov-report=term-missing \
             -v
-
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         if: always()
         with:
           file: ./coverage.xml
           fail_ci_if_error: false
-
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-latest
     # Only run integration tests on pushes to main branches or manual dispatch
     if: |
-      github.event_name == 'push' || 
+      github.event_name == 'push' ||
       (github.event_name == 'workflow_dispatch' && inputs.run_integration_tests == 'true') ||
       (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-integration-tests'))
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-
       - name: Install uv
         uses: astral-sh/setup-uv@v4
         with:
           version: "latest"
-
       - name: Install dependencies
         run: uv sync --dev
-
       - name: Run integration tests (without live APIs)
         run: |
           uv run pytest tests/integration/ \
@@ -99,32 +83,27 @@ jobs:
           # Set environment variables for integration tests
           # Note: Live API tests are excluded by default
           BUTTERMILK_ENV: test
-
   live-api-tests:
     name: Live API Tests
     runs-on: ubuntu-latest
     # Only run live API tests on pushes to main branches with secrets available
     if: |
-      github.event_name == 'push' && 
+      github.event_name == 'push' &&
       (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/stable') &&
       github.repository_owner == 'qut-dmrc'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-
       - name: Install uv
         uses: astral-sh/setup-uv@v4
         with:
           version: "latest"
-
       - name: Install dependencies
         run: uv sync --dev
-
       - name: Run live API integration tests
         run: |
           uv run pytest tests/integration/ \
@@ -136,7 +115,6 @@ jobs:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
           # Other API keys can be added here as needed
           BUTTERMILK_ENV: test
-
       - name: Upload test results
         uses: actions/upload-artifact@v4
         if: failure()
@@ -145,7 +123,6 @@ jobs:
           path: |
             pytest-report.html
             test-results.xml
-
   test-summary:
     name: Test Summary
     runs-on: ubuntu-latest
@@ -156,10 +133,10 @@ jobs:
         run: |
           unit_result="${{ needs.unit-tests.result }}"
           integration_result="${{ needs.integration-tests.result }}"
-          
+
           echo "Unit tests: $unit_result"
           echo "Integration tests: $integration_result"
-          
+
           if [[ "$unit_result" == "failure" ]]; then
             echo "❌ Unit tests failed"
             exit 1

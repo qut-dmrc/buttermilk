@@ -104,7 +104,9 @@ async def test_from_object_valid():
     as text. This test documents current behavior.
     """
     from io import BytesIO
+
     from PIL import Image
+
     image = Image.new("RGB", (100, 100))
     buffer = BytesIO()
     image.save(buffer, format="PNG")
@@ -129,7 +131,9 @@ async def test_record_update():
     rather than updating existing records.
     """
     from io import BytesIO
+
     from PIL import Image
+
     image = Image.new("RGB", (100, 100))
     buffer = BytesIO()
     image.save(buffer, format="PNG")
@@ -160,7 +164,9 @@ def test_as_openai_message_with_media(image_bytes: bytes):
     This test verifies the Record can be created with PIL images.
     """
     from io import BytesIO
+
     from PIL import Image
+
     pil_image = Image.open(BytesIO(image_bytes))
     message = Record(content=[pil_image, "test"])
 
@@ -176,7 +182,9 @@ def test_as_openai_message_with_media(image_bytes: bytes):
 
 def test_as_openai_message_with_media_and_role(image_bytes: bytes):
     from io import BytesIO
+
     from PIL import Image
+
     pil_image = Image.open(BytesIO(image_bytes))
     message = Record(content=[pil_image])
     openai_message = message.as_message(role="assistant")

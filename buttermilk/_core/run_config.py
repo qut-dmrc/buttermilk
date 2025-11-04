@@ -6,12 +6,12 @@ The RunMode enum defines valid execution modes.
 """
 
 from enum import Enum
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field, field_validator
 
 if TYPE_CHECKING:
-    from buttermilk._core.orchestrator import OrchestratorProtocol
+    pass
 
 
 class RunMode(str, Enum):
@@ -84,64 +84,32 @@ class RunConfig(BaseModel):
     """
 
     # Execution mode (loaded from run config group)
-    mode: RunMode = Field(
-        default=RunMode.CONSOLE,
-        description="Execution mode (set via run=api, run=batch, etc.)"
-    )
+    mode: RunMode = Field(default=RunMode.CONSOLE, description="Execution mode (set via run=api, run=batch, etc.)")
 
     # Flow definitions (configuration, not execution)
     flows: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Flow definitions keyed by flow name. Each flow must conform to OrchestratorProtocol"
+        default_factory=dict, description="Flow definitions keyed by flow name. Each flow must conform to OrchestratorProtocol"
     )
 
     # Flow execution parameters
-    flow: str | None = Field(
-        default=None,
-        description="Which flow to execute (required for console/batch modes)"
-    )
-    limit: int | None = Field(
-        default=None,
-        description="Unified limit for records/jobs to process (replaces max_records/max_jobs)"
-    )
-    record_id: str | None = Field(
-        default=None,
-        description="Specific record ID for console mode testing"
-    )
+    flow: str | None = Field(default=None, description="Which flow to execute (required for console/batch modes)")
+    limit: int | None = Field(default=None, description="Unified limit for records/jobs to process (replaces max_records/max_jobs)")
+    record_id: str | None = Field(default=None, description="Specific record ID for console mode testing")
 
     # API mode settings
-    host: str = Field(
-        default="0.0.0.0",
-        description="API server host (api mode)"
-    )
-    port: int = Field(
-        default=8000,
-        description="API server port (api mode)"
-    )
-    workers: int = Field(
-        default=1,
-        description="Number of worker processes (api mode)"
-    )
-    reload: bool = Field(
-        default=False,
-        description="Enable hot reloading for development (api mode)"
-    )
-    log_level: str = Field(
-        default="info",
-        description="Logging level (api mode)"
-    )
+    host: str = Field(default="0.0.0.0", description="API server host (api mode)")
+    port: int = Field(default=8000, description="API server port (api mode)")
+    workers: int = Field(default=1, description="Number of worker processes (api mode)")
+    reload: bool = Field(default=False, description="Enable hot reloading for development (api mode)")
+    log_level: str = Field(default="info", description="Logging level (api mode)")
 
     # Pipeline mode configuration
     pipeline: Any = Field(  # Will be PipelineConfig but avoid circular import
-        default=None,
-        description="Pipeline processing configuration (pipeline mode)"
+        default=None, description="Pipeline processing configuration (pipeline mode)"
     )
 
     # Storage override for batch modes
-    storage_config: dict[str, Any] | None = Field(
-        default=None,
-        description="Storage configuration override for batch modes"
-    )
+    storage_config: dict[str, Any] | None = Field(default=None, description="Storage configuration override for batch modes")
 
     model_config = {
         "extra": "allow",  # Allow additional fields for flexibility
@@ -163,7 +131,5 @@ class RunConfig(BaseModel):
                 return RunMode(v)
             except ValueError:
                 valid_modes = [m.value for m in RunMode]
-                raise ValueError(
-                    f"Invalid run mode: {v}. Must be one of: {', '.join(valid_modes)}"
-                )
+                raise ValueError(f"Invalid run mode: {v}. Must be one of: {', '.join(valid_modes)}")
         raise ValueError(f"Mode must be a string or RunMode, got {type(v)}")

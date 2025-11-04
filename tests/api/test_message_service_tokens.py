@@ -15,33 +15,21 @@ class TestMessageServiceTokenExtraction:
     def test_format_message_extracts_tokens_from_agent_output(self, mock_extract, mock_calculate, real_bm):
         """Test that tokens are extracted from AgentOutput metadata."""
         # Setup mocks
-        mock_extract.return_value = {
-            "prompt_tokens": 100,
-            "completion_tokens": 50
-        }
+        mock_extract.return_value = {"prompt_tokens": 100, "completion_tokens": 50}
         mock_calculate.return_value = (100, 50, 0.003)
-        
+
         # Create test AgentOutput with usage metadata
-        agent_config = AgentConfig(
-            name="test_agent",
-            parameters={"model": "gpt41"}
-        )
-        
+        agent_config = AgentConfig(name="test_agent", parameters={"model": "gpt41"})
+
         # Create AgentOutput with AssistantMessage as output
         from buttermilk._core.types import AssistantMessage
-        
+
         agent_output = AgentOutput(
             agent_id="test_agent",
             outputs=AssistantMessage(content="Test response", source="test_agent"),
-            metadata={
-                "agent_model": "gpt41",
-                "usage": {
-                    "prompt_tokens": 100,
-                    "completion_tokens": 50
-                }
-            }
+            metadata={"agent_model": "gpt41", "usage": {"prompt_tokens": 100, "completion_tokens": 50}},
         )
-        
+
         # Mock getattr to return agent_config when 'agent_info' is requested
         original_getattr = getattr
 
@@ -126,7 +114,7 @@ class TestMessageServiceTokenExtraction:
 
         with patch("builtins.getattr", mock_getattr):
             result = MessageService.format_message_for_client(agent_output)
-            
+
             assert isinstance(result, ChatMessage)
             assert result.type == "system_error"
             assert result.prompt_tokens == 0
@@ -137,29 +125,20 @@ class TestMessageServiceTokenExtraction:
     def test_format_message_model_from_metadata(self, mock_calculate, real_bm):
         """Test extracting model name from metadata when not in agent_info."""
         from buttermilk._core.types import AssistantMessage
-        
+
         mock_calculate.return_value = (50, 25, 0.001)
-        
+
         agent_output = AgentOutput(
             agent_id="test_agent",
             outputs=AssistantMessage(content="Test response", source="test_agent"),
-            metadata={
-                "agent_model": "gpt41mini",
-                "usage": {
-                    "prompt_tokens": 50,
-                    "completion_tokens": 25
-                }
-            }
+            metadata={"agent_model": "gpt41mini", "usage": {"prompt_tokens": 50, "completion_tokens": 25}},
         )
-        
+
         result = MessageService.format_message_for_client(agent_output)
-        
+
         assert isinstance(result, ChatMessage)
         assert result.prompt_tokens == 50
         assert result.completion_tokens == 25
         assert result.cost_usd == 0.001
-        
-        mock_calculate.assert_called_with(
-            model="gpt41mini",
-            usage_dict={"prompt_tokens": 50, "completion_tokens": 25}
-        )
+
+        mock_calculate.assert_called_with(model="gpt41mini", usage_dict={"prompt_tokens": 50, "completion_tokens": 25})

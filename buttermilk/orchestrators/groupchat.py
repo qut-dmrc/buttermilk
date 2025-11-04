@@ -150,7 +150,7 @@ class AutogenOrchestrator(Orchestrator):
         # - Or set AUTOGEN_DISABLE_RUNTIME_TRACING=true environment variable
 
         self._runtime = SingleThreadedAgentRuntime(
-           tracer_provider=NoOpTracerProvider(),
+            tracer_provider=NoOpTracerProvider(),
             intervention_handlers=[termination_handler, interrupt_handler],
         )
 
@@ -215,7 +215,7 @@ class AutogenOrchestrator(Orchestrator):
         instances for each agent variant and registering them with the runtime.
         Sets up subscriptions so agents listen on the main group chat topic and
         potentially role-specific topics.
-        
+
         Agents are registered in parallel to improve startup performance.
         """
         logger.debug("Registering agents with Autogen runtime...")
@@ -278,10 +278,10 @@ class AutogenOrchestrator(Orchestrator):
         role_name: str,
     ) -> tuple[AgentType, Any]:
         """Register a single agent with the runtime.
-        
+
         Returns:
             tuple: (agent_type, variant_config) on success
-            
+
         Raises:
             Exception: Any exception that occurs during registration
 
@@ -291,7 +291,7 @@ class AutogenOrchestrator(Orchestrator):
             # Check if this is a Buttermilk Agent subclass
             if issubclass(agent_cls, Agent):
                 config_with_session = {**variant_config.model_dump(), "session_id": params.session_id, "topic_id": self._topic}
-                
+
                 # Add BM instance if available from orchestrator
                 if hasattr(self, "get_effective_bm"):
                     config_with_session["bm"] = self.get_effective_bm()
@@ -352,9 +352,7 @@ class AutogenOrchestrator(Orchestrator):
 
         except Exception as e:
             # Log detailed error information for agent registration failures
-            error_msg = (
-                f"Failed to register agent {variant_config.agent_id} (class: {agent_cls.__name__}) for role '{role_name}': {e}"
-            )
+            error_msg = f"Failed to register agent {variant_config.agent_id} (class: {agent_cls.__name__}) for role '{role_name}': {e}"
             logger.error(error_msg, exc_info=True)
             raise
 

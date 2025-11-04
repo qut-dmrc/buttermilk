@@ -13,7 +13,7 @@ class HuggingFaceStorage:
 
     def __init__(self, config: StorageConfig, bm_instance=None):
         """Initialize HuggingFace dataset storage.
-        
+
         Args:
             config: Storage configuration
             bm_instance: BM instance for context (optional)
@@ -23,12 +23,10 @@ class HuggingFaceStorage:
         # Import datasets with proper error handling
         try:
             from datasets import load_dataset
+
             self._load_dataset = load_dataset
         except ImportError:
-            raise ImportError(
-                "datasets package required for HuggingFace storage. "
-                "Install with: pip install datasets"
-            )
+            raise ImportError("datasets package required for HuggingFace storage. " "Install with: pip install datasets")
 
     def __iter__(self) -> Iterator[Record]:
         """Load and yield records from HuggingFace dataset."""
@@ -40,10 +38,7 @@ class HuggingFaceStorage:
 
             # Load with streaming for large datasets
             dataset = self._load_dataset(
-                self.config.path,
-                name=getattr(self.config, "name", None),
-                split=getattr(self.config, "split", "train"),
-                streaming=True
+                self.config.path, name=getattr(self.config, "name", None), split=getattr(self.config, "split", "train"), streaming=True
             )
 
             for idx, item in enumerate(dataset):
@@ -113,7 +108,7 @@ class HuggingFaceStorage:
                 self.config.path,
                 name=getattr(self.config, "name", None),
                 split=getattr(self.config, "split", "train"),
-                streaming=False  # Need to load fully to get length
+                streaming=False,  # Need to load fully to get length
             )
             length = len(dataset)
             return min(length, self.config.limit) if self.config.limit else length
@@ -123,23 +118,20 @@ class HuggingFaceStorage:
 
     def save(self, records: list[Record] | Record) -> None:
         """Save records to HuggingFace dataset (not typically supported)."""
-        raise StorageError(
-            "HuggingFace datasets are typically read-only. "
-            "Use FileStorage or BigQueryStorage for saving records."
-        )
+        raise StorageError("HuggingFace datasets are typically read-only. " "Use FileStorage or BigQueryStorage for saving records.")
 
     def get_record_by_id(self, record_id: str) -> Record | None:
         """Get a single record by ID.
-        
-        HuggingFace datasets can be very large, so we don't allow the default 
+
+        HuggingFace datasets can be very large, so we don't allow the default
         iteration-based approach. For small datasets, export to FileStorage.
-        
+
         Args:
             record_id: The unique identifier of the record to retrieve
-            
+
         Returns:
             The record if found, None otherwise
-            
+
         Raises:
             NotImplementedError: HuggingFace datasets may be too large for iteration
         """
@@ -157,10 +149,7 @@ class HuggingFaceStorage:
         try:
             # Try to load just the dataset info
             self._load_dataset(
-                self.config.path,
-                name=getattr(self.config, "name", None),
-                split=getattr(self.config, "split", "train"),
-                streaming=True
+                self.config.path, name=getattr(self.config, "name", None), split=getattr(self.config, "split", "train"), streaming=True
             )
             return True
         except Exception:
@@ -168,7 +157,4 @@ class HuggingFaceStorage:
 
     def create(self) -> None:
         """Create dataset (not applicable for HuggingFace datasets)."""
-        raise StorageError(
-            "Cannot create HuggingFace datasets programmatically. "
-            "Datasets must exist on the HuggingFace Hub."
-        )
+        raise StorageError("Cannot create HuggingFace datasets programmatically. " "Datasets must exist on the HuggingFace Hub.")

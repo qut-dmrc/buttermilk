@@ -29,21 +29,21 @@ describe('Session URL Routing', () => {
         // Simulate URL with session ID
         const mockSessionId = 'test-session-123';
         const mockParams = { sessionId: mockSessionId };
-        
+
         // In actual implementation, this would be in +page.svelte load function
         // Simulating the extraction logic
         const extractedId = mockParams.sessionId;
-        
+
         expect(extractedId).toBe(mockSessionId);
     });
 
     it('should redirect from /terminal to /session/{id}', async () => {
         // Generate new session ID
         const newSessionId = 'generated-session-456';
-        
+
         // Simulate navigation from /terminal
         await goto(`/session/${newSessionId}`, { replaceState: true });
-        
+
         // Verify goto was called with correct URL
         expect(goto).toHaveBeenCalledWith(
             `/session/${newSessionId}`,
@@ -54,16 +54,16 @@ describe('Session URL Routing', () => {
     it('should update URL when session changes', async () => {
         const oldSessionId = 'old-session';
         const newSessionId = 'new-session';
-        
+
         // Set initial session
         sessionId.set(oldSessionId);
-        
+
         // Change session
         sessionId.set(newSessionId);
-        
+
         // In actual implementation, sessionStore would trigger URL update
         await goto(`/session/${newSessionId}`, { replaceState: true });
-        
+
         expect(goto).toHaveBeenCalledWith(
             `/session/${newSessionId}`,
             { replaceState: true }
@@ -72,10 +72,10 @@ describe('Session URL Routing', () => {
 
     it('should persist session ID in localStorage as fallback', () => {
         const testSessionId = 'localStorage-session';
-        
+
         // Set session ID
         sessionId.set(testSessionId);
-        
+
         // Verify it's saved to localStorage
         expect(localStorage.getItem('sessionId')).toBe(testSessionId);
     });
@@ -83,22 +83,22 @@ describe('Session URL Routing', () => {
     it('should read session ID from URL first, localStorage second', () => {
         const urlSessionId = 'url-session';
         const localStorageSessionId = 'localStorage-session';
-        
+
         // Set localStorage value
         localStorage.setItem('sessionId', localStorageSessionId);
-        
+
         // Simulate URL parameter being available
         const mockUrlParams = { sessionId: urlSessionId };
-        
+
         // URL should take precedence
         const resolvedSessionId = mockUrlParams.sessionId || localStorage.getItem('sessionId');
-        
+
         expect(resolvedSessionId).toBe(urlSessionId);
-        
+
         // Test fallback to localStorage when no URL param
         const noUrlParams = {};
         const fallbackSessionId = noUrlParams.sessionId || localStorage.getItem('sessionId');
-        
+
         expect(fallbackSessionId).toBe(localStorageSessionId);
     });
 });
@@ -142,7 +142,7 @@ describe('Session Restoration UI', () => {
 
         // Verify fetch was called correctly
         expect(fetch).toHaveBeenCalledWith(`/api/session/${sessionId}/messages`);
-        
+
         // Verify messages were returned
         expect(restoredMessages).toHaveLength(2);
         expect(restoredMessages[0].message_id).toBe('msg-1');
@@ -198,7 +198,7 @@ describe('Session Restoration UI', () => {
         ];
 
         // Sort messages by timestamp
-        const sortedMessages = [...messages].sort((a, b) => 
+        const sortedMessages = [...messages].sort((a, b) =>
             new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
         );
 

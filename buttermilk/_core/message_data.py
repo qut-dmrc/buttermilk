@@ -10,12 +10,12 @@ structures without hardcoding access patterns within the agent logic.
 from collections.abc import Sequence  # For type hinting sequences
 from typing import Any  # For general type hinting
 
-from buttermilk.utils import scrub_serializable
 import jmespath  # For resolving input mappings using JMESPath query language
 from jmespath import exceptions as jmespath_exceptions  # JMESPath specific exceptions
 
 from buttermilk._core.contract import GroupchatMessageTypes  # Union type for messages
 from buttermilk._core.log import logger  # Centralized logger
+from buttermilk.utils import scrub_serializable
 from buttermilk.utils.utils import clean_empty_values  # Utility to remove empty values from dicts
 
 

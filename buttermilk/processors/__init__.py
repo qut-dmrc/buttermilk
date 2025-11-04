@@ -5,8 +5,8 @@ for use in data processing pipelines. Each processor takes dict inputs
 containing 'record' and other fields, yielding transformed dict outputs.
 """
 
-from .embeddings import EmbeddingGenerator
 from .chromadb_uploader import ChromaDBUploader
+from .embeddings import EmbeddingGenerator
 from .jmespath_transform import JMESPathTransform
 
 __all__ = [

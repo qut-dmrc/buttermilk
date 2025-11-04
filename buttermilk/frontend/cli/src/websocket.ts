@@ -32,7 +32,7 @@ export const connect = (
   reconnectOptions?: ReconnectOptions
 ): WebSocketConnection => {
   const options = { ...DEFAULT_RECONNECT_OPTIONS, ...reconnectOptions };
-  
+
   let ws: WebSocket | null = null;
   let state: ConnectionState = 'connecting';
   let retryCount = 0;
@@ -69,14 +69,14 @@ export const connect = (
 
   const attemptConnection = () => {
     cleanup();
-    
+
     if (!shouldReconnect) {
       return;
     }
 
     console.log(`WebSocket: Attempting to connect to: ${url}`);
     setState('connecting');
-    
+
     ws = new WebSocket(url);
 
     ws.on('open', () => {
@@ -98,17 +98,17 @@ export const connect = (
 
     ws.on('close', (code, reason) => {
       console.log(`WebSocket: Disconnected. Code: ${code}, Reason: ${reason?.toString() || 'Unknown'}`);
-      
+
       if (shouldReconnect && retryCount < options.maxRetries) {
         setState('reconnecting');
         retryCount++;
-        
+
         console.log(`WebSocket: Reconnecting in ${retryDelay}ms (attempt ${retryCount}/${options.maxRetries})`);
-        
+
         reconnectTimeout = setTimeout(() => {
           attemptConnection();
         }, retryDelay);
-        
+
         retryDelay = Math.min(retryDelay * options.factor, options.maxDelay);
       } else {
         setState('disconnected');
