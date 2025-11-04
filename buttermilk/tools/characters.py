@@ -69,25 +69,56 @@ class ProtectedCharacteristics(BaseModel):
         if "body_type" in char_dict:
             demo_parts.append(char_dict["body_type"])
 
-        if demo_parts:
-            parts.append("A" if demo_parts[0][0].lower() not in "aeiou" else "An")
-            parts.append(" ".join(demo_parts))
+        # Handle sexuality + gender combination with "person" format
+        has_sexuality = "sexuality" in char_dict
+        has_gender = "gender" in char_dict or "gender_presentation" in char_dict
 
-        # Add gender/gender_presentation
-        gender_parts = []
-        if "gender" in char_dict:
-            gender_parts.append(char_dict["gender"])
-        if "gender_presentation" in char_dict:
-            gender_parts.append(char_dict["gender_presentation"])
-        if gender_parts:
-            parts.append(" ".join(gender_parts))
+        if has_sexuality and has_gender:
+            # Format as: "[article] [demo_parts] [sexuality] [gender/gender_presentation] person"
+            identity_parts = []
+
+            # Add sexuality (lowercase for adjective use)
+            identity_parts.append(char_dict["sexuality"].lower())
+
+            # Add gender/gender_presentation
+            if "gender" in char_dict:
+                identity_parts.append(char_dict["gender"].lower())
+            if "gender_presentation" in char_dict:
+                identity_parts.append(char_dict["gender_presentation"].lower())
+
+            # Add "person"
+            identity_parts.append("person")
+
+            # Combine demo + identity parts and add article
+            all_parts = demo_parts + identity_parts
+            if all_parts:
+                parts.append("A" if all_parts[0][0].lower() not in "aeiou" else "An")
+                parts.append(" ".join(all_parts))
+        else:
+            # Original logic for when sexuality and gender are not both present
+            if demo_parts:
+                parts.append("A" if demo_parts[0][0].lower() not in "aeiou" else "An")
+                parts.append(" ".join(demo_parts))
+
+            # Add gender/gender_presentation
+            gender_parts = []
+            if "gender" in char_dict:
+                gender_parts.append(char_dict["gender"])
+            if "gender_presentation" in char_dict:
+                gender_parts.append(char_dict["gender_presentation"])
+            if gender_parts:
+                parts.append(" ".join(gender_parts))
+
+            # Add sexuality with "and" if gender present, standalone otherwise
+            if "sexuality" in char_dict:
+                if gender_parts:
+                    parts.append(f"and {char_dict['sexuality']}")
+                else:
+                    parts.append(char_dict["sexuality"])
 
         # Add other characteristics with natural phrasing
         if "social_class" in char_dict:
             parts.append(f"who is {char_dict['social_class']}")
-
-        if "sexuality" in char_dict:
-            parts.append(f"and {char_dict['sexuality']}")
 
         if "religion" in char_dict:
             parts.append(f"{char_dict['religion']}")
