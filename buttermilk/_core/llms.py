@@ -803,8 +803,8 @@ def autogen_to_litellm_messages(messages: Sequence[LLMMessage]) -> list[dict[str
     return litellm_messages
 
 
-def litellm_to_autogen_result(response: Any, usage: Any, model: str, schema: type[BaseModel] | None = None) -> CreateResult | ModelOutput:
-    """Convert LiteLLM response to Autogen CreateResult/ModelOutput.
+def litellm_to_autogen_result(response: Any, usage: Any, model: str, schema: type[BaseModel] | None = None) -> ModelOutput:
+    """Convert LiteLLM response to Autogen ModelOutput.
 
     Args:
         response: LiteLLM response object or dict
@@ -813,7 +813,7 @@ def litellm_to_autogen_result(response: Any, usage: Any, model: str, schema: typ
         schema: Optional Pydantic schema for structured output
 
     Returns:
-        CreateResult or ModelOutput compatible with Autogen interface
+        ModelOutput compatible with Autogen interface (always returns ModelOutput to preserve pricing metadata)
     """
     from autogen_core.models import RequestUsage
 
@@ -823,11 +823,12 @@ def litellm_to_autogen_result(response: Any, usage: Any, model: str, schema: typ
         choice = response.choices[0]
         message = choice.message if hasattr(choice, "message") else choice
 
-        # Check for tool calls
-        if hasattr(message, "tool_calls") and message.tool_calls:
+        # Check for tool calls (check both existence and non-empty list)
+        tool_calls_attr = getattr(message, "tool_calls", None)
+        if tool_calls_attr is not None and isinstance(tool_calls_attr, list) and len(tool_calls_attr) > 0:
             # Convert to FunctionCall objects
             tool_calls: list[FunctionCall] = []
-            for tc in message.tool_calls:
+            for tc in tool_calls_attr:
                 tool_calls.append(FunctionCall(id=tc.id, name=tc.function.name, arguments=tc.function.arguments))
             content = tool_calls
         else:
@@ -849,16 +850,14 @@ def litellm_to_autogen_result(response: Any, usage: Any, model: str, schema: typ
     # Check if content is cached (some providers support this)
     cached = getattr(response, "cached", False)
 
-    # Return appropriate result type
-    if schema:
-        return ModelOutput(
-            content=content,
-            finish_reason=finish_reason,
-            usage=request_usage,
-            cached=cached,
-            parsed_object=None,  # Will be parsed by caller if needed
-        )
-    return CreateResult(content=content, finish_reason=finish_reason, usage=request_usage, cached=cached)
+    # Always return ModelOutput to preserve pricing metadata
+    return ModelOutput(
+        content=content,
+        finish_reason=finish_reason,
+        usage=request_usage,
+        cached=cached,
+        parsed_object=None,  # Will be parsed by caller if needed
+    )
 
 
 # =============================================================================
@@ -1041,15 +1040,14 @@ class LiteLLMWrapper(BaseModel):
         usage = response.usage if hasattr(response, "usage") else None
         pricing_metadata = self._calculate_pricing(usage)
 
-        # Convert response to Autogen format
+        # Convert response to Autogen format (always returns ModelOutput now)
         result = litellm_to_autogen_result(response, usage, self.litellm_model_name, schema)
 
-        # Add pricing metadata
-        if isinstance(result, ModelOutput):
-            result.metadata = {"pricing": pricing_metadata}
+        # Add pricing metadata (result is always ModelOutput now)
+        result.metadata = {"pricing": pricing_metadata}
 
         # Parse structured output if schema was provided
-        if schema and isinstance(result, ModelOutput):
+        if schema:
             try:
                 parsed = await AutoGenWrapper._parse_structured_output(result.content, schema)
                 result.parsed_object = parsed
