@@ -1,13 +1,13 @@
 import pytest
 
-# Skip module if replicate not installed (requires ml extras)
-pytest.importorskip("replicate", reason="replicate package not installed - requires ml extras")
-
 from buttermilk import logger
 from buttermilk.agents.imagegen import (
     BatchImageGenerator,
     ImageClients,
 )
+
+# Skip entire module if replicate not installed (requires ml extras)
+pytest.importorskip("replicate", reason="replicate package not installed - requires ml extras")
 
 prompts = [
     (
@@ -36,6 +36,21 @@ async def test_model(client, prompt):
     image.image.show()
     logger.info("Saved image", model=imagegenerator.model, uri=image.uri)
     assert image
+
+
+@pytest.mark.anyio
+async def test_flux11pro_generation():
+    """Test FLUX 1.1 Pro image generation via Azure."""
+    from buttermilk.agents.imagegen import FLUX11Pro
+
+    client = FLUX11Pro()
+    image = await client.generate(
+        text="a simple geometric shape on white background",
+        save_path=None,
+    )
+    assert not image.error, f"Image generation failed: {image.error}"
+    assert image.image is not None, "No image was generated"
+    logger.info("FLUX 1.1 Pro image generated", uri=image.uri)
 
 
 @pytest.mark.anyio

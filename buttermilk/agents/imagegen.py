@@ -3,6 +3,7 @@
 This module provides a base client `TextToImageClient` with retry capabilities
 and several concrete implementations for different image generation models/services:
 - Google's Imagen 3 and 4 (via Vertex AI)
+- FLUX 1.1 Pro (via Azure)
 - Stable Diffusion 3.5 Large (via Azure)
 - Stable Diffusion 3 (via Stability AI API)
 - Stable Diffusion XL (via HuggingFace Hub and Replicate)
@@ -364,6 +365,110 @@ class SD35Large(TextToImageClient):
         image_record = read_image(image_b64=image_b64)
         image_record.model = self.model
         image_record.parameters = request_data  # Log parameters used
+        image_record.prompt = text
+        image_record.negative_prompt = negative_prompt
+
+        return image_record
+
+
+class FLUX11Pro(TextToImageClient):
+    """Client for FLUX 1.1 Pro model via Azure.
+
+    Uses Azure OpenAI endpoint for FLUX 1.1 Pro image generation.
+    Requires `AZURE_FLUX_URL` and `AZURE_FLUX_API_KEY` in `bm.credentials`.
+
+    Attributes:
+        model (str): Defaults to "FLUX-1.1-pro".
+        prefix (str): File prefix defaults to "flux11pro_".
+    """
+
+    model: str = "FLUX-1.1-pro"
+    prefix: str = "flux11pro_"
+
+    async def generate_image(
+        self,
+        text: str,
+        negative_prompt: str | None = "",
+        size: str = "1024x1024",  # Default size
+        **kwargs: Any,
+    ) -> ImageRecord:
+        """Generates an image using FLUX 1.1 Pro via Azure.
+
+        Args:
+            text: The prompt for image generation.
+            negative_prompt: Optional negative prompt (may not be supported by FLUX).
+            size: Image dimensions (e.g., "1024x1024").
+            **kwargs: Additional parameters for the API request.
+
+        Returns:
+            ImageRecord: An `ImageRecord` with the generated image and metadata.
+        """
+        # Get Azure credentials from bm.credentials
+        azure_url = bm.credentials.get("AZURE_FLUX_URL")
+        azure_api_key = bm.credentials.get("AZURE_FLUX_API_KEY")
+
+        if not azure_url:
+            # Use default endpoint if not configured
+            azure_url = (
+                "https://platformaieast.cognitiveservices.azure.com/openai/deployments/FLUX-1.1-pro/images/generations?api-version=2025-04-01-preview"
+            )
+
+        if not azure_api_key:
+            raise ValueError("AZURE_FLUX_API_KEY not configured in bm.credentials.")
+
+        # Build request data
+        request_data = {
+            "prompt": text,
+            "size": size,
+            **kwargs,
+        }
+
+        # Add negative_prompt if provided and not empty
+        if negative_prompt:
+            request_data["negative_prompt"] = negative_prompt
+
+        headers = {
+            "Content-Type": "application/json",
+            "api-key": azure_api_key,  # Azure uses 'api-key' header
+        }
+
+        async with httpx.AsyncClient() as http_client:
+            response = await http_client.post(
+                azure_url,
+                headers=headers,
+                json=request_data,
+                timeout=600.0,
+            )
+        response.raise_for_status()
+
+        # Parse response - Azure OpenAI typically returns data.url or data.b64_json
+        response_json = response.json()
+
+        # Try to get image data from various possible response formats
+        if "data" in response_json and len(response_json["data"]) > 0:
+            image_data_item = response_json["data"][0]
+
+            # Check for b64_json format
+            if "b64_json" in image_data_item:
+                image_b64 = image_data_item["b64_json"]
+                image_record = read_image(image_b64=image_b64)
+            # Check for url format
+            elif "url" in image_data_item:
+                image_url = image_data_item["url"]
+                # Fetch image from URL
+                async with httpx.AsyncClient() as http_client:
+                    img_response = await http_client.get(image_url, timeout=300.0)
+                img_response.raise_for_status()
+                pil_image = Image.open(BytesIO(img_response.content))
+                image_record = ImageRecord(image=pil_image)
+            else:
+                raise ValueError(f"Azure FLUX API response missing expected image data. Got: {image_data_item}")
+        else:
+            raise ValueError(f"Azure FLUX API response did not include 'data' array. Response: {response_json}")
+
+        # Set metadata
+        image_record.model = self.model
+        image_record.parameters = request_data
         image_record.prompt = text
         image_record.negative_prompt = negative_prompt
 
@@ -837,7 +942,7 @@ class DALLE(TextToImageClient):
         )
 
 
-ImageClients: list[Type[TextToImageClient]] = [DALLE, SD35Large, VertexImagegenModels, SD3, SDXL, SDXLReplicate]
+ImageClients: list[Type[TextToImageClient]] = [DALLE, SD35Large, FLUX11Pro, VertexImagegenModels, SD3, SDXL, SDXLReplicate]
 """A list of available `TextToImageClient` classes that can be used by `BatchImageGenerator`.
 This list allows for easy iteration or selection of different image generation models.
 """
@@ -923,6 +1028,56 @@ class BatchImageGenerator(BaseModel):
         self._clients = {gen_class.__name__: gen_class() for gen_class in self.generators}
         logger.info(f"Initialized image generator clients: {list(self._clients.keys())}")
 
+    def _parse_batch_prompts(self, inputs: Sequence[str | dict[str, str]]) -> list[dict[str, Any]]:
+        """Parse and validate batch input prompts into a standardized format.
+
+        Args:
+            inputs: Sequence of prompts (strings or dicts with 'text' key)
+
+        Returns:
+            List of prompt dictionaries with 'text', 'id', and optional 'negative_prompt'
+
+        Raises:
+            ValueError: If a prompt has an invalid type
+        """
+        prompts_to_process: list[dict[str, Any]] = []
+        for idx, prompt_item in enumerate(inputs):
+            if isinstance(prompt_item, str):
+                prompts_to_process.append({"text": prompt_item, "id": str(idx)})
+            elif isinstance(prompt_item, dict):
+                if "text" not in prompt_item:
+                    logger.warning(f"Prompt dictionary at index {idx} is missing 'text' key. Skipping.")
+                    continue
+                prompts_to_process.append(
+                    {
+                        "text": prompt_item["text"],
+                        "id": str(prompt_item.get("id", idx)),
+                        "negative_prompt": prompt_item.get("negative_prompt", ""),
+                    }
+                )
+            else:
+                raise ValueError(f"Invalid prompt type at index {idx}: expected str or dict, got {type(prompt_item)}.")
+        return prompts_to_process
+
+    def _create_summary_record(self, image_result: ImageRecord) -> dict[str, Any]:
+        """Create a summary record from an ImageRecord for JSON export.
+
+        Args:
+            image_result: The ImageRecord to summarize
+
+        Returns:
+            Dictionary containing summary information for the image result
+        """
+        return {
+            "prompt_id": image_result.parameters.get("id", "unknown_id_in_params"),
+            "original_prompt": image_result.prompt,
+            "negative_prompt": image_result.negative_prompt,
+            "model_used": image_result.model,
+            "image_uri": image_result.uri if (image_result.image and image_result.uri) else None,
+            "generation_parameters": image_result.parameters,
+            "error": image_result.error,
+        }
+
     async def abatch(
         self,
         inputs: Sequence[str | dict[str, str]],  # Changed 'input' to 'inputs' to avoid builtin clash
@@ -963,25 +1118,8 @@ class BatchImageGenerator(BaseModel):
         generated_records_summary: list[dict[str, Any]] = []
         self._tasks = []  # Reset tasks for this batch
 
-        # Prepare prompts list with IDs
-        prompts_to_process: list[dict[str, Any]] = []
-        for idx, prompt_item in enumerate(inputs):
-            if isinstance(prompt_item, str):
-                prompts_to_process.append({"text": prompt_item, "id": str(idx)})
-            elif isinstance(prompt_item, dict):
-                if "text" not in prompt_item:
-                    logger.warning(f"Prompt dictionary at index {idx} is missing 'text' key. Skipping.")
-                    continue
-                prompts_to_process.append(
-                    {
-                        "text": prompt_item["text"],
-                        "id": str(prompt_item.get("id", idx)),  # Ensure ID is string
-                        "negative_prompt": prompt_item.get("negative_prompt", ""),  # Default to empty
-                    }
-                )
-            else:
-                raise ValueError(f"Invalid prompt type at index {idx}: expected str or dict, got {type(prompt_item)}.")
-
+        # Parse and validate input prompts
+        prompts_to_process = self._parse_batch_prompts(inputs)
         if not prompts_to_process:
             logger.warning("No valid prompts to process in abatch.")
             return
@@ -1004,7 +1142,7 @@ class BatchImageGenerator(BaseModel):
                             "save_path": img_full_save_path,
                             # Add any other specific params from current_prompt_info if needed
                         }
-                        self._tasks.append(client_instance.generate(**task_params))
+                        self._tasks.append(asyncio.create_task(client_instance.generate(**task_params)))
                     except Exception as e:
                         logger.error(
                             f"Error adding task: generate image from {client_name}, run {i_run}, prompt ID {prompt_id}. Error: {e!s}",
@@ -1020,30 +1158,8 @@ class BatchImageGenerator(BaseModel):
                 yield image_result  # Yield the successful ImageRecord
 
                 # Collect summary information for info.json
-                if image_result and image_result.image and image_result.uri:  # Successfully generated and saved
-                    generated_records_summary.append(
-                        {
-                            "prompt_id": image_result.parameters.get("id", "unknown_id_in_params"),  # Try to get ID from params if set
-                            "original_prompt": image_result.prompt,
-                            "negative_prompt": image_result.negative_prompt,
-                            "model_used": image_result.model,
-                            "image_uri": image_result.uri,
-                            "generation_parameters": image_result.parameters,
-                            "error": image_result.error,  # Will be None if successful
-                        }
-                    )
-                elif image_result and image_result.error:  # Generation failed, record error
-                    generated_records_summary.append(
-                        {
-                            "prompt_id": image_result.parameters.get("id", "unknown_id_in_params"),
-                            "original_prompt": image_result.prompt,
-                            "negative_prompt": image_result.negative_prompt,
-                            "model_used": image_result.model,
-                            "image_uri": None,
-                            "generation_parameters": image_result.parameters,
-                            "error": image_result.error,
-                        }
-                    )
+                if image_result:
+                    generated_records_summary.append(self._create_summary_record(image_result))
 
             except Exception as e:  # Catch errors from await task itself
                 logger.error(f"Error collecting result from an image generation task: {e!s}", exc_info=True)
