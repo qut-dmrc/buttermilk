@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from buttermilk import logger
 from buttermilk._core.types import BaseRecord
-from buttermilk.agents.imagegen import TextToImageClient
+from buttermilk.agents.imagegen import ALL_IMAGE_CLIENTS, TextToImageClient
 
 
 class ImageGenerationProcessor(BaseModel):
@@ -31,6 +31,31 @@ class ImageGenerationProcessor(BaseModel):
     client_class: Optional[Type[TextToImageClient]] = Field(
         default=None, description="Optional default TextToImageClient class. If None, reads from record.metadata['model_class']"
     )
+
+    def _resolve_client_class(self, model_class: Type[TextToImageClient] | str) -> Type[TextToImageClient]:
+        """Resolve model_class to actual class object.
+
+        Args:
+            model_class: Either a TextToImageClient class or string class name
+
+        Returns:
+            The resolved TextToImageClient class
+
+        Raises:
+            ValueError: If string class name not found in registry
+        """
+        # If already a class, return it
+        if isinstance(model_class, type) and issubclass(model_class, TextToImageClient):
+            return model_class
+
+        # If string, look up in registry
+        if isinstance(model_class, str):
+            for client_cls in ALL_IMAGE_CLIENTS:
+                if client_cls.__name__ == model_class:
+                    return client_cls
+            raise ValueError(f"Unknown model class name: {model_class}. Available: {[cls.__name__ for cls in ALL_IMAGE_CLIENTS]}")
+
+        raise ValueError(f"model_class must be a TextToImageClient class or string class name, got: {type(model_class)}")
 
     async def process(
         self,
@@ -58,10 +83,11 @@ class ImageGenerationProcessor(BaseModel):
         # Determine which client class to use
         if self.client_class is not None:
             # Use configured client class
-            client_cls = self.client_class
+            client_cls = self._resolve_client_class(self.client_class)
         elif "model_class" in record.metadata:
             # Use model_class from record metadata (set by BatchExpansionProcessor)
-            client_cls = record.metadata["model_class"]
+            # This may be a class object or a string class name (if serialized)
+            client_cls = self._resolve_client_class(record.metadata["model_class"])
         else:
             raise ValueError(f"Record {record.record_id} has no model_class in metadata and ImageGenerationProcessor has no default client_class")
 
