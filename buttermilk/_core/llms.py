@@ -181,8 +181,8 @@ CHAT_MODELS = [
     "gpt5mini",
     "gpt5nano",
     "llama4maverick",
-    "opus",
-    "sonnet",
+    "claude41opus",
+    "claude45sonnet",
 ]
 
 """A predefined list of identifiers for cost-effective chat models."""

@@ -141,7 +141,9 @@ class SessionInfo(BaseModel):
     flow_config: dict[str, Any] = Field(default_factory=dict, description="Flow configuration for this session.")
     flow_hash: str | None = Field(default=None, description="Hash of flow configuration for A/B testing.")
     template_paths: list[str] = Field(default_factory=list, description="Paths to search for templates.")
-    llm_wrapper: str = Field(default="autogen", description="Global LLM wrapper selection (autogen or litellm). Per-model use_litellm overrides this.")
+    llm_wrapper: str = Field(
+        default="autogen", description="Global LLM wrapper selection (autogen or litellm). Per-model use_litellm overrides this."
+    )
 
     _get_ip_task: asyncio.Task[Any] | None = PrivateAttr(default=None)  # type: ignore
 
@@ -206,7 +208,7 @@ class SessionInfo(BaseModel):
         elif self.started_at:
             duration = (datetime.datetime.now(datetime.UTC) - self.started_at).total_seconds()
 
-        summary = {
+        return {
             "session_id": self.session_id,
             "batch_id": self.batch_id,
             "project_name": self.project_name,
@@ -389,7 +391,15 @@ class BM(BaseModel):
         values.pop("_target_", None)  # Remove if exists, do nothing otherwise
         return values
 
-    def __init__(self, logger_cfg=None, cloud_manager=None, secret_manager=None, llms_instance=None, query_runner=None, **data: Any) -> None:
+    def __init__(
+        self,
+        logger_cfg: Any = None,
+        cloud_manager: Any = None,
+        secret_manager: Any = None,
+        llms_instance: Any = None,
+        query_runner: Any = None,
+        **data: Any,
+    ) -> None:
         """Initializes the BM instance with minimal field assignment.
 
         This is a lightweight constructor that only sets fields. All I/O operations
@@ -551,28 +561,28 @@ class BM(BaseModel):
             object.__setattr__(self, name, value)
 
     @property
-    def cloud_manager(self):
+    def cloud_manager(self) -> Any:
         """Provides access to the CloudManager instance."""
         if self._cloud_manager is None:
             raise RuntimeError("CloudManager not available. Ensure infrastructure is properly injected.")
         return self._cloud_manager
 
     @property
-    def secret_manager(self):
+    def secret_manager(self) -> Any:
         """Provides access to the SecretsManager instance."""
         if self._secret_manager is None:
             raise RuntimeError("SecretsManager not available. Ensure infrastructure is properly injected.")
         return self._secret_manager
 
     @property
-    def llms(self):
+    def llms(self) -> Any:
         """Provides access to the LLMs manager instance."""
         if self._llms_instance is None:
             raise RuntimeError("LLMs instance not available. Ensure infrastructure is properly injected.")
         return self._llms_instance
 
     @property
-    def query_runner(self):
+    def query_runner(self) -> Any:
         """Provides access to the QueryRunner instance."""
         if self._query_runner is None:
             raise RuntimeError("QueryRunner not available. Ensure infrastructure is properly injected.")
@@ -603,7 +613,7 @@ class BM(BaseModel):
         return self.cloud_manager.genai
 
     @property
-    def pubsub(self):
+    def pubsub(self) -> Any:
         """Provides access to complete Pub/Sub configuration including project_id."""
         if self._cloud_manager is None:
             raise RuntimeError("CloudManager not available. Ensure infrastructure is properly injected.")
@@ -655,12 +665,12 @@ class BM(BaseModel):
             return os.environ.copy()  # Return environment variables as fallback
 
     @property
-    def cfg(self):
+    def cfg(self) -> Any:
         """Provides access to the instantiated Hydra configuration."""
         return self._config
 
     @property
-    def logger(self):
+    def logger(self) -> Any:
         """Returns a contextualized logger with session information."""
         from buttermilk import logger as base_logger
 
@@ -680,7 +690,7 @@ class BM(BaseModel):
                 # Start task only if it hasn't been started or is already done
                 if not hasattr(self, "_get_ip_task") or self._get_ip_task is None or self._get_ip_task.done():
 
-                    async def _fetch_and_set_ip():
+                    async def _fetch_and_set_ip() -> None:
                         ip = await get_ip()
                         self.session_info.ip = ip
                         logger.debug(f"Fetched IP address: {ip}")
@@ -750,7 +760,7 @@ class BM(BaseModel):
             logger.error(f"Failed to save data to '{effective_save_dir_str}' with extension '{effective_extension}': {e!s}")
             return None  # Indicate save failure
 
-    def run_query(
+    def run_query(  # noqa: PLR0913
         self,
         sql: str,
         destination: str | None = None,
@@ -864,7 +874,7 @@ class BM(BaseModel):
 
         return storage
 
-    def get_bigquery_storage(self, dataset_name: str, **kwargs) -> Any:
+    def get_bigquery_storage(self, dataset_name: str, **kwargs: Any) -> Any:
         """Convenience method to create BigQuery storage with dataset name.
 
         Args:
@@ -932,20 +942,20 @@ class BM(BaseModel):
 # Factory functions for creating session-scoped BM instances
 
 
-async def create_session_bm_async(
+async def create_session_bm_async(  # noqa: PLR0913
     project_name: str,
     job: str,
     batch_id: str | None = None,
     platform: str = "local",
     save_dir_base: str | None = None,
     template_paths: list[str] | None = None,
-    cloud_manager=None,
-    secret_manager=None,
-    llms_instance=None,
-    query_runner=None,
-    logger_cfg=None,
-    config=None,
-    **kwargs,
+    cloud_manager: Any = None,
+    secret_manager: Any = None,
+    llms_instance: Any = None,
+    query_runner: Any = None,
+    logger_cfg: Any = None,
+    config: Any = None,
+    **kwargs: Any,
 ) -> BM:
     """Create a new session-scoped BM instance with async initialization.
 
