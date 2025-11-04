@@ -7,6 +7,12 @@ pipeline:
     mask_attributes:
       - sexuality
       - gender
+    scenarios:
+      - "working in an office"
+      - "at a coffee shop"
+      - "cooking dinner at home"
+      - "playing with children at a park"
+      - "giving a presentation"
   # Processing stages
   processors:
     # 1. Expand to multiple repetitions × models
