@@ -1,9 +1,6 @@
 # Buttermilk Initialization Profiling Results
 
-**Date:** 2025-11-03
-**Total Cold Start Time:** ~14.7 seconds
-**Import Time:** ~14.5 seconds (98.6%)
-**Actual Init Time:** ~0.2 seconds (1.4%)
+**Date:** 2025-11-03 **Total Cold Start Time:** ~14.7 seconds **Import Time:** ~14.5 seconds (98.6%) **Actual Init Time:** ~0.2 seconds (1.4%)
 
 ## 🔴 Critical Finding
 
@@ -13,21 +10,20 @@ Your initialization code is already well-optimized. The bottleneck is **eager mo
 
 ## 📊 Import Time Breakdown (CLI mode)
 
-| Package | Time | % of Total | Status |
-|---------|------|------------|--------|
-| **wandb** | **64.2s** | **35.4%** | 🔴 Via weave, not directly used |
-| **weave** | **27.0s** | **14.9%** | 🔴 Imported eagerly in \_core |
-| **google.*** | **22.4s** | **12.3%** | 🟡 GCP clients (aiplatform, etc) |
-| **litellm** | **5.8s** | **3.2%** | 🟡 Via dependencies |
-| **opentelemetry** | **3.6s** | **2.0%** | 🟡 Observability |
-| **vertexai** | **3.1s** | **1.7%** | 🟡 GCP AI Platform |
-| openai | 2.1s | 1.1% | Used for LLMs |
-| anthropic | 0.99s | 0.5% | Used for LLMs |
-| chromadb | 0.44s | 0.2% | Vector DB |
-| fastapi | 0.48s | 0.3% | API mode only |
+| Package           | Time      | % of Total | Status                           |
+| ----------------- | --------- | ---------- | -------------------------------- |
+| **wandb**         | **64.2s** | **35.4%**  | 🔴 Via weave, not directly used  |
+| **weave**         | **27.0s** | **14.9%**  | 🔴 Imported eagerly in \_core    |
+| **google.**\*     | **22.4s** | **12.3%**  | 🟡 GCP clients (aiplatform, etc) |
+| **litellm**       | **5.8s**  | **3.2%**   | 🟡 Via dependencies              |
+| **opentelemetry** | **3.6s**  | **2.0%**   | 🟡 Observability                 |
+| **vertexai**      | **3.1s**  | **1.7%**   | 🟡 GCP AI Platform               |
+| openai            | 2.1s      | 1.1%       | Used for LLMs                    |
+| anthropic         | 0.99s     | 0.5%       | Used for LLMs                    |
+| chromadb          | 0.44s     | 0.2%       | Vector DB                        |
+| fastapi           | 0.48s     | 0.3%       | API mode only                    |
 
-**Total cumulative import time:** 181.5 seconds (with transitive dependencies)
-**Actual wall clock time:** ~14.5 seconds
+**Total cumulative import time:** 181.5 seconds (with transitive dependencies) **Actual wall clock time:** ~14.5 seconds
 
 ## 🎯 Root Cause Analysis
 
@@ -40,17 +36,20 @@ import weave  # For tracing - core dependency
 ```
 
 **Impact:**
+
 - Directly adds **27 seconds** of cumulative import time
 - Transitively imports **wandb** (64 seconds cumulative)
 - Combined: **91 seconds** (50% of all import time)
 - Wall clock: ~6-8 seconds
 
 **Why it's a problem:**
+
 - Imported at module level in `_core/bm_init.py`
 - This means EVERY buttermilk import triggers weave/wandb loading
 - Weave/wandb are only needed if tracing is enabled
 
 **Files with eager weave imports:**
+
 ```
 buttermilk/_core/bm_init.py:38
 buttermilk/_core/tracing.py:3
@@ -68,6 +67,7 @@ buttermilk/pipeline.py:63
 **Impact:** 22.4 seconds cumulative (12.3%)
 
 **Why it's a problem:**
+
 - GCP client libraries (aiplatform, vertex AI) are imported even if not configured
 - Should only import when `infrastructure.clouds` contains GCP config
 - Likely imported in `execution_context.py` during infrastructure setup
@@ -182,21 +182,22 @@ def _get_gcp_client(service: str):
 ### Phase 3: Optional Optimizations (LOW IMPACT)
 
 1. **ChromaDB** - Already only 0.44s, but could be lazy loaded in storage modules
-2. **FastAPI** - Should already only load in API mode (verify not in runner.cli)
-3. **Pandas/Numpy** - Standard data libs, acceptable overhead
+1. **FastAPI** - Should already only load in API mode (verify not in runner.cli)
+1. **Pandas/Numpy** - Standard data libs, acceptable overhead
 
 ## 📈 Expected Results
 
-| Optimization | Current | After | Improvement |
-|--------------|---------|-------|-------------|
-| **Baseline** | 14.7s | - | - |
-| **+ Lazy Weave** | 14.7s | **~7s** | **-52%** |
-| **+ Lazy Cloud** | ~7s | **~5s** | **-66%** |
-| **Target** | 14.7s | **~5s** | **-66%** |
+| Optimization     | Current | After   | Improvement |
+| ---------------- | ------- | ------- | ----------- |
+| **Baseline**     | 14.7s   | -       | -           |
+| **+ Lazy Weave** | 14.7s   | **~7s** | **-52%**    |
+| **+ Lazy Cloud** | ~7s     | **~5s** | **-66%**    |
+| **Target**       | 14.7s   | **~5s** | **-66%**    |
 
 ## 🔧 Implementation Priority
 
 ### Priority 1: Weave (CRITICAL)
+
 - [ ] Make weave import conditional in `_core/bm_init.py`
 - [ ] Update `_core/tracing.py` to lazy load
 - [ ] Handle `@weave.op` decorators conditionally
@@ -204,11 +205,13 @@ def _get_gcp_client(service: str):
 - [ ] Add config flag: `observability.weave.enabled` (default: true)
 
 ### Priority 2: Cloud Clients (HIGH)
+
 - [ ] Lazy load GCP clients in `execution_context.py`
 - [ ] Only import when cloud is configured
 - [ ] Add early returns for unconfigured clouds
 
 ### Priority 3: Verification (MEDIUM)
+
 - [ ] Verify FastAPI not imported in non-API modes
 - [ ] Check for other eager imports in `_core`
 - [ ] Profile again to verify improvements
@@ -234,18 +237,21 @@ uv run python -X importtime -c "from buttermilk._core import config_bootstrap" 2
 ## 📝 Notes
 
 1. **Weave decorators** are tricky because they're evaluated at import time. You may need to:
+
    - Use a conditional decorator factory
    - Apply decorators dynamically after import
    - Or use environment variable to control decorator behavior
 
-2. **Type checking** - Use `TYPE_CHECKING` for type hints without importing:
+1. **Type checking** - Use `TYPE_CHECKING` for type hints without importing:
+
    ```python
    from typing import TYPE_CHECKING
    if TYPE_CHECKING:
        import weave
    ```
 
-3. **Backwards compatibility** - Consider adding a flag to enable eager imports for users who want the old behavior:
+1. **Backwards compatibility** - Consider adding a flag to enable eager imports for users who want the old behavior:
+
    ```yaml
    # config.yaml
    performance:
@@ -259,6 +265,7 @@ The **single biggest win** is making weave imports lazy. This alone will cut sta
 The issue isn't your initialization logic (which is already fast at ~200ms). It's that you're importing heavyweight observability libraries that bring in 90+ seconds of cumulative dependency chains, even when users might not need tracing.
 
 **Next Steps:**
+
 1. Implement lazy weave loading
-2. Profile again to verify improvement
-3. Iterate on cloud client lazy loading if needed
+1. Profile again to verify improvement
+1. Iterate on cloud client lazy loading if needed

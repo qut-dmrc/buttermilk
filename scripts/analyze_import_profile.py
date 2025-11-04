@@ -19,7 +19,7 @@ def parse_import_profile(filename: str) -> list[tuple[int, str]]:
         for line in f:
             if "import time:" in line:
                 # Format: import time: self [us] | cumulative | imported package
-                match = re.search(r'import time:\s+\d+\s+\|\s+(\d+)\s+\|\s+(.+)', line)
+                match = re.search(r"import time:\s+\d+\s+\|\s+(\d+)\s+\|\s+(.+)", line)
                 if match:
                     cumulative_us = int(match.group(1))
                     module_name = match.group(2).strip()
@@ -33,7 +33,7 @@ def group_by_top_level(imports: list[tuple[int, str]]) -> dict[str, int]:
 
     for cumulative_us, module_name in imports:
         # Extract top-level package
-        top_level = module_name.split('.')[0]
+        top_level = module_name.split(".")[0]
         grouped[top_level] += cumulative_us
 
     return dict(grouped)
@@ -76,7 +76,7 @@ def analyze_profile(profile_file: str, title: str):
 
     total_time_us = sum(grouped.values())
 
-    print(f"\n📦 Top Packages by Total Import Time:")
+    print("\n📦 Top Packages by Total Import Time:")
     print(f"{'Package':<30} {'Time':<12} {'% of Total':<12}")
     print("-" * 80)
 
@@ -150,9 +150,9 @@ def find_lazy_loading_opportunities():
 
 def main():
     """Main analysis function."""
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("🔍 Buttermilk Import Profile Analysis")
-    print("="*80)
+    print("=" * 80)
 
     # Analyze both profiles
     profiles = [
@@ -170,9 +170,9 @@ def main():
     # Show recommendations
     find_lazy_loading_opportunities()
 
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("🎯 Key Recommendations")
-    print("="*80)
+    print("=" * 80)
     print("""
 1. WANDB (2.5s) - The biggest offender
    - Check if wandb is imported eagerly in buttermilk._core

@@ -14,7 +14,6 @@ Output shows:
 
 import time
 from contextlib import contextmanager
-from typing import Any
 
 
 @contextmanager
@@ -77,30 +76,25 @@ def profile_init():
         # Time config loading
         with timer("Config loading"):
             from buttermilk._core.config_bootstrap import ConfigurationBootstrapper, resolve_config_dir
+
             config_dir = resolve_config_dir()
             bootstrapper = ConfigurationBootstrapper(
-                config_path=config_dir,
-                config_name="config",
-                overrides=["++project_name=profile_test", "++job=init_profile"]
+                config_path=config_dir, config_name="config", overrides=["++project_name=profile_test", "++job=init_profile"]
             )
             typed_config = bootstrapper.config
 
         # Time execution context creation
         with timer("Execution context setup"):
             from buttermilk._core.execution_context import from_config_async
-            execution_context = await from_config_async(
-                typed_config.infrastructure,
-                project_name=typed_config.session.project_name
-            )
+
+            execution_context = await from_config_async(typed_config.infrastructure, project_name=typed_config.session.project_name)
 
         # Time session creation
         with timer("Session creation"):
             from buttermilk._core.execution_context import create_session_from_context_async
+
             bm = await create_session_from_context_async(
-                execution_context=execution_context,
-                session=typed_config.session,
-                storage_configs=typed_config.storage,
-                full_config=typed_config
+                execution_context=execution_context, session=typed_config.session, storage_configs=typed_config.storage, full_config=typed_config
             )
 
         print(f"\n✓ Initialization complete - Session: {bm.session_info.session_id}")
@@ -124,10 +118,7 @@ def profile_cold_start():
         from buttermilk import init_async
 
         with timer("Full init_async()"):
-            bm = await init_async(
-                job="cold_start_profile",
-                project_name="profile_test"
-            )
+            bm = await init_async(job="cold_start_profile", project_name="profile_test")
 
         print(f"✓ Session: {bm.session_info.session_id}")
 
