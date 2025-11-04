@@ -2,9 +2,6 @@ import pytest
 
 from buttermilk import logger
 
-# Skip entire module if replicate not installed (requires ml extras)
-pytest.importorskip("replicate", reason="replicate package not installed - requires ml extras")
-
 prompts = [
     (
         "cat",
