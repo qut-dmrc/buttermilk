@@ -3,12 +3,12 @@
 This module provides a base client `TextToImageClient` with retry capabilities
 and several concrete implementations for different image generation models/services:
 - Google's Imagen 3 and 4 (via Vertex AI)
-- FLUX 1.1 Pro (via Azure)
+- FLUX 1.1 Pro (via Azure OpenAI)
+- DALL-E 3 (via Azure OpenAI)
 - Stable Diffusion 3.5 Large (via Azure)
 - Stable Diffusion 3 (via Stability AI API)
 - Stable Diffusion XL (via HuggingFace Hub and Replicate)
 - Stable Diffusion 2.1 (via Replicate)
-- DALL-E 3 (via OpenAI API or Azure OpenAI)
 
 It also includes `BatchImageGenerator` for generating images from multiple prompts
 using a selection of these clients asynchronously.
@@ -29,12 +29,11 @@ from tempfile import mkdtemp
 from typing import Any, Literal, Type  # For type hinting
 
 import aiohttp  # Asynchronous HTTP client (used by SD3, SDXLReplicate, SD)
-import httpx  # Asynchronous HTTP client (used by SD35Large, DALLE)
+import httpx  # Asynchronous HTTP client (used by SD35Large, DALLE, FLUX)
 import replicate  # Client for Replicate API
 from cloudpathlib import CloudPath  # For handling cloud storage paths
 from google.genai.types import GenerateImagesConfig
 from huggingface_hub import AsyncInferenceClient, login  # HuggingFace Hub client
-from openai import AsyncOpenAI  # OpenAI client
 from PIL import Image  # Pillow library for image manipulation
 from pydantic import BaseModel, Field, PrivateAttr, field_validator  # Pydantic components
 from shortuuid import ShortUUID  # For generating short unique IDs
@@ -417,7 +416,7 @@ class FLUX11Pro(TextToImageClient):
     """Client for FLUX 1.1 Pro model via Azure.
 
     Uses Azure OpenAI endpoint for FLUX 1.1 Pro image generation.
-    Requires `AZURE_FLUX_URL` and `AZURE_FLUX_API_KEY` in `bm.credentials`.
+    Requires `AZURE_API_KEY` in `bm.credentials`.
 
     Attributes:
         model (str): Defaults to "FLUX-1.1-pro".
@@ -447,7 +446,7 @@ class FLUX11Pro(TextToImageClient):
         """
         # Get Azure credentials from bm.credentials
         azure_url = bm.credentials.get("AZURE_FLUX_URL")
-        azure_api_key = bm.credentials.get("AZURE_FLUX_API_KEY")
+        azure_api_key = bm.credentials.get("AZURE_API_KEY")
 
         if not azure_url:
             # Use default endpoint if not configured
@@ -456,7 +455,7 @@ class FLUX11Pro(TextToImageClient):
             )
 
         if not azure_api_key:
-            raise ValueError("AZURE_FLUX_API_KEY not configured in bm.credentials.")
+            raise ValueError("AZURE_API_KEY not configured in bm.credentials.")
 
         # Build request data
         request_data = {
@@ -881,9 +880,10 @@ class SD(TextToImageClient):
 
 
 class DALLE(TextToImageClient):
-    """Client for OpenAI's DALL-E 3 model.
+    """Client for DALL-E 3 model via Azure.
 
-    Uses the `openai` Python library. Requires `OPENAI_API_KEY` in `bm.credentials`.
+    Uses Azure OpenAI endpoint for DALL-E 3 image generation.
+    Requires `AZURE_API_KEY` in `bm.credentials`.
 
     Attributes:
         model (str): Defaults to "dall-e-3".
@@ -892,7 +892,6 @@ class DALLE(TextToImageClient):
 
     model: str = "dall-e-3"
     prefix: str = "dalle3_"
-    # Client will be initialized in generate_image if None
 
     async def generate_image(
         self,
@@ -903,7 +902,7 @@ class DALLE(TextToImageClient):
         quality: str = "standard",  # "standard" or "hd"
         **kwargs: Any,
     ) -> ImageRecord:
-        """Generates an image using OpenAI's DALL-E 3 model.
+        """Generates an image using DALL-E 3 via Azure.
 
         Note: DALL-E 3 API does not have a direct `negative_prompt` parameter.
         If `negative_prompt` is provided, it's prepended to the main `text` prompt
@@ -915,73 +914,99 @@ class DALLE(TextToImageClient):
             size: Image dimensions (e.g., "1024x1024", "1792x1024", "1024x1792").
             style: The style of the generated images ("natural" or "vivid").
             quality: The quality of the image to generate ("standard" or "hd").
-            **kwargs: Additional parameters for the OpenAI images API.
+            **kwargs: Additional parameters for the Azure images API.
 
         Returns:
             ImageRecord: An `ImageRecord` with the generated image and metadata.
 
         Raises:
-            KeyError: If `OPENAI_API_KEY` is not in `bm.credentials`.
-            RuntimeError: If the OpenAI API call fails or returns unexpected data.
+            ValueError: If `AZURE_API_KEY` is not in `bm.credentials`.
+            RuntimeError: If the Azure API call fails or returns unexpected data.
         """
-        if self.client is None or not isinstance(self.client, AsyncOpenAI):
-            openai_api_key = bm.credentials.get("OPENAI_API_KEY")
-            if not openai_api_key:
-                raise KeyError("OPENAI_API_KEY not found in bm.credentials for DALL-E client.")
-            self.client = AsyncOpenAI(
-                api_key=openai_api_key,
-                timeout=600.0,  # httpx.Timeout
-            )
+        # Get Azure credentials from bm.credentials
+        azure_url = bm.credentials.get("AZURE_DALLE_URL")
+        azure_api_key = bm.credentials.get("AZURE_API_KEY")
+
+        if not azure_url:
+            # Use default endpoint if not configured
+            azure_url = "https://platformaieast.cognitiveservices.azure.com/openai/deployments/dall-e-3/images/generations?api-version=2024-02-01"
+
+        if not azure_api_key:
+            raise ValueError("AZURE_API_KEY not configured in bm.credentials.")
 
         prompt_for_api = text
         if negative_prompt:  # Simulate negative prompt by instruction
             prompt_for_api = f"{text} \n\nIMPORTANT: DO NOT INCLUDE the following elements: {negative_prompt}"
 
-        # Consolidate all parameters for the API call
-        api_parameters = {
-            "model": self.model,
+        # Build request data
+        request_data = {
             "prompt": prompt_for_api,
             "size": size,
-            "style": style,
-            "quality": quality,
-            "n": 1,  # DALL-E 3 currently supports n=1
-            "response_format": "url",  # Get a URL to download the image
-            **kwargs,  # Allow other valid DALL-E parameters
+            "n": 1,
+            **kwargs,
         }
 
-        try:
-            response = await self.client.images.generate(**api_parameters)  # type: ignore # client is AsyncOpenAI
-        except Exception as e:
-            logger.error(f"Error calling OpenAI DALL-E 3 API: {e!s}")
-            raise RuntimeError(f"OpenAI DALL-E 3 API call failed: {e!s}") from e
+        # Add style and quality if supported by the API version
+        if style:
+            request_data["style"] = style
+        if quality:
+            request_data["quality"] = quality
 
-        if not response.data or not response.data[0].url:
-            raise RuntimeError(f"OpenAI DALL-E 3 API returned no image data or URL. Response: {response}")
+        headers = {
+            "Content-Type": "application/json",
+            "api-key": azure_api_key,  # Azure uses 'api-key' header
+        }
 
-        output_image_url = response.data[0].url
-        revised_prompt_from_api = response.data[0].revised_prompt
+        async with httpx.AsyncClient() as http_client:
+            response = await http_client.post(
+                azure_url,
+                headers=headers,
+                json=request_data,
+                timeout=600.0,
+            )
+        response.raise_for_status()
+
+        # Parse response - Azure OpenAI returns data.url or data.b64_json
+        response_json = response.json()
+
+        if "data" not in response_json or len(response_json["data"]) == 0:
+            raise RuntimeError(f"Azure DALL-E 3 API response did not include 'data' array. Response: {response_json}")
+
+        image_data_item = response_json["data"][0]
+        revised_prompt_from_api = image_data_item.get("revised_prompt")
+
+        # Check for b64_json format
+        if "b64_json" in image_data_item:
+            image_b64 = image_data_item["b64_json"]
+            image_record = read_image(image_b64=image_b64)
+            output_image_url = None
+        # Check for url format
+        elif "url" in image_data_item:
+            output_image_url = image_data_item["url"]
+            # Fetch image from URL
+            async with httpx.AsyncClient() as http_client:
+                img_response = await http_client.get(output_image_url, timeout=300.0)
+            img_response.raise_for_status()
+            pil_image = Image.open(BytesIO(img_response.content))
+            image_record = ImageRecord(image=pil_image)
+        else:
+            raise ValueError(f"Azure DALL-E 3 API response missing expected image data. Got: {image_data_item}")
 
         # Store the actual prompt sent and any revised prompt
-        api_parameters["prompt_sent_to_api"] = prompt_for_api  # Store the exact prompt sent
+        request_data["prompt_sent_to_api"] = prompt_for_api
         if revised_prompt_from_api:
-            api_parameters["revised_prompt_by_api"] = revised_prompt_from_api
+            request_data["revised_prompt_by_api"] = revised_prompt_from_api
 
-        # Fetch the image from the URL provided by OpenAI
-        async with httpx.AsyncClient() as http_client:  # Renamed to avoid conflict
-            image_http_response = await http_client.get(output_image_url, timeout=300.0)
-        image_http_response.raise_for_status()  # Ensure download was successful
+        # Set metadata
+        image_record.model = self.model
+        image_record.parameters = request_data
+        image_record.prompt = text
+        image_record.negative_prompt = negative_prompt
+        image_record.enhanced_prompt = revised_prompt_from_api
+        if output_image_url:
+            image_record.uri = output_image_url
 
-        pil_image = Image.open(BytesIO(image_http_response.content))
-
-        return ImageRecord(
-            image=pil_image,
-            model=self.model,
-            parameters=api_parameters,  # Log all parameters used, including revisions
-            prompt=text,  # Original user prompt
-            negative_prompt=negative_prompt,  # Original user negative prompt
-            enhanced_prompt=revised_prompt_from_api,  # DALL-E often revises prompts
-            uri=output_image_url,  # Store the temporary OpenAI URL
-        )
+        return image_record
 
 
 # =============================================================================
@@ -997,7 +1022,7 @@ class DALLE(TextToImageClient):
 # Cheap/Fast Models
 CHEAP_IMAGE_CLIENTS: list[Type[TextToImageClient]] = [
     VertexImagen3Fast,  # Imagen 3.0 Fast (GCP Vertex AI)
-    VertexImagen4Fast,  # Imagen 4.0 Fast (GCP Vertex AI) - NEW
+    VertexImagen4Fast,  # Imagen 4.0 Fast (GCP Vertex AI)
     SD35Large,  # Stable Diffusion 3.5 Large (Azure)
     FLUX11Pro,  # FLUX 1.1 Pro (Azure)
 ]
