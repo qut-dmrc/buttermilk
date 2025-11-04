@@ -45,7 +45,7 @@ class ProtectedCharacteristics(BaseModel):
     citizenship_status: str
     disability: str
 
-    def __str__(self) -> str:
+    def __str__(self) -> str:  # noqa: PLR0912
         """Format characteristics into a natural-sounding description."""
         # When presenting in English, try to follow a standard-ish order that
         # doesn't emphasise any particular characteristic.
@@ -116,7 +116,7 @@ CHARACTERISTICS: TypeAlias = Literal[tuple(get_type_hints(ProtectedCharacteristi
 
 class CharacterGenerator(BaseModel):
     @cached_property
-    def _identities(self):
+    def _identities(self) -> dict:
         with open(CHARACTERISTICS_FILE) as f:
             data = json.load(f)
 
@@ -187,6 +187,36 @@ class CharacterGenerator(BaseModel):
         result.append(blind_char)
 
         return result
+
+    def reverse_mask(
+        self,
+        character: ProtectedCharacteristics,
+        keep: list[CHARACTERISTICS],
+    ) -> ProtectedCharacteristics:
+        """Keep ONLY specified attributes, set all others to None.
+
+        This is the opposite of mask() - instead of removing specified attributes,
+        this keeps ONLY the specified attributes and removes all others.
+
+        Args:
+            character: The character to filter
+            keep: List of attribute names to keep (all others set to None)
+
+        Returns:
+            A new ProtectedCharacteristics with only the specified attributes
+        """
+        # Create a copy of the character
+        filtered = character.model_copy()
+
+        # Get all attribute names from the model class
+        all_attributes = ProtectedCharacteristics.model_fields.keys()
+
+        # Set all attributes NOT in keep list to None
+        for attribute in all_attributes:
+            if attribute not in keep:
+                setattr(filtered, attribute, None)
+
+        return filtered
 
     def _format_character_with_scenario(self, character: str, scenario: str) -> str:
         """Format the character and scenario into a natural-sounding sentence."""
