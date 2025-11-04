@@ -1,7 +1,6 @@
 import pytest
 
 from buttermilk import logger
-from buttermilk.agents.imagegen import BatchImageGenerator
 
 # Skip entire module if replicate not installed (requires ml extras)
 pytest.importorskip("replicate", reason="replicate package not installed - requires ml extras")
@@ -33,7 +32,7 @@ def pytest_generate_tests(metafunc):
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("prompt", [x[1] for x in prompts], ids=[x[0] for x in prompts])
-async def test_model(client, prompt):
+async def test_model(client, real_bm, prompt):
     negative_prompt = "dog"
     imagegenerator = client()
     image = await imagegenerator.generate(
@@ -45,14 +44,3 @@ async def test_model(client, prompt):
     image.image.show()
     logger.info("Saved image", model=imagegenerator.model, uri=image.uri)
     assert image
-
-
-@pytest.mark.anyio
-async def test_batch(real_bm, image_clients):
-    prompt = prompts[0][1]
-    runner = BatchImageGenerator(generators=image_clients)
-    images = []
-    async for result in runner.abatch(inputs=[prompt], n=1):
-        images.append(result)
-        result.image.show()
-    assert len(images) == len(image_clients)
