@@ -23,10 +23,11 @@ class CharacterPromptSource(BaseModel):
     Attributes:
         mask_attributes: List of character attributes to keep (all others removed).
         scenarios: List of scenario descriptions to combine with characters.
+                   If not provided, uses CharacterGenerator.generate_scenarios().
     """
 
     mask_attributes: list[str]
-    scenarios: list[str]
+    scenarios: list[str] | None = None
 
     async def __aiter__(self) -> AsyncIterator[BaseRecord]:
         """Yield BaseRecord for each scenario with filtered character.
@@ -34,6 +35,8 @@ class CharacterPromptSource(BaseModel):
         Generates a single character identity, filters it to keep only
         specified attributes, then yields one BaseRecord per scenario
         combining the filtered character with each scenario.
+
+        If scenarios not provided, generates them using CharacterGenerator.
 
         Uses bm.session_info.session_id for session tracking.
 
@@ -45,9 +48,12 @@ class CharacterPromptSource(BaseModel):
         char = gen.generate_identity()
         filtered = gen.reverse_mask(char, keep=self.mask_attributes)
 
+        # Use provided scenarios or generate them
+        scenarios = self.scenarios if self.scenarios is not None else gen.generate_scenarios()
+
         session_id = bm.session_info.session_id
 
-        for idx, scenario in enumerate(self.scenarios):
+        for idx, scenario in enumerate(scenarios):
             prompt = gen._format_character_with_scenario(str(filtered), scenario)
 
             yield BaseRecord(

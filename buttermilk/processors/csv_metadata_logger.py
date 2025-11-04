@@ -35,9 +35,13 @@ class CSVMetadataLogger(BaseModel):
         if self._session_id is None:
             self._session_id = record.metadata.get("session_id", "")
 
+        # Extract model name from class object or use stored string
+        model_class = record.metadata.get("model_class", "unknown")
+        model_name = model_class.__name__ if hasattr(model_class, "__name__") else str(model_class)
+
         row = {
             "prompt": record.content,
-            "model": record.metadata.get("model_class", "unknown"),
+            "model": model_name,
             "timestamp": record.metadata.get("timestamp", datetime.now(timezone.utc).isoformat()),
             "filename": filename,
             "scenario": record.metadata.get("scenario", ""),

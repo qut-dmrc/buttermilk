@@ -54,10 +54,10 @@ async def test_batch_expansion_adds_model_metadata():
 
     results = [r async for r in processor.process(record, processor_stage="expand")]
 
-    # Check that we have the right model classes
+    # Check that we have the right model classes (as class objects, not strings)
     model_classes = [r.metadata["model_class"] for r in results]
-    assert model_classes.count("VertexImagen3Fast") == 2
-    assert model_classes.count("VertexImagen4Fast") == 2
+    assert model_classes.count(VertexImagen3Fast) == 2
+    assert model_classes.count(VertexImagen4Fast) == 2
 
     # Check that model_prefix is set
     assert all("model_prefix" in r.metadata for r in results)

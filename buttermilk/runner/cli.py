@@ -394,13 +394,21 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
 
             pipeline_conf = conf.run.pipeline
 
-            # Instantiate source storage
-            logger.info("Initializing source storage...")
-            pipeline_conf["source"] = bm.get_storage(pipeline_conf["source"])
+            # Instantiate source (either via _target_ or as storage config)
+            logger.info("Initializing source...")
+            source = hydra.utils.instantiate(pipeline_conf["source"])
+            # If instantiate didn't create an object (no _target_), treat as storage config
+            if isinstance(source, (dict, DictConfig)):
+                source = bm.get_storage(source)
+            pipeline_conf["source"] = source
 
-            # Instantiate output storage
-            logger.info("Initializing output storage...")
-            pipeline_conf["output"] = bm.get_storage(pipeline_conf["output"])
+            # Instantiate output (either via _target_ or as storage config)
+            logger.info("Initializing output...")
+            output = hydra.utils.instantiate(pipeline_conf["output"])
+            # If instantiate didn't create an object (no _target_), treat as storage config
+            if isinstance(output, (dict, DictConfig)):
+                output = bm.get_storage(output)
+            pipeline_conf["output"] = output
 
             # Instantiate processors
             logger.info(f"Loading {len(pipeline_conf['processors'])} processor(s)...")
