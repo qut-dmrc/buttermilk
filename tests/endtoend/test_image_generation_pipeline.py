@@ -44,13 +44,12 @@ async def test_image_generation_pipeline_end_to_end(real_bm, tmp_path):
     - Session ID propagated throughout pipeline
     """
     # Create pipeline programmatically (simpler than Hydra for testing)
-    session_id = "test_session_001"
+    # Note: session_id comes from real_bm.session_info.session_id automatically
 
     # 1. Source: Character-based prompts
     source = CharacterPromptSource(
         mask_attributes=["sexuality", "gender"],
         scenarios=["working in an office", "at a coffee shop"],
-        session_id=session_id,
     )
 
     # 2. Processors: Complete pipeline stages
@@ -58,16 +57,17 @@ async def test_image_generation_pipeline_end_to_end(real_bm, tmp_path):
         # Stage 1: Expand to repetitions × models
         BatchExpansionProcessor(repetitions=2, models=[VertexImagen3Fast, VertexImagen4Fast]),
         # Stage 2: Generate images (real Vertex AI calls)
+        # Model class is determined from record.metadata set by BatchExpansionProcessor
         ImageGenerationProcessor(),
         # Stage 3: Store images (local only for testing)
         GCSImageStorageProcessor(
             bucket="test-bucket",
-            base_path=f"test-images/{session_id}",
+            base_path="test-images",  # session_id added dynamically by processor
             local_only=True,  # Don't actually upload to GCS
             local_dir=str(tmp_path / "images"),
         ),
-        # Stage 4: Log metadata to CSV
-        CSVMetadataLogger(output_path=str(tmp_path / "generation_log.csv")),
+        # Stage 4: Log metadata to CSV (writes to local tmp_path, not GCS)
+        CSVMetadataLogger(bucket="test-bucket", base_path=str(tmp_path)),
     ]
 
     # 3. Run pipeline
@@ -116,9 +116,10 @@ async def test_image_generation_pipeline_end_to_end(real_bm, tmp_path):
     for col in required_columns:
         assert col in df.columns, f"Missing CSV column: {col}"
 
-    # Verify session ID consistency
+    # Verify session ID consistency (it's set dynamically by bm)
     assert df["session_id"].nunique() == 1, "Multiple session IDs found"
-    assert df["session_id"].iloc[0] == session_id
+    session_id = df["session_id"].iloc[0]  # Get the actual session ID used
+    assert session_id, "Session ID should not be empty"
 
     # Verify models used are from CHEAP_IMAGE_CLIENTS
     models_used = df["model"].unique()
@@ -137,7 +138,7 @@ async def test_image_generation_pipeline_end_to_end(real_bm, tmp_path):
 
     # Verify structured paths (scenario/model/filename pattern)
     for image_file in image_files:
-        # Path should be: images/test-images/test_session_001/scenario/model/filename.png
+        # Path should be: images/test-images/{session_id}/{scenario}/{filename.png}
         parts = image_file.parts
         assert "images" in parts
         # Verify session ID in path
@@ -152,13 +153,10 @@ async def test_pipeline_with_single_character(real_bm, tmp_path):
     This is a smoke test to verify basic pipeline functionality without
     hitting cost/quota limits.
     """
-    session_id = "test_single_char"
-
     # Minimal source: 1 scenario
     source = CharacterPromptSource(
         mask_attributes=["sexuality"],
         scenarios=["sitting at a desk"],
-        session_id=session_id,
     )
 
     # Minimal processors: 1 repetition, 1 model
@@ -167,11 +165,11 @@ async def test_pipeline_with_single_character(real_bm, tmp_path):
         ImageGenerationProcessor(),
         GCSImageStorageProcessor(
             bucket="test-bucket",
-            base_path=f"test-single/{session_id}",
+            base_path="test-single",  # session_id added dynamically
             local_only=True,
             local_dir=str(tmp_path / "images"),
         ),
-        CSVMetadataLogger(output_path=str(tmp_path / "single_log.csv")),
+        CSVMetadataLogger(bucket="test-bucket", base_path=str(tmp_path)),
     ]
 
     orchestrator = PipelineOrchestrator(
@@ -190,9 +188,12 @@ async def test_pipeline_with_single_character(real_bm, tmp_path):
     # Verify at least one successful generation
     assert len(results) > 0, "No results generated"
 
-    # Check CSV
-    csv_path = tmp_path / "single_log.csv"
-    assert csv_path.exists()
+    # Check CSV - find the generated CSV file (named by session_id)
+    csv_files = list(tmp_path.glob("**/generation_log.csv"))
+    assert len(csv_files) > 0, "No CSV file generated"
+    csv_path = csv_files[0]
+
     df = pd.read_csv(csv_path)
     assert len(df) > 0
-    assert all(df["session_id"] == session_id)
+    # All records should have the same session_id (set by bm)
+    assert df["session_id"].nunique() == 1, "Multiple session IDs found"
