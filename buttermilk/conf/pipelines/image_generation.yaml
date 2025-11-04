@@ -1,35 +1,43 @@
-pipeline:
-  name: image_generation
-  description: "Generate images using character-based prompts across multiple models"
-  # Character-based prompt source
-  source:
-    _target_: buttermilk.data.sources.character_prompt_source.CharacterPromptSource
-    mask_attributes:
-      - sexuality
-      - gender
-    scenarios:
-      - "working in an office"
-      - "at a coffee shop"
-      - "cooking dinner at home"
-      - "playing with children at a park"
-      - "giving a presentation"
-  # Processing stages
-  processors:
-    # 1. Expand to multiple repetitions × models
-    - _target_: buttermilk.processors.batch_expansion.BatchExpansionProcessor
-      repetitions: 3
-      models:
-        # Use cheap models for cost control
-        - _target_: buttermilk.agents.imagegen.VertexImagen3Fast
-        - _target_: buttermilk.agents.imagegen.VertexImagen4Fast
-    # 2. Generate images via Vertex AI
-    - _target_: buttermilk.processors.image_generation.ImageGenerationProcessor
-      # Model class specified in record.metadata
-    # 3. Upload to GCS with structured paths
-    - _target_: buttermilk.processors.gcs_image_storage.GCSImageStorageProcessor
-      bucket: prosocial-dev
-      base_path: "image-generation"
-    # 4. Log all metadata to CSV
-    - _target_: buttermilk.processors.csv_metadata_logger.CSVMetadataLogger
-      bucket: prosocial-dev
-      base_path: "image-generation"
+#@package _global_
+
+project_name: buttermilk
+job: image_generation
+verbose: true
+run:
+  mode: pipeline
+  limit: 100
+  pipeline:
+    name: image_generation
+    description: "Generate images using character-based prompts across multiple models"
+    # Character-based prompt source
+    source:
+      _target_: buttermilk.data.sources.character_prompt_source.CharacterPromptSource
+      mask_attributes:
+        - sexuality
+        - gender
+      scenarios:
+        - "working in an office"
+        - "at a coffee shop"
+        - "cooking dinner at home"
+        - "playing with children at a park"
+        - "giving a presentation"
+    # Processing stages
+    processors:
+      # 1. Expand to multiple repetitions × models
+      - _target_: buttermilk.processors.batch_expansion.BatchExpansionProcessor
+        repetitions: 3
+        models:
+          # Use cheap models for cost control
+          - _target_: buttermilk.agents.imagegen.VertexImagen3Fast
+          - _target_: buttermilk.agents.imagegen.VertexImagen4Fast
+      # 2. Generate images via Vertex AI
+      - _target_: buttermilk.processors.image_generation.ImageGenerationProcessor
+        # Model class specified in record.metadata
+      # 3. Upload to GCS with structured paths
+      - _target_: buttermilk.processors.gcs_image_storage.GCSImageStorageProcessor
+        bucket: prosocial-dev
+        base_path: "image-generation"
+      # 4. Log all metadata to CSV
+      - _target_: buttermilk.processors.csv_metadata_logger.CSVMetadataLogger
+        bucket: prosocial-dev
+        base_path: "image-generation"
