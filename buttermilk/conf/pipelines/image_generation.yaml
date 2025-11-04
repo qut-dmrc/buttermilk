@@ -1,8 +1,3 @@
-# Image Generation Pipeline Configuration
-# Usage: PIPELINE=image_generation uv run python -m buttermilk.pipeline
-
-# Unique session ID for this pipeline run
-session_id: ${now:%Y%m%d_%H%M%S}
 pipeline:
   name: image_generation
   description: "Generate images using character-based prompts across multiple models"
@@ -12,13 +7,6 @@ pipeline:
     mask_attributes:
       - sexuality
       - gender
-    scenarios:
-      - "working in an office"
-      - "at a coffee shop"
-      - "cooking dinner at home"
-      - "playing with children at a park"
-      - "giving a presentation"
-    session_id: ${session_id}
   # Processing stages
   processors:
     # 1. Expand to multiple repetitions × models
@@ -33,8 +21,9 @@ pipeline:
       # Model class specified in record.metadata
     # 3. Upload to GCS with structured paths
     - _target_: buttermilk.processors.gcs_image_storage.GCSImageStorageProcessor
-      bucket: buttermilk-research
-      base_path: "image-generation/${session_id}"
+      bucket: prosocial-dev
+      base_path: "image-generation"
     # 4. Log all metadata to CSV
     - _target_: buttermilk.processors.csv_metadata_logger.CSVMetadataLogger
-      output_path: "gs://buttermilk-research/image-generation/${session_id}/generation_log.csv"
+      bucket: prosocial-dev
+      base_path: "image-generation"

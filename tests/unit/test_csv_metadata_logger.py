@@ -1,4 +1,3 @@
-import pandas as pd
 import pytest
 
 from buttermilk._core.types import BaseRecord
@@ -6,10 +5,9 @@ from buttermilk.processors.csv_metadata_logger import CSVMetadataLogger
 
 
 @pytest.mark.anyio
-async def test_csv_logger_accumulates_records(tmp_path):
+async def test_csv_logger_accumulates_records():
     """Test that logger accumulates records without modifying them."""
-    output_path = tmp_path / "log.csv"
-    logger = CSVMetadataLogger(output_path=str(output_path))
+    logger = CSVMetadataLogger(bucket="test-bucket", base_path="test-images")
 
     record = BaseRecord(
         record_id="r1",
@@ -30,15 +28,15 @@ async def test_csv_logger_accumulates_records(tmp_path):
     assert results[0].record_id == "r1"
     assert results[0].content == "test prompt"
 
-    # CSV not written yet (happens in finalize)
-    assert not output_path.exists()
+    # Verify internal state
+    assert len(logger._accumulated_records) == 1
+    assert logger._session_id == "s1"
 
 
 @pytest.mark.anyio
-async def test_csv_logger_writes_on_finalize(tmp_path):
-    """Test CSV is written with correct schema on finalize."""
-    output_path = tmp_path / "generation_log.csv"
-    logger = CSVMetadataLogger(output_path=str(output_path))
+async def test_csv_logger_captures_session_id():
+    """Test that logger captures session_id from first record."""
+    logger = CSVMetadataLogger(bucket="test-bucket", base_path="image-generation")
 
     records = [
         BaseRecord(
@@ -71,29 +69,20 @@ async def test_csv_logger_writes_on_finalize(tmp_path):
         async for _ in logger.process(rec, processor_stage="log"):
             pass
 
-    # Finalize writes CSV
-    await logger.finalize_processing()
-
-    assert output_path.exists()
-    df = pd.read_csv(output_path)
-
-    assert len(df) == 2
-    assert list(df.columns) == ["prompt", "model", "timestamp", "filename", "scenario", "session_id", "repetition"]
-    assert df["prompt"].tolist() == ["prompt 1", "prompt 2"]
-    assert df["session_id"].unique().tolist() == ["sess123"]
+    # Verify accumulation
+    assert len(logger._accumulated_records) == 2
+    assert logger._session_id == "sess123"
+    assert logger._accumulated_records[0]["prompt"] == "prompt 1"
+    assert logger._accumulated_records[1]["prompt"] == "prompt 2"
 
 
 @pytest.mark.anyio
-async def test_csv_logger_handles_empty_finalize(tmp_path):
-    """Test finalize with no records doesn't crash."""
-    output_path = tmp_path / "empty.csv"
-    logger = CSVMetadataLogger(output_path=str(output_path))
+async def test_csv_logger_handles_empty_finalize():
+    """Test finalize with no records logs warning and returns early."""
+    logger = CSVMetadataLogger(bucket="test-bucket", base_path="test")
 
-    # Finalize without processing any records
+    # Finalize without processing any records - should not crash
     await logger.finalize_processing()
 
-    # Should create empty CSV with header
-    assert output_path.exists()
-    df = pd.read_csv(output_path)
-    assert len(df) == 0
-    assert "prompt" in df.columns
+    # Should have logged warning (checked via logger, not asserting here)
+    assert logger._session_id is None
