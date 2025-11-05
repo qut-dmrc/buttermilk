@@ -368,7 +368,7 @@ class AutogenOrchestrator(Orchestrator):
 
         async def output_result(_ctx: ClosureContext, message: AllMessages, ctx: MessageContext) -> None:
             try:
-                result = await callback_to_ui(message)
+                await callback_to_ui(message)
             except Exception as e:
                 logger.error(f"[MANAGER ClosureAgent] ❌ Error calling callback_to_ui: {e}", exc_info=True)
 
@@ -419,7 +419,7 @@ class AutogenOrchestrator(Orchestrator):
                 termination_handler, interrupt_handler = await self._setup(request)
             except Exception as e:
                 logger.error(f"Error during setup: {e}")
-                raise FatalError from e
+                raise FatalError(f"Orchestrator setup failed: {e}") from e
 
             # 2. Pass any initial data handling to the host via ConductorRequest.inputs
             # The host agent is now responsible for checking if there are records/prompts
@@ -467,8 +467,10 @@ class AutogenOrchestrator(Orchestrator):
 
         except KeyboardInterrupt:
             logger.info("Flow terminated by user.")
+            raise
         except (FatalError, Exception) as e:
             logger.exception(f"Unexpected and unhandled fatal error: {e}", exc_info=True)
+            raise
         finally:
             # Cleanup is now handled by the orchestrator lifecycle management
             pass
