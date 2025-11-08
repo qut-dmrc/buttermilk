@@ -1,12 +1,14 @@
-"""Quality filter processor for Buttermilk pipeline.
+"""Quality validation processor for Buttermilk pipeline.
 
-This processor analyzes document-level corruption and filters out documents
-that exceed corruption thresholds. It should be placed between the chunking
-and embedding steps to prevent corrupt documents from being vectorized.
+This processor analyzes document-level corruption and FAILS LOUDLY when documents
+exceed corruption thresholds. It should be placed between the chunking and embedding
+steps to prevent corrupt documents from being vectorized.
 
-The processor uses the text_quality module's is_document_corrupt() to
-perform document-level analysis on all chunks and applies configurable
-thresholds to determine if a document should be filtered.
+The processor uses the text_quality module's is_document_corrupt() to perform
+document-level analysis on all chunks. When corruption exceeds the threshold,
+it raises ProcessingError (fail-fast pattern) rather than silently filtering.
+
+This ensures corrupt documents are tracked as failures in the pipeline, not silently dropped.
 """
 
 from typing import AsyncGenerator
@@ -14,41 +16,43 @@ from typing import AsyncGenerator
 from pydantic import BaseModel, Field
 
 from buttermilk import logger
+from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.types import Record
 from buttermilk.utils.text_quality import is_document_corrupt
 
 
 class QualityFilterProcessor(BaseModel):
-    """Filter corrupt documents from the pipeline based on quality analysis.
+    """Validate document quality and fail loudly on corruption.
 
     This processor performs document-level quality analysis by examining all
-    chunks of a document. Documents that exceed the corruption_threshold are
-    filtered out (not yielded), preventing them from being embedded and stored.
+    chunks of a document. Documents that exceed the corruption_threshold will
+    RAISE ProcessingError, causing the pipeline to track them as failures.
 
     Features:
     - Document-level analysis (not chunk-level)
     - Configurable corruption threshold
     - Preserves clean documents unchanged
-    - Logs filtering decisions for observability
-    - Fail-fast: missing chunks attribute raises error
+    - FAILS LOUDLY on corrupt documents (raises ProcessingError)
+    - Fail-fast: missing chunks or empty chunks raise errors
 
     Configuration:
-        corruption_threshold: Percentage of chunks that must be corrupt to filter (0-100)
-        pattern_threshold: Percentage of repetitive pattern to consider corrupt (0-100)
+        corruption_threshold: Percentage of chunks that must be corrupt to fail (0-100)
+        pattern_threshold: Reserved for future use
 
     Example:
         >>> processor = QualityFilterProcessor(
-        ...     corruption_threshold=95.0,
-        ...     pattern_threshold=80.0
+        ...     corruption_threshold=66.0,  # Fail if >=66% of chunks are corrupt
         ... )
         >>> async for record in processor.process(record, processor_stage="quality"):
         ...     # Only clean documents are yielded
+        ...     # Corrupt documents raise ProcessingError
         ...     print(f"Processing {record.record_id}")
     """
 
     corruption_threshold: float = Field(
         default=95.0,
-        description="Minimum corruption rate (%) to filter document. " "Documents with >= this percentage of corrupt chunks are filtered.",
+        description="Minimum corruption rate (%) to fail document. "
+        "Documents with >= this percentage of corrupt chunks will raise ProcessingError.",
     )
 
     pattern_threshold: float = Field(
@@ -70,22 +74,17 @@ class QualityFilterProcessor(BaseModel):
 
         Yields:
             Record if document passes quality check (corruption < threshold)
-            Nothing if document is filtered due to high corruption
 
         Raises:
             ValueError: If record has no chunks attribute (fail-fast)
+            ProcessingError: If document corruption exceeds threshold (fail-fast)
         """
         # Fail-fast: Require chunks attribute from prior stage
         if not hasattr(record, "chunks") or record.chunks is None:
             raise ValueError(f"Record {record.record_id} has no chunks. " "QualityFilterProcessor requires chunks from prior chunking stage.")
 
         if len(record.chunks) == 0:
-            logger.warning(
-                "Record has empty chunks list, filtering out",
-                record_id=record.record_id,
-                processor_stage=processor_stage,
-            )
-            return
+            raise ProcessingError(f"Record {record.record_id} has empty chunks list. " "Cannot perform quality analysis on document with no chunks.")
 
         # Extract chunk texts for quality analysis
         chunk_texts = []
@@ -107,19 +106,14 @@ class QualityFilterProcessor(BaseModel):
         # Get document title for logging
         title = record.metadata.get("title", record.record_id) if record.metadata else record.record_id
 
-        # Apply threshold filter
+        # Apply threshold filter - FAIL LOUDLY if corrupt
         if is_corrupt:
-            # Filter out (do not yield) corrupt document
-            logger.info(
-                f"🚫 Filtering corrupt document: {title[:100]}",
-                record_id=record.record_id,
-                corruption_rate=f"{corruption_rate:.1f}%",
-                corrupted_chunks=corrupted_chunks,
-                total_chunks=total_chunks,
-                threshold=f"{self.corruption_threshold:.1f}%",
-                processor_stage=processor_stage,
+            raise ProcessingError(
+                f"Document '{title[:100]}' failed quality check: "
+                f"{corruption_rate:.1f}% of chunks are corrupt (threshold: {self.corruption_threshold:.1f}%). "
+                f"Corrupted chunks: {corrupted_chunks}/{total_chunks}. "
+                f"This document has excessive corruption and cannot be processed reliably."
             )
-            return  # Do not yield - document is filtered
 
         # Document passes quality check
         logger.debug(
