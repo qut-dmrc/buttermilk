@@ -21,7 +21,9 @@ from buttermilk.data.vector import ChromaDBEmbeddings, SemanticSplitter
 class TestZoteroVectorIntegration:
     """Integration test simulating the zotero vectorization pipeline."""
 
-    @pytest.mark.skip(reason="Requires BM singleton initialization - covered by test_vector_dict_chunks.py")
+    @pytest.mark.skip(
+        reason="Requires BM singleton initialization - covered by test_vector_dict_chunks.py"
+    )
     @pytest.mark.anyio
     async def test_full_pipeline_with_dict_chunks(self):
         """Test the full pipeline: SemanticSplitter -> EmbeddingGenerator -> ChromaDB.
@@ -59,7 +61,7 @@ class TestZoteroVectorIntegration:
         assert len(chunked_record.chunks) > 0
 
         # Verify chunks are dicts (this is what SemanticSplitter produces)
-        first_chunk = chunked_record.chunks[0]
+        chunked_record.chunks[0]
         # Note: SemanticSplitter actually produces ChunkedDocument objects, not dicts
         # But let's simulate what happens when they ARE dicts to test our fix
 

@@ -5,6 +5,7 @@ This directory contains reference templates for deploying FastMCP applications t
 ## Overview
 
 The buttermilk base image (`us-central1-docker.pkg.dev/prosocial-443205/reg/buttermilk:latest`) provides:
+
 - Python 3.11 with uv package manager
 - Node.js and npm
 - Google Cloud tools (gcsfuse, gcloud)
@@ -22,6 +23,7 @@ Applications built on this base inherit all buttermilk functionality with minima
 ### 1. Project Structure
 
 Your MCP server project should have:
+
 ```
 your-mcp-server/
 ├── src/
@@ -41,8 +43,8 @@ Include buttermilk as a git dependency:
 [project]
 name = "your-mcp-server"
 dependencies = [
-    "fastmcp>=2.12.3",
-    "buttermilk",
+  "fastmcp>=2.12.3",
+  "buttermilk",
 ]
 
 [tool.uv.sources]
@@ -81,12 +83,14 @@ ENTRYPOINT ["/entrypoint.sh"]
 ### 4. Building and Running
 
 Build and push to registry:
+
 ```bash
 cd your-mcp-server
 ./deploy/build.sh --push
 ```
 
 Run from registry (stdio mode for MCP clients):
+
 ```bash
 docker run --rm \
   -v ${HOME}/.config/gcloud:/root/.config/gcloud:ro \
@@ -94,6 +98,7 @@ docker run --rm \
 ```
 
 Run in HTTP mode:
+
 ```bash
 docker run --rm \
   -v ${HOME}/.config/gcloud:/root/.config/gcloud:ro \
@@ -107,6 +112,7 @@ docker run --rm \
 ## Examples
 
 See these projects for working implementations:
+
 - `projects/osbchatmcp/` - OSB chat with ChromaDB cache
 - `projects/zotmcp/` - Zotero search with ChromaDB cache
 - `projects/omcp/` - Outlook MCP proxy (no additional resources)

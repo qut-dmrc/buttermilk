@@ -164,9 +164,13 @@ class FlowRunContext(BaseModel):
     # Session management fields
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     last_activity: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    background_tasks: set[asyncio.Task] = Field(default_factory=set)  # DEPRECATED: Use resources.tasks
+    background_tasks: set[asyncio.Task] = Field(
+        default_factory=set
+    )  # DEPRECATED: Use resources.tasks
     session_timeout: int = 3600  # 1 hour default timeout in seconds
-    resources: SessionResources = Field(default_factory=SessionResources)  # Resource tracking
+    resources: SessionResources = Field(
+        default_factory=SessionResources
+    )  # Resource tracking
 
     websocket: Any = None
     monitor_ui_task: asyncio.Task | None = None  # Track active monitor_ui task
@@ -180,7 +184,9 @@ class FlowRunContext(BaseModel):
 
     def is_expired(self) -> bool:
         """Check if the session has expired based on timeout."""
-        return (datetime.now(UTC) - self.last_activity).total_seconds() > self.session_timeout
+        return (
+            datetime.now(UTC) - self.last_activity
+        ).total_seconds() > self.session_timeout
 
     def get_isolated_topic(self, base_topic: str) -> str:
         """Generate session-isolated topic names for message routing."""
@@ -210,7 +216,9 @@ class FlowRunContext(BaseModel):
     def cancel_monitor_ui_task(self) -> None:
         """Cancel the active monitor_ui task if it exists."""
         if self.monitor_ui_task and not self.monitor_ui_task.done():
-            logger.debug("Cancelling monitor_ui task for session", session_id=self.session_id)
+            logger.debug(
+                "Cancelling monitor_ui task for session", session_id=self.session_id
+            )
             self.monitor_ui_task.cancel()
             self.monitor_ui_task = None
 
@@ -243,7 +251,9 @@ class FlowRunContext(BaseModel):
                 self.resources.add_custom_resource("orchestrator", self.orchestrator)
 
             # Perform comprehensive resource cleanup
-            logger.debug("Cleaning up resources for session", session_id=self.session_id)
+            logger.debug(
+                "Cleaning up resources for session", session_id=self.session_id
+            )
             cleanup_report = await self.resources.cleanup()
 
             # Detach OTEL baggage if attached
@@ -260,20 +270,32 @@ class FlowRunContext(BaseModel):
 
             # Log cleanup report
             if cleanup_report.get("errors"):
-                logger.warning("Session cleanup completed with errors", session_id=self.session_id, cleanup_report=cleanup_report)
+                logger.warning(
+                    "Session cleanup completed with errors",
+                    session_id=self.session_id,
+                    cleanup_report=cleanup_report,
+                )
                 self.status = SessionStatus.ERROR
             else:
-                logger.info("Session cleaned up successfully", session_id=self.session_id, cleanup_report=cleanup_report)
+                logger.info(
+                    "Session cleaned up successfully",
+                    session_id=self.session_id,
+                    cleanup_report=cleanup_report,
+                )
                 self.status = SessionStatus.TERMINATED
 
         except Exception as e:
-            logger.error("Error during session cleanup", session_id=self.session_id, error=str(e))
+            logger.error(
+                "Error during session cleanup", session_id=self.session_id, error=str(e)
+            )
             # Ensure status is set even if cleanup fails
             self.status = SessionStatus.ERROR
 
     async def monitor_ui(self) -> AsyncGenerator[RunRequest, None]:
         """Monitor the UI for incoming messages."""
-        logger.debug("[MONITOR_UI] Starting monitor_ui for session", session_id=self.session_id)
+        logger.debug(
+            "[MONITOR_UI] Starting monitor_ui for session", session_id=self.session_id
+        )
         while True:
             await asyncio.sleep(0.1)
 
@@ -283,39 +305,64 @@ class FlowRunContext(BaseModel):
             try:
                 data = await self.websocket.receive_json()
                 logger.debug(
-                    "[MONITOR_UI] Received message from WebSocket for session", message_type=data.get("type", "unknown"), session_id=self.session_id
+                    "[MONITOR_UI] Received message from WebSocket for session",
+                    message_type=data.get("type", "unknown"),
+                    session_id=self.session_id,
                 )
                 self.update_activity()  # Update activity timestamp on message
 
                 message = await MessageService.process_message_from_ui(data)
                 if not message:
-                    logger.debug("[MONITOR_UI] No message returned from process_message_from_ui", data=data)
+                    logger.debug(
+                        "[MONITOR_UI] No message returned from process_message_from_ui",
+                        data=data,
+                    )
                     continue
 
                 if isinstance(message, RunRequest):
                     # Generate a request to run the flow with the new parameters
                     message.callback_to_ui = self.send_message_to_ui
                     message.session_id = self.session_id
-                    logger.info("Yielding RunRequest for flow in session", flow=message.flow, session_id=self.session_id)
+                    logger.info(
+                        "Yielding RunRequest for flow in session",
+                        flow=message.flow,
+                        session_id=self.session_id,
+                    )
 
                     yield message
                 elif not self.callback_to_groupchat:
                     # Group chat has not started yet
-                    logger.debug("Group chat not yet started for session", session_id=self.session_id)
+                    logger.debug(
+                        "Group chat not yet started for session",
+                        session_id=self.session_id,
+                    )
                     continue
                 else:
                     await self.callback_to_groupchat(message)
             except WebSocketDisconnect:
-                logger.debug("WebSocket disconnected for session", session_id=self.session_id)
+                logger.debug(
+                    "WebSocket disconnected for session", session_id=self.session_id
+                )
                 self.websocket = None
                 break
             except Exception as e:
-                logger.error("Error receiving/processing client message", session_id=self.session_id, error=str(e))
+                logger.error(
+                    "Error receiving/processing client message",
+                    session_id=self.session_id,
+                    error=str(e),
+                )
                 self.websocket = None
                 break
                 # raise FatalError(f"Error receiving/processing client message for {self.session_id}: {e}")
 
-    async def send_message_to_ui(self, message: ExecutionTrace | SystemPromptMessage | Record | FlowEvent | FlowMessage) -> None:
+    async def send_message_to_ui(
+        self,
+        message: ExecutionTrace
+        | SystemPromptMessage
+        | Record
+        | FlowEvent
+        | FlowMessage,
+    ) -> None:
         """Send a message to a WebSocket connection.
 
         Args:
@@ -325,7 +372,10 @@ class FlowRunContext(BaseModel):
         message_type = type(message).__name__
         formatted_message = MessageService.format_message_for_client(message)
         if not formatted_message:
-            logger.debug("Unhandled message type, not forwarding to UI", message_type=message_type)
+            logger.debug(
+                "Unhandled message type, not forwarding to UI",
+                message_type=message_type,
+            )
             return
 
         # Persist message to session storage
@@ -334,7 +384,11 @@ class FlowRunContext(BaseModel):
             if storage_service.should_persist_message(formatted_message):
                 storage_service.save_message(self.session_id, formatted_message)
         except Exception as e:
-            logger.warning("Failed to persist message for session", session_id=self.session_id, error=str(e))
+            logger.warning(
+                "Failed to persist message for session",
+                session_id=self.session_id,
+                error=str(e),
+            )
             # Continue even if persistence fails
 
         if self.websocket is None:
@@ -342,7 +396,9 @@ class FlowRunContext(BaseModel):
 
         try:
             message_type = formatted_message.type
-            message_data_to_send = scrub_serializable(formatted_message.model_dump(exclude_unset=True, exclude_none=True))
+            message_data_to_send = scrub_serializable(
+                formatted_message.model_dump(exclude_unset=True, exclude_none=True)
+            )
 
             # Consolidate debug info into a single log entry
             logger.debug(
@@ -356,7 +412,9 @@ class FlowRunContext(BaseModel):
             async def _send_with_retry_internal():
                 if not self.websocket:
                     # Raise an error to be caught by tenacity or the outer try/except
-                    raise RuntimeError(f"WebSocket is None for session {self.session_id} during send attempt.")
+                    raise RuntimeError(
+                        f"WebSocket is None for session {self.session_id} during send attempt."
+                    )
 
                 await self.websocket.send_json(message_data_to_send)
 
@@ -364,11 +422,19 @@ class FlowRunContext(BaseModel):
 
         except Exception as e:
             # Attempt to send an error message back to the client if the websocket is still viable
-            websocket_state = self.websocket.client_state if self.websocket else "websocket is None"
+            websocket_state = (
+                self.websocket.client_state if self.websocket else "websocket is None"
+            )
             if self.websocket:
                 try:
-                    error_event = ErrorEvent(source="websocket_manager", content=f"Failed to send message to client: {e!s}")
-                    error_message_data = {"content": error_event.model_dump(), "type": "system_message"}
+                    error_event = ErrorEvent(
+                        source="websocket_manager",
+                        content=f"Failed to send message to client: {e!s}",
+                    )
+                    error_message_data = {
+                        "content": error_event.model_dump(),
+                        "type": "system_message",
+                    }
                     await self.websocket.send_json(error_message_data)
                 except Exception as err2:
                     logger.warning(
@@ -393,7 +459,9 @@ class OrchestratorFactory:
     """Factory for creating and managing orchestrator instances with proper lifecycle."""
 
     @staticmethod
-    def create_orchestrator(flow_config: OrchestratorProtocol, flow_name: str) -> Orchestrator:
+    def create_orchestrator(
+        flow_config: OrchestratorProtocol, flow_name: str
+    ) -> Orchestrator:
         """Create a completely fresh orchestrator instance.
 
         Args:
@@ -426,11 +494,17 @@ class OrchestratorFactory:
             # Create and return a fresh instance
             orchestrator = orchestrator_cls(**config)
 
-            logger.debug("Created fresh orchestrator for flow", flow_name=flow_name, orchestrator_class=orchestrator_cls.__name__)
+            logger.debug(
+                "Created fresh orchestrator for flow",
+                flow_name=flow_name,
+                orchestrator_class=orchestrator_cls.__name__,
+            )
             return orchestrator
 
         except Exception as e:
-            raise ValueError(f"Failed to create orchestrator for flow '{flow_name}': {e}") from e
+            raise ValueError(
+                f"Failed to create orchestrator for flow '{flow_name}': {e}"
+            ) from e
 
     @staticmethod
     async def cleanup_orchestrator(orchestrator: Orchestrator) -> None:
@@ -446,7 +520,10 @@ class OrchestratorFactory:
                 result = cleanup_method()
                 if asyncio.iscoroutine(result):
                     await result
-                logger.debug("Orchestrator cleanup completed", orchestrator_class=orchestrator.__class__.__name__)
+                logger.debug(
+                    "Orchestrator cleanup completed",
+                    orchestrator_class=orchestrator.__class__.__name__,
+                )
             except Exception as e:
                 logger.warning("Error during orchestrator cleanup", error=str(e))
 
@@ -463,7 +540,9 @@ class SessionManager:
         # Atomic operation support
         self.session_locks: dict[str, asyncio.Lock] = {}  # Prevent race conditions
         self.session_resources: dict[str, SessionResources] = {}  # Track all resources
-        self.active_connections: dict[str, set[Any]] = {}  # Multiple connections per session
+        self.active_connections: dict[
+            str, set[Any]
+        ] = {}  # Multiple connections per session
         self.shutdown_handlers: dict[str, Callable] = {}  # Custom cleanup per session
         self._global_lock = asyncio.Lock()  # Protect session creation/deletion
 
@@ -490,7 +569,9 @@ class SessionManager:
 
         logger.info("Session manager stopped and all sessions cleaned up")
 
-    async def get_or_create_session(self, session_id: str, websocket: Any = None) -> FlowRunContext:
+    async def get_or_create_session(
+        self, session_id: str, websocket: Any = None
+    ) -> FlowRunContext:
         """Get existing session or create a new one with atomic operations.
 
         Args:
@@ -515,10 +596,14 @@ class SessionManager:
                     # Ensure OTEL baggage is attached for this session context
                     try:
                         if getattr(session, "_otel_baggage_token", None) is None:
-                            session._otel_baggage_token = attach_session_baggage(session_id)
+                            session._otel_baggage_token = attach_session_baggage(
+                                session_id
+                            )
                     except Exception:
                         pass
-                    logger.debug("Added WebSocket to existing session", session_id=session_id)
+                    logger.debug(
+                        "Added WebSocket to existing session", session_id=session_id
+                    )
                 return session
 
             # Create new session with INITIALIZING status
@@ -549,14 +634,18 @@ class SessionManager:
             # Each flow run creates its own independent root trace
             session._otel_session_root = None
 
-            logger.info("Created new session with INITIALIZING status", session_id=session_id)
+            logger.info(
+                "Created new session with INITIALIZING status", session_id=session_id
+            )
 
             # Transition to ACTIVE after initialization
             await self._transition_session_status(session_id, SessionStatus.ACTIVE)
 
             return session
 
-    async def _transition_session_status(self, session_id: str, new_status: SessionStatus) -> bool:
+    async def _transition_session_status(
+        self, session_id: str, new_status: SessionStatus
+    ) -> bool:
         """Safely transition a session to a new status.
 
         Args:
@@ -568,7 +657,10 @@ class SessionManager:
 
         """
         if session_id not in self.sessions:
-            logger.warning("Attempted to transition status for non-existent session", session_id=session_id)
+            logger.warning(
+                "Attempted to transition status for non-existent session",
+                session_id=session_id,
+            )
             return False
 
         session = self.sessions[session_id]
@@ -584,22 +676,49 @@ class SessionManager:
                 SessionStatus.ERROR,
                 SessionStatus.EXPIRED,
             ],
-            SessionStatus.RECONNECTING: [SessionStatus.ACTIVE, SessionStatus.TERMINATING, SessionStatus.ERROR],
+            SessionStatus.RECONNECTING: [
+                SessionStatus.ACTIVE,
+                SessionStatus.TERMINATING,
+                SessionStatus.ERROR,
+            ],
             SessionStatus.TERMINATING: [SessionStatus.TERMINATED, SessionStatus.ERROR],
             SessionStatus.COMPLETED: [SessionStatus.TERMINATED],
             SessionStatus.TERMINATED: [],  # Terminal state - no transitions allowed
             SessionStatus.ERROR: [SessionStatus.TERMINATING, SessionStatus.TERMINATED],
-            SessionStatus.EXPIRED: [SessionStatus.TERMINATING, SessionStatus.TERMINATED],
-            SessionStatus.PAUSED: [SessionStatus.ACTIVE, SessionStatus.TERMINATING, SessionStatus.ERROR],  # Legacy support
-            SessionStatus.FAILED: [SessionStatus.TERMINATING, SessionStatus.TERMINATED],  # Legacy support
+            SessionStatus.EXPIRED: [
+                SessionStatus.TERMINATING,
+                SessionStatus.TERMINATED,
+            ],
+            SessionStatus.PAUSED: [
+                SessionStatus.ACTIVE,
+                SessionStatus.TERMINATING,
+                SessionStatus.ERROR,
+            ],  # Legacy support
+            SessionStatus.FAILED: [
+                SessionStatus.TERMINATING,
+                SessionStatus.TERMINATED,
+            ],  # Legacy support
         }
 
-        if old_status in valid_transitions and new_status not in valid_transitions[old_status]:
-            logger.warning("Invalid status transition for session", session_id=session_id, old_status=old_status.value, new_status=new_status.value)
+        if (
+            old_status in valid_transitions
+            and new_status not in valid_transitions[old_status]
+        ):
+            logger.warning(
+                "Invalid status transition for session",
+                session_id=session_id,
+                old_status=old_status.value,
+                new_status=new_status.value,
+            )
             return False
 
         session.status = new_status
-        logger.debug("Session status transition", session_id=session_id, old_status=old_status.value, new_status=new_status.value)
+        logger.debug(
+            "Session status transition",
+            session_id=session_id,
+            old_status=old_status.value,
+            new_status=new_status.value,
+        )
         # Update session-root span attribute to reflect status change
         try:
             if session._otel_session_root is not None:
@@ -616,14 +735,20 @@ class SessionManager:
             # Terminal states - finalize with archival
             if new_status in {SessionStatus.COMPLETED, SessionStatus.TERMINATED}:
                 storage_service.finalize_session(session_id, "completed")
-            elif new_status in {SessionStatus.ERROR, SessionStatus.FAILED, SessionStatus.EXPIRED}:
+            elif new_status in {
+                SessionStatus.ERROR,
+                SessionStatus.FAILED,
+                SessionStatus.EXPIRED,
+            }:
                 storage_service.finalize_session(session_id, "failed")
             else:
                 # Non-terminal states - just update status
                 storage_service.update_flow_status(session_id, "running")
 
         except Exception as e:
-            logger.warning("Failed to update session storage", session_id=session_id, error=str(e))
+            logger.warning(
+                "Failed to update session storage", session_id=session_id, error=str(e)
+            )
 
         return True
 
@@ -643,7 +768,11 @@ class SessionManager:
                 try:
                     await self.shutdown_handlers[session_id]()
                 except Exception as e:
-                    logger.warning("Error in custom shutdown handler for session", session_id=session_id, error=str(e))
+                    logger.warning(
+                        "Error in custom shutdown handler for session",
+                        session_id=session_id,
+                        error=str(e),
+                    )
                 finally:
                     del self.shutdown_handlers[session_id]
 
@@ -662,10 +791,14 @@ class SessionManager:
 
             # Remove session and transition to TERMINATED
             del self.sessions[session_id]
-            logger.info("Session removed and cleaned up (TERMINATED)", session_id=session_id)
+            logger.info(
+                "Session removed and cleaned up (TERMINATED)", session_id=session_id
+            )
             return True
 
-    async def register_shutdown_handler(self, session_id: str, handler: Callable) -> None:
+    async def register_shutdown_handler(
+        self, session_id: str, handler: Callable
+    ) -> None:
         """Register a custom shutdown handler for a session.
 
         Args:
@@ -750,19 +883,28 @@ class SessionManager:
 
         """
         if session_id not in self.sessions:
-            logger.warning("Attempted to handle disconnect for non-existent session", session_id=session_id)
+            logger.warning(
+                "Attempted to handle disconnect for non-existent session",
+                session_id=session_id,
+            )
             return False
 
         session = self.sessions[session_id]
 
         # Only allow reconnection for ACTIVE sessions
         if session.status != SessionStatus.ACTIVE:
-            logger.debug("Session in status - cleaning up instead of allowing reconnection", session_id=session_id, status=session.status.value)
+            logger.debug(
+                "Session in status - cleaning up instead of allowing reconnection",
+                session_id=session_id,
+                status=session.status.value,
+            )
             await self.cleanup_session(session_id)
             return False
 
         # Transition to RECONNECTING status
-        success = await self._transition_session_status(session_id, SessionStatus.RECONNECTING)
+        success = await self._transition_session_status(
+            session_id, SessionStatus.RECONNECTING
+        )
         if success:
             # Clear the websocket but keep the session alive
             session.websocket = None
@@ -780,7 +922,9 @@ class SessionManager:
         await self.cleanup_session(session_id)
         return False
 
-    async def reconnect_session(self, session_id: str, websocket: Any) -> FlowRunContext | None:
+    async def reconnect_session(
+        self, session_id: str, websocket: Any
+    ) -> FlowRunContext | None:
         """Reconnect a client to an existing session in RECONNECTING status.
 
         Args:
@@ -792,19 +936,28 @@ class SessionManager:
 
         """
         if session_id not in self.sessions:
-            logger.warning("Attempted to reconnect to non-existent session", session_id=session_id)
+            logger.warning(
+                "Attempted to reconnect to non-existent session", session_id=session_id
+            )
             return None
 
         session = self.sessions[session_id]
 
         # Only allow reconnection to sessions in RECONNECTING status
         if session.status != SessionStatus.RECONNECTING:
-            logger.warning("Attempted to reconnect to session in status", session_id=session_id, status=session.status.value)
+            logger.warning(
+                "Attempted to reconnect to session in status",
+                session_id=session_id,
+                status=session.status.value,
+            )
             return None
 
         # Check if session has expired
         if session.is_expired():
-            logger.info("Session has expired - cleaning up instead of reconnecting", session_id=session_id)
+            logger.info(
+                "Session has expired - cleaning up instead of reconnecting",
+                session_id=session_id,
+            )
             await self.cleanup_session(session_id)
             return None
 
@@ -819,11 +972,16 @@ class SessionManager:
         self.active_connections[session_id].add(websocket)
 
         # Transition back to ACTIVE status
-        success = await self._transition_session_status(session_id, SessionStatus.ACTIVE)
+        success = await self._transition_session_status(
+            session_id, SessionStatus.ACTIVE
+        )
         if success:
             logger.debug("Successfully reconnected session", session_id=session_id)
             return session
-        logger.error("Failed to transition session back to ACTIVE after reconnection", session_id=session_id)
+        logger.error(
+            "Failed to transition session back to ACTIVE after reconnection",
+            session_id=session_id,
+        )
         return None
 
     async def _periodic_cleanup(self) -> None:  # noqa: PLR0912
@@ -845,22 +1003,30 @@ class SessionManager:
                         cleanup_candidates.append((session_id, "error_state"))
                     elif session.status == SessionStatus.COMPLETED:
                         # Clean up completed sessions after a grace period
-                        time_since_completion = (datetime.now(UTC) - session.last_activity).total_seconds()
+                        time_since_completion = (
+                            datetime.now(UTC) - session.last_activity
+                        ).total_seconds()
                         if time_since_completion > 300:  # 5 minutes grace period
-                            cleanup_candidates.append((session_id, "completed_gracetime"))
+                            cleanup_candidates.append(
+                                (session_id, "completed_gracetime")
+                            )
                     elif session.status == SessionStatus.RECONNECTING:
                         # Clean up RECONNECTING sessions that have exceeded timeout
                         if session.is_expired():
                             cleanup_candidates.append((session_id, "reconnect_timeout"))
                     elif len(self.active_connections.get(session_id, set())) == 0:
                         # No active connections for extended period
-                        time_since_activity = (datetime.now(UTC) - session.last_activity).total_seconds()
+                        time_since_activity = (
+                            datetime.now(UTC) - session.last_activity
+                        ).total_seconds()
                         if time_since_activity > 1800:  # 30 minutes without connections
                             cleanup_candidates.append((session_id, "no_connections"))
 
                 # Perform cleanup
                 for session_id, reason in cleanup_candidates:
-                    logger.info("Cleaning up session", session_id=session_id, reason=reason)
+                    logger.info(
+                        "Cleaning up session", session_id=session_id, reason=reason
+                    )
                     await self.cleanup_session(session_id)
 
             except asyncio.CancelledError:
@@ -884,13 +1050,18 @@ class FlowRunner(BaseModel):
     flows: dict[str, OrchestratorProtocol]
 
     # Session-scoped BM instance (optional)
-    bm: Any | None = Field(default=None, description="Optional session-scoped BM instance. If None, falls back to global singleton.")
+    bm: Any | None = Field(
+        default=None,
+        description="Optional session-scoped BM instance. If None, falls back to global singleton.",
+    )
 
     tasks: list = Field(default=[])
     mode: str = Field(default="api")
     ui: str = Field(default="console")
     human_in_loop: bool = False
-    sessions: dict[str, FlowRunContext] = Field(default_factory=dict)  # Dictionary of active sessions (DEPRECATED)
+    sessions: dict[str, FlowRunContext] = Field(
+        default_factory=dict
+    )  # Dictionary of active sessions (DEPRECATED)
 
     # New session management
     session_manager: SessionManager = Field(default_factory=lambda: SessionManager())
@@ -953,7 +1124,9 @@ class FlowRunner(BaseModel):
 
             return get_bm()
 
-    async def get_websocket_session_async(self, session_id: str, websocket: Any | None = None) -> FlowRunContext | None:
+    async def get_websocket_session_async(
+        self, session_id: str, websocket: Any | None = None
+    ) -> FlowRunContext | None:
         """Get or create a session for the given session ID, handling reconnection scenarios.
 
         Args:
@@ -972,41 +1145,69 @@ class FlowRunner(BaseModel):
 
             # If session is in RECONNECTING status, attempt to reconnect
             if existing_session.status == SessionStatus.RECONNECTING and websocket:
-                logger.debug("Attempting to reconnect to session", session_id=session_id)
-                reconnected_session = await self.session_manager.reconnect_session(session_id, websocket)
+                logger.debug(
+                    "Attempting to reconnect to session", session_id=session_id
+                )
+                reconnected_session = await self.session_manager.reconnect_session(
+                    session_id, websocket
+                )
                 if reconnected_session:
                     return reconnected_session
                 # Reconnection failed, fall through to create new session
-                logger.warning("Failed to reconnect to session, creating new session", session_id=session_id)
+                logger.warning(
+                    "Failed to reconnect to session, creating new session",
+                    session_id=session_id,
+                )
             elif existing_session.status == SessionStatus.TERMINATED:
                 # Session has been terminated, don't allow new connections
-                logger.info("WebSocket connection attempt to terminated session, rejecting", session_id=session_id)
+                logger.info(
+                    "WebSocket connection attempt to terminated session, rejecting",
+                    session_id=session_id,
+                )
                 return None
-            elif existing_session.status in [SessionStatus.ACTIVE, SessionStatus.INITIALIZING]:
+            elif existing_session.status in [
+                SessionStatus.ACTIVE,
+                SessionStatus.INITIALIZING,
+            ]:
                 # Session is already active, replace the websocket connection
                 if websocket:
                     # Cancel existing monitor_ui task to prevent WebSocket conflicts
                     existing_session.cancel_monitor_ui_task()
 
                     # Close existing websocket if any
-                    if existing_session.websocket and existing_session.websocket != websocket:
+                    if (
+                        existing_session.websocket
+                        and existing_session.websocket != websocket
+                    ):
                         try:
-                            logger.debug("Closing previous WebSocket connection for session", session_id=session_id)
+                            logger.debug(
+                                "Closing previous WebSocket connection for session",
+                                session_id=session_id,
+                            )
                             await existing_session.websocket.close()
                         except Exception as e:
-                            logger.warning("Error closing previous WebSocket for session", session_id=session_id, error=str(e))
+                            logger.warning(
+                                "Error closing previous WebSocket for session",
+                                session_id=session_id,
+                                error=str(e),
+                            )
 
                     # Replace with new websocket
                     existing_session.websocket = websocket
                     existing_session.add_websocket(websocket)
-                    logger.debug("Replaced WebSocket connection for active session", session_id=session_id)
+                    logger.debug(
+                        "Replaced WebSocket connection for active session",
+                        session_id=session_id,
+                    )
                 return existing_session
 
         # Create new session if no websocket provided or reconnection failed
         if not websocket:
             return None
 
-        session = await self.session_manager.get_or_create_session(session_id, websocket)
+        session = await self.session_manager.get_or_create_session(
+            session_id, websocket
+        )
         return session
 
     async def cleanup(self) -> None:
@@ -1082,7 +1283,9 @@ class FlowRunner(BaseModel):
                 # Extract flows from the reloaded configuration
                 if hasattr(conf, "run") and hasattr(conf.run, "flows"):
                     new_flows = conf.run.flows
-                    logger.info("Found flows in reloaded config", flow_count=len(new_flows))
+                    logger.info(
+                        "Found flows in reloaded config", flow_count=len(new_flows)
+                    )
 
                     # Update flows dictionary
                     old_flows = self.flows.copy()
@@ -1092,16 +1295,24 @@ class FlowRunner(BaseModel):
                     new_flow_names = set(new_flows.keys())
 
                     result["flows_loaded"] = list(new_flow_names)
-                    result["flows_updated"] = list(current_flows.intersection(new_flow_names))
+                    result["flows_updated"] = list(
+                        current_flows.intersection(new_flow_names)
+                    )
                     result["flows_removed"] = list(current_flows - new_flow_names)
 
                     # Log the changes
                     if result["flows_updated"]:
-                        logger.info("Updated flows", flows_updated=result["flows_updated"])
+                        logger.info(
+                            "Updated flows", flows_updated=result["flows_updated"]
+                        )
                     if new_flow_names - current_flows:
-                        logger.info("New flows", new_flows=list(new_flow_names - current_flows))
+                        logger.info(
+                            "New flows", new_flows=list(new_flow_names - current_flows)
+                        )
                     if result["flows_removed"]:
-                        logger.info("Removed flows", flows_removed=result["flows_removed"])
+                        logger.info(
+                            "Removed flows", flows_removed=result["flows_removed"]
+                        )
 
                     result["success"] = True
                     logger.info("Configuration reload completed successfully")
@@ -1125,7 +1336,9 @@ class FlowRunner(BaseModel):
             try:
                 hydra.core.global_hydra.GlobalHydra.instance().clear()
             except Exception as cleanup_error:
-                logger.warning("Error cleaning up Hydra state", error=str(cleanup_error))
+                logger.warning(
+                    "Error cleaning up Hydra state", error=str(cleanup_error)
+                )
 
         return result
 
@@ -1162,7 +1375,11 @@ class FlowRunner(BaseModel):
                     config_dict = OmegaConf.to_container(flow_config, resolve=True)
                 else:
                     # Regular dict or other object
-                    config_dict = dict(flow_config) if hasattr(flow_config, "__dict__") else str(flow_config)
+                    config_dict = (
+                        dict(flow_config)
+                        if hasattr(flow_config, "__dict__")
+                        else str(flow_config)
+                    )
 
                 # Config file named by session_id (e.g., /tmp/runs/abc123/abc123_config.json)
                 # This overwrites on each run, keeping only one config file per session
@@ -1188,11 +1405,19 @@ class FlowRunner(BaseModel):
                     )
                 # File is automatically closed here when exiting 'with' block
 
-                logger.debug("Saved config snapshot for session", session_id=session_id, config_file=str(config_file))
+                logger.debug(
+                    "Saved config snapshot for session",
+                    session_id=session_id,
+                    config_file=str(config_file),
+                )
 
         except Exception as e:
             # Don't fail the flow execution if config snapshot fails
-            logger.warning("Failed to save config snapshot", session_id=getattr(run_request, "session_id", "unknown"), error=str(e))
+            logger.warning(
+                "Failed to save config snapshot",
+                session_id=getattr(run_request, "session_id", "unknown"),
+                error=str(e),
+            )
 
     def _create_fresh_orchestrator(self, flow_name: str) -> Orchestrator:
         """Create a completely fresh orchestrator instance using the factory.
@@ -1208,7 +1433,9 @@ class FlowRunner(BaseModel):
 
         """
         if flow_name not in self.flows:
-            raise ValueError(f"Flow '{flow_name}' not found. Available flows: {list(self.flows.keys())}")
+            raise ValueError(
+                f"Flow '{flow_name}' not found. Available flows: {list(self.flows.keys())}"
+            )
 
         flow_config = self.flows[flow_name]
         orchestrator = OrchestratorFactory.create_orchestrator(flow_config, flow_name)
@@ -1218,9 +1445,16 @@ class FlowRunner(BaseModel):
         # (session_id, job, platform) instead of sharing global singleton state
         if self.bm is not None:
             orchestrator.set_bm(self.bm)
-            logger.debug("Injected session-scoped BM into orchestrator for flow", flow_name=flow_name, session_id=self.bm.session_info.session_id)
+            logger.debug(
+                "Injected session-scoped BM into orchestrator for flow",
+                flow_name=flow_name,
+                session_id=self.bm.session_info.session_id,
+            )
         else:
-            logger.debug("Using global singleton BM for orchestrator (legacy mode)", flow_name=flow_name)
+            logger.debug(
+                "Using global singleton BM for orchestrator (legacy mode)",
+                flow_name=flow_name,
+            )
 
         return orchestrator
 
@@ -1234,7 +1468,9 @@ class FlowRunner(BaseModel):
         # Use the enhanced cleanup from FlowRunContext
         await context.cleanup()
 
-    async def run_flow(self, run_request: RunRequest, wait_for_completion: bool = False, **kwargs) -> None:  # noqa: PLR0912
+    async def run_flow(
+        self, run_request: RunRequest, wait_for_completion: bool = False, **kwargs
+    ) -> None:  # noqa: PLR0912
         """Run a flow based on its configuration and a request.
 
         Args:
@@ -1288,7 +1524,9 @@ class FlowRunner(BaseModel):
                 "buttermilk.session.id": getattr(run_request, "session_id", None),
                 "buttermilk.flow.name": getattr(run_request, "flow", None),
                 "buttermilk.job.id": getattr(run_request, "job_id", None),
-                "buttermilk.source": ", ".join(run_request.source) if getattr(run_request, "source", None) else "direct",
+                "buttermilk.source": ", ".join(run_request.source)
+                if getattr(run_request, "source", None)
+                else "direct",
                 "buttermilk.mode": self.mode,
             },
             kind="internal",
@@ -1306,7 +1544,9 @@ class FlowRunner(BaseModel):
             asyncio.get_event_loop().slow_callback_duration = 120
 
             # Get or create session using the session manager
-            _session = await self.session_manager.get_or_create_session(run_request.session_id)
+            _session = await self.session_manager.get_or_create_session(
+                run_request.session_id
+            )
 
             set_logging_context(run_request.session_id)
             _session.flow_name = run_request.flow
@@ -1319,10 +1559,15 @@ class FlowRunner(BaseModel):
 
         # Set the callback_to_ui for the run_request, which will be used by the orchestrator
         run_request.callback_to_ui = _session.send_message_to_ui
-        logger.debug("[FlowRunner.run_flow] Callback configured for session", session_id=_session.session_id)
+        logger.debug(
+            "[FlowRunner.run_flow] Callback configured for session",
+            session_id=_session.session_id,
+        )
 
         # Create the task and register it with the session
-        _session.flow_task = asyncio.create_task(fresh_orchestrator.run(request=run_request))  # type: ignore
+        _session.flow_task = asyncio.create_task(
+            fresh_orchestrator.run(request=run_request)
+        )  # type: ignore
         _session.add_task(_session.flow_task)
 
         # ======== MAJOR EVENT: FLOW STARTING ========
@@ -1337,7 +1582,10 @@ class FlowRunner(BaseModel):
         try:
             storage_service = SessionStorageService()
             storage_service.update_flow_status(run_request.session_id, "running")
-            logger.debug("Updated flow status to 'running' for session", session_id=run_request.session_id)
+            logger.debug(
+                "Updated flow status to 'running' for session",
+                session_id=run_request.session_id,
+            )
 
             # Save flow parameters for demo mode functionality
             parameters = {
@@ -1357,20 +1605,32 @@ class FlowRunner(BaseModel):
                     parameters["criteria"] = run_request.parameters["criteria"]
 
             storage_service.save_parameters(run_request.session_id, parameters)
-            logger.debug("Saved flow parameters for session", parameters=parameters, session_id=run_request.session_id)
+            logger.debug(
+                "Saved flow parameters for session",
+                parameters=parameters,
+                session_id=run_request.session_id,
+            )
 
         except Exception as e:
-            logger.warning("Failed to update session storage flow status", session_id=run_request.session_id, error=str(e))
+            logger.warning(
+                "Failed to update session storage flow status",
+                session_id=run_request.session_id,
+                error=str(e),
+            )
 
         try:
             if wait_for_completion:
                 # Wait for the task
                 await _session.flow_task
-                await self.session_manager._transition_session_status(run_request.session_id, SessionStatus.COMPLETED)
+                await self.session_manager._transition_session_status(
+                    run_request.session_id, SessionStatus.COMPLETED
+                )
                 success = True
                 return
         except Exception as e:
-            await self.session_manager._transition_session_status(run_request.session_id, SessionStatus.ERROR)
+            await self.session_manager._transition_session_status(
+                run_request.session_id, SessionStatus.ERROR
+            )
             logger.error("Error running flow", flow=run_request.flow, error=str(e))
             raise
         finally:
@@ -1384,14 +1644,21 @@ class FlowRunner(BaseModel):
                         success=success,
                     )
                 except Exception as e:
-                    logger.debug("Failed to record flow execution metrics", error=str(e))
+                    logger.debug(
+                        "Failed to record flow execution metrics", error=str(e)
+                    )
 
             if wait_for_completion:
                 # Clean up after completion if we were waiting
                 await self.session_manager.cleanup_session(run_request.session_id)
         return
 
-    async def create_batch(self, flow_name, storage_config: dict | str | None = None, max_records: int | None = None) -> list[RunRequest]:  # noqa: PLR0912
+    async def create_batch(
+        self,
+        flow_name,
+        storage_config: dict | str | None = None,
+        max_records: int | None = None,
+    ) -> list[RunRequest]:  # noqa: PLR0912
         """Create a new batch job from storage source.
 
         Args:
@@ -1417,19 +1684,35 @@ class FlowRunner(BaseModel):
             if hasattr(flow, "storage") and flow.storage:
                 if "initial" in flow.storage:
                     storage_cfg = flow.storage["initial"]
-                    logger.debug("Auto-discovered storage using 'initial' key", flow_name=flow_name)
+                    logger.debug(
+                        "Auto-discovered storage using 'initial' key",
+                        flow_name=flow_name,
+                    )
                 else:
                     storage_cfg = next(iter(flow.storage.values()))
-                    logger.debug("Auto-discovered storage using first available", flow_name=flow_name)
+                    logger.debug(
+                        "Auto-discovered storage using first available",
+                        flow_name=flow_name,
+                    )
             else:
-                raise ValueError(f"Flow '{flow_name}' has no storage configuration and none was provided")
+                raise ValueError(
+                    f"Flow '{flow_name}' has no storage configuration and none was provided"
+                )
         elif isinstance(storage_config, str):
             # Legacy dataset_key behavior - lookup in flow.storage
             if not hasattr(flow, "storage") or storage_config not in flow.storage:
-                available = list(flow.storage.keys()) if hasattr(flow, "storage") else []
-                raise ValueError(f"Storage key '{storage_config}' not found in flow '{flow_name}'. Available: {available}")
+                available = (
+                    list(flow.storage.keys()) if hasattr(flow, "storage") else []
+                )
+                raise ValueError(
+                    f"Storage key '{storage_config}' not found in flow '{flow_name}'. Available: {available}"
+                )
             storage_cfg = flow.storage[storage_config]
-            logger.debug("Using storage from key", storage_key=storage_config, flow_name=flow_name)
+            logger.debug(
+                "Using storage from key",
+                storage_key=storage_config,
+                flow_name=flow_name,
+            )
         else:
             # Direct storage configuration dict (pipeline pattern)
             storage_cfg = storage_config
@@ -1443,11 +1726,19 @@ class FlowRunner(BaseModel):
 
         # Stream records from storage (don't load all into memory)
         records = list(storage)  # Storage.__iter__ yields BaseRecord objects
-        logger.info("Extracted records from storage", record_count=len(records), flow_name=flow_name)
+        logger.info(
+            "Extracted records from storage",
+            record_count=len(records),
+            flow_name=flow_name,
+        )
 
         # Create multiple iterations by multiplying the parameters
         iteration_values = expand_dict(flow.parameters) or [{}]
-        logger.debug("Expanded parameters for batch into variants", parameter_count=len(flow.parameters), variant_count=len(iteration_values))
+        logger.debug(
+            "Expanded parameters for batch into variants",
+            parameter_count=len(flow.parameters),
+            variant_count=len(iteration_values),
+        )
 
         #
         # Shuffle records
@@ -1471,7 +1762,12 @@ class FlowRunner(BaseModel):
                     callback_to_ui=None,
                 )
                 job_definitions.append(job)
-                logger.debug("Batch job created", flow=flow_name, record_id=record.record_id, job_id=job.job_id)
+                logger.debug(
+                    "Batch job created",
+                    flow=flow_name,
+                    record_id=record.record_id,
+                    job_id=job.job_id,
+                )
                 # Apply max_records limit if specified
                 if max_records is not None and max_records > 0 and i >= max_records:
                     break
@@ -1484,7 +1780,11 @@ class FlowRunner(BaseModel):
                 job_count=len(job_definitions),
             )
         else:
-            logger.info("Returning iterations for jobs", iteration_count=len(iteration_values), job_count=len(job_definitions))
+            logger.info(
+                "Returning iterations for jobs",
+                iteration_count=len(iteration_values),
+                job_count=len(job_definitions),
+            )
 
         random.shuffle(job_definitions)
 
@@ -1502,7 +1802,11 @@ class FlowRunner(BaseModel):
         return job_definitions
 
     async def run_batch_job(
-        self, callback_to_ui: Callable, max_jobs: int = 1, wait_for_completion: bool = True, show_progress: bool = True
+        self,
+        callback_to_ui: Callable,
+        max_jobs: int = 1,
+        wait_for_completion: bool = True,
+        show_progress: bool = True,
     ) -> ProcessingSummary:
         """Pull and run jobs from the queue, ensuring fresh state for each job.
 
@@ -1520,7 +1824,15 @@ class FlowRunner(BaseModel):
             Exception: If there's an error running a job
 
         """
-        from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn, TimeElapsedColumn
+        from rich.progress import (
+            BarColumn,
+            MofNCompleteColumn,
+            Progress,
+            SpinnerColumn,
+            TaskProgressColumn,
+            TextColumn,
+            TimeElapsedColumn,
+        )
 
         summary = ProcessingSummary()
 
@@ -1567,24 +1879,50 @@ class FlowRunner(BaseModel):
                     )
 
                     logger.info(
-                        "Processing batch job", job_number=jobs_processed + 1, max_jobs=max_jobs, flow=run_request.flow, job_id=run_request.job_id
+                        "Processing batch job",
+                        job_number=jobs_processed + 1,
+                        max_jobs=max_jobs,
+                        flow=run_request.flow,
+                        job_id=run_request.job_id,
                     )
                     try:
-                        await self.run_flow(run_request=run_request, wait_for_completion=wait_for_completion)
+                        await self.run_flow(
+                            run_request=run_request,
+                            wait_for_completion=wait_for_completion,
+                        )
                         summary.increment_processed()
                         if wait_for_completion:
-                            logger.info("Successfully completed job", job_id=run_request.job_id)
-                            worker.ack_message(ack_id)  # Acknowledge only after successful processing
+                            logger.info(
+                                "Successfully completed job", job_id=run_request.job_id
+                            )
+                            worker.ack_message(
+                                ack_id
+                            )  # Acknowledge only after successful processing
                         else:
-                            logger.info("Job started in the background", job_id=run_request.job_id)
+                            logger.info(
+                                "Job started in the background",
+                                job_id=run_request.job_id,
+                            )
                             # Defer ack until the background task completes successfully
                             try:
-                                self.schedule_ack_on_completion(session_id=run_request.session_id, ack_id=ack_id, worker=worker)
+                                self.schedule_ack_on_completion(
+                                    session_id=run_request.session_id,
+                                    ack_id=ack_id,
+                                    worker=worker,
+                                )
                             except Exception as e:
-                                logger.warning("Failed to schedule ack on completion", job_id=run_request.job_id, error=str(e))
+                                logger.warning(
+                                    "Failed to schedule ack on completion",
+                                    job_id=run_request.job_id,
+                                    error=str(e),
+                                )
                     except Exception as job_error:
                         summary.increment_failed()
-                        logger.error("Error running job", job_id=run_request.job_id, error=str(job_error))
+                        logger.error(
+                            "Error running job",
+                            job_id=run_request.job_id,
+                            error=str(job_error),
+                        )
                         # Continue processing other jobs even if one fails
 
                     jobs_processed += 1
@@ -1600,7 +1938,9 @@ class FlowRunner(BaseModel):
             logger.error("Fatal error during batch processing", error=str(e))
             raise
 
-    def schedule_ack_on_completion(self, session_id: str, ack_id: str, worker: JobQueueClient) -> None:
+    def schedule_ack_on_completion(
+        self, session_id: str, ack_id: str, worker: JobQueueClient
+    ) -> None:
         """Schedule Pub/Sub ack once the flow task completes successfully.
 
         This ensures messages are only acknowledged after the background flow
@@ -1614,12 +1954,16 @@ class FlowRunner(BaseModel):
         """
         session = self.session_manager.sessions.get(session_id)
         if not session:
-            logger.warning("Cannot schedule ack: session not found", session_id=session_id)
+            logger.warning(
+                "Cannot schedule ack: session not found", session_id=session_id
+            )
             return
 
         task = session.flow_task
         if not task or not isinstance(task, asyncio.Task):
-            logger.warning("Cannot schedule ack: flow task not available", session_id=session_id)
+            logger.warning(
+                "Cannot schedule ack: flow task not available", session_id=session_id
+            )
             return
 
         def _on_done(t: asyncio.Task) -> None:
@@ -1631,10 +1975,21 @@ class FlowRunner(BaseModel):
             if exc is None:
                 try:
                     worker.ack_message(ack_id)
-                    logger.debug("Acknowledged Pub/Sub message after task completion", session_id=session_id)
+                    logger.debug(
+                        "Acknowledged Pub/Sub message after task completion",
+                        session_id=session_id,
+                    )
                 except Exception as e:
-                    logger.warning("Failed to acknowledge Pub/Sub message on completion", session_id=session_id, error=str(e))
+                    logger.warning(
+                        "Failed to acknowledge Pub/Sub message on completion",
+                        session_id=session_id,
+                        error=str(e),
+                    )
             else:
-                logger.error("Flow task completed with error; not acknowledging message", session_id=session_id, error=str(exc))
+                logger.error(
+                    "Flow task completed with error; not acknowledging message",
+                    session_id=session_id,
+                    error=str(exc),
+                )
 
         task.add_done_callback(_on_done)

@@ -1,45 +1,45 @@
-name: '📋 Gemini Scheduled Issue Triage'
+name: "📋 Gemini Scheduled Issue Triage"
 on:
   schedule:
-    - cron: '20 18 * * *' # Runs every day
+    - cron: "20 18 * * *" # Runs every day
   workflow_dispatch:
 concurrency:
-  group: '${{ github.workflow }}'
+  group: "${{ github.workflow }}"
   cancel-in-progress: true
 defaults:
   run:
-    shell: 'bash'
+    shell: "bash"
 permissions:
-  contents: 'read'
-  id-token: 'write'
-  issues: 'write'
-  statuses: 'write'
+  contents: "read"
+  id-token: "write"
+  issues: "write"
+  statuses: "write"
 jobs:
   triage-issues:
     timeout-minutes: 5
-    runs-on: 'ubuntu-latest'
+    runs-on: "ubuntu-latest"
     steps:
-      - name: 'Checkout repository'
-        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # ratchet:actions/checkout@v4
+      - name: "Checkout repository"
+        uses: "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683" # ratchet:actions/checkout@v4
       - name: Authenticate to Google Cloud
-        uses: 'google-github-actions/auth@v2'
+        uses: "google-github-actions/auth@v2"
         with:
-          workload_identity_provider: '${{ vars.GCP_WIF_PROVIDER }}'
-          service_account: '${{ vars.SERVICE_ACCOUNT_EMAIL }}'
-      - name: 'Generate GitHub App Token'
-        id: 'generate_token'
+          workload_identity_provider: "${{ vars.GCP_WIF_PROVIDER }}"
+          service_account: "${{ vars.SERVICE_ACCOUNT_EMAIL }}"
+      - name: "Generate GitHub App Token"
+        id: "generate_token"
         if: |-
           ${{ vars.APP_ID }}
-        uses: 'actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e' # ratchet:actions/create-github-app-token@v2
+        uses: "actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e" # ratchet:actions/create-github-app-token@v2
         with:
-          app-id: '${{ vars.APP_ID }}'
-          private-key: '${{ secrets.APP_PRIVATE_KEY }}'
-      - name: 'Find untriaged issues'
-        id: 'find_issues'
+          app-id: "${{ vars.APP_ID }}"
+          private-key: "${{ secrets.APP_PRIVATE_KEY }}"
+      - name: "Find untriaged issues"
+        id: "find_issues"
         env:
-          GITHUB_TOKEN: '${{ steps.generate_token.outputs.token || secrets.GITHUB_TOKEN }}'
-          GITHUB_REPOSITORY: '${{ github.repository }}'
-          GITHUB_OUTPUT: '${{ github.output }}'
+          GITHUB_TOKEN: "${{ steps.generate_token.outputs.token || secrets.GITHUB_TOKEN }}"
+          GITHUB_REPOSITORY: "${{ github.repository }}"
+          GITHUB_OUTPUT: "${{ github.output }}"
         run: |-
           set -euo pipefail
 
@@ -59,24 +59,24 @@ jobs:
 
           ISSUE_COUNT="$(echo "${ISSUES}" | jq 'length')"
           echo "✅ Found ${ISSUE_COUNT} issues to triage! 🎯"
-      - name: 'Run Gemini Issue Triage'
+      - name: "Run Gemini Issue Triage"
         if: |-
           ${{ steps.find_issues.outputs.issues_to_triage != '[]' }}
-        uses: 'google-github-actions/run-gemini-cli@v0'
-        id: 'gemini_issue_triage'
+        uses: "google-github-actions/run-gemini-cli@v0"
+        id: "gemini_issue_triage"
         env:
-          GITHUB_TOKEN: '${{ steps.generate_token.outputs.token || secrets.GITHUB_TOKEN }}'
-          ISSUES_TO_TRIAGE: '${{ steps.find_issues.outputs.issues_to_triage }}'
-          REPOSITORY: '${{ github.repository }}'
+          GITHUB_TOKEN: "${{ steps.generate_token.outputs.token || secrets.GITHUB_TOKEN }}"
+          ISSUES_TO_TRIAGE: "${{ steps.find_issues.outputs.issues_to_triage }}"
+          REPOSITORY: "${{ github.repository }}"
         with:
-          gemini_cli_version: '${{ vars.GEMINI_CLI_VERSION }}'
-          gcp_workload_identity_provider: '${{ vars.GCP_WIF_PROVIDER }}'
-          gcp_project_id: '${{ vars.GOOGLE_CLOUD_PROJECT }}'
-          gcp_location: '${{ vars.GOOGLE_CLOUD_LOCATION }}'
-          gcp_service_account: '${{ vars.SERVICE_ACCOUNT_EMAIL }}'
-          gemini_api_key: '${{ secrets.GEMINI_API_KEY }}'
-          use_vertex_ai: '${{ vars.GOOGLE_GENAI_USE_VERTEXAI }}'
-          use_gemini_code_assist: '${{ vars.GOOGLE_GENAI_USE_GCA }}'
+          gemini_cli_version: "${{ vars.GEMINI_CLI_VERSION }}"
+          gcp_workload_identity_provider: "${{ vars.GCP_WIF_PROVIDER }}"
+          gcp_project_id: "${{ vars.GOOGLE_CLOUD_PROJECT }}"
+          gcp_location: "${{ vars.GOOGLE_CLOUD_LOCATION }}"
+          gcp_service_account: "${{ vars.SERVICE_ACCOUNT_EMAIL }}"
+          gemini_api_key: "${{ secrets.GEMINI_API_KEY }}"
+          use_vertex_ai: "${{ vars.GOOGLE_GENAI_USE_VERTEXAI }}"
+          use_gemini_code_assist: "${{ vars.GOOGLE_GENAI_USE_GCA }}"
           settings: |-
             {
               "maxSessionTurns": 25,

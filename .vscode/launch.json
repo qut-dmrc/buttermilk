@@ -4,7 +4,6 @@
   // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
   "version": "0.2.0",
   "configurations": [
-
     {
       "name": "Buttermilk API daemon",
       "type": "debugpy",
@@ -216,7 +215,7 @@
       "justMyCode": false,
       "args": [
         "+experiments=ots",
-        "+data=drag_noalt",
+        "+data=drag_noalt"
       ],
       "envFile": "${userHome}/.env",
       "console": "integratedTerminal"
@@ -243,7 +242,7 @@
       "pathMapping": {
         "/": "${workspaceFolder}/buttermilk/frontend/chat/src/"
       }
-    },
+    }
   ],
   "compounds": [
     {

@@ -16,9 +16,24 @@ async def test_storage_async_iterator_protocol():
 
     # Create test data
     test_data = [
-        {"record_id": "1", "content": "First record", "dataset_name": "test", "split_type": "train"},
-        {"record_id": "2", "content": "Second record", "dataset_name": "test", "split_type": "train"},
-        {"record_id": "3", "content": "Third record", "dataset_name": "test", "split_type": "train"}
+        {
+            "record_id": "1",
+            "content": "First record",
+            "dataset_name": "test",
+            "split_type": "train",
+        },
+        {
+            "record_id": "2",
+            "content": "Second record",
+            "dataset_name": "test",
+            "split_type": "train",
+        },
+        {
+            "record_id": "3",
+            "content": "Third record",
+            "dataset_name": "test",
+            "split_type": "train",
+        },
     ]
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
@@ -30,10 +45,7 @@ async def test_storage_async_iterator_protocol():
     try:
         # Create storage
         config = FileStorageConfig(
-            type="file",
-            path=temp_path,
-            dataset_name="test",
-            split_type="train"
+            type="file", path=temp_path, dataset_name="test", split_type="train"
         )
         storage = FileStorage(config)
 
@@ -43,7 +55,9 @@ async def test_storage_async_iterator_protocol():
 
         # Test 2: Pipeline pattern compatibility (from pipeline.py:179)
         source_iter = storage if hasattr(storage, "__anext__") else storage.__aiter__()
-        assert source_iter is storage  # Should use storage directly since it has __anext__
+        assert (
+            source_iter is storage
+        )  # Should use storage directly since it has __anext__
 
         # Test 3: Actual async iteration
         records = []
@@ -79,11 +93,7 @@ async def test_storage_async_iterator_empty():
         temp_path = f.name
 
     try:
-        config = FileStorageConfig(
-            type="file",
-            path=temp_path,
-            dataset_name="test"
-        )
+        config = FileStorageConfig(type="file", path=temp_path, dataset_name="test")
         storage = FileStorage(config)
 
         records = []
@@ -107,11 +117,7 @@ async def test_manual_anext_usage():
         temp_path = f.name
 
     try:
-        config = FileStorageConfig(
-            type="file",
-            path=temp_path,
-            dataset_name="test"
-        )
+        config = FileStorageConfig(type="file", path=temp_path, dataset_name="test")
         storage = FileStorage(config)
 
         # Get async iterator

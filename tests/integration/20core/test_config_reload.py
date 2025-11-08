@@ -58,11 +58,18 @@ flows: ${flows}
     def test_config_snapshot_saving(self, temp_config_dir):
         """Test that configuration snapshots are saved during flow execution."""
         # Create a mock FlowRunner with test flows
-        flow_runner = FlowRunner(flows={"test_flow": {"name": "test_flow", "parameters": {"test": "value"}}}, mode="api")
+        flow_runner = FlowRunner(
+            flows={"test_flow": {"name": "test_flow", "parameters": {"test": "value"}}},
+            mode="api",
+        )
 
         # Create a test run request
         run_request = RunRequest(
-            flow="test_flow", session_id="test_session_123", job_id="test_job_456", parameters={"param1": "value1"}, inputs={"input1": "data1"}
+            flow="test_flow",
+            session_id="test_session_123",
+            job_id="test_job_456",
+            parameters={"param1": "value1"},
+            inputs={"input1": "data1"},
         )
 
         # Call the config snapshot method
@@ -72,7 +79,9 @@ flows: ${flows}
         expected_session_dir = Path(f"/tmp/runs/{run_request.session_id}")
         config_snapshot_dir = expected_session_dir / "config_snapshot"
 
-        assert config_snapshot_dir.exists(), "Config snapshot directory should be created"
+        assert config_snapshot_dir.exists(), (
+            "Config snapshot directory should be created"
+        )
 
         # Check latest.json was created
         latest_file = config_snapshot_dir / "latest.json"
@@ -103,22 +112,31 @@ flows: ${flows}
         assert config_data["run_inputs"] == {"input1": "data1"}
         assert "flow_config" in config_data
 
-    @pytest.mark.skip(reason="Requires comprehensive mocking of Hydra config loading - needs refactoring")
+    @pytest.mark.skip(
+        reason="Requires comprehensive mocking of Hydra config loading - needs refactoring"
+    )
     @pytest.mark.anyio
     @patch("hydra.core.global_hydra.GlobalHydra")
     @patch("hydra.compose")
     @patch("hydra.initialize_config_dir")
-    async def test_reload_configurations_success(self, mock_initialize, mock_compose, mock_global_hydra, temp_config_dir):
+    async def test_reload_configurations_success(
+        self, mock_initialize, mock_compose, mock_global_hydra, temp_config_dir
+    ):
         """Test successful configuration reload."""
         # Mock Hydra configuration loading
         mock_conf = Mock()
-        mock_conf.run.flows = {"test_flow": {"name": "test_flow", "updated": True}, "new_flow": {"name": "new_flow", "new": True}}
+        mock_conf.run.flows = {
+            "test_flow": {"name": "test_flow", "updated": True},
+            "new_flow": {"name": "new_flow", "new": True},
+        }
 
         mock_compose.return_value = mock_conf
         mock_global_hydra.instance.return_value.clear.return_value = None
 
         # Create FlowRunner with initial flows
-        flow_runner = FlowRunner(flows={"test_flow": {"name": "test_flow", "updated": False}}, mode="api")
+        flow_runner = FlowRunner(
+            flows={"test_flow": {"name": "test_flow", "updated": False}}, mode="api"
+        )
 
         # Mock the config directory path
         with patch("pathlib.Path.resolve", return_value=temp_config_dir):
@@ -137,13 +155,17 @@ flows: ${flows}
         assert "new_flow" in flow_runner.flows
         assert flow_runner.flows["test_flow"]["updated"] is True
 
-    @pytest.mark.skip(reason="Requires comprehensive mocking of Hydra config loading - needs refactoring")
+    @pytest.mark.skip(
+        reason="Requires comprehensive mocking of Hydra config loading - needs refactoring"
+    )
     @pytest.mark.anyio
     @patch("hydra.core.global_hydra.GlobalHydra")
     async def test_reload_configurations_failure(self, mock_global_hydra):
         """Test configuration reload failure handling."""
         # Mock Hydra to raise an exception
-        mock_global_hydra.instance.return_value.clear.side_effect = Exception("Config error")
+        mock_global_hydra.instance.return_value.clear.side_effect = Exception(
+            "Config error"
+        )
 
         # Create FlowRunner
         flow_runner = FlowRunner(flows={"test_flow": {"name": "test_flow"}}, mode="api")
@@ -194,21 +216,30 @@ class TestConfigReloadIntegration:
         startup_script = Path("/src/buttermilk/deploy/startup.sh")
 
         # Integration test must fail if startup script not present
-        assert startup_script.exists(), "Startup script must be present for integration tests"
+        assert startup_script.exists(), (
+            "Startup script must be present for integration tests"
+        )
 
         # Verify script is executable
-        assert startup_script.stat().st_mode & 0o111, "Startup script should be executable"
+        assert startup_script.stat().st_mode & 0o111, (
+            "Startup script should be executable"
+        )
 
         # Could add more sophisticated testing of script logic here
         # but would require mocking gcsfuse and other container-specific tools
 
-    @pytest.mark.skipif(not Path("/usr/bin/gcsfuse").exists(), reason="gcsfuse not installed - not in container environment")
+    @pytest.mark.skipif(
+        not Path("/usr/bin/gcsfuse").exists(),
+        reason="gcsfuse not installed - not in container environment",
+    )
     def test_gcsfuse_available(self):
         """Test that gcsfuse is available in the container."""
         import subprocess
 
         # Test gcsfuse help command
-        result = subprocess.run(["gcsfuse", "--help"], check=False, capture_output=True, text=True)
+        result = subprocess.run(
+            ["gcsfuse", "--help"], check=False, capture_output=True, text=True
+        )
         assert result.returncode == 0, "gcsfuse should be available and working"
         assert "gcsfuse" in result.stdout.lower(), "gcsfuse help should mention gcsfuse"
 

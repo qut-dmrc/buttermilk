@@ -16,7 +16,11 @@ class TestAgentAnnouncement:
         agent_config = AgentConfig(role="JUDGE", description="Test judge agent")
 
         # Create announcement
-        announcement = AgentAnnouncement(content="Agent joining group chat", agent_config=agent_config, announcement_type="initial")
+        announcement = AgentAnnouncement(
+            content="Agent joining group chat",
+            agent_config=agent_config,
+            announcement_type="initial",
+        )
 
         # Verify fields
         assert announcement.agent_config == agent_config
@@ -29,7 +33,11 @@ class TestAgentAnnouncement:
     def test_agent_announcement_creation_full(self):
         """Test creating an AgentAnnouncement with all fields."""
         # Create agent config with tools
-        agent_config = AgentConfig(role="FETCH", description="Data fetching agent", parameters={"model": "gpt-4"})
+        agent_config = AgentConfig(
+            role="FETCH",
+            description="Data fetching agent",
+            parameters={"model": "gpt-4"},
+        )
 
         # Create announcement with all fields
         announcement = AgentAnnouncement(
@@ -53,7 +61,11 @@ class TestAgentAnnouncement:
     def test_agent_announcement_inheritance(self):
         """Test that AgentAnnouncement properly inherits from FlowEvent."""
         agent_config = AgentConfig(role="TEST", description="Test agent")
-        announcement = AgentAnnouncement(content="Test announcement", agent_config=agent_config, announcement_type="initial")
+        announcement = AgentAnnouncement(
+            content="Test announcement",
+            agent_config=agent_config,
+            announcement_type="initial",
+        )
 
         # Should inherit FlowEvent fields
         assert hasattr(announcement, "call_id")
@@ -73,7 +85,12 @@ class TestAgentAnnouncement:
             unique_identifier="abc123",  # This will generate agent_id as "JUDGE-abc123"
         )
 
-        announcement = AgentAnnouncement(content="Judge agent joining", agent_config=agent_config, announcement_type="initial", status="joining")
+        announcement = AgentAnnouncement(
+            content="Judge agent joining",
+            agent_config=agent_config,
+            announcement_type="initial",
+            status="joining",
+        )
 
         str_repr = str(announcement)
         # agent_id is auto-generated, so we check the format instead
@@ -86,12 +103,22 @@ class TestAgentAnnouncement:
 
         # Valid statuses
         for status in ["joining", "active", "leaving"]:
-            announcement = AgentAnnouncement(content="Test", agent_config=agent_config, announcement_type="initial", status=status)
+            announcement = AgentAnnouncement(
+                content="Test",
+                agent_config=agent_config,
+                announcement_type="initial",
+                status=status,
+            )
             assert announcement.status == status
 
         # Invalid status should raise validation error
         with pytest.raises(ValidationError) as exc_info:
-            AgentAnnouncement(content="Test", agent_config=agent_config, announcement_type="initial", status="invalid_status")
+            AgentAnnouncement(
+                content="Test",
+                agent_config=agent_config,
+                announcement_type="initial",
+                status="invalid_status",
+            )
         assert "status" in str(exc_info.value)
 
     def test_agent_announcement_type_validation(self):
@@ -100,12 +127,18 @@ class TestAgentAnnouncement:
 
         # Valid announcement types
         for ann_type in ["initial", "response", "update"]:
-            announcement = AgentAnnouncement(content="Test", agent_config=agent_config, announcement_type=ann_type)
+            announcement = AgentAnnouncement(
+                content="Test", agent_config=agent_config, announcement_type=ann_type
+            )
             assert announcement.announcement_type == ann_type
 
         # Invalid type should raise validation error
         with pytest.raises(ValidationError) as exc_info:
-            AgentAnnouncement(content="Test", agent_config=agent_config, announcement_type="invalid_type")
+            AgentAnnouncement(
+                content="Test",
+                agent_config=agent_config,
+                announcement_type="invalid_type",
+            )
         assert "announcement_type" in str(exc_info.value)
 
     def test_agent_announcement_response_type_requires_responding_to(self):
@@ -114,7 +147,10 @@ class TestAgentAnnouncement:
 
         # Response type with responding_to
         announcement = AgentAnnouncement(
-            content="Responding to host", agent_config=agent_config, announcement_type="response", responding_to="HOST_xyz789"
+            content="Responding to host",
+            agent_config=agent_config,
+            announcement_type="response",
+            responding_to="HOST_xyz789",
         )
 
         assert announcement.announcement_type == "response"
@@ -128,7 +164,12 @@ class TestAgentAnnouncement:
             unique_identifier="123",  # This will generate agent_id as "FETCH-123"
         )
 
-        announcement = AgentAnnouncement(content="Agent disconnecting", agent_config=agent_config, announcement_type="update", status="leaving")
+        announcement = AgentAnnouncement(
+            content="Agent disconnecting",
+            agent_config=agent_config,
+            announcement_type="update",
+            status="leaving",
+        )
 
         assert announcement.status == "leaving"
         # agent_id is auto-generated, so we check the format instead
@@ -138,10 +179,17 @@ class TestAgentAnnouncement:
 
     def test_agent_announcement_serialization(self):
         """Test that AgentAnnouncement can be serialized/deserialized."""
-        agent_config = AgentConfig(role="ANALYST", description="Analysis agent", parameters={"model": "claude-3"})
+        agent_config = AgentConfig(
+            role="ANALYST",
+            description="Analysis agent",
+            parameters={"model": "claude-3"},
+        )
 
         announcement = AgentAnnouncement(
-            content="Analyst ready", agent_config=agent_config, available_tools=["analyze", "summarize"], announcement_type="initial"
+            content="Analyst ready",
+            agent_config=agent_config,
+            available_tools=["analyze", "summarize"],
+            announcement_type="initial",
         )
 
         # Serialize to dict

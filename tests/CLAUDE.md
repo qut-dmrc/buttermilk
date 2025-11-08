@@ -35,16 +35,19 @@ Load testing methodology and standards when working in tests/:
 ## Test Categories
 
 **Unit Tests** (`tests/`):
+
 - Isolated components
 - Demonstrate bugs
 - Verify specific fixes
 
 **Integration Tests** (`tests/`):
+
 - 2-3 components working together
 - Real configuration
 - May mock external APIs
 
 **TRUE E2E Tests** (`tests/data/test_*_e2e.py`):
+
 - Complete pipeline start to finish
 - REAL everything (APIs, storage, processors)
 - Validates production workflow
@@ -88,6 +91,7 @@ uv run pytest tests/ -m "not slow"
 ## Anti-Patterns to Avoid
 
 ❌ **FORBIDDEN**:
+
 - Mocking internal code (`@patch("buttermilk.*")`)
 - Loading Hydra configs in test files
 - Inline fake data
@@ -95,6 +99,7 @@ uv run pytest tests/ -m "not slow"
 - Creating config-loading fixtures
 
 ✅ **REQUIRED**:
+
 - Use `real_bm` or `real_conf` fixtures
 - Load test data from JSON files
 - Test business behavior

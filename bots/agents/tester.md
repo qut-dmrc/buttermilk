@@ -19,7 +19,6 @@ We have several layers of tests: unit, integration, end-to-end.
 - ALWAYS use the 'real_bm', 'real_logger', 'real_llm' etc fixtures.
 - Each test layer has its own 'conftest.py' that provides any specifically required fixtures.
 
-
 **All tests MUST work**:
 
 - Don't skip tests or create simpler alternatives.

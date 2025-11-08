@@ -19,7 +19,9 @@ def debug():
 
 
 @debug.command()
-@click.option("--flow", multiple=True, help="Flows to test (e.g., osb, trans, tox_allinone)")
+@click.option(
+    "--flow", multiple=True, help="Flows to test (e.g., osb, trans, tox_allinone)"
+)
 @click.option("--timeout", default=60, help="Test timeout in seconds")
 @click.option("--output", help="Output file for results (JSON)")
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
@@ -73,7 +75,9 @@ def test_startup(flow, timeout, output, verbose):
                 click.echo(f"📝 {line.strip()}")
 
             # Check for validation errors
-            if ("ValidationError" in line and "validation errors" in line) or "ValidationError" in line:
+            if (
+                "ValidationError" in line and "validation errors" in line
+            ) or "ValidationError" in line:
                 validation_errors.append(line.strip())
 
             # Check for startup success
@@ -327,9 +331,13 @@ def test_startup(flow, timeout, output, verbose):
 
 
 @debug.command()
-@click.option("--minutes-back", default=30, help="How many minutes back to analyze logs")
+@click.option(
+    "--minutes-back", default=30, help="How many minutes back to analyze logs"
+)
 @click.option("--project-id", help="GCP project ID (auto-detected if not provided)")
-@click.option("--include-warnings", is_flag=True, help="Include warning-level logs in analysis")
+@click.option(
+    "--include-warnings", is_flag=True, help="Include warning-level logs in analysis"
+)
 def analyze_logs(minutes_back, project_id, include_warnings):
     """Analyze GCP logs for Enhanced RAG agent and startup issues."""
     click.echo("🔍 ANALYZING GCP LOGS FOR BUTTERMILK ISSUES")
@@ -406,7 +414,11 @@ def stream_logs(filter):
 
 @debug.command()
 @click.option("--flow", default="osb", help="Flow to test and debug")
-@click.option("--query", default="Does hate speech have to be explicit to be prohibited?", help="Test query")
+@click.option(
+    "--query",
+    default="Does hate speech have to be explicit to be prohibited?",
+    help="Test query",
+)
 @click.option("--logs-minutes", default=15, help="Minutes of logs to analyze")
 @click.option("--comprehensive", is_flag=True, help="Run full debugging suite")
 def diagnose_issue(flow, query, logs_minutes, comprehensive):
@@ -431,7 +443,6 @@ def diagnose_issue(flow, query, logs_minutes, comprehensive):
     # client = MCPFlowTester()
     # health = client.health_check()
     click.echo("   ⚠️  API health check skipped (MCP client removed)")
-    health = None  # MCP client removed
 
     # if health.api_reachable:
     #     click.echo(f"   ✅ API reachable (response time: {health.response_time:.2f}s)")
@@ -511,7 +522,9 @@ def diagnose_issue(flow, query, logs_minutes, comprehensive):
     type_analysis = analyze_type_checking_errors()
 
     if type_analysis["total_type_errors"] > 0:
-        click.echo(f"   🚨 Found {type_analysis['total_type_errors']} type checking errors")
+        click.echo(
+            f"   🚨 Found {type_analysis['total_type_errors']} type checking errors"
+        )
         for rec in type_analysis["recommendations"]:
             click.echo(f"   💡 {rec['issue']}: {rec['fix']}")
     else:
@@ -551,13 +564,19 @@ def diagnose_issue(flow, query, logs_minutes, comprehensive):
 
     if type_analysis["total_type_errors"] > 0:
         click.echo("🔧 Next steps for type checking:")
-        click.echo("   1. Replace isinstance(obj, List[str]) with isinstance(obj, list)")
+        click.echo(
+            "   1. Replace isinstance(obj, List[str]) with isinstance(obj, list)"
+        )
         click.echo("   2. Use TYPE_CHECKING guard for typing-only imports")
         click.echo("   3. Test fixes with isolated unit tests")
 
 
 @debug.command()
-@click.option("--config-path", default="/workspaces/buttermilk/conf", help="Path to configuration directory")
+@click.option(
+    "--config-path",
+    default="/workspaces/buttermilk/conf",
+    help="Path to configuration directory",
+)
 @click.option("--output", help="Output file for validation report (JSON)")
 @click.option("--verbose", "-v", is_flag=True, help="Show detailed validation results")
 def validate_config(config_path, output, verbose):
@@ -619,7 +638,9 @@ def validate_config(config_path, output, verbose):
     if report.is_valid:
         click.echo("\n🎉 CONFIGURATION VALID - No errors found!")
     else:
-        click.echo(f"\n💥 CONFIGURATION INVALID - {len(report.errors)} errors need fixing")
+        click.echo(
+            f"\n💥 CONFIGURATION INVALID - {len(report.errors)} errors need fixing"
+        )
         click.echo("   Use --verbose for detailed suggestions")
 
     # Set exit code

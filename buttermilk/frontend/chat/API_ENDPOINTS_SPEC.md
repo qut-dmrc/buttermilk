@@ -18,15 +18,15 @@ GET /api/flows/{flow}/records/{record_id}
 
 ```json
 {
-	"id": "string",
-	"name": "string",
-	"content": "string",
-	"metadata": {
-		"created_at": "2024-01-15T10:30:00Z",
-		"dataset": "osb|drag|tonepolice",
-		"word_count": 156,
-		"char_count": 892
-	}
+  "id": "string",
+  "name": "string",
+  "content": "string",
+  "metadata": {
+    "created_at": "2024-01-15T10:30:00Z",
+    "dataset": "osb|drag|tonepolice",
+    "word_count": 156,
+    "char_count": 892
+  }
 }
 ```
 
@@ -45,73 +45,73 @@ GET /api/flows/{flow}/records/{record_id}/scores
 
 ```json
 {
-	"record_id": "string",
-	"off_shelf_results": {
-		"GPT-4": {
-			"correct": true,
-			"score": 0.85,
-			"label": "TOXIC|SAFE",
-			"confidence": 0.92,
-			"model_version": "gpt-4-0613"
-		},
-		"Claude-3": {
-			"correct": false,
-			"score": 0.42,
-			"label": "SAFE",
-			"confidence": 0.78,
-			"model_version": "claude-3-sonnet"
-		},
-		"Gemini": {
-			"correct": true,
-			"score": 0.78,
-			"label": "TOXIC",
-			"confidence": 0.85,
-			"model_version": "gemini-pro"
-		},
-		"LLaMA-2": {
-			"correct": true,
-			"score": 0.91,
-			"label": "TOXIC",
-			"confidence": 0.88,
-			"model_version": "llama-2-70b"
-		}
-	},
-	"custom_results": {
-		"Judge-GPT4": {
-			"step": "judge",
-			"score": 0.88,
-			"model": "gpt-4-0613",
-			"template": "toxicity_judge_v1",
-			"criteria": "community_guidelines"
-		},
-		"Judge-Claude": {
-			"step": "judge",
-			"score": 0.45,
-			"model": "claude-3-sonnet",
-			"template": "toxicity_judge_v1",
-			"criteria": "community_guidelines"
-		},
-		"Synth-GPT4": {
-			"step": "synth",
-			"score": 0.82,
-			"model": "gpt-4-0613",
-			"template": "synthesis_v1",
-			"criteria": "community_guidelines"
-		},
-		"Synth-Claude": {
-			"step": "synth",
-			"score": 0.39,
-			"model": "claude-3-sonnet",
-			"template": "synthesis_v1",
-			"criteria": "community_guidelines"
-		}
-	},
-	"summary": {
-		"off_shelf_accuracy": 0.75,
-		"custom_average_score": 0.635,
-		"total_evaluations": 8,
-		"agreement_rate": 0.62
-	}
+  "record_id": "string",
+  "off_shelf_results": {
+    "GPT-4": {
+      "correct": true,
+      "score": 0.85,
+      "label": "TOXIC|SAFE",
+      "confidence": 0.92,
+      "model_version": "gpt-4-0613"
+    },
+    "Claude-3": {
+      "correct": false,
+      "score": 0.42,
+      "label": "SAFE",
+      "confidence": 0.78,
+      "model_version": "claude-3-sonnet"
+    },
+    "Gemini": {
+      "correct": true,
+      "score": 0.78,
+      "label": "TOXIC",
+      "confidence": 0.85,
+      "model_version": "gemini-pro"
+    },
+    "LLaMA-2": {
+      "correct": true,
+      "score": 0.91,
+      "label": "TOXIC",
+      "confidence": 0.88,
+      "model_version": "llama-2-70b"
+    }
+  },
+  "custom_results": {
+    "Judge-GPT4": {
+      "step": "judge",
+      "score": 0.88,
+      "model": "gpt-4-0613",
+      "template": "toxicity_judge_v1",
+      "criteria": "community_guidelines"
+    },
+    "Judge-Claude": {
+      "step": "judge",
+      "score": 0.45,
+      "model": "claude-3-sonnet",
+      "template": "toxicity_judge_v1",
+      "criteria": "community_guidelines"
+    },
+    "Synth-GPT4": {
+      "step": "synth",
+      "score": 0.82,
+      "model": "gpt-4-0613",
+      "template": "synthesis_v1",
+      "criteria": "community_guidelines"
+    },
+    "Synth-Claude": {
+      "step": "synth",
+      "score": 0.39,
+      "model": "claude-3-sonnet",
+      "template": "synthesis_v1",
+      "criteria": "community_guidelines"
+    }
+  },
+  "summary": {
+    "off_shelf_accuracy": 0.75,
+    "custom_average_score": 0.635,
+    "total_evaluations": 8,
+    "agreement_rate": 0.62
+  }
 }
 ```
 
@@ -131,35 +131,35 @@ GET /api/flows/{flow}/records/{record_id}/responses
 
 ```json
 {
-	"record_id": "string",
-	"responses": [
-		{
-			"agent": "Judge-GPT4",
-			"type": "judge",
-			"model": "gpt-4-0613",
-			"content": "This content violates our community guidelines regarding hate speech targeting specific groups.",
-			"score": 0.88,
-			"reasoning": "The language used contains derogatory terms and promotes harmful stereotypes against the mentioned communities.",
-			"criteria_used": "community_guidelines",
-			"template": "toxicity_judge_v1",
-			"timestamp": "2024-01-15T10:30:00Z",
-			"confidence": 0.92,
-			"prediction": true
-		},
-		{
-			"agent": "Judge-Claude",
-			"type": "judge",
-			"model": "claude-3-sonnet",
-			"content": "While the content discusses sensitive topics, it appears to be educational in nature.",
-			"score": 0.45,
-			"reasoning": "The context suggests academic analysis rather than promoting harmful behavior. The language, while discussing difficult topics, maintains an analytical tone.",
-			"criteria_used": "community_guidelines",
-			"template": "toxicity_judge_v1",
-			"timestamp": "2024-01-15T10:31:00Z",
-			"confidence": 0.78,
-			"prediction": false
-		}
-	]
+  "record_id": "string",
+  "responses": [
+    {
+      "agent": "Judge-GPT4",
+      "type": "judge",
+      "model": "gpt-4-0613",
+      "content": "This content violates our community guidelines regarding hate speech targeting specific groups.",
+      "score": 0.88,
+      "reasoning": "The language used contains derogatory terms and promotes harmful stereotypes against the mentioned communities.",
+      "criteria_used": "community_guidelines",
+      "template": "toxicity_judge_v1",
+      "timestamp": "2024-01-15T10:30:00Z",
+      "confidence": 0.92,
+      "prediction": true
+    },
+    {
+      "agent": "Judge-Claude",
+      "type": "judge",
+      "model": "claude-3-sonnet",
+      "content": "While the content discusses sensitive topics, it appears to be educational in nature.",
+      "score": 0.45,
+      "reasoning": "The context suggests academic analysis rather than promoting harmful behavior. The language, while discussing difficult topics, maintains an analytical tone.",
+      "criteria_used": "community_guidelines",
+      "template": "toxicity_judge_v1",
+      "timestamp": "2024-01-15T10:31:00Z",
+      "confidence": 0.78,
+      "prediction": false
+    }
+  ]
 }
 ```
 
@@ -179,17 +179,17 @@ GET /api/records?flow={flow}&include_scores={boolean}
 
 ```json
 [
-	{
-		"id": "record_123",
-		"name": "Example Record Name",
-		"description": "Brief description...",
-		"summary_scores": {
-			"off_shelf_accuracy": 0.75,
-			"custom_average": 0.635,
-			"total_evaluations": 8,
-			"has_detailed_responses": true
-		}
-	}
+  {
+    "id": "record_123",
+    "name": "Example Record Name",
+    "description": "Brief description...",
+    "summary_scores": {
+      "off_shelf_accuracy": 0.75,
+      "custom_average": 0.635,
+      "total_evaluations": 8,
+      "has_detailed_responses": true
+    }
+  }
 ]
 ```
 

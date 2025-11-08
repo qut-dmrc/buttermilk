@@ -28,7 +28,7 @@ class TestFileStorageAppendMode:
                 path=tmp_path,
                 dataset_name="test",
                 split_type="test",
-                append=True
+                append=True,
             )
 
             storage = FileStorage(config)
@@ -39,14 +39,14 @@ class TestFileStorageAppendMode:
                     record_id="test_001",
                     content="First record",
                     dataset_name="test",
-                    split_type="test"
+                    split_type="test",
                 ),
                 Record(
                     record_id="test_002",
                     content="Second record",
                     dataset_name="test",
-                    split_type="test"
-                )
+                    split_type="test",
+                ),
             ]
 
             # Save first batch
@@ -65,7 +65,7 @@ class TestFileStorageAppendMode:
                     record_id="test_003",
                     content="Third record",
                     dataset_name="test",
-                    split_type="test"
+                    split_type="test",
                 )
             ]
 
@@ -96,7 +96,7 @@ class TestFileStorageAppendMode:
                 path=tmp_path,
                 dataset_name="test",
                 split_type="test",
-                append=True
+                append=True,
             )
 
             storage = FileStorage(config)
@@ -107,7 +107,7 @@ class TestFileStorageAppendMode:
                     record_id="test_001",
                     content="First record",
                     dataset_name="test",
-                    split_type="test"
+                    split_type="test",
                 )
             ]
 
@@ -120,7 +120,7 @@ class TestFileStorageAppendMode:
                     record_id="test_002",
                     content="Second record",
                     dataset_name="test",
-                    split_type="test"
+                    split_type="test",
                 )
             ]
 
@@ -149,7 +149,7 @@ class TestFileStorageAppendMode:
                 type="file",
                 path=tmp_path,
                 dataset_name="test",
-                split_type="test"
+                split_type="test",
                 # append defaults to False
             )
 
@@ -161,7 +161,7 @@ class TestFileStorageAppendMode:
                     record_id="test_001",
                     content="First record",
                     dataset_name="test",
-                    split_type="test"
+                    split_type="test",
                 )
             ]
 
@@ -174,7 +174,7 @@ class TestFileStorageAppendMode:
                     record_id="test_002",
                     content="Second record",
                     dataset_name="test",
-                    split_type="test"
+                    split_type="test",
                 )
             ]
 
@@ -204,7 +204,7 @@ class TestFileStorageAppendMode:
                 path=tmp_path,
                 dataset_name="test",
                 split_type="test",
-                append=True
+                append=True,
             )
 
             storage = FileStorage(config)
@@ -215,7 +215,7 @@ class TestFileStorageAppendMode:
                     record_id="test_001",
                     content="First record",
                     dataset_name="test",
-                    split_type="test"
+                    split_type="test",
                 )
             ]
 

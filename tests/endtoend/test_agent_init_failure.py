@@ -70,7 +70,9 @@ async def test_agent_init_failure_fails_loud(real_bm):
         # This should fail during _setup() -> _register_agents() -> get_configs()
         # The bug was that exceptions were caught at line 470-471 in groupchat.py
         # and logged but not re-raised, allowing the flow to "complete" silently
-        await orchestrator._run(request=run_request, flow_name="test-agent-init-failure")
+        await orchestrator._run(
+            request=run_request, flow_name="test-agent-init-failure"
+        )
 
     # VERIFY: The exception should be FatalError or TypeError
     # and should contain information about the missing agent class
@@ -79,11 +81,15 @@ async def test_agent_init_failure_fails_loud(real_bm):
 
     # The error should mention the nonexistent agent class or registry
     assert (
-        "NonExistentAgentClass" in error_msg or "not found" in error_msg.lower() or "AgentRegistry" in error_msg
+        "NonExistentAgentClass" in error_msg
+        or "not found" in error_msg.lower()
+        or "AgentRegistry" in error_msg
     ), f"Error message should identify the missing agent class. Got: {error_msg}"
 
     # The error should NOT be swallowed - we should get a clear exception
-    assert error is not None, "Flow must raise exception when agent initialization fails"
+    assert error is not None, (
+        "Flow must raise exception when agent initialization fails"
+    )
 
     # SUCCESS: If we reach here, the flow failed LOUDLY as expected
     # The October 31st bug would have let this complete silently with status="completed"
@@ -159,7 +165,9 @@ async def test_valid_agent_init_succeeds(real_bm):
 
     # ACT: Run setup - this should succeed
     try:
-        termination_handler, interrupt_handler = await orchestrator._setup(request=run_request)
+        termination_handler, interrupt_handler = await orchestrator._setup(
+            request=run_request
+        )
 
         # ASSERT: Setup completed successfully
         assert termination_handler is not None

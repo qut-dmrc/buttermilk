@@ -14,7 +14,9 @@ from buttermilk._core.storage_config import BaseStorageConfig
 class TMDBProcessorConfig(BaseModel):
     """Configuration for TMDB metadata enrichment processor."""
 
-    region: str = Field(default="US", description="Region code for TMDB data (e.g., 'US', 'GB')")
+    region: str = Field(
+        default="US", description="Region code for TMDB data (e.g., 'US', 'GB')"
+    )
     language: str = Field(default="en-US", description="Language code for TMDB data")
 
     model_config = {
@@ -30,24 +32,41 @@ class PipelineConfig(BaseModel):
     """
 
     # Source configuration
-    source: dict[str, Any] | BaseStorageConfig | None = Field(default=None, description="Source storage configuration for input data")
+    source: dict[str, Any] | BaseStorageConfig | None = Field(
+        default=None, description="Source storage configuration for input data"
+    )
 
     # Output configuration
-    output: dict[str, Any] | BaseStorageConfig | None = Field(default=None, description="Output storage configuration for processed data")
+    output: dict[str, Any] | BaseStorageConfig | None = Field(
+        default=None, description="Output storage configuration for processed data"
+    )
 
     # Processor configurations
     tmdb: TMDBProcessorConfig | dict[str, Any] | bool | None = Field(
-        default=None, description="TMDB processor configuration (True to enable with defaults, dict for custom config, None to disable)"
+        default=None,
+        description="TMDB processor configuration (True to enable with defaults, dict for custom config, None to disable)",
     )
 
     # Pipeline execution parameters
-    concurrency: int = Field(default=1, ge=1, description="Number of concurrent processing tasks")
-    max_records: int | None = Field(default=None, description="Maximum number of records to process (None for unlimited)")
-    sample_size: int | None = Field(default=None, description="Number of samples to collect from source (for sampling pipelines)")
+    concurrency: int = Field(
+        default=1, ge=1, description="Number of concurrent processing tasks"
+    )
+    max_records: int | None = Field(
+        default=None,
+        description="Maximum number of records to process (None for unlimited)",
+    )
+    sample_size: int | None = Field(
+        default=None,
+        description="Number of samples to collect from source (for sampling pipelines)",
+    )
 
     # Uploader configuration
-    buffer_size: int = Field(default=10, ge=1, description="Buffer size for batch uploading")
-    flush_interval: int = Field(default=30, ge=1, description="Interval in seconds for flushing buffered data")
+    buffer_size: int = Field(
+        default=10, ge=1, description="Buffer size for batch uploading"
+    )
+    flush_interval: int = Field(
+        default=30, ge=1, description="Interval in seconds for flushing buffered data"
+    )
 
     model_config = {
         "extra": "allow",  # Allow additional processor configurations

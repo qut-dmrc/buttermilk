@@ -14,7 +14,13 @@ class TestExecutionTrace:
 
     def test_execution_trace_creation(self, real_bm):
         """Test basic ExecutionTrace creation."""
-        trace = ExecutionTrace(agent_info={"component_name": "TestComponent", "execution_type": "processor", "config": {"model": "gpt-4"}})
+        trace = ExecutionTrace(
+            agent_info={
+                "component_name": "TestComponent",
+                "execution_type": "processor",
+                "config": {"model": "gpt-4"},
+            }
+        )
 
         assert trace.call_id is not None
         assert trace.timestamp is not None
@@ -23,12 +29,18 @@ class TestExecutionTrace:
 
     def test_execution_trace_with_messages(self, real_bm):
         """Test ExecutionTrace with LLM messages."""
-        messages = [SystemMessage(content="You are a helpful assistant", source="test"), UserMessage(content="Hello", source="test")]
+        messages = [
+            SystemMessage(content="You are a helpful assistant", source="test"),
+            UserMessage(content="Hello", source="test"),
+        ]
 
         trace = ExecutionTrace(
             agent_info={"component_name": "LLMAgent"},
             messages=messages,
-            metadata={"token_usage": {"prompt_tokens": 10, "completion_tokens": 20}, "template_name": "test_template"},
+            metadata={
+                "token_usage": {"prompt_tokens": 10, "completion_tokens": 20},
+                "template_name": "test_template",
+            },
         )
 
         assert len(trace.messages) == 2
@@ -38,7 +50,11 @@ class TestExecutionTrace:
     def test_execution_trace_with_error(self, real_bm):
         """Test ExecutionTrace error handling."""
         trace = ExecutionTrace(
-            agent_info={"component_name": "ErrorComponent"}, error={"event": "Processing failed", "details": {"error_type": "ValueError"}}
+            agent_info={"component_name": "ErrorComponent"},
+            error={
+                "event": "Processing failed",
+                "details": {"error_type": "ValueError"},
+            },
         )
 
         assert trace.is_error is True
@@ -53,11 +69,17 @@ class TestExecutionTrace:
     def test_execution_trace_from_output(self, real_bm):
         """Test creating ExecutionTrace from AgentOutput."""
         output = AgentOutput(
-            agent_id="test_agent", outputs="Test result", messages=[UserMessage(content="Test", source="test")], metadata={"test_key": "test_value"}
+            agent_id="test_agent",
+            outputs="Test result",
+            messages=[UserMessage(content="Test", source="test")],
+            metadata={"test_key": "test_value"},
         )
 
         trace = ExecutionTrace.from_output(
-            output, agent_info={"component_name": "TestAgent", "execution_type": "agent"}, inputs={"input": "test"}, parameters={"param": "value"}
+            output,
+            agent_info={"component_name": "TestAgent", "execution_type": "agent"},
+            inputs={"input": "test"},
+            parameters={"param": "value"},
         )
 
         assert trace.outputs == "Test result"
@@ -69,7 +91,12 @@ class TestExecutionTrace:
     def test_execution_trace_with_record(self, real_bm):
         """Test ExecutionTrace with record context."""
         trace = ExecutionTrace(
-            agent_info={"component_name": "RecordProcessor"}, record={"record_id": "rec_123", "dataset_name": "test_dataset", "split_type": "train"}
+            agent_info={"component_name": "RecordProcessor"},
+            record={
+                "record_id": "rec_123",
+                "dataset_name": "test_dataset",
+                "split_type": "train",
+            },
         )
 
         assert trace.record["record_id"] == "rec_123"
@@ -79,7 +106,10 @@ class TestExecutionTrace:
     def test_execution_trace_model_dump(self, real_bm):
         """Test ExecutionTrace serialization for BigQuery."""
         trace = ExecutionTrace(
-            agent_info={"component_name": "TestComponent"}, inputs={"test": "input"}, outputs="test output", metadata={"key": "value"}
+            agent_info={"component_name": "TestComponent"},
+            inputs={"test": "input"},
+            outputs="test output",
+            metadata={"key": "value"},
         )
 
         dumped = trace.model_dump()
@@ -108,7 +138,9 @@ class TestTraceWriter:
     @pytest.mark.anyio
     async def test_trace_writer_add(self, real_bm):
         """Test adding traces to TraceWriter."""
-        with patch("buttermilk.utils.trace_writer.AsyncDataUploader") as mock_uploader_class:
+        with patch(
+            "buttermilk.utils.trace_writer.AsyncDataUploader"
+        ) as mock_uploader_class:
             mock_uploader = AsyncMock()
             mock_uploader_class.return_value = mock_uploader
 

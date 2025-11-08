@@ -165,11 +165,17 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
 
             # Count active WebSocket connections (approximation)
             websocket_connections = 0
-            if hasattr(request.app.state, "flow_runner") and hasattr(request.app.state.flow_runner, "session_manager"):
-                websocket_connections = len(request.app.state.flow_runner.session_manager.sessions)
+            if hasattr(request.app.state, "flow_runner") and hasattr(
+                request.app.state.flow_runner, "session_manager"
+            ):
+                websocket_connections = len(
+                    request.app.state.flow_runner.session_manager.sessions
+                )
 
             metrics_collector.update_system_metrics(
-                memory_mb=memory.used / 1024 / 1024, cpu_percent=cpu_percent, websocket_connections=websocket_connections
+                memory_mb=memory.used / 1024 / 1024,
+                cpu_percent=cpu_percent,
+                websocket_connections=websocket_connections,
             )
         except Exception as e:
             logger.debug(f"Error updating system metrics: {e}")
@@ -180,7 +186,9 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
         # Log request duration for performance monitoring
         duration = time.time() - start_time
         if duration > 1.0:  # Log slow requests
-            logger.info(f"Slow request: {request.method} {request.url.path} took {duration:.2f}s")
+            logger.info(
+                f"Slow request: {request.method} {request.url.path} took {duration:.2f}s"
+            )
 
         return response
 
@@ -199,9 +207,15 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
             await websocket.accept()
             logger.debug(f"[WEBSOCKET] Connection accepted for session {session_id}")
         else:
-            logger.warning(f"[WEBSOCKET] Unexpected WebSocket state {websocket.client_state} for session {session_id}")
+            logger.warning(
+                f"[WEBSOCKET] Unexpected WebSocket state {websocket.client_state} for session {session_id}"
+            )
         flow_runner: FlowRunner = websocket.app.state.flow_runner
-        if not (session := await flow_runner.get_websocket_session_async(session_id=session_id, websocket=websocket)):
+        if not (
+            session := await flow_runner.get_websocket_session_async(
+                session_id=session_id, websocket=websocket
+            )
+        ):
             logger.error(f"[WEBSOCKET] Session {session_id} not found or terminated.")
             await websocket.close(code=1000, reason="Session TERMINATED or not found")
             raise HTTPException(status_code=404, detail="Session not found")
@@ -221,12 +235,16 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
         # Store the current task reference in the session for cancellation
         current_task = asyncio.current_task()
         session.monitor_ui_task = current_task
-        logger.debug(f"[WEBSOCKET] Assigned monitor_ui task {id(current_task)} to session {session_id}")
+        logger.debug(
+            f"[WEBSOCKET] Assigned monitor_ui task {id(current_task)} to session {session_id}"
+        )
 
         try:
             async for run_request in session.monitor_ui():
                 try:
-                    logger.info(f"[WEBSOCKET] Received RunRequest in websocket handler: flow={run_request.flow}, session={session_id}")
+                    logger.info(
+                        f"[WEBSOCKET] Received RunRequest in websocket handler: flow={run_request.flow}, session={session_id}"
+                    )
                     await asyncio.sleep(0.1)
                     # Track session activity
                     metrics_collector.update_session_activity(session_id)
@@ -234,8 +252,12 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
                     # This loop internally feeds the groupchat with messages from the client.
                     # The only message we receive is a run_request -- which we then
                     # use to create a new flow.
-                    logger.info(f"Creating flow task for '{run_request.flow}' in session {session_id}")
-                    logger.info(f"[WEBSOCKET] Before creating task - session.websocket: {session.websocket}")
+                    logger.info(
+                        f"Creating flow task for '{run_request.flow}' in session {session_id}"
+                    )
+                    logger.info(
+                        f"[WEBSOCKET] Before creating task - session.websocket: {session.websocket}"
+                    )
 
                     # Create session-scoped BM for this flow execution using existing infrastructurep
                     from buttermilk._core.execution_context import get_execution_context
@@ -246,16 +268,24 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
                     session_bm = await create_session_bm_async(
                         project_name=execution_context.project_name,  # Use same project
                         job=run_request.flow,  # Use flow name as job
-                        cloud_manager=execution_context.cloud_manager if execution_context.clouds else None,
-                        secret_manager=execution_context.secret_manager if execution_context._find_cloud_with_service("secrets") else None,
+                        cloud_manager=execution_context.cloud_manager
+                        if execution_context.clouds
+                        else None,
+                        secret_manager=execution_context.secret_manager
+                        if execution_context._find_cloud_with_service("secrets")
+                        else None,
                         llms_instance=execution_context.llms,
-                        query_runner=execution_context.query_runner if execution_context.clouds else None,
+                        query_runner=execution_context.query_runner
+                        if execution_context.clouds
+                        else None,
                         logger_cfg=execution_context.logging,
                     )
 
                     # Set the session-scoped BM for this flow execution
                     flow_runner.set_session_bm(session_bm)
-                    logger.debug(f"Created session-scoped BM for session {session_id} with session_id: {session_bm.session_info.session_id}")
+                    logger.debug(
+                        f"Created session-scoped BM for session {session_id} with session_id: {session_bm.session_info.session_id}"
+                    )
 
                     task = asyncio.create_task(
                         flow_runner.run_flow(
@@ -269,21 +299,37 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
                         if task_future.exception() is not None:
                             exc = task_future.exception()
                             # Log the exception with full traceback
-                            logger.error(f"🚨 FATAL: Unhandled exception in flow task for session {session_id}: {exc}", exc_info=exc)
+                            logger.error(
+                                f"🚨 FATAL: Unhandled exception in flow task for session {session_id}: {exc}",
+                                exc_info=exc,
+                            )
                             fatal_msg = f"Flow execution failed for '{run_request.flow}' in session {session_id}: {exc}"
                             logger.critical(f"💥 FATAL ERROR: {fatal_msg}")
 
                             # Send error message to UI if session is still active - schedule as async task
                             async def notify_ui():
                                 try:
-                                    session = await flow_runner.session_manager.get_or_create_session(session_id)
-                                    if session and session.websocket and session.websocket.client_state == WebSocketState.CONNECTED:
+                                    session = await flow_runner.session_manager.get_or_create_session(
+                                        session_id
+                                    )
+                                    if (
+                                        session
+                                        and session.websocket
+                                        and session.websocket.client_state
+                                        == WebSocketState.CONNECTED
+                                    ):
                                         # Send error to UI asynchronously
                                         await session.websocket.send_json(
-                                            {"type": "error", "message": f"Flow execution failed: {str(exc)}", "fatal": True}
+                                            {
+                                                "type": "error",
+                                                "message": f"Flow execution failed: {str(exc)}",
+                                                "fatal": True,
+                                            }
                                         )
                                 except Exception as notify_exc:
-                                    logger.warning(f"Failed to notify UI of fatal error: {notify_exc}")
+                                    logger.warning(
+                                        f"Failed to notify UI of fatal error: {notify_exc}"
+                                    )
 
                             # Schedule the async notification
                             asyncio.create_task(notify_ui())
@@ -296,22 +342,34 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
                     break
                 except Exception as e:
                     # Track error in session metrics
-                    metrics_collector.update_session_activity(session_id, error_occurred=True)
+                    metrics_collector.update_session_activity(
+                        session_id, error_occurred=True
+                    )
                     msg = f"Error receiving/processing client message for {session_id}: {e}"
                     logger.exception(msg)  # Log with full traceback to structured logs
                     raise FatalError(msg) from e
                 finally:
                     session_id_var.reset(token)
         except asyncio.CancelledError:
-            logger.debug(f"[WEBSOCKET] Monitor UI task cancelled for session {session_id} (WebSocket replacement)")
+            logger.debug(
+                f"[WEBSOCKET] Monitor UI task cancelled for session {session_id} (WebSocket replacement)"
+            )
             # Don't treat this as an error - this is expected when WebSocket connections are replaced
         except Exception as e:
             # Catch any unhandled exceptions from the websocket loop
-            logger.exception(f"Unhandled exception in websocket endpoint for session {session_id}")
+            logger.exception(
+                f"Unhandled exception in websocket endpoint for session {session_id}"
+            )
             # Try to notify the client
             try:
                 if websocket.client_state == WebSocketState.CONNECTED:
-                    await websocket.send_json({"type": "error", "message": f"Fatal error: {str(e)}", "fatal": True})
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": f"Fatal error: {str(e)}",
+                            "fatal": True,
+                        }
+                    )
             except Exception:
                 pass  # Best effort notification
             # Close the websocket cleanly
@@ -323,7 +381,9 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
         # Clear the monitor_ui task reference from session
         if session and session.monitor_ui_task == current_task:
             session.monitor_ui_task = None
-            logger.debug(f"[WEBSOCKET] Cleared monitor_ui task reference for session {session_id}")
+            logger.debug(
+                f"[WEBSOCKET] Cleared monitor_ui task reference for session {session_id}"
+            )
 
         # End session tracking
         metrics_collector.end_session_tracking(session_id)
@@ -332,11 +392,19 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
         try:
             if hasattr(flow_runner, "session_manager"):
                 # Try to transition to RECONNECTING status instead of immediate cleanup
-                reconnect_enabled = await flow_runner.session_manager.handle_client_disconnect(session_id)
+                reconnect_enabled = (
+                    await flow_runner.session_manager.handle_client_disconnect(
+                        session_id
+                    )
+                )
                 if reconnect_enabled:
-                    logger.debug(f"Session {session_id} transitioned to RECONNECTING after WebSocket disconnect")
+                    logger.debug(
+                        f"Session {session_id} transitioned to RECONNECTING after WebSocket disconnect"
+                    )
                 else:
-                    logger.debug(f"Session {session_id} cleaned up after WebSocket disconnect (reconnection not applicable)")
+                    logger.debug(
+                        f"Session {session_id} cleaned up after WebSocket disconnect (reconnection not applicable)"
+                    )
         except Exception as e:
             logger.warning(f"Error handling session {session_id} disconnect: {e}")
 

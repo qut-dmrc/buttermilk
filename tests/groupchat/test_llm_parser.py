@@ -42,7 +42,7 @@ def llm_wrapper() -> AutoGenWrapper:
         "json_output": True,
         "family": "test-family",
         "structured_output": True,
-        "multiple_system_messages": False
+        "multiple_system_messages": False,
     }
     return MockWrapper(client=None, client_factory=mock_factory, model_info=mock_info)
 
@@ -52,7 +52,9 @@ def llm_wrapper() -> AutoGenWrapper:
 async def test_parse_list_reasons(llm_wrapper, output_obj, text, should_succeed):
     result = await llm_wrapper._parse_structured_output(text, schema=output_obj)
     assert should_succeed, f"Parsing was expected to fail but succeeded: {result}"
-    assert isinstance(result, output_obj), f"Parsed result is not of type {output_obj}: {result}"
+    assert isinstance(result, output_obj), (
+        f"Parsed result is not of type {output_obj}: {result}"
+    )
     assert result is not None, "Parsed result is None"
     assert hasattr(result, "reasons"), "Parsed result does not have 'reasons' attribute"
     assert isinstance(result.reasons, list), "'reasons' attribute is not a list"

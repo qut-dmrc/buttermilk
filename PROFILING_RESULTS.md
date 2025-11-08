@@ -99,9 +99,11 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import weave  # For type checking only
 
+
 def _get_weave_client():
     """Lazy import weave only when needed."""
     import weave
+
     return weave.client()
 ```
 
@@ -113,10 +115,12 @@ In files that use weave decorators (`@weave.op`), you need a different approach 
 # Option A: Conditional decorator
 def conditional_weave_op(func):
     """Apply @weave.op only if tracing is enabled."""
-    if os.getenv('WEAVE_ENABLED') == 'true':
+    if os.getenv("WEAVE_ENABLED") == "true":
         import weave
+
         return weave.op(func)
     return func
+
 
 @conditional_weave_op
 def my_function():
@@ -130,9 +134,11 @@ Or:
 def my_function():
     pass
 
+
 # At module end or in init function:
 if tracing_enabled:
     import weave
+
     my_function = weave.op(my_function)
 ```
 
@@ -168,14 +174,17 @@ In `_core/execution_context.py`, defer GCP/Azure client imports until actually n
 from google.cloud import aiplatform
 from google.cloud import bigquery
 
+
 # AFTER:
 def _get_gcp_client(service: str):
     """Lazy import GCP clients."""
-    if service == 'aiplatform':
+    if service == "aiplatform":
         from google.cloud import aiplatform
+
         return aiplatform
-    elif service == 'bigquery':
+    elif service == "bigquery":
         from google.cloud import bigquery
+
         return bigquery
 ```
 
@@ -246,6 +255,7 @@ uv run python -X importtime -c "from buttermilk._core import config_bootstrap" 2
 
    ```python
    from typing import TYPE_CHECKING
+
    if TYPE_CHECKING:
        import weave
    ```
@@ -255,7 +265,7 @@ uv run python -X importtime -c "from buttermilk._core import config_bootstrap" 2
    ```yaml
    # config.yaml
    performance:
-     lazy_imports: true  # Default true for speed
+     lazy_imports: true # Default true for speed
    ```
 
 ## 🎯 Quick Wins Summary

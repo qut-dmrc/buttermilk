@@ -3,7 +3,12 @@ import json
 
 import pytest
 from autogen_core import CancellationToken, FunctionCall
-from autogen_core.models import ChatCompletionClient, CreateResult, RequestUsage, UserMessage
+from autogen_core.models import (
+    ChatCompletionClient,
+    CreateResult,
+    RequestUsage,
+    UserMessage,
+)
 from pydantic import BaseModel
 
 from buttermilk._core.llms import AutoGenWrapper, ModelOutput
@@ -60,7 +65,16 @@ class FakeChatClient(ChatCompletionClient):
 
         return RequestUsage()
 
-    async def create(self, messages, *, tools=None, tool_choice="auto", json_output=None, extra_create_args=None, cancellation_token=None):  # type: ignore[override]
+    async def create(
+        self,
+        messages,
+        *,
+        tools=None,
+        tool_choice="auto",
+        json_output=None,
+        extra_create_args=None,
+        cancellation_token=None,
+    ):  # type: ignore[override]
         if extra_create_args is None:
             extra_create_args = {}
         if tools is None:
@@ -68,17 +82,38 @@ class FakeChatClient(ChatCompletionClient):
         self._count += 1
         usage = RequestUsage(prompt_tokens=1, completion_tokens=1)
         if self.mode == "text":
-            return CreateResult(content="final text", finish_reason="stop", usage=usage, cached=False)
+            return CreateResult(
+                content="final text", finish_reason="stop", usage=usage, cached=False
+            )
 
         if self.mode == "tool_then_text":
             if self._count == 1:
-                call = FunctionCall(id="1", name="search", arguments=json.dumps({"q": "hello"}))
-                return CreateResult(content=[call], finish_reason="function_calls", usage=usage, cached=False)
-            return CreateResult(content="final from synth", finish_reason="stop", usage=usage, cached=False)
+                call = FunctionCall(
+                    id="1", name="search", arguments=json.dumps({"q": "hello"})
+                )
+                return CreateResult(
+                    content=[call],
+                    finish_reason="function_calls",
+                    usage=usage,
+                    cached=False,
+                )
+            return CreateResult(
+                content="final from synth",
+                finish_reason="stop",
+                usage=usage,
+                cached=False,
+            )
 
         if self.mode == "tool_loop":
-            call = FunctionCall(id="1", name="search", arguments=json.dumps({"q": "hello"}))
-            return CreateResult(content=[call], finish_reason="function_calls", usage=usage, cached=False)
+            call = FunctionCall(
+                id="1", name="search", arguments=json.dumps({"q": "hello"})
+            )
+            return CreateResult(
+                content=[call],
+                finish_reason="function_calls",
+                usage=usage,
+                cached=False,
+            )
 
         if self.mode == "schema_base_model":
             assert self._schema_model is not None
@@ -129,7 +164,9 @@ async def test_call_chat_returns_text_without_tools():
         },
     )
 
-    res = await wrapper.call_chat(messages=[UserMessage(content="hi", source="user")], cancellation_token=None)
+    res = await wrapper.call_chat(
+        messages=[UserMessage(content="hi", source="user")], cancellation_token=None
+    )
     assert isinstance(res, CreateResult)
     assert isinstance(res.content, str)
     assert res.content == "final text"
@@ -199,7 +236,9 @@ async def test_create_schema_with_base_model_content_normalizes_and_parses():
         },
     )
 
-    res = await wrapper.create(messages=[UserMessage(content="make object", source="user")], schema=MySchema)
+    res = await wrapper.create(
+        messages=[UserMessage(content="make object", source="user")], schema=MySchema
+    )
     assert isinstance(res, ModelOutput)
     assert isinstance(res.content, str)  # normalized to JSON string
     assert res.parsed_object is not None and isinstance(res.parsed_object, MySchema)

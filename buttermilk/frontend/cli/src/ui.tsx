@@ -1,210 +1,218 @@
-import { Box, Text } from 'ink';
-import React, { useEffect, useState } from 'react';
-import MessageList from './components/MessageList.js';
-import ProgressIndicator from './components/ProgressIndicator.js';
-import Spinner from './components/Spinner.js';
-import UserInput from './components/UserInput.js';
-import { retroIRCTheme } from './themes.js';
-import { Message } from './types.js';
-import { connect, ConnectionState, WebSocketConnection } from './websocket.js';
+import { Box, Text } from "ink"
+import React, { useEffect, useState } from "react"
+import MessageList from "./components/MessageList.js"
+import ProgressIndicator from "./components/ProgressIndicator.js"
+import Spinner from "./components/Spinner.js"
+import UserInput from "./components/UserInput.js"
+import { retroIRCTheme } from "./themes.js"
+import { Message } from "./types.js"
+import { connect, ConnectionState, WebSocketConnection } from "./websocket.js"
 
 interface Props {
-  url: string;
+  url: string
 }
 
 const UI = ({ url }: Props) => {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [connection, setConnection] = useState<WebSocketConnection | null>(null);
-  const [connectionState, setConnectionState] = useState<ConnectionState>('connecting');
-  const [connectionError, setConnectionError] = useState<Error | null>(null);
-  const [lastUserInput, setLastUserInput] = useState<string>('');
-  const [lastUIMessageOptions, setLastUIMessageOptions] = useState<string[] | null>(null);
+  const [messages, setMessages] = useState<Message[]>([])
+  const [connection, setConnection] = useState<WebSocketConnection | null>(null)
+  const [connectionState, setConnectionState] = useState<ConnectionState>("connecting")
+  const [connectionError, setConnectionError] = useState<Error | null>(null)
+  const [lastUserInput, setLastUserInput] = useState<string>("")
+  const [lastUIMessageOptions, setLastUIMessageOptions] = useState<string[] | null>(null)
 
   // Progress tracking state
-  const [activeAgents, setActiveAgents] = useState<Set<string>>(new Set());
-  const [currentStep, setCurrentStep] = useState<string>('');
-  const [flowStatus, setFlowStatus] = useState<string>('');
-  const [waitingOn, setWaitingOn] = useState<string[]>([]);
+  const [activeAgents, setActiveAgents] = useState<Set<string>>(new Set())
+  const [currentStep, setCurrentStep] = useState<string>("")
+  const [flowStatus, setFlowStatus] = useState<string>("")
+  const [waitingOn, setWaitingOn] = useState<string[]>([])
 
   // Message types to filter out from chat display
   const FILTERED_MESSAGE_TYPES = new Set([
-    'flow_progress_update',
-    'agent_announcement',
-    'task_processing_started',
-    'task_processing_complete'
-  ]);
+    "flow_progress_update",
+    "agent_announcement",
+    "task_processing_started",
+    "task_processing_complete",
+  ])
 
   useEffect(() => {
     const conn = connect(
       url,
       (message) => {
         // Debug: Log the raw message structure for ui_message types
-        if (message.type === 'ui_message') {
-          console.log('🔍 Raw UI message received:', JSON.stringify(message, null, 2));
+        if (message.type === "ui_message") {
+          console.log("🔍 Raw UI message received:", JSON.stringify(message, null, 2))
         }
 
         // Track UI messages with options for confirmation handling
-        if (message.type === 'ui_message' && (message as any).outputs?.options) {
-          const options = (message as any).outputs.options;
-          console.log('🔔 UIMessage with options received:', { content: (message as any).outputs?.content, options, type: typeof options });
-          setLastUIMessageOptions(Array.isArray(options) ? options : null);
-        } else if (message.type === 'flow_progress_update') {
-          updateFlowProgress(message);
-        } else if (message.type === 'agent_announcement') {
-          updateAgentStatus(message);
-        } else if (message.type === 'task_processing_started') {
+        if (message.type === "ui_message" && (message as any).outputs?.options) {
+          const options = (message as any).outputs.options
+          console.log("🔔 UIMessage with options received:", {
+            content: (message as any).outputs?.content,
+            options,
+            type: typeof options,
+          })
+          setLastUIMessageOptions(Array.isArray(options) ? options : null)
+        } else if (message.type === "flow_progress_update") {
+          updateFlowProgress(message)
+        } else if (message.type === "agent_announcement") {
+          updateAgentStatus(message)
+        } else if (message.type === "task_processing_started") {
           // Track when agents start processing
           if (message.payload?.agent_id) {
-            setActiveAgents(prev => new Set([...prev, message.payload.agent_id]));
+            setActiveAgents(prev => new Set([...prev, message.payload.agent_id]))
           }
-        } else if (message.type === 'task_processing_complete') {
+        } else if (message.type === "task_processing_complete") {
           // Track when agents finish processing
           if (message.payload?.agent_id) {
             setActiveAgents(prev => {
-              const newSet = new Set(prev);
-              newSet.delete(message.payload.agent_id);
-              return newSet;
-            });
+              const newSet = new Set(prev)
+              newSet.delete(message.payload.agent_id)
+              return newSet
+            })
           }
         }
 
         // Debug all ui_messages
-        if (message.type === 'ui_message') {
-          console.log('📨 UI Message received:', {
+        if (message.type === "ui_message") {
+          console.log("📨 UI Message received:", {
             content: (message as any).outputs?.content,
             options: (message as any).outputs?.options,
             hasOptions: !!(message as any).outputs?.options,
             optionsType: typeof (message as any).outputs?.options,
-            isArray: Array.isArray((message as any).outputs?.options)
-          });
+            isArray: Array.isArray((message as any).outputs?.options),
+          })
         }
 
         // Only add non-filtered messages to the chat display
         if (!FILTERED_MESSAGE_TYPES.has(message.type)) {
-          setMessages((prevMessages) => [...prevMessages, message]);
+          setMessages((prevMessages) => [...prevMessages, message])
         }
       },
       (state, error) => {
-        setConnectionState(state);
-        setConnectionError(error || null);
-      }
-    );
-    setConnection(conn);
+        setConnectionState(state)
+        setConnectionError(error || null)
+      },
+    )
+    setConnection(conn)
 
     return () => {
-      conn.close();
-    };
-  }, [url]);
+      conn.close()
+    }
+  }, [url])
 
   const updateFlowProgress = (message: Message) => {
-    const payload = message.payload;
+    const payload = message.payload
     if (payload?.step_name) {
-      setCurrentStep(payload.step_name);
+      setCurrentStep(payload.step_name)
     }
     if (payload?.status) {
-      setFlowStatus(payload.status);
+      setFlowStatus(payload.status)
     }
-    if (payload?.waiting_on && typeof payload.waiting_on === 'object') {
-      setWaitingOn(Object.keys(payload.waiting_on));
+    if (payload?.waiting_on && typeof payload.waiting_on === "object") {
+      setWaitingOn(Object.keys(payload.waiting_on))
     }
-  };
+  }
 
   const updateAgentStatus = (message: Message) => {
-    const payload = message.payload;
+    const payload = message.payload
     if (payload?.agent_id) {
-      if (payload.action === 'joined') {
-        setActiveAgents(prev => new Set([...prev, payload.agent_id]));
-      } else if (payload.action === 'left') {
+      if (payload.action === "joined") {
+        setActiveAgents(prev => new Set([...prev, payload.agent_id]))
+      } else if (payload.action === "left") {
         setActiveAgents(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(payload.agent_id);
-          return newSet;
-        });
+          const newSet = new Set(prev)
+          newSet.delete(payload.agent_id)
+          return newSet
+        })
       }
     }
-  };
+  }
 
   const handleSubmit = (text: string) => {
-    if (!connection) return;
+    if (!connection) return
 
-    console.log('🎯 handleSubmit called:', { text, hasUIOptions: !!lastUIMessageOptions, options: lastUIMessageOptions });
+    console.log("🎯 handleSubmit called:", {
+      text,
+      hasUIOptions: !!lastUIMessageOptions,
+      options: lastUIMessageOptions,
+    })
 
     // Handle empty input (ENTER key) for confirmation
     if (!text.trim() && lastUIMessageOptions) {
       // Empty input means confirm/accept (first option)
-      const confirmOption = lastUIMessageOptions[0] || 'confirm';
-      console.log('✅ Sending confirmation via ENTER:', confirmOption);
+      const confirmOption = lastUIMessageOptions[0] || "confirm"
+      console.log("✅ Sending confirmation via ENTER:", confirmOption)
       const userMessage: Message = {
-        type: 'user_message',
+        type: "user_message",
         payload: {
           message: `[${confirmOption}]`,
-          timestamp: new Date().toISOString()
-        }
-      };
-      setMessages(prev => [...prev, userMessage]);
+          timestamp: new Date().toISOString(),
+        },
+      }
+      setMessages(prev => [...prev, userMessage])
       connection.send({
-        type: 'manager_response',
+        type: "manager_response",
         content: confirmOption,
-        confirm: confirmOption.toLowerCase() === 'confirm'
-      } as any);
-      setLastUIMessageOptions(null);
-      return;
+        confirm: confirmOption.toLowerCase() === "confirm",
+      } as any)
+      setLastUIMessageOptions(null)
+      return
     }
 
-    if (!text.trim()) return;
+    if (!text.trim()) return
 
     // Add local echo of user input
     const userMessage: Message = {
-      type: 'user_message',
+      type: "user_message",
       payload: {
         message: text,
-        timestamp: new Date().toISOString()
-      }
-    };
-    setMessages(prev => [...prev, userMessage]);
-    setLastUserInput(text);
+        timestamp: new Date().toISOString(),
+      },
+    }
+    setMessages(prev => [...prev, userMessage])
+    setLastUserInput(text)
 
     // Check if this is a response to a UIMessage with options
     if (lastUIMessageOptions) {
-      console.log('🔍 Checking response against options:', { text, options: lastUIMessageOptions });
-      const lowerText = text.trim().toLowerCase();
-      let selectedOption = null;
+      console.log("🔍 Checking response against options:", { text, options: lastUIMessageOptions })
+      const lowerText = text.trim().toLowerCase()
+      let selectedOption = null
 
       // Check for single letter match or full option match
       for (const option of lastUIMessageOptions) {
         if (lowerText === option[0].toLowerCase() || lowerText === option.toLowerCase()) {
-          selectedOption = option;
-          break;
+          selectedOption = option
+          break
         }
       }
 
       // Common aliases for confirm/reject
-      if (!selectedOption && lastUIMessageOptions.includes('confirm') && lastUIMessageOptions.includes('reject')) {
-        if (['y', 'yes', 'ok'].includes(lowerText)) {
-          selectedOption = 'confirm';
-        } else if (['n', 'no', 'cancel'].includes(lowerText)) {
-          selectedOption = 'reject';
+      if (!selectedOption && lastUIMessageOptions.includes("confirm") && lastUIMessageOptions.includes("reject")) {
+        if (["y", "yes", "ok"].includes(lowerText)) {
+          selectedOption = "confirm"
+        } else if (["n", "no", "cancel"].includes(lowerText)) {
+          selectedOption = "reject"
         }
       }
 
       if (selectedOption) {
-        console.log('✅ Sending selected option:', selectedOption);
+        console.log("✅ Sending selected option:", selectedOption)
         connection.send({
-          type: 'manager_response',
+          type: "manager_response",
           content: selectedOption,
-          confirm: selectedOption.toLowerCase() === 'confirm'
-        } as any);
-        setLastUIMessageOptions(null);
-        return;
+          confirm: selectedOption.toLowerCase() === "confirm",
+        } as any)
+        setLastUIMessageOptions(null)
+        return
       } else {
-        console.log('❌ No option matched, treating as regular message');
+        console.log("❌ No option matched, treating as regular message")
       }
     }
 
     // Handle help command
-    if (text === '/help') {
+    if (text === "/help") {
       const helpMessage: Message = {
-        type: 'system_message',
+        type: "system_message",
         payload: {
           message: `Available commands:
   /flow <name> <prompt>  - Start a flow (e.g., /flow osb What is AI?)
@@ -214,82 +222,93 @@ const UI = ({ url }: Props) => {
 You can also send raw JSON messages:
   {"type": "run_flow", "flow": "osb", "prompt": "Your question"}
 
-Regular text is sent as user_message to the current flow.`
-        }
-      };
-      setMessages(prev => [...prev, helpMessage]);
-      return;
+Regular text is sent as user_message to the current flow.`,
+        },
+      }
+      setMessages(prev => [...prev, helpMessage])
+      return
     }
 
     // Try to parse as JSON for advanced users
-    if (text.trim().startsWith('{')) {
+    if (text.trim().startsWith("{")) {
       try {
-        const parsed = JSON.parse(text);
-        connection.send(parsed);
-        setLastUIMessageOptions(null);
-        return;
+        const parsed = JSON.parse(text)
+        connection.send(parsed)
+        setLastUIMessageOptions(null)
+        return
       } catch (e) {
         // If JSON parsing fails, treat as regular message
       }
     }
 
     // Handle flow commands
-    if (text.startsWith('/flow ') || text.startsWith('/run ')) {
-      const parts = text.split(' ');
-      const flowName = parts[1];
-      const prompt = parts.slice(2).join(' ');
+    if (text.startsWith("/flow ") || text.startsWith("/run ")) {
+      const parts = text.split(" ")
+      const flowName = parts[1]
+      const prompt = parts.slice(2).join(" ")
 
       if (!flowName) {
         setMessages(prev => [...prev, {
-          type: 'system_error',
-          payload: { message: 'Please specify a flow name. Usage: /flow <name> [prompt]' }
-        }]);
-        return;
+          type: "system_error",
+          payload: { message: "Please specify a flow name. Usage: /flow <name> [prompt]" },
+        }])
+        return
       }
 
       const message: any = {
-        type: 'run_flow',
-        flow: flowName
-      };
-      if (prompt) {
-        message.prompt = prompt;
+        type: "run_flow",
+        flow: flowName,
       }
-      connection.send(message);
-      setLastUIMessageOptions(null);
-      return;
+      if (prompt) {
+        message.prompt = prompt
+      }
+      connection.send(message)
+      setLastUIMessageOptions(null)
+      return
     }
 
     // Default: send as manager_response (correct type for user input)
     // Note: manager_response expects fields directly, not wrapped in payload
-    connection.send({ type: 'manager_response', content: text } as any);
-    setLastUIMessageOptions(null);
-  };
+    connection.send({ type: "manager_response", content: text } as any)
+    setLastUIMessageOptions(null)
+  }
 
   const getStatusMessage = () => {
     const statusIcon = retroIRCTheme.format.status(
-      connectionState === 'connected' ? 'connected' :
-      connectionState === 'disconnected' || connectionState === 'error' ? 'disconnected' :
-      'reconnecting'
-    );
+      connectionState === "connected"
+        ? "connected"
+        : connectionState === "disconnected" || connectionState === "error"
+        ? "disconnected"
+        : "reconnecting",
+    )
 
-    const statusColor =
-      connectionState === 'connected' ? retroIRCTheme.colors.connected :
-      connectionState === 'disconnected' || connectionState === 'error' ? retroIRCTheme.colors.disconnected :
-      retroIRCTheme.colors.reconnecting;
+    const statusColor = connectionState === "connected"
+      ? retroIRCTheme.colors.connected
+      : connectionState === "disconnected" || connectionState === "error"
+      ? retroIRCTheme.colors.disconnected
+      : retroIRCTheme.colors.reconnecting
 
     switch (connectionState) {
-      case 'connecting':
-        return <Text color={statusColor}><Spinner /> Connecting to server...</Text>;
-      case 'connected':
-        return <Text color={statusColor}>{statusIcon} Connected</Text>;
-      case 'reconnecting':
-        return <Text color={statusColor}><Spinner /> Reconnecting...</Text>;
-      case 'disconnected':
-        return <Text color={statusColor}>{statusIcon} Disconnected</Text>;
-      case 'error':
-        return <Text color={statusColor}>{statusIcon} Error: {connectionError?.message || 'Unknown error'}</Text>;
+      case "connecting":
+        return (
+          <Text color={statusColor}>
+            <Spinner /> Connecting to server...
+          </Text>
+        )
+      case "connected":
+        return <Text color={statusColor}>{statusIcon} Connected</Text>
+      case "reconnecting":
+        return (
+          <Text color={statusColor}>
+            <Spinner /> Reconnecting...
+          </Text>
+        )
+      case "disconnected":
+        return <Text color={statusColor}>{statusIcon} Disconnected</Text>
+      case "error":
+        return <Text color={statusColor}>{statusIcon} Error: {connectionError?.message || "Unknown error"}</Text>
     }
-  };
+  }
 
   return (
     <Box flexDirection="column">
@@ -323,13 +342,13 @@ Regular text is sent as user_message to the current flow.`
       </Box>
 
       {/* Input area - only show when connected */}
-      {connectionState === 'connected' && (
+      {connectionState === "connected" && (
         <Box borderStyle="single" borderColor={retroIRCTheme.colors.border} marginTop={1}>
           <UserInput onSubmit={handleSubmit} />
         </Box>
       )}
     </Box>
-  );
-};
+  )
+}
 
-export default UI;
+export default UI

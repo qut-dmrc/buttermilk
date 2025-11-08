@@ -34,7 +34,11 @@ class TestStructlogRichHandlerFix:
         # Set up logging
         setup_console_logging(verbose=False)
         execution_context_id = f"test_info_{uuid.uuid4().hex[:8]}"
-        log_files = setup_file_logging(execution_context_id=execution_context_id, project_name="test_project", verbose=False)
+        log_files = setup_file_logging(
+            execution_context_id=execution_context_id,
+            project_name="test_project",
+            verbose=False,
+        )
 
         log_file_path = Path(log_files[0])
 
@@ -43,7 +47,9 @@ class TestStructlogRichHandlerFix:
 
         # Test logger.info() with structured data
         test_message = f"Test info message {uuid.uuid4()}"
-        logger.info(test_message, flow="test_flow", record_id="test_record", job_id="test_job")
+        logger.info(
+            test_message, flow="test_flow", record_id="test_record", job_id="test_job"
+        )
 
         # Read the log file content and strip null bytes
         log_content = log_file_path.read_text().replace("\x00", "").strip()
@@ -66,7 +72,9 @@ class TestStructlogRichHandlerFix:
             except json.JSONDecodeError:
                 pytest.fail(f"Invalid JSON in log file: {repr(line)}")
 
-        assert test_entry is not None, f"Test message not found in log. Content: {log_content}"
+        assert test_entry is not None, (
+            f"Test message not found in log. Content: {log_content}"
+        )
 
         # Verify structured data is present
         assert test_entry["event"] == test_message
@@ -81,7 +89,11 @@ class TestStructlogRichHandlerFix:
         # Set up logging with verbose to capture debug messages
         setup_console_logging(verbose=True)
         execution_context_id = f"test_debug_{uuid.uuid4().hex[:8]}"
-        log_files = setup_file_logging(execution_context_id=execution_context_id, project_name="test_project", verbose=True)
+        log_files = setup_file_logging(
+            execution_context_id=execution_context_id,
+            project_name="test_project",
+            verbose=True,
+        )
 
         log_file_path = Path(log_files[0])
 
@@ -90,7 +102,9 @@ class TestStructlogRichHandlerFix:
 
         # Test logger.debug() with structured data
         test_message = f"Test debug message {uuid.uuid4()}"
-        logger.debug(test_message, flow="test_flow", record_id="test_record", job_id="test_job")
+        logger.debug(
+            test_message, flow="test_flow", record_id="test_record", job_id="test_job"
+        )
 
         # Read the log file content and strip null bytes
         log_content = log_file_path.read_text().replace("\x00", "").strip()
@@ -113,7 +127,9 @@ class TestStructlogRichHandlerFix:
             except json.JSONDecodeError:
                 pytest.fail(f"Invalid JSON in log file: {repr(line)}")
 
-        assert test_entry is not None, f"Test message not found in log. Content: {log_content}"
+        assert test_entry is not None, (
+            f"Test message not found in log. Content: {log_content}"
+        )
 
         # Verify structured data is present
         assert test_entry["event"] == test_message
@@ -128,7 +144,11 @@ class TestStructlogRichHandlerFix:
         # Set up logging with verbose to capture both levels
         setup_console_logging(verbose=True)
         execution_context_id = f"test_both_{uuid.uuid4().hex[:8]}"
-        log_files = setup_file_logging(execution_context_id=execution_context_id, project_name="test_project", verbose=True)
+        log_files = setup_file_logging(
+            execution_context_id=execution_context_id,
+            project_name="test_project",
+            verbose=True,
+        )
 
         log_file_path = Path(log_files[0])
 
@@ -162,8 +182,12 @@ class TestStructlogRichHandlerFix:
                 pytest.fail(f"Invalid JSON in log file: {repr(line)}")
 
         # Verify both entries were found
-        assert info_entry is not None, f"Info message not found in log. Content: {log_content}"
-        assert debug_entry is not None, f"Debug message not found in log. Content: {log_content}"
+        assert info_entry is not None, (
+            f"Info message not found in log. Content: {log_content}"
+        )
+        assert debug_entry is not None, (
+            f"Debug message not found in log. Content: {log_content}"
+        )
 
         # Verify both have consistent structure
         for entry in [info_entry, debug_entry]:

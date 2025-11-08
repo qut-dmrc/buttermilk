@@ -33,23 +33,30 @@ class TestVectorDictChunks:
 
         # This is what the code at line 923 tries to do:
         # chunk.metadata.update(...)
-        with pytest.raises(AttributeError, match="'dict' object has no attribute 'metadata'"):
+        with pytest.raises(
+            AttributeError, match="'dict' object has no attribute 'metadata'"
+        ):
             chunk = dict_chunk
             chunk.metadata.update({"new_key": "value"})  # Fails!
 
     def test_dict_chunks_fail_when_accessing_chunk_text(self):
         """Demonstrate failure at line 1404 when accessing chunk.chunk_text."""
-        dict_chunk = {"chunk_id": "MRWAIRWT_0", "chunk_text": "Journalism content here.", "chunk_title": "Introduction"}
 
         # This is what line 1404 tries to do:
         # text=chunk.chunk_text
-        with pytest.raises(AttributeError, match="'dict' object has no attribute 'chunk_text'"):
-            chunk = dict_chunk
-            text = chunk.chunk_text  # Fails!
+        with pytest.raises(
+            AttributeError, match="'dict' object has no attribute 'chunk_text'"
+        ):
+            pass
 
     def test_proper_dict_access_works(self):
         """Show the correct way to access dict chunk fields."""
-        dict_chunk = {"chunk_id": "TEST_0", "chunk_text": "Test content", "chunk_title": "Test Title", "metadata": {"chunk_type": "content"}}
+        dict_chunk = {
+            "chunk_id": "TEST_0",
+            "chunk_text": "Test content",
+            "chunk_title": "Test Title",
+            "metadata": {"chunk_type": "content"},
+        }
 
         # The correct way to access dict fields
         assert dict_chunk["chunk_text"] == "Test content"
@@ -138,7 +145,11 @@ class TestVectorDictChunksFix:
         from buttermilk.data.vector import _get_chunk_field
 
         # Test with dict chunk
-        dict_chunk = {"chunk_id": "TEST_0", "chunk_text": "Test content", "metadata": {"key": "value"}}
+        dict_chunk = {
+            "chunk_id": "TEST_0",
+            "chunk_text": "Test content",
+            "metadata": {"key": "value"},
+        }
 
         assert _get_chunk_field(dict_chunk, "chunk_id") == "TEST_0"
         assert _get_chunk_field(dict_chunk, "chunk_text") == "Test content"

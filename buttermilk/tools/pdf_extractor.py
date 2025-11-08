@@ -32,7 +32,13 @@ class PdfTextExtractor(BaseModel):
                 json.dump(item.model_dump(), f, ensure_ascii=False, indent=4)
             logger.debug("Saved item record", file=metadata_file)
         except Exception as json_e:
-            logger.error("Failed to save item JSON", record_id=item.record_id, file=metadata_file, error=json_e, error_args=json_e.args)
+            logger.error(
+                "Failed to save item JSON",
+                record_id=item.record_id,
+                file=metadata_file,
+                error=json_e,
+                error_args=json_e.args,
+            )
         return item
 
     @staticmethod
@@ -66,10 +72,17 @@ class PdfTextExtractor(BaseModel):
                     file_path=file_path,
                 )
                 return None
-            logger.debug("Successfully extracted text", file_path=file_path, length=len(full_text))
+            logger.debug(
+                "Successfully extracted text",
+                file_path=file_path,
+                length=len(full_text),
+            )
             return full_text
         except Exception as e:
             logger.error(
-                "Error extracting text from PDF", file_path=file_path, error=e, error_args=e.args
+                "Error extracting text from PDF",
+                file_path=file_path,
+                error=e,
+                error_args=e.args,
             )
             return None

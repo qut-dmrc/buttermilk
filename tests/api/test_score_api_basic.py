@@ -19,7 +19,12 @@ class TestScoreAPIBasics:
 
     def test_data_service_exists(self):
         """Test DataService class has expected methods"""
-        expected_methods = ["get_record_by_id", "get_scores_for_record", "get_responses_for_record", "get_records_for_flow"]
+        expected_methods = [
+            "get_record_by_id",
+            "get_scores_for_record",
+            "get_responses_for_record",
+            "get_records_for_flow",
+        ]
 
         for method_name in expected_methods:
             assert hasattr(DataService, method_name), f"Missing method: {method_name}"
@@ -50,7 +55,12 @@ class TestScoreAPIBasics:
             "id": "test_record",
             "name": "Test Record",
             "content": "Test content",
-            "metadata": {"created_at": None, "dataset": "test_flow", "word_count": 2, "char_count": 12},
+            "metadata": {
+                "created_at": None,
+                "dataset": "test_flow",
+                "word_count": 2,
+                "char_count": 12,
+            },
         }
 
         # Verify structure matches spec
@@ -65,7 +75,12 @@ class TestScoreAPIBasics:
             "record_id": "test_record",
             "off_shelf_results": {},
             "custom_results": {},
-            "summary": {"off_shelf_accuracy": 0.0, "custom_average_score": 0.0, "total_evaluations": 0, "agreement_rate": 0.0},
+            "summary": {
+                "off_shelf_accuracy": 0.0,
+                "custom_average_score": 0.0,
+                "total_evaluations": 0,
+                "agreement_rate": 0.0,
+            },
         }
 
         # Verify structure matches spec
@@ -83,7 +98,11 @@ class TestScoreAPIBasics:
     def test_error_handling_structure(self):
         """Test that error responses match expected structure"""
         # Test 404 error structure from spec
-        expected_404 = {"error": "Record not found", "detail": "No record found with id: test_id in flow: test_flow", "code": "RECORD_NOT_FOUND"}
+        expected_404 = {
+            "error": "Record not found",
+            "detail": "No record found with id: test_id in flow: test_flow",
+            "code": "RECORD_NOT_FOUND",
+        }
 
         assert "error" in expected_404
         assert "detail" in expected_404
@@ -104,7 +123,9 @@ class TestAPISpecCompliance:
             "/api/flows/{flow}/records": "GET",
         }
 
-        actual_routes = {route.path: list(route.methods)[0] for route in flow_data_router.routes}
+        actual_routes = {
+            route.path: list(route.methods)[0] for route in flow_data_router.routes
+        }
 
         for path, method in spec_endpoints.items():
             assert path in actual_routes, f"Missing endpoint: {method} {path}"

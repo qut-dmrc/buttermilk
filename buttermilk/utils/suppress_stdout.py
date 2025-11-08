@@ -34,7 +34,9 @@ def redirect_stdout_to_stderr() -> None:
     # Override the warning handler to use stderr
     def warning_on_stderr(message, category, filename, lineno, file=None, line=None):
         """Custom warning handler that always writes to stderr."""
-        sys.stderr.write(warnings.formatwarning(message, category, filename, lineno, line))
+        sys.stderr.write(
+            warnings.formatwarning(message, category, filename, lineno, line)
+        )
 
     warnings.showwarning = warning_on_stderr
 

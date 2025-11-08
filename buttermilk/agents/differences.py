@@ -27,7 +27,10 @@ class Expert(BaseModel):
     """
 
     name: str = Field(..., description="Name or identifier of the expert or source.")
-    answer_id: str = Field(..., description="Unique identifier for the expert's specific answer or statement.")
+    answer_id: str = Field(
+        ...,
+        description="Unique identifier for the expert's specific answer or statement.",
+    )
 
 
 class Position(BaseModel):
@@ -40,8 +43,12 @@ class Position(BaseModel):
 
     """
 
-    experts: list[str] = Field(..., description="A list of experts who hold or support this position.")
-    position: str = Field(..., description="A concise summary or statement of the position.")
+    experts: list[str] = Field(
+        ..., description="A list of experts who hold or support this position."
+    )
+    position: str = Field(
+        ..., description="A concise summary or statement of the position."
+    )
 
 
 class Divergence(BaseModel):
@@ -58,8 +65,12 @@ class Divergence(BaseModel):
 
     """
 
-    topic: str = Field(..., description="The key topic, point, or fact where differences are noted.")
-    positions: list[Position] = Field(..., description="A list of distinct positions held by experts on this topic.")
+    topic: str = Field(
+        ..., description="The key topic, point, or fact where differences are noted."
+    )
+    positions: list[Position] = Field(
+        ..., description="A list of distinct positions held by experts on this topic."
+    )
 
 
 class Differences(BaseModel):
@@ -110,7 +121,9 @@ class Differences(BaseModel):
         # Format divergences as structured list
         divergences_parts = []
         for div in self.divergences:
-            positions_str = "; ".join(f"{pos.position} (by {', '.join(pos.experts)})" for pos in div.positions)
+            positions_str = "; ".join(
+                f"{pos.position} (by {', '.join(pos.experts)})" for pos in div.positions
+            )
             divergences_parts.append(f"- {div.topic}: {positions_str}")
 
         divergences_str = "\n".join(divergences_parts)

@@ -11,4 +11,4 @@ fetch:
     # Data source will be determined by flow configuration
     storage: ${....storage}
   inputs:
-    prompt: 'prompt||content'
+    prompt: "prompt||content"

@@ -58,13 +58,18 @@ class LazyRouteManager:
                 )
                 logger.info("Loaded deferred router", prefix=router_config["prefix"])
             except Exception as e:
-                logger.error("Failed to load deferred router", prefix=router_config["prefix"], error=e)
+                logger.error(
+                    "Failed to load deferred router",
+                    prefix=router_config["prefix"],
+                    error=e,
+                )
 
         self._heavy_routes_registered = True
         logger.info("All deferred routes loaded successfully")
 
     def create_lazy_middleware(self):
         """Create middleware that loads heavy routes on first request."""
+
         @self.app.middleware("http")
         async def lazy_route_loader(request, call_next):
             # Check if this is a request that needs heavy routes
@@ -104,14 +109,22 @@ def create_core_router() -> APIRouter:
     ):
         """Run a flow with provided inputs - core functionality."""
         # Access state via request.app.state
-        if not hasattr(request.app.state.flow_runner, "flows") or flow_name not in request.app.state.flow_runner.flows:
-            raise HTTPException(status_code=404, detail="Flow configuration not found or flow name invalid")
+        if (
+            not hasattr(request.app.state.flow_runner, "flows")
+            or flow_name not in request.app.state.flow_runner.flows
+        ):
+            raise HTTPException(
+                status_code=404,
+                detail="Flow configuration not found or flow name invalid",
+            )
 
         # For GET requests, extract prompt from query parameters
         if request.method == "GET":
             prompt = request.query_params.get("prompt", "")
             if not prompt:
-                raise HTTPException(status_code=400, detail="Prompt parameter required for GET requests")
+                raise HTTPException(
+                    status_code=400, detail="Prompt parameter required for GET requests"
+                )
 
         # Create RunRequest if not provided
         if not run_request:
@@ -127,6 +140,7 @@ def create_core_router() -> APIRouter:
         # For web UI, we should return session info so client can connect via WebSocket
         # Create a session ID that the client can use
         import uuid
+
         session_id = str(uuid.uuid4())
 
         return {

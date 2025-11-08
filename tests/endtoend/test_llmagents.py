@@ -4,7 +4,10 @@ import pytest
 from buttermilk._core.contract import AgentInput, AgentOutput, ExecutionTrace
 from buttermilk._core.llms import CHAT_MODELS, CHEAP_CHAT_MODELS
 from buttermilk._core.types import Record
-from buttermilk.agents.judge import Judge, JudgeReasons  # Import Judge and its output model
+from buttermilk.agents.judge import (
+    Judge,
+    JudgeReasons,
+)  # Import Judge and its output model
 
 # Specific Agents being tested
 from buttermilk.agents.llm import LLMAgent
@@ -21,10 +24,19 @@ def request_chief(fight_no_more_forever) -> AgentInput:
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("model_name", CHEAP_CHAT_MODELS)  # Parametrize over cheap models
-async def test_llm_agent_direct_call(real_bm, model_name: str, request_paris: AgentInput):
+@pytest.mark.parametrize(
+    "model_name", CHEAP_CHAT_MODELS
+)  # Parametrize over cheap models
+async def test_llm_agent_direct_call(
+    real_bm, model_name: str, request_paris: AgentInput
+):
     """Test direct invocation of a basic LLMAgent using ._process()."""
-    agent = LLMAgent(role="tester", name="Basic Assistant", description="Test basic LLM call", parameters={"model": model_name, "template": "ra"})
+    agent = LLMAgent(
+        role="tester",
+        name="Basic Assistant",
+        description="Test basic LLM call",
+        parameters={"model": model_name, "template": "ra"},
+    )
 
     response = await agent._process(message=request_paris)
 
@@ -44,7 +56,9 @@ async def test_llm_agent_direct_call(real_bm, model_name: str, request_paris: Ag
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("model_name", CHAT_MODELS)
-async def test_judge_agent_process(model_name: str, request_chief: AgentInput, fight_no_more_forever: Record):
+async def test_judge_agent_process(
+    model_name: str, request_chief: AgentInput, fight_no_more_forever: Record
+):
     """Test direct invocation of Judge agent's _process method with a record."""
     # Templates
     judge_params = {
@@ -52,7 +66,12 @@ async def test_judge_agent_process(model_name: str, request_chief: AgentInput, f
         "template": "judge",
         "criteria": "is this content safe or toxic?",  # Example criteria
     }
-    agent = Judge(role="testing", name="Test Judge", description="Test judge agent", parameters=judge_params)
+    agent = Judge(
+        role="testing",
+        name="Test Judge",
+        description="Test judge agent",
+        parameters=judge_params,
+    )
 
     # Correctly call _process with 'message' keyword arg
     result = await agent._process(message=request_chief)
@@ -62,27 +81,42 @@ async def test_judge_agent_process(model_name: str, request_chief: AgentInput, f
     assert result.outputs is not None, "Judge agent should produce outputs"
 
     # Assert that the output is the expected Reasons model
-    assert isinstance(result.outputs, JudgeReasons), f"Expected JudgeReasons output, got {type(result.outputs)}"
+    assert isinstance(result.outputs, JudgeReasons), (
+        f"Expected JudgeReasons output, got {type(result.outputs)}"
+    )
 
     # Check fields within Reasons
-    assert isinstance(result.outputs.prediction, bool), "'prediction' field should be boolean"
+    assert isinstance(result.outputs.prediction, bool), (
+        "'prediction' field should be boolean"
+    )
     assert isinstance(result.outputs.reasons, list), "'reasons' field should be a list"
     assert len(result.outputs.reasons) > 0, "'reasons' list should not be empty"
-    assert isinstance(result.outputs.conclusion, str), "'conclusion' field should be string"
+    assert isinstance(result.outputs.conclusion, str), (
+        "'conclusion' field should be string"
+    )
 
     # Example content check (adapt based on expected behavior for the given record/criteria)
     # This is harder to make deterministic without mocking the LLM.
     # We can check if certain keywords appear, but the exact output varies.
     reasons_text = " ".join(result.outputs.reasons).lower()
     # Depending on criteria, check for keywords like 'surrender', 'fight', etc.
-    assert "surrender" in reasons_text or "fight" in reasons_text, "Reasons should relate to the speech content"
+    assert "surrender" in reasons_text or "fight" in reasons_text, (
+        "Reasons should relate to the speech content"
+    )
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("model_name", CHEAP_CHAT_MODELS)  # Parametrize over cheap models
+@pytest.mark.parametrize(
+    "model_name", CHEAP_CHAT_MODELS
+)  # Parametrize over cheap models
 async def test_scorer(real_bm, model_name: str, request_paris: AgentInput):
     """Test direct invocation of a basic LLMAgent using __call__."""
-    LLMAgent(role="tester", name="Basic Assistant", description="Test basic LLM call", parameters={"model": model_name, "template": "simple"})
+    LLMAgent(
+        role="tester",
+        name="Basic Assistant",
+        description="Test basic LLM call",
+        parameters={"model": model_name, "template": "simple"},
+    )
 
     # response = await agent(message=request_paris)  # Use __call__
 
@@ -104,7 +138,10 @@ async def test_scorer(real_bm, model_name: str, request_paris: AgentInput):
 async def test_llm_agent_template_metadata(model_name: str, request_paris: AgentInput):
     """Test that LLMAgent includes template metadata in AgentOutput."""
     agent = LLMAgent(
-        role="tester", name="Template Test Agent", description="Test template metadata tracking", parameters={"model": model_name, "template": "best"}
+        role="tester",
+        name="Template Test Agent",
+        description="Test template metadata tracking",
+        parameters={"model": model_name, "template": "best"},
     )
 
     # Call the agent to get the output
@@ -120,20 +157,38 @@ async def test_llm_agent_template_metadata(model_name: str, request_paris: Agent
 
     # Verify the template metadata values
     assert result.metadata["template_name"] == "best", "Template name should match"
-    assert isinstance(result.metadata["template_hash"], str), "Template hash should be string"
-    assert result.metadata["template_hash"].startswith("sha256:"), "Template hash should start with sha256:"
-    assert len(result.metadata["template_hash"]) == 71, "Template hash should be 71 chars (sha256: + 64 hex chars)"
+    assert isinstance(result.metadata["template_hash"], str), (
+        "Template hash should be string"
+    )
+    assert result.metadata["template_hash"].startswith("sha256:"), (
+        "Template hash should start with sha256:"
+    )
+    assert len(result.metadata["template_hash"]) == 71, (
+        "Template hash should be 71 chars (sha256: + 64 hex chars)"
+    )
 
     # Test that ExecutionTrace also includes the metadata when created from output
     from buttermilk._core.config import AgentConfig
 
-    agent_config = AgentConfig(name="test_agent", role="TESTER", instructions="Test instructions")
+    agent_config = AgentConfig(
+        name="test_agent", role="TESTER", instructions="Test instructions"
+    )
 
-    trace = ExecutionTrace.from_output(output=result, inputs=request_paris, agent_info=agent_config)
+    trace = ExecutionTrace.from_output(
+        output=result, inputs=request_paris, agent_info=agent_config
+    )
 
     # Verify the trace includes the template metadata
     assert isinstance(trace, ExecutionTrace), "Trace should be ExecutionTrace"
-    assert "template_name" in trace.metadata, "Template name should be in ExecutionTrace metadata"
-    assert "template_hash" in trace.metadata, "Template hash should be in ExecutionTrace metadata"
-    assert trace.metadata["template_name"] == "best", "Template name should match in trace"
-    assert trace.metadata["template_hash"] == result.metadata["template_hash"], "Template hash should match between output and trace"
+    assert "template_name" in trace.metadata, (
+        "Template name should be in ExecutionTrace metadata"
+    )
+    assert "template_hash" in trace.metadata, (
+        "Template hash should be in ExecutionTrace metadata"
+    )
+    assert trace.metadata["template_name"] == "best", (
+        "Template name should match in trace"
+    )
+    assert trace.metadata["template_hash"] == result.metadata["template_hash"], (
+        "Template hash should match between output and trace"
+    )

@@ -20,7 +20,12 @@ from buttermilk._core.config import AgentConfig
 from buttermilk._core.contract import AgentAnnouncement, AgentInput, AgentOutput
 from buttermilk.agents.flowcontrol.structured_llmhost import StructuredLLMHostAgent
 
-pytestmark = [pytest.mark.anyio, pytest.mark.skip(reason="Tests for future agent-centric tool calling functionality")]
+pytestmark = [
+    pytest.mark.anyio,
+    pytest.mark.skip(
+        reason="Tests for future agent-centric tool calling functionality"
+    ),
+]
 
 
 class MockSimpleAgent(Agent):
@@ -43,7 +48,11 @@ class MockSimpleAgent(Agent):
 
     async def _process(self, *, message: AgentInput, **kwargs) -> AgentOutput:
         """Mock process method."""
-        return AgentOutput(agent_id=self.agent_id, outputs=f"Processed: {message.inputs}", metadata={"test": True})
+        return AgentOutput(
+            agent_id=self.agent_id,
+            outputs=f"Processed: {message.inputs}",
+            metadata={"test": True},
+        )
 
 
 class MockStructuredHost(StructuredLLMHostAgent):
@@ -85,8 +94,12 @@ async def test_agent_tool_definition():
 
     # Validate structure
     assert tool_def["name"] == "call_researcher"
-    assert "Use this tool when you need to" in tool_def["description"]  # Enhanced description
-    assert "researches topics" in tool_def["description"].lower()  # Contains original description
+    assert (
+        "Use this tool when you need to" in tool_def["description"]
+    )  # Enhanced description
+    assert (
+        "researches topics" in tool_def["description"].lower()
+    )  # Contains original description
     assert "input_schema" in tool_def
     assert tool_def["input_schema"]["type"] == "object"
     assert "prompt" in tool_def["input_schema"]["properties"]
@@ -102,7 +115,9 @@ async def test_agent_announcement():
     agent = MockSimpleAgent("ANALYZER", "Analyzes data")
 
     # Create announcement
-    announcement = agent.create_announcement(announcement_type="initial", status="joining")
+    announcement = agent.create_announcement(
+        announcement_type="initial", status="joining"
+    )
 
     print(f"✅ Announcement: {announcement}")
 

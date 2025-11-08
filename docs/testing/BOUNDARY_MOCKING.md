@@ -10,13 +10,14 @@ Quick reference for mocking at system boundaries in Buttermilk tests.
 import respx
 import httpx
 
+
 @respx.mock
 async def test_api_call():
     # Mock specific endpoint
     respx.post("https://api.openai.com/v1/chat/completions").mock(
-        return_value=httpx.Response(200, json={
-            "choices": [{"message": {"content": "Response"}}]
-        })
+        return_value=httpx.Response(
+            200, json={"choices": [{"message": {"content": "Response"}}]}
+        )
     )
 
     # Your code makes real httpx calls
@@ -67,6 +68,7 @@ def test_file_operations(tmp_path):
 ```python
 from unittest.mock import mock_open, patch
 
+
 def test_read_file():
     mock_data = "file content"
     with patch("builtins.open", mock_open(read_data=mock_data)):
@@ -82,10 +84,12 @@ def test_read_file():
 from freezegun import freeze_time
 from datetime import datetime
 
+
 @freeze_time("2024-01-15 10:30:00")
 def test_timestamp():
     record = create_timestamped_record()
     assert record.created_at == datetime(2024, 1, 15, 10, 30, 0)
+
 
 # Time progression
 def test_timeout():
@@ -119,7 +123,7 @@ def test_environment(monkeypatch):
     env_vars = {
         "DATABASE_URL": "postgresql://test",
         "REDIS_URL": "redis://localhost",
-        "SECRET_KEY": "test-secret"
+        "SECRET_KEY": "test-secret",
     }
 
     for key, value in env_vars.items():
@@ -136,6 +140,7 @@ def test_environment(monkeypatch):
 ```python
 import random
 
+
 def test_random_selection():
     random.seed(42)  # Deterministic randomness
 
@@ -147,6 +152,7 @@ def test_random_selection():
 
 ```python
 from unittest.mock import patch
+
 
 @patch("random.choice")
 def test_random_choice(mock_choice):
@@ -163,13 +169,10 @@ def test_random_choice(mock_choice):
 ```python
 from unittest.mock import patch, MagicMock
 
+
 @patch("subprocess.run")
 def test_shell_command(mock_run):
-    mock_run.return_value = MagicMock(
-        returncode=0,
-        stdout="command output",
-        stderr=""
-    )
+    mock_run.return_value = MagicMock(returncode=0, stdout="command output", stderr="")
 
     result = run_external_tool("ls")
     assert result == "command output"
@@ -182,6 +185,7 @@ def test_shell_command(mock_run):
 
 ```python
 from unittest.mock import patch, MagicMock
+
 
 @patch("google.cloud.storage.Client")
 def test_gcs_upload(mock_client):
@@ -230,12 +234,12 @@ class FakeOpenAIClient:
 
         return {"choices": [{"message": {"content": "default"}}]}
 
+
 # Use in tests
 async def test_with_fake_client():
-    client = FakeOpenAIClient(responses={
-        "weather": "It's sunny",
-        "news": "Breaking news"
-    })
+    client = FakeOpenAIClient(
+        responses={"weather": "It's sunny", "news": "Breaking news"}
+    )
 
     agent = Agent(client=client)
     result = await agent.query("What's the weather?")
@@ -252,20 +256,25 @@ import pytest
 import respx
 from freezegun import freeze_time
 
+
 @pytest.fixture
 def mock_api():
     """Pre-configured API mocks."""
     with respx.mock:
         respx.post("https://api.openai.com/v1/chat/completions").mock(
-            return_value=httpx.Response(200, json={"choices": [{"message": {"content": "OK"}}]})
+            return_value=httpx.Response(
+                200, json={"choices": [{"message": {"content": "OK"}}]}
+            )
         )
         yield respx
+
 
 @pytest.fixture
 def frozen_time():
     """Frozen time at a specific date."""
     with freeze_time("2024-01-01"):
         yield
+
 
 @pytest.fixture
 def temp_config(tmp_path, monkeypatch):

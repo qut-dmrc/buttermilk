@@ -68,11 +68,11 @@ Define storage objects in Hydra YAML config:
 
 ```yaml
 storage:
-    my_bigquery_storage:
-        type: bigquery
-        full_table_id: my-gcp-project.my_dataset.my_table
-        auto_create: true
-        schema_path: "conf/schemas/my_schema.json"
+  my_bigquery_storage:
+    type: bigquery
+    full_table_id: my-gcp-project.my_dataset.my_table
+    auto_create: true
+    schema_path: "conf/schemas/my_schema.json"
 ```
 
 Storage configs are automatically converted to Pydantic models (BigQueryStorageConfig) when loaded by Hydra.
@@ -95,19 +95,19 @@ Here is an example of a BigQuery storage configuration in a YAML file:
 ```yaml
 # buttermilk/conf/flows/my_flow.yaml
 storage:
-    my_bigquery_storage:
-        type: bigquery
-        full_table_id: my-gcp-project.my_dataset.my_table
-        auto_create: true
-        schema_path: "conf/schemas/my_schema.json"
+  my_bigquery_storage:
+    type: bigquery
+    full_table_id: my-gcp-project.my_dataset.my_table
+    auto_create: true
+    schema_path: "conf/schemas/my_schema.json"
 ```
 
 Within a flow, storage objects can be accessed through the orchestrator:
 
 ```python
-  # In your orchestrator/flow
-  storage_config = orchestrator.storage["my_bigquery_storage"]
-  assert isinstance(storage_config, BigQueryStorageConfig)
+# In your orchestrator/flow
+storage_config = orchestrator.storage["my_bigquery_storage"]
+assert isinstance(storage_config, BigQueryStorageConfig)
 ```
 
 Use the StorageFactory to create storage instances:

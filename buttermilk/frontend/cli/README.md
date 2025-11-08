@@ -21,11 +21,13 @@ npm link  # Make available globally as buttermilk-cli
 ## Usage
 
 ### Basic Usage
+
 ```bash
 buttermilk-cli
 ```
 
 ### Custom Backend
+
 ```bash
 # Via command line arguments
 buttermilk-cli --host myserver.com --port 9000
@@ -62,6 +64,7 @@ Hello, how are you?
 ## Message Types Supported
 
 ### Chat Messages
+
 - User messages (cyan)
 - System messages (gray)
 - System updates (yellow)
@@ -72,12 +75,14 @@ Hello, how are you?
 - Research results (green)
 
 ### Flow Events
+
 - Flow progress updates with status icons
 - Agent announcements (join/leave/status)
 - Task processing events
 - Error events
 
 ### Agent Messages
+
 - Agent outputs with content and tool calls
 - Agent traces with full execution details
 - Step requests and conductor decisions
@@ -116,6 +121,7 @@ npx . --host localhost --port 8000
 ### Development Mode
 
 For active development with auto-rebuild:
+
 ```bash
 # Terminal 1: Watch for changes
 npm run build -- --watch
@@ -137,7 +143,9 @@ node dist/cli.js
 ## Known Issues
 
 ### No Local Echo on Input
+
 If you don't see characters as you type, this is usually because:
+
 1. The terminal is not in raw mode (common in some terminal emulators)
 2. Running through a pipe or non-TTY environment
 

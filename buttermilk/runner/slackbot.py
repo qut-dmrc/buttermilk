@@ -16,7 +16,7 @@ from buttermilk._core.orchestrator import OrchestratorProtocol
 from buttermilk._core.types import RunRequest
 from buttermilk._core.variants import AgentRegistry
 from buttermilk.libs.slack import SlackContext, post_message_with_retry
-from buttermilk.orchestrators.groupchat import AutogenOrchestrator  #noqa
+from buttermilk.orchestrators.groupchat import AutogenOrchestrator  # noqa
 
 _ = "AutogenOrchestrator"
 BOTPATTERNS = re.compile(
@@ -65,7 +65,11 @@ async def register_handlers(
     async def _flow_start_matcher(body):
         logger.debug(f"Received request: {json.dumps(body)}")
         # don't trigger on self-messages or within a thread
-        if body and body["event"].get("subtype") != "bot_message" and (body["event"].get("event_ts") != body["event"].get("thread_ts")):
+        if (
+            body
+            and body["event"].get("subtype") != "bot_message"
+            and (body["event"].get("event_ts") != body["event"].get("thread_ts"))
+        ):
             match = BOTPATTERNS.search(body["event"]["text"])
             if match:
                 return True
@@ -213,7 +217,9 @@ async def read_thread_history(
     history = []
     if replies and "messages" in replies:
         for message in replies["messages"]:
-            if message.get("text", "").startswith("<@") or message.get("text", "").startswith("!"):
+            if message.get("text", "").startswith("<@") or message.get(
+                "text", ""
+            ).startswith("!"):
                 # ignore directed messages
                 continue
             message.get("user", "Unknown")

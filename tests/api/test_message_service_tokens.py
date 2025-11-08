@@ -3,7 +3,12 @@
 from unittest.mock import patch
 
 from buttermilk import AgentConfig
-from buttermilk._core.contract import AgentInput, AgentOutput, ErrorEvent, ExecutionTrace
+from buttermilk._core.contract import (
+    AgentInput,
+    AgentOutput,
+    ErrorEvent,
+    ExecutionTrace,
+)
 from buttermilk.api.services.message_service import ChatMessage, MessageService
 
 
@@ -12,7 +17,9 @@ class TestMessageServiceTokenExtraction:
 
     @patch("buttermilk.api.services.message_service.calculate_token_cost")
     @patch("buttermilk.api.services.message_service.extract_usage_from_metadata")
-    def test_format_message_extracts_tokens_from_agent_output(self, mock_extract, mock_calculate, real_bm):
+    def test_format_message_extracts_tokens_from_agent_output(
+        self, mock_extract, mock_calculate, real_bm
+    ):
         """Test that tokens are extracted from AgentOutput metadata."""
         # Setup mocks
         mock_extract.return_value = {"prompt_tokens": 100, "completion_tokens": 50}
@@ -27,7 +34,10 @@ class TestMessageServiceTokenExtraction:
         agent_output = AgentOutput(
             agent_id="test_agent",
             outputs=AssistantMessage(content="Test response", source="test_agent"),
-            metadata={"agent_model": "gpt41", "usage": {"prompt_tokens": 100, "completion_tokens": 50}},
+            metadata={
+                "agent_model": "gpt41",
+                "usage": {"prompt_tokens": 100, "completion_tokens": 50},
+            },
         )
 
         # Mock getattr to return agent_config when 'agent_info' is requested
@@ -50,11 +60,16 @@ class TestMessageServiceTokenExtraction:
 
             # Verify mocks were called correctly
             mock_extract.assert_called_once()
-            mock_calculate.assert_called_once_with(model="gpt41", usage_dict={"prompt_tokens": 100, "completion_tokens": 50})
+            mock_calculate.assert_called_once_with(
+                model="gpt41",
+                usage_dict={"prompt_tokens": 100, "completion_tokens": 50},
+            )
 
     @patch("buttermilk.api.services.message_service.calculate_token_cost")
     @patch("buttermilk.api.services.message_service.extract_usage_from_metadata")
-    def test_format_message_extracts_tokens_from_agent_trace(self, mock_extract, mock_calculate, real_bm):
+    def test_format_message_extracts_tokens_from_agent_trace(
+        self, mock_extract, mock_calculate, real_bm
+    ):
         """Test that tokens are extracted from ExecutionTrace metadata."""
         mock_extract.return_value = {"input_tokens": 200, "output_tokens": 75}
         mock_calculate.return_value = (200, 75, 0.005)
@@ -69,7 +84,10 @@ class TestMessageServiceTokenExtraction:
             agent_info=agent_config.model_dump(),
             inputs=agent_input,
             outputs=AssistantMessage(content="Test response", source="test_agent"),
-            metadata={"agent_model": "sonnet", "outputs": {"usage": {"input_tokens": 200, "output_tokens": 75}}},
+            metadata={
+                "agent_model": "sonnet",
+                "outputs": {"usage": {"input_tokens": 200, "output_tokens": 75}},
+            },
         )
 
         result = MessageService.format_message_for_client(agent_trace)
@@ -102,7 +120,9 @@ class TestMessageServiceTokenExtraction:
 
         error_event = ErrorEvent(source="test_agent", content="Test error")
 
-        agent_output = AgentOutput(agent_id="test_agent", outputs=None, error=[error_event])
+        agent_output = AgentOutput(
+            agent_id="test_agent", outputs=None, error=[error_event]
+        )
 
         # Mock getattr to return agent_config when 'agent_info' is requested
         original_getattr = getattr
@@ -131,7 +151,10 @@ class TestMessageServiceTokenExtraction:
         agent_output = AgentOutput(
             agent_id="test_agent",
             outputs=AssistantMessage(content="Test response", source="test_agent"),
-            metadata={"agent_model": "gpt41mini", "usage": {"prompt_tokens": 50, "completion_tokens": 25}},
+            metadata={
+                "agent_model": "gpt41mini",
+                "usage": {"prompt_tokens": 50, "completion_tokens": 25},
+            },
         )
 
         result = MessageService.format_message_for_client(agent_output)
@@ -141,4 +164,6 @@ class TestMessageServiceTokenExtraction:
         assert result.completion_tokens == 25
         assert result.cost_usd == 0.001
 
-        mock_calculate.assert_called_with(model="gpt41mini", usage_dict={"prompt_tokens": 50, "completion_tokens": 25})
+        mock_calculate.assert_called_with(
+            model="gpt41mini", usage_dict={"prompt_tokens": 50, "completion_tokens": 25}
+        )

@@ -55,16 +55,22 @@ class WebSocketTestClient:
         """Send message to WebSocket."""
         if self.websocket:
             await self.websocket.send(json.dumps(message))
-            self.connection_events.append(("message_sent", time.time(), message["type"]))
+            self.connection_events.append(
+                ("message_sent", time.time(), message["type"])
+            )
 
     async def receive_message(self, timeout: float = 5.0):
         """Receive message from WebSocket with timeout."""
         if self.websocket:
             try:
-                message_str = await asyncio.wait_for(self.websocket.recv(), timeout=timeout)
+                message_str = await asyncio.wait_for(
+                    self.websocket.recv(), timeout=timeout
+                )
                 message = json.loads(message_str)
                 self.messages_received.append(message)
-                self.connection_events.append(("message_received", time.time(), message["type"]))
+                self.connection_events.append(
+                    ("message_received", time.time(), message["type"])
+                )
                 return message
             except asyncio.TimeoutError:
                 self.connection_events.append(("receive_timeout", time.time()))
@@ -169,7 +175,11 @@ class TestOSBWebSocketConnection:
         with TestClient(test_app) as client:
             with client.websocket_connect(f"/ws/{session_id}") as websocket:
                 # Test valid OSB message
-                valid_message = {"type": "run_flow", "flow": "osb", "query": "Valid OSB query"}
+                valid_message = {
+                    "type": "run_flow",
+                    "flow": "osb",
+                    "query": "Valid OSB query",
+                }
                 websocket.send_json(valid_message)
 
                 # Test invalid message structure
@@ -248,7 +258,9 @@ class TestOSBWebSocketSessionIsolation:
             session.monitor_ui.return_value = mock_monitor()
             return session
 
-        real_flow_runner.get_websocket_session_async.side_effect = track_session_creation
+        real_flow_runner.get_websocket_session_async.side_effect = (
+            track_session_creation
+        )
 
         with TestClient(test_app) as client:
             # Create first session
@@ -256,9 +268,13 @@ class TestOSBWebSocketSessionIsolation:
                 # Create second session
                 with client.websocket_connect(f"/ws/{session_2_id}") as ws2:
                     # Send messages to both sessions
-                    ws1.send_json({"type": "run_flow", "flow": "osb", "query": "Session 1 query"})
+                    ws1.send_json(
+                        {"type": "run_flow", "flow": "osb", "query": "Session 1 query"}
+                    )
 
-                    ws2.send_json({"type": "run_flow", "flow": "osb", "query": "Session 2 query"})
+                    ws2.send_json(
+                        {"type": "run_flow", "flow": "osb", "query": "Session 2 query"}
+                    )
 
                     # Verify both sessions were created separately
                     assert session_1_id in session_calls
@@ -272,7 +288,9 @@ class TestOSBWebSocketSessionIsolation:
         with TestClient(test_app) as client:
             # Create connection and then close it
             with client.websocket_connect(f"/ws/{session_id}") as websocket:
-                websocket.send_json({"type": "run_flow", "flow": "osb", "query": "Test cleanup query"})
+                websocket.send_json(
+                    {"type": "run_flow", "flow": "osb", "query": "Test cleanup query"}
+                )
 
             # Connection closed automatically by context manager
             # Verify session was created (cleanup verification would require
@@ -300,7 +318,11 @@ class TestOSBWebSocketErrorHandling:
                     pass
 
                 # Send valid message after error to test recovery
-                valid_message = {"type": "run_flow", "flow": "osb", "query": "Recovery test query"}
+                valid_message = {
+                    "type": "run_flow",
+                    "flow": "osb",
+                    "query": "Recovery test query",
+                }
                 websocket.send_json(valid_message)
 
     @pytest.mark.anyio
@@ -312,7 +334,12 @@ class TestOSBWebSocketErrorHandling:
             with client.websocket_connect(f"/ws/{session_id}") as websocket:
                 # Send large query (within OSB limits)
                 large_query = "x" * 1500  # Within 2000 char limit
-                large_message = {"type": "run_flow", "flow": "osb", "query": large_query, "case_number": "OSB-LARGE-MSG-001"}
+                large_message = {
+                    "type": "run_flow",
+                    "flow": "osb",
+                    "query": large_query,
+                    "case_number": "OSB-LARGE-MSG-001",
+                }
 
                 websocket.send_json(large_message)
 
@@ -328,14 +355,21 @@ class TestOSBWebSocketErrorHandling:
             with client.websocket_connect(f"/ws/{session_id}") as websocket:
                 # Send multiple messages rapidly
                 for i in range(5):
-                    rapid_message = {"type": "run_flow", "flow": "osb", "query": f"Rapid query {i + 1}", "case_number": f"OSB-RAPID-{i + 1:03d}"}
+                    rapid_message = {
+                        "type": "run_flow",
+                        "flow": "osb",
+                        "query": f"Rapid query {i + 1}",
+                        "case_number": f"OSB-RAPID-{i + 1:03d}",
+                    }
                     websocket.send_json(rapid_message)
 
                 # Connection should remain stable under rapid messaging
                 assert True
 
     @pytest.mark.anyio
-    async def test_websocket_session_not_found_handling(self, test_app, real_flow_runner):
+    async def test_websocket_session_not_found_handling(
+        self, test_app, real_flow_runner
+    ):
         """Test WebSocket handling when session is not found."""
         # Mock session not found scenario
         real_flow_runner.get_websocket_session_async.return_value = None
@@ -370,12 +404,20 @@ class TestOSBWebSocketPerformance:
                     connection_times.append(connection_time)
 
                     # Send test message to verify connection works
-                    websocket.send_json({"type": "run_flow", "flow": "osb", "query": f"Performance test {i + 1}"})
+                    websocket.send_json(
+                        {
+                            "type": "run_flow",
+                            "flow": "osb",
+                            "query": f"Performance test {i + 1}",
+                        }
+                    )
 
         # Basic performance validation
         avg_connection_time = sum(connection_times) / len(connection_times)
         assert avg_connection_time < 1.0  # Should connect in under 1 second
-        assert all(t < 2.0 for t in connection_times)  # No single connection > 2 seconds
+        assert all(
+            t < 2.0 for t in connection_times
+        )  # No single connection > 2 seconds
 
     @pytest.mark.anyio
     async def test_websocket_message_throughput(self, test_app):
@@ -388,7 +430,12 @@ class TestOSBWebSocketPerformance:
                 start_time = time.time()
 
                 for i in range(message_count):
-                    message = {"type": "run_flow", "flow": "osb", "query": f"Throughput test message {i + 1}", "case_number": f"OSB-THRU-{i + 1:03d}"}
+                    message = {
+                        "type": "run_flow",
+                        "flow": "osb",
+                        "query": f"Throughput test message {i + 1}",
+                        "case_number": f"OSB-THRU-{i + 1:03d}",
+                    }
                     websocket.send_json(message)
 
                 total_time = time.time() - start_time
@@ -416,7 +463,13 @@ class TestOSBWebSocketPerformance:
 
                 # Send test message to each connection
                 for i, websocket in enumerate(session_connections):
-                    websocket.send_json({"type": "run_flow", "flow": "osb", "query": f"Concurrent test {i + 1}"})
+                    websocket.send_json(
+                        {
+                            "type": "run_flow",
+                            "flow": "osb",
+                            "query": f"Concurrent test {i + 1}",
+                        }
+                    )
 
             finally:
                 # Cleanup all connections
@@ -464,7 +517,11 @@ class TestOSBWebSocketMessageFlow:
         with TestClient(test_app) as client:
             with client.websocket_connect(f"/ws/{session_id}") as websocket:
                 # Send OSB query to trigger status flow
-                osb_query = {"type": "run_flow", "flow": "osb", "query": "Status flow test query"}
+                osb_query = {
+                    "type": "run_flow",
+                    "flow": "osb",
+                    "query": "Status flow test query",
+                }
 
                 websocket.send_json(osb_query)
 
@@ -487,7 +544,11 @@ class TestOSBWebSocketMessageFlow:
         with TestClient(test_app) as client:
             with client.websocket_connect(f"/ws/{session_id}") as websocket:
                 # Send OSB query that will trigger error
-                osb_query = {"type": "run_flow", "flow": "osb", "query": "Error test query"}
+                osb_query = {
+                    "type": "run_flow",
+                    "flow": "osb",
+                    "query": "Error test query",
+                }
 
                 websocket.send_json(osb_query)
 
@@ -506,7 +567,12 @@ async def test_websocket_integration_with_flow_runner(test_app, real_flow_runner
             assert real_flow_runner.get_websocket_session_async.called
 
             # Send OSB flow request
-            osb_request = {"type": "run_flow", "flow": "osb", "query": "Integration test query", "case_number": "OSB-INTEGRATION-001"}
+            osb_request = {
+                "type": "run_flow",
+                "flow": "osb",
+                "query": "Integration test query",
+                "case_number": "OSB-INTEGRATION-001",
+            }
 
             websocket.send_json(osb_request)
 

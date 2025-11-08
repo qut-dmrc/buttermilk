@@ -72,7 +72,9 @@ class TestLLMCore:
         """Test template filling with basic inputs using real template file."""
         core = LLMCore(model="gpt-4", template="test/simple")
 
-        messages = await core._fill_template(inputs={"var": "test value", "context": [], "records": []})
+        messages = await core._fill_template(
+            inputs={"var": "test value", "context": [], "records": []}
+        )
 
         # Should have system and user messages
         assert len(messages) == 2
@@ -97,7 +99,9 @@ class TestLLMCore:
 
         # Only provide required_var, leave missing_var undefined
         with pytest.raises(ProcessingError, match="unfilled parameters"):
-            await core._fill_template(inputs={"required_var": "value", "context": [], "records": []})
+            await core._fill_template(
+                inputs={"required_var": "value", "context": [], "records": []}
+            )
 
     @pytest.mark.anyio
     async def test_fill_template_with_unfilled_vars_lenient(self):
@@ -109,7 +113,9 @@ class TestLLMCore:
         )
 
         # Only provide required_var, leave missing_var undefined
-        messages = await core._fill_template(inputs={"required_var": "value", "context": [], "records": []})
+        messages = await core._fill_template(
+            inputs={"required_var": "value", "context": [], "records": []}
+        )
 
         # Should return messages even with unfilled vars
         assert len(messages) >= 1
@@ -380,10 +386,14 @@ class TestLLMCore:
 
             # The bug: template metadata should be in result.metadata
             # If the bug exists, template metadata would be overwritten
-            assert "template" in result.metadata, "Template metadata should be present in result"
+            assert "template" in result.metadata, (
+                "Template metadata should be present in result"
+            )
             assert result.metadata["template"]["template_name"] == "test/simple"
             assert "template_hash" in result.metadata["template"]
-            assert result.metadata["template"]["template_hash"] != ""  # Should have a hash
+            assert (
+                result.metadata["template"]["template_hash"] != ""
+            )  # Should have a hash
             assert result.metadata["template"]["unfilled_vars"] == []
 
             # Also verify other metadata is still there (wasn't overwritten)
@@ -434,7 +444,9 @@ class TestLLMCore:
         # The template was filled, but with nonsensical "undefined" string
         assert len(messages) >= 1
         # Check that the literal "undefined" made it into the message
-        message_text = " ".join(msg.content for msg in messages if hasattr(msg, "content"))
+        message_text = " ".join(
+            msg.content for msg in messages if hasattr(msg, "content")
+        )
         assert "undefined" in message_text.lower()
 
         # TODO: Consider if we should detect and fail on special values like:
@@ -487,7 +499,9 @@ class TestLLMCore:
 
         # CRITICAL: parameters must include model and template for trace writing
         assert "model" in core.parameters, "model must be in self.parameters for traces"
-        assert "template" in core.parameters, "template must be in self.parameters for traces"
+        assert "template" in core.parameters, (
+            "template must be in self.parameters for traces"
+        )
 
         # Verify the values are correct
         assert core.parameters["model"] == "gpt-4"

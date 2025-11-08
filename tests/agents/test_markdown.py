@@ -21,7 +21,10 @@ class TestJudgeReasonsMarkdown:
 
         output = JudgeReasons(
             conclusion="The content violates policy due to harmful content",
-            reasons=["The content contains explicit threats", "The language targets a specific group"],
+            reasons=[
+                "The content contains explicit threats",
+                "The language targets a specific group",
+            ],
             prediction=True,
             uncertainty="low",
         )
@@ -48,7 +51,12 @@ class TestJudgeReasonsMarkdown:
 
     def test_judge_reasons_str_alias(self):
         """Test that __str__ is aliased to as_markdown."""
-        output = JudgeReasons(conclusion="Content is acceptable", reasons=["No violations found"], prediction=False, uncertainty="low")
+        output = JudgeReasons(
+            conclusion="Content is acceptable",
+            reasons=["No violations found"],
+            prediction=False,
+            uncertainty="low",
+        )
 
         # Mock the agent context
         output._agent_id = "JUDGE-test"
@@ -71,7 +79,10 @@ class TestDifferencesMarkdown:
                 Divergence(
                     topic="Content interpretation",
                     positions=[
-                        Position(experts=["Expert1", "Expert2"], position="Content is harmful"),
+                        Position(
+                            experts=["Expert1", "Expert2"],
+                            position="Content is harmful",
+                        ),
                         Position(experts=["Expert3"], position="Content is neutral"),
                     ],
                 )
@@ -94,7 +105,11 @@ class TestMediaDescriptionMarkdown:
         agent_id = "DESC-gpt4"
         call_id = "9012IJKL"
 
-        output = MediaDescription(description="A scenic view of mountains at sunset", media_type="image", confidence=0.95)
+        output = MediaDescription(
+            description="A scenic view of mountains at sunset",
+            media_type="image",
+            confidence=0.95,
+        )
 
         result = output.as_markdown(agent_id, call_id)
 
@@ -138,7 +153,11 @@ class TestResearchResultMarkdown:
         call_id = "7890QRST"
 
         output = ResearchResult(
-            literature=[Reference(summary="Study on climate impacts", citation="Smith et al., 2024")],
+            literature=[
+                Reference(
+                    summary="Study on climate impacts", citation="Smith et al., 2024"
+                )
+            ],
             response="Based on the literature...",
             summary="Climate change has significant impacts",
         )
@@ -183,9 +202,16 @@ class TestExecutionTraceMarkdown:
 
     def test_agent_trace_with_judge_output(self):
         """Test ExecutionTrace formatting with JudgeReasons output."""
-        config = AgentConfig(agent_id="JUDGE-gpt4", agent_name="judge_agent", agent_type="Judge")
+        config = AgentConfig(
+            agent_id="JUDGE-gpt4", agent_name="judge_agent", agent_type="Judge"
+        )
 
-        output = JudgeReasons(conclusion="Content is safe", reasons=["No violations detected"], prediction=False, uncertainty="low")
+        output = JudgeReasons(
+            conclusion="Content is safe",
+            reasons=["No violations detected"],
+            prediction=False,
+            uncertainty="low",
+        )
 
         trace = MagicMock(spec=ExecutionTrace)
         trace.agent_info = config

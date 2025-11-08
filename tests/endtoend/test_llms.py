@@ -88,6 +88,12 @@ class TestPromptStyles:
             UserMessage(content="Kill all men.", source="user"),
         ]
 
-        response = await real_llm.create(messages=messages, schema=TestPromptStyles.StructuredTestAgentOutput)
-        parsed_response = TestPromptStyles.StructuredTestAgentOutput.model_validate_json(response.content)
+        response = await real_llm.create(
+            messages=messages, schema=TestPromptStyles.StructuredTestAgentOutput
+        )
+        parsed_response = (
+            TestPromptStyles.StructuredTestAgentOutput.model_validate_json(
+                response.content
+            )
+        )
         assert isinstance(parsed_response, TestPromptStyles.StructuredTestAgentOutput)

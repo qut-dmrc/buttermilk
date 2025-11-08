@@ -50,14 +50,26 @@ class ChatMessage(BaseModel):
         "start_flow",
     ] = Field(..., description="Type of message")
     message_id: str = Field(default_factory=lambda: uuid())
-    preview: str | None = Field(default="", description="Short (one-line) abstract of message")
+    preview: str | None = Field(
+        default="", description="Short (one-line) abstract of message"
+    )
     outputs: Any | None = Field(None, description="Message outputs")
-    timestamp: datetime.datetime = Field(default_factory=datetime.datetime.now, description="Timestamp of the message")
+    timestamp: datetime.datetime = Field(
+        default_factory=datetime.datetime.now, description="Timestamp of the message"
+    )
     agent_info: AgentConfig | None = Field(None, description="Agent information")
-    tracing_link: str | None = Field(None, description="Link to the tracing information")
-    prompt_tokens: int = Field(default=0, description="Number of prompt/input tokens used")
-    completion_tokens: int = Field(default=0, description="Number of completion/output tokens used")
-    cost_usd: float = Field(default=0.0, description="Estimated cost in USD for this message")
+    tracing_link: str | None = Field(
+        None, description="Link to the tracing information"
+    )
+    prompt_tokens: int = Field(
+        default=0, description="Number of prompt/input tokens used"
+    )
+    completion_tokens: int = Field(
+        default=0, description="Number of completion/output tokens used"
+    )
+    cost_usd: float = Field(
+        default=0.0, description="Estimated cost in USD for this message"
+    )
 
 
 class MessageService:
@@ -83,16 +95,24 @@ class MessageService:
             # Handle messages that need special processing
             if isinstance(message, (ChatMessage, StepRequest)):
                 message_type = type(message).__name__
-                action = "returning as-is" if isinstance(message, ChatMessage) else "not sending to UI"
+                action = (
+                    "returning as-is"
+                    if isinstance(message, ChatMessage)
+                    else "not sending to UI"
+                )
                 logger.debug(f"[MessageService] {message_type} received, {action}")
                 return message if isinstance(message, ChatMessage) else None
 
             # Convert UserResponseMessage to user_response for display
             if isinstance(message, UserResponseMessage):
-                logger.debug("UserResponseMessage received, converting to user_response for UI")
+                logger.debug(
+                    "UserResponseMessage received, converting to user_response for UI"
+                )
                 return ChatMessage(
                     type="user_response",
-                    preview=str(message.content)[:PREVIEW_LENGTH] if message.content else "",
+                    preview=str(message.content)[:PREVIEW_LENGTH]
+                    if message.content
+                    else "",
                     outputs=message.content,
                     agent_info=None,
                     timestamp=datetime.datetime.now(),
@@ -122,7 +142,9 @@ class MessageService:
                     try:
                         usage = extract_usage_from_metadata(message.metadata)
                     except Exception as e:
-                        logger.debug(f"[MessageService] Failed to extract usage from metadata: {e}")
+                        logger.debug(
+                            f"[MessageService] Failed to extract usage from metadata: {e}"
+                        )
 
                 # Fall back to agent_info parameters for model name
                 if not model_for_pricing and agent_info is not None:
@@ -135,13 +157,19 @@ class MessageService:
                 # Calculate cost/tokens if we have model and usage information
                 if model_for_pricing and usage:
                     try:
-                        prompt_tokens, completion_tokens, cost_usd = calculate_token_cost(
-                            model=model_for_pricing,
-                            usage_dict=usage,
+                        prompt_tokens, completion_tokens, cost_usd = (
+                            calculate_token_cost(
+                                model=model_for_pricing,
+                                usage_dict=usage,
+                            )
                         )
-                        logger.debug(f"[MessageService] Pricing computed: {prompt_tokens} prompt, {completion_tokens} completion, ${cost_usd:.6f}")
+                        logger.debug(
+                            f"[MessageService] Pricing computed: {prompt_tokens} prompt, {completion_tokens} completion, ${cost_usd:.6f}"
+                        )
                     except Exception as e:
-                        logger.debug(f"[MessageService] Failed to calculate token cost: {e}")
+                        logger.debug(
+                            f"[MessageService] Failed to calculate token cost: {e}"
+                        )
 
                 if message.outputs:
                     # Send the unwrapped message instead of the ExecutionTrace object
@@ -152,12 +180,24 @@ class MessageService:
                         message = (
                             message.error[0]
                             if isinstance(message.error[0], ErrorEvent)
-                            else ErrorEvent(source=agent_info.get("name", "unknown") if agent_info else "unknown", content=str(message.error[0]))
+                            else ErrorEvent(
+                                source=agent_info.get("name", "unknown")
+                                if agent_info
+                                else "unknown",
+                                content=str(message.error[0]),
+                            )
                         )
                     else:
-                        message = ErrorEvent(source=agent_info.get("name", "unknown") if agent_info else "unknown", content=str(message.error))
+                        message = ErrorEvent(
+                            source=agent_info.get("name", "unknown")
+                            if agent_info
+                            else "unknown",
+                            content=str(message.error),
+                        )
                 else:
-                    logger.warning(f"[MessageService] ExecutionTrace object with no outputs: {message}, returning None.")
+                    logger.warning(
+                        f"[MessageService] ExecutionTrace object with no outputs: {message}, returning None."
+                    )
                     return None
 
             message_type = None
@@ -183,7 +223,9 @@ class MessageService:
                 message_type = "system_error"
             elif isinstance(message, FlowEvent):
                 message_type = "system_update"
-            elif isinstance(message, TaskProcessingComplete) or isinstance(message, TaskProcessingStarted):
+            elif isinstance(message, TaskProcessingComplete) or isinstance(
+                message, TaskProcessingStarted
+            ):
                 message_type = "system_update"
             elif isinstance(message, str):
                 # Handle string messages (like StructuredLLMHost summaries) as chat messages
@@ -215,7 +257,14 @@ class MessageService:
     @staticmethod
     async def process_message_from_ui(
         data: dict[str, Any],
-    ) -> FlowEvent | RunRequest | FlowMessage | TaskProcessingStarted | TaskProcessingComplete | None:
+    ) -> (
+        FlowEvent
+        | RunRequest
+        | FlowMessage
+        | TaskProcessingStarted
+        | TaskProcessingComplete
+        | None
+    ):
         """Process a message from a WebSocket connection.
 
         Args:
@@ -266,7 +315,9 @@ class MessageService:
                 case "TaskProcessingStarted":
                     return TaskProcessingStarted(**data)
                 case _:
-                    logger.warning(f"Unknown message type received on websocket: {message_type}")
+                    logger.warning(
+                        f"Unknown message type received on websocket: {message_type}"
+                    )
                     return None
             return None
         except Exception as e:

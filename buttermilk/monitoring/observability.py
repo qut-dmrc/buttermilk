@@ -42,7 +42,11 @@ class SystemStatus:
 class SimpleHealthMonitor:
     """Simplified health monitoring for basic error detection and flow responsiveness."""
 
-    def __init__(self, metrics_collector: Optional[MetricsCollector] = None, health_monitor: Optional[HealthMonitor] = None):
+    def __init__(
+        self,
+        metrics_collector: Optional[MetricsCollector] = None,
+        health_monitor: Optional[HealthMonitor] = None,
+    ):
         """Initialize simplified health monitor."""
         self.metrics_collector = metrics_collector or get_metrics_collector()
         self.health_monitor = health_monitor or HealthMonitor()
@@ -66,7 +70,9 @@ class SimpleHealthMonitor:
         """Get the fatal error message if any."""
         return self.fatal_error_message
 
-    def check_flow_responsiveness(self, flow_name: str, timeout_seconds: int = 300) -> bool:
+    def check_flow_responsiveness(
+        self, flow_name: str, timeout_seconds: int = 300
+    ) -> bool:
         """
         Check if a flow is responsive within timeout.
 
@@ -75,10 +81,16 @@ class SimpleHealthMonitor:
         """
         # TODO: Implement actual flow responsiveness checking
         # For now, return True (no flows detected as stuck)
-        logger.debug("Checking flow responsiveness", flow_name=flow_name, timeout_seconds=timeout_seconds)
+        logger.debug(
+            "Checking flow responsiveness",
+            flow_name=flow_name,
+            timeout_seconds=timeout_seconds,
+        )
         return True
 
-    def check_interactive_flow_ui_timeout(self, session_id: str, timeout_seconds: int = 1800) -> bool:
+    def check_interactive_flow_ui_timeout(
+        self, session_id: str, timeout_seconds: int = 1800
+    ) -> bool:
         """
         Check if interactive flow has been without UI for too long.
 
@@ -87,7 +99,11 @@ class SimpleHealthMonitor:
         """
         # TODO: Implement actual UI timeout checking
         # For now, return True (no flows detected as stuck without UI)
-        logger.debug("Checking interactive flow UI timeout", session_id=session_id, timeout_seconds=timeout_seconds)
+        logger.debug(
+            "Checking interactive flow UI timeout",
+            session_id=session_id,
+            timeout_seconds=timeout_seconds,
+        )
         return True
 
     async def start_monitoring(self):
@@ -107,7 +123,12 @@ class SimpleHealthMonitor:
             return SystemStatus(
                 overall_status=HealthStatus.UNHEALTHY,
                 timestamp=self.last_check,
-                components={"fatal_error": {"detected": True, "message": self.fatal_error_message}},
+                components={
+                    "fatal_error": {
+                        "detected": True,
+                        "message": self.fatal_error_message,
+                    }
+                },
                 error_message=self.fatal_error_message,
             )
 
@@ -127,7 +148,10 @@ class SimpleHealthMonitor:
                 overall_status = HealthStatus.UNKNOWN
 
             return SystemStatus(
-                overall_status=overall_status, timestamp=self.last_check, components=health_summary.get("components", {}), error_message=None
+                overall_status=overall_status,
+                timestamp=self.last_check,
+                components=health_summary.get("components", {}),
+                error_message=None,
             )
 
         except Exception as e:
@@ -153,7 +177,9 @@ class SimpleHealthMonitor:
 
             return {
                 "total_flows": len(flow_metrics),
-                "system_uptime_seconds": (datetime.now() - system_metrics["start_time"]).total_seconds(),
+                "system_uptime_seconds": (
+                    datetime.now() - system_metrics["start_time"]
+                ).total_seconds(),
                 "memory_mb": system_metrics.get("total_memory_mb", 0),
                 "active_sessions": system_metrics.get("active_sessions", 0),
                 "timestamp": datetime.now().isoformat(),

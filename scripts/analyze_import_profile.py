@@ -45,14 +45,14 @@ def format_time(us: int) -> str:
     if ms < 1000:
         return f"{ms:.1f}ms"
     else:
-        return f"{ms/1000:.2f}s"
+        return f"{ms / 1000:.2f}s"
 
 
 def analyze_profile(profile_file: str, title: str):
     """Analyze and display import profile."""
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print(f"{title}")
-    print(f"{'='*80}\n")
+    print(f"{'=' * 80}\n")
 
     imports = parse_import_profile(profile_file)
 
@@ -89,9 +89,9 @@ def analyze_profile(profile_file: str, title: str):
 
 def find_lazy_loading_opportunities():
     """Identify modules that could benefit from lazy loading."""
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print("💡 Lazy Loading Opportunities")
-    print(f"{'='*80}\n")
+    print(f"{'=' * 80}\n")
 
     opportunities = [
         {
@@ -165,7 +165,9 @@ def main():
             analyze_profile(profile_file, title)
         else:
             print(f"\n⚠️  Profile not found: {profile_file}")
-            print(f"   Run: uv run python -X importtime -c 'from buttermilk._core import config_bootstrap' 2> {profile_file}")
+            print(
+                f"   Run: uv run python -X importtime -c 'from buttermilk._core import config_bootstrap' 2> {profile_file}"
+            )
 
     # Show recommendations
     find_lazy_loading_opportunities()

@@ -35,11 +35,20 @@ from cloudpathlib import CloudPath  # For handling cloud storage paths
 from google.genai.types import GenerateImagesConfig
 from huggingface_hub import AsyncInferenceClient, login  # HuggingFace Hub client
 from PIL import Image  # Pillow library for image manipulation
-from pydantic import BaseModel, Field, PrivateAttr, field_validator  # Pydantic components
+from pydantic import (
+    BaseModel,
+    Field,
+    PrivateAttr,
+    field_validator,
+)  # Pydantic components
 from shortuuid import ShortUUID  # For generating short unique IDs
 
 from buttermilk import bm, logger
-from buttermilk._core.image import ImageRecord, google_genai_image_to_pil, read_image  # Buttermilk ImageRecord model
+from buttermilk._core.image import (
+    ImageRecord,
+    google_genai_image_to_pil,
+    read_image,
+)  # Buttermilk ImageRecord model
 from buttermilk._core.retry import RetryWrapper  # Base class for retry logic
 
 
@@ -62,12 +71,17 @@ class TextToImageClient(RetryWrapper):
             helping to identify which model created them.
     """
 
-    client: object = Field(default=None, description="The underlying API client object for the image generation service.")
+    client: object = Field(
+        default=None,
+        description="The underlying API client object for the image generation service.",
+    )
     model: str = Field(
         ...,  # Ellipsis indicates a required field
         description="The specific model identifier to use for text-to-image generation.",
     )
-    prefix: str = Field(description="A short prefix for naming generated image files (e.g., 'dalle3_', 'sdxl_').")
+    prefix: str = Field(
+        description="A short prefix for naming generated image files (e.g., 'dalle3_', 'sdxl_')."
+    )
 
     async def generate(
         self,
@@ -106,17 +120,26 @@ class TextToImageClient(RetryWrapper):
         final_save_path = save_path
         if not final_save_path:
             # Ensure bm.session_info.save_dir is available and valid
-            if not bm.session_info.save_dir or not Path(bm.session_info.save_dir).is_dir():  # Check if local dir, cloud paths need different check
+            if (
+                not bm.session_info.save_dir
+                or not Path(bm.session_info.save_dir).is_dir()
+            ):  # Check if local dir, cloud paths need different check
                 # Fallback if bm.session_info.save_dir is not set or invalid, consider a temporary directory
                 import tempfile
 
                 temp_dir = tempfile.mkdtemp()
-                logger.warning(f"bm.session_info.save_dir not available or invalid, using temporary directory: {temp_dir}")
+                logger.warning(
+                    f"bm.session_info.save_dir not available or invalid, using temporary directory: {temp_dir}"
+                )
                 final_save_path = f"{temp_dir}/{self.prefix}{uuid.uuid4()}.{filetype}"
             else:
-                final_save_path = f"{bm.session_info.save_dir}/{self.prefix}{uuid.uuid4()}.{filetype}"
+                final_save_path = (
+                    f"{bm.session_info.save_dir}/{self.prefix}{uuid.uuid4()}.{filetype}"
+                )
 
-        log_msg_parts = [f"Generating image with {self.model} using prompt: ```{text}```"]
+        log_msg_parts = [
+            f"Generating image with {self.model} using prompt: ```{text}```"
+        ]
         if negative_prompt:
             log_msg_parts.append(f", negative prompt: ```{negative_prompt}```")
         log_msg_parts.append(f", saving to `{final_save_path}`")
@@ -136,8 +159,13 @@ class TextToImageClient(RetryWrapper):
             )
 
             # Ensure generated_image_record is an ImageRecord and has an image
-            if not isinstance(generated_image_record, ImageRecord) or not generated_image_record.image:
-                raise ValueError("generate_image implementation did not return a valid ImageRecord with an image.")
+            if (
+                not isinstance(generated_image_record, ImageRecord)
+                or not generated_image_record.image
+            ):
+                raise ValueError(
+                    "generate_image implementation did not return a valid ImageRecord with an image."
+                )
 
             # Save the image and update the URI in the record
             # The save method is part of ImageRecord
@@ -198,7 +226,9 @@ class TextToImageClient(RetryWrapper):
         Raises:
             NotImplementedError: If a subclass does not implement this method.
         """
-        raise NotImplementedError("Subclasses must implement the `generate_image` method.")
+        raise NotImplementedError(
+            "Subclasses must implement the `generate_image` method."
+        )
 
 
 ImageGenModels = Literal[
@@ -270,10 +300,14 @@ class VertexImagegenModels(TextToImageClient):
 
         client = bm.genai  # Ensure that we have initialised the genai client
 
-        api_response = await client.aio.models.generate_images(model=self.model, prompt=text, config=config)
+        api_response = await client.aio.models.generate_images(
+            model=self.model, prompt=text, config=config
+        )
 
         if not api_response.generated_images[0].image:
-            raise ValueError(f"No image generated by {self.model}. Response: {api_response}")
+            raise ValueError(
+                f"No image generated by {self.model}. Response: {api_response}"
+            )
 
         pil_image = google_genai_image_to_pil(api_response.generated_images[0].image)
         # enhanced_prompt = first_generated_image.enhanced_prompt
@@ -379,7 +413,9 @@ class SD35Large(TextToImageClient):
         azure_api_key = bm.credentials.get("AZURE_STABILITY35_API_KEY")
 
         if not azure_url or not azure_api_key:
-            raise ValueError("Azure Stability 3.5 URL or API Key not configured in bm.credentials.")
+            raise ValueError(
+                "Azure Stability 3.5 URL or API Key not configured in bm.credentials."
+            )
 
         headers = {
             "Content-Type": "application/json",
@@ -400,7 +436,9 @@ class SD35Large(TextToImageClient):
         response_json = response.json()
         image_b64 = response_json.get("image")
         if not image_b64:
-            raise ValueError("Azure Stability 3.5 API response did not include an 'image' field.")
+            raise ValueError(
+                "Azure Stability 3.5 API response did not include an 'image' field."
+            )
 
         # read_image utility is expected to handle base64 string and return ImageRecord
         image_record = read_image(image_b64=image_b64)
@@ -450,9 +488,7 @@ class FLUX11Pro(TextToImageClient):
 
         if not azure_url:
             # Use default endpoint if not configured
-            azure_url = (
-                "https://platformaieast.cognitiveservices.azure.com/openai/deployments/FLUX-1.1-pro/images/generations?api-version=2025-04-01-preview"
-            )
+            azure_url = "https://platformaieast.cognitiveservices.azure.com/openai/deployments/FLUX-1.1-pro/images/generations?api-version=2025-04-01-preview"
 
         if not azure_api_key:
             raise ValueError("AZURE_API_KEY not configured in bm.credentials.")
@@ -503,9 +539,13 @@ class FLUX11Pro(TextToImageClient):
                 pil_image = Image.open(BytesIO(img_response.content))
                 image_record = ImageRecord(image=pil_image)
             else:
-                raise ValueError(f"Azure FLUX API response missing expected image data. Got: {image_data_item}")
+                raise ValueError(
+                    f"Azure FLUX API response missing expected image data. Got: {image_data_item}"
+                )
         else:
-            raise ValueError(f"Azure FLUX API response did not include 'data' array. Response: {response_json}")
+            raise ValueError(
+                f"Azure FLUX API response did not include 'data' array. Response: {response_json}"
+            )
 
         # Set metadata
         image_record.model = self.model
@@ -552,7 +592,9 @@ class SD3(TextToImageClient):
         """
         stability_api_key = os.environ.get("STABILITY_AI_KEY")
         if not stability_api_key:
-            raise KeyError("STABILITY_AI_KEY environment variable not set for SD3 client.")
+            raise KeyError(
+                "STABILITY_AI_KEY environment variable not set for SD3 client."
+            )
 
         parameters = {
             "prompt": text,
@@ -613,23 +655,33 @@ class SDXL(TextToImageClient):
 
     model: str = "stabilityai/stable-diffusion-xl-base-1.0"  # Changed to base model
     prefix: str = "sdxl_"
-    image_params: dict[str, Any] = Field(default_factory=lambda: {"num_inference_steps": 50})
+    image_params: dict[str, Any] = Field(
+        default_factory=lambda: {"num_inference_steps": 50}
+    )
 
     # client is inherited from TextToImageClient for the base model
     # refiner client needs to be initialized
-    _refiner_client: AsyncInferenceClient | None = PrivateAttr(default=None)  # For async refiner
-    _sync_refiner_client: Any | None = PrivateAttr(default=None)  # For sync refiner used in original
+    _refiner_client: AsyncInferenceClient | None = PrivateAttr(
+        default=None
+    )  # For async refiner
+    _sync_refiner_client: Any | None = PrivateAttr(
+        default=None
+    )  # For sync refiner used in original
 
     async def _initialize_clients_if_needed(self) -> None:
         """Initializes HuggingFace clients if not already done."""
         if self.client is None:  # client for base model
             hf_token = os.environ.get("HUGGINGFACEHUB_API_TOKEN")
             if not hf_token:
-                raise KeyError("HUGGINGFACEHUB_API_TOKEN environment variable not set for SDXL client.")
+                raise KeyError(
+                    "HUGGINGFACEHUB_API_TOKEN environment variable not set for SDXL client."
+                )
             try:
                 login(token=hf_token, new_session=False)  # Login to HuggingFace Hub
             except Exception as e:
-                logger.warning(f"HuggingFace Hub login failed (token might be invalid or already logged in): {e!s}")
+                logger.warning(
+                    f"HuggingFace Hub login failed (token might be invalid or already logged in): {e!s}"
+                )
 
             self.client = AsyncInferenceClient(
                 "stabilityai/stable-diffusion-xl-base-1.0",  # Base model
@@ -640,10 +692,16 @@ class SDXL(TextToImageClient):
         # Initialize refiner client (example uses sync, should ideally be async)
         # The original code mixed sync and async refiner client initialization.
         # Sticking to async for consistency if possible, or noting the sync usage.
-        if self._sync_refiner_client is None:  # Using the sync client as per original code's refine step
-            from huggingface_hub import InferenceClient as SyncInferenceClient  # Local import for clarity
+        if (
+            self._sync_refiner_client is None
+        ):  # Using the sync client as per original code's refine step
+            from huggingface_hub import (
+                InferenceClient as SyncInferenceClient,
+            )  # Local import for clarity
 
-            hf_token = os.environ.get("HUGGINGFACEHUB_API_TOKEN")  # Get token again just in case
+            hf_token = os.environ.get(
+                "HUGGINGFACEHUB_API_TOKEN"
+            )  # Get token again just in case
             self._sync_refiner_client = SyncInferenceClient(
                 "stabilityai/stable-diffusion-xl-refiner-1.0",
                 token=hf_token,
@@ -672,21 +730,32 @@ class SDXL(TextToImageClient):
         """
         await self._initialize_clients_if_needed()  # Ensure clients are ready
         if self.client is None or self._sync_refiner_client is None:  # Check after init
-            raise RuntimeError("SDXL clients (base or refiner) not properly initialized.")
+            raise RuntimeError(
+                "SDXL clients (base or refiner) not properly initialized."
+            )
 
         # Combine default image_params with any runtime kwargs
-        final_parameters = {**self.image_params, "prompt": text, "negative_prompt": negative_prompt or "", **kwargs}
+        final_parameters = {
+            **self.image_params,
+            "prompt": text,
+            "negative_prompt": negative_prompt or "",
+            **kwargs,
+        }
 
         # Generate base image
         base_image_pil = await self.client.text_to_image(**final_parameters)  # type: ignore # client is AsyncInferenceClient
         if not isinstance(base_image_pil, Image.Image):
-            raise RuntimeError(f"SDXL base model did not return a PIL Image. Got: {type(base_image_pil)}")
+            raise RuntimeError(
+                f"SDXL base model did not return a PIL Image. Got: {type(base_image_pil)}"
+            )
 
         # Refine the image (using the synchronous client as per original code)
         # For a fully async pipeline, the refiner should also be async and awaited.
         # This requires converting PIL image to bytes for the sync client.
         img_bytes_io = BytesIO()
-        base_image_pil.save(img_bytes_io, format="PNG")  # Save to BytesIO in a common format
+        base_image_pil.save(
+            img_bytes_io, format="PNG"
+        )  # Save to BytesIO in a common format
         img_to_refine_bytes = img_bytes_io.getvalue()
 
         try:
@@ -705,7 +774,9 @@ class SDXL(TextToImageClient):
             raise RuntimeError(f"SDXL image refinement failed: {e!s}") from e
 
         if not isinstance(refined_image_pil, Image.Image):
-            raise RuntimeError(f"SDXL refiner did not return a PIL Image. Got: {type(refined_image_pil)}")
+            raise RuntimeError(
+                f"SDXL refiner did not return a PIL Image. Got: {type(refined_image_pil)}"
+            )
 
         return ImageRecord(
             image=refined_image_pil,
@@ -771,15 +842,25 @@ class SDXLReplicate(TextToImageClient):
 
         try:
             # replicate.async_run returns a list of output URLs or direct data
-            replicate_response = await replicate.async_run(self.model, input=final_parameters)
+            replicate_response = await replicate.async_run(
+                self.model, input=final_parameters
+            )
         except Exception as e:
             logger.error(f"Error calling Replicate API for SDXL: {e!s}")
             raise RuntimeError(f"Replicate API call failed for SDXL: {e!s}") from e
 
-        if not replicate_response or not isinstance(replicate_response, list) or not replicate_response[0]:
-            raise RuntimeError(f"Replicate API for SDXL returned an unexpected response: {replicate_response}")
+        if (
+            not replicate_response
+            or not isinstance(replicate_response, list)
+            or not replicate_response[0]
+        ):
+            raise RuntimeError(
+                f"Replicate API for SDXL returned an unexpected response: {replicate_response}"
+            )
 
-        output_image_url = replicate_response[0]  # Assuming the first item is the image URL
+        output_image_url = replicate_response[
+            0
+        ]  # Assuming the first item is the image URL
 
         # Fetch the image from the URL
         timeout = aiohttp.ClientTimeout(total=300.0)  # Timeout for fetching image
@@ -851,13 +932,21 @@ class SD(TextToImageClient):
         }
 
         try:
-            replicate_output = await replicate.async_run(self.model, input=final_parameters)
+            replicate_output = await replicate.async_run(
+                self.model, input=final_parameters
+            )
         except Exception as e:
             logger.error(f"Error calling Replicate API for SD 2.1: {e!s}")
             raise RuntimeError(f"Replicate API call failed for SD 2.1: {e!s}") from e
 
-        if not replicate_output or not isinstance(replicate_output, list) or not replicate_output[0]:
-            raise RuntimeError(f"Replicate API for SD 2.1 returned an unexpected response: {replicate_output}")
+        if (
+            not replicate_output
+            or not isinstance(replicate_output, list)
+            or not replicate_output[0]
+        ):
+            raise RuntimeError(
+                f"Replicate API for SD 2.1 returned an unexpected response: {replicate_output}"
+            )
 
         output_image_url = replicate_output[0]
 
@@ -896,7 +985,8 @@ class DALLE(TextToImageClient):
     async def generate_image(
         self,
         text: str,
-        negative_prompt: str | None = "",  # Note: DALL-E 3 doesn't directly support negative_prompt via API
+        negative_prompt: str
+        | None = "",  # Note: DALL-E 3 doesn't directly support negative_prompt via API
         size: str = "1024x1024",  # Supported DALL-E 3 sizes
         style: str = "natural",  # "natural" or "vivid"
         quality: str = "standard",  # "standard" or "hd"
@@ -970,7 +1060,9 @@ class DALLE(TextToImageClient):
         response_json = response.json()
 
         if "data" not in response_json or len(response_json["data"]) == 0:
-            raise RuntimeError(f"Azure DALL-E 3 API response did not include 'data' array. Response: {response_json}")
+            raise RuntimeError(
+                f"Azure DALL-E 3 API response did not include 'data' array. Response: {response_json}"
+            )
 
         image_data_item = response_json["data"][0]
         revised_prompt_from_api = image_data_item.get("revised_prompt")
@@ -990,7 +1082,9 @@ class DALLE(TextToImageClient):
             pil_image = Image.open(BytesIO(img_response.content))
             image_record = ImageRecord(image=pil_image)
         else:
-            raise ValueError(f"Azure DALL-E 3 API response missing expected image data. Got: {image_data_item}")
+            raise ValueError(
+                f"Azure DALL-E 3 API response missing expected image data. Got: {image_data_item}"
+            )
 
         # Store the actual prompt sent and any revised prompt
         request_data["prompt_sent_to_api"] = prompt_for_api
@@ -1040,7 +1134,9 @@ EXPENSIVE_IMAGE_CLIENTS: list[Type[TextToImageClient]] = [
 ]
 
 # Complete registry
-ALL_IMAGE_CLIENTS: list[Type[TextToImageClient]] = CHEAP_IMAGE_CLIENTS + EXPENSIVE_IMAGE_CLIENTS
+ALL_IMAGE_CLIENTS: list[Type[TextToImageClient]] = (
+    CHEAP_IMAGE_CLIENTS + EXPENSIVE_IMAGE_CLIENTS
+)
 
 # Backward compatibility - ImageClients now references the full registry
 # NOTE: Tests and new code should use CHEAP_IMAGE_CLIENTS or ALL_IMAGE_CLIENTS directly
@@ -1073,16 +1169,22 @@ class BatchImageGenerator(BaseModel):
             concurrent image generation. Corrected type hint for task list.
     """
 
-    generators: Sequence[Type[TextToImageClient]] = Field(  # Type hint for list of classes
-        default_factory=lambda: ImageClients,  # Use factory for mutable default
-        description="A sequence of TextToImageClient classes to use for generation.",
+    generators: Sequence[Type[TextToImageClient]] = (
+        Field(  # Type hint for list of classes
+            default_factory=lambda: ImageClients,  # Use factory for mutable default
+            description="A sequence of TextToImageClient classes to use for generation.",
+        )
     )
-    save_path: CloudPath | Path | None = Field(  # Allow None initially, will default in validator
-        default=None,
-        description="Base path to save generated images. Defaults to current Buttermilk run's save directory.",
+    save_path: CloudPath | Path | None = (
+        Field(  # Allow None initially, will default in validator
+            default=None,
+            description="Base path to save generated images. Defaults to current Buttermilk run's save directory.",
+        )
     )
     _clients: dict[str, TextToImageClient] = PrivateAttr(default_factory=dict)
-    _tasks: list[asyncio.Task[ImageRecord]] = PrivateAttr(default_factory=list)  # More specific task type
+    _tasks: list[asyncio.Task[ImageRecord]] = PrivateAttr(
+        default_factory=list
+    )  # More specific task type
 
     @field_validator("save_path", mode="before")
     @classmethod
@@ -1106,17 +1208,22 @@ class BatchImageGenerator(BaseModel):
             if bm.session_info.save_dir:
                 return (
                     CloudPath(bm.session_info.save_dir)
-                    if isinstance(bm.session_info.save_dir, str) and bm.session_info.save_dir.startswith(("gs://", "s3://", "az://"))
+                    if isinstance(bm.session_info.save_dir, str)
+                    and bm.session_info.save_dir.startswith(("gs://", "s3://", "az://"))
                     else Path(bm.session_info.save_dir)
                 )  # type: ignore
             else:
                 # Fallback to a temporary directory if bm.session_info.save_dir is also None
                 # This ensures save_path is always set.
                 temp_dir = Path(mkdtemp(prefix="buttermilk_imagegen_batch_"))
-                logger.warning(f"No save_path provided and bm.session_info.save_dir not set. Defaulting to temporary directory: {temp_dir}")
+                logger.warning(
+                    f"No save_path provided and bm.session_info.save_dir not set. Defaulting to temporary directory: {temp_dir}"
+                )
                 return temp_dir
         if isinstance(v, str):
-            return CloudPath(v) if v.startswith(("gs://", "s3://", "az://")) else Path(v)
+            return (
+                CloudPath(v) if v.startswith(("gs://", "s3://", "az://")) else Path(v)
+            )
         if isinstance(v, (CloudPath, Path)):
             return v
         raise ValueError(
@@ -1128,10 +1235,16 @@ class BatchImageGenerator(BaseModel):
 
         Populates `self._clients` with instantiated clients, keyed by their class name.
         """
-        self._clients = {gen_class.__name__: gen_class() for gen_class in self.generators}
-        logger.info(f"Initialized image generator clients: {list(self._clients.keys())}")
+        self._clients = {
+            gen_class.__name__: gen_class() for gen_class in self.generators
+        }
+        logger.info(
+            f"Initialized image generator clients: {list(self._clients.keys())}"
+        )
 
-    def _parse_batch_prompts(self, inputs: Sequence[str | dict[str, str]]) -> list[dict[str, Any]]:
+    def _parse_batch_prompts(
+        self, inputs: Sequence[str | dict[str, str]]
+    ) -> list[dict[str, Any]]:
         """Parse and validate batch input prompts into a standardized format.
 
         Args:
@@ -1149,7 +1262,9 @@ class BatchImageGenerator(BaseModel):
                 prompts_to_process.append({"text": prompt_item, "id": str(idx)})
             elif isinstance(prompt_item, dict):
                 if "text" not in prompt_item:
-                    logger.warning(f"Prompt dictionary at index {idx} is missing 'text' key. Skipping.")
+                    logger.warning(
+                        f"Prompt dictionary at index {idx} is missing 'text' key. Skipping."
+                    )
                     continue
                 prompts_to_process.append(
                     {
@@ -1159,7 +1274,9 @@ class BatchImageGenerator(BaseModel):
                     }
                 )
             else:
-                raise ValueError(f"Invalid prompt type at index {idx}: expected str or dict, got {type(prompt_item)}.")
+                raise ValueError(
+                    f"Invalid prompt type at index {idx}: expected str or dict, got {type(prompt_item)}."
+                )
         return prompts_to_process
 
     def _create_summary_record(self, image_result: ImageRecord) -> dict[str, Any]:
@@ -1176,14 +1293,18 @@ class BatchImageGenerator(BaseModel):
             "original_prompt": image_result.prompt,
             "negative_prompt": image_result.negative_prompt,
             "model_used": image_result.model,
-            "image_uri": image_result.uri if (image_result.image and image_result.uri) else None,
+            "image_uri": image_result.uri
+            if (image_result.image and image_result.uri)
+            else None,
             "generation_parameters": image_result.parameters,
             "error": image_result.error,
         }
 
     async def abatch(
         self,
-        inputs: Sequence[str | dict[str, str]],  # Changed 'input' to 'inputs' to avoid builtin clash
+        inputs: Sequence[
+            str | dict[str, str]
+        ],  # Changed 'input' to 'inputs' to avoid builtin clash
         n: int = 1,
     ) -> AsyncGenerator[ImageRecord, None]:
         """Generates images asynchronously from a sequence of prompts using multiple models.
@@ -1209,7 +1330,9 @@ class BatchImageGenerator(BaseModel):
         if not self._clients:  # Ensure clients are initialized
             self.init_clients()
         if not self._clients:
-            logger.error("No image generator clients initialized for batch generation. Aborting.")
+            logger.error(
+                "No image generator clients initialized for batch generation. Aborting."
+            )
             return
 
         # Create a unique subdirectory for this batch run
@@ -1237,15 +1360,21 @@ class BatchImageGenerator(BaseModel):
                     try:
                         # Construct a unique save path for each image
                         img_filename = f"{prompt_id}_{client_instance.prefix}{i_run}_{ShortUUID().uuid()[:6]}.png"
-                        img_full_save_path = (batch_save_path / img_filename).as_posix()  # Use as_posix for string path
+                        img_full_save_path = (
+                            batch_save_path / img_filename
+                        ).as_posix()  # Use as_posix for string path
 
                         task_params = {
                             "text": current_prompt_info["text"],
-                            "negative_prompt": current_prompt_info.get("negative_prompt", ""),
+                            "negative_prompt": current_prompt_info.get(
+                                "negative_prompt", ""
+                            ),
                             "save_path": img_full_save_path,
                             # Add any other specific params from current_prompt_info if needed
                         }
-                        self._tasks.append(asyncio.create_task(client_instance.generate(**task_params)))
+                        self._tasks.append(
+                            asyncio.create_task(client_instance.generate(**task_params))
+                        )
                     except Exception as e:
                         logger.error(
                             f"Error adding task: generate image from {client_name}, run {i_run}, prompt ID {prompt_id}. Error: {e!s}",
@@ -1262,10 +1391,15 @@ class BatchImageGenerator(BaseModel):
 
                 # Collect summary information for info.json
                 if image_result:
-                    generated_records_summary.append(self._create_summary_record(image_result))
+                    generated_records_summary.append(
+                        self._create_summary_record(image_result)
+                    )
 
             except Exception as e:  # Catch errors from await task itself
-                logger.error(f"Error collecting result from an image generation task: {e!s}", exc_info=True)
+                logger.error(
+                    f"Error collecting result from an image generation task: {e!s}",
+                    exc_info=True,
+                )
                 # Optionally add an error entry to summary here if task details can be inferred
                 continue
 
@@ -1279,6 +1413,8 @@ class BatchImageGenerator(BaseModel):
                 f"Summary saved to {info_json_path.as_posix()}"
             )
         except Exception as e:
-            logger.error(f"Failed to save batch image generation summary to {info_json_path}: {e!s}")
+            logger.error(
+                f"Failed to save batch image generation summary to {info_json_path}: {e!s}"
+            )
 
         self._tasks.clear()  # Clear tasks for next batch run

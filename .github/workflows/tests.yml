@@ -7,12 +7,12 @@ on:
   workflow_dispatch:
     inputs:
       run_integration_tests:
-        description: 'Run integration tests'
+        description: "Run integration tests"
         required: false
         default: false
         type: boolean
 env:
-  PYTHON_VERSION: '3.12'
+  PYTHON_VERSION: "3.12"
 concurrency:
   group: tests-${{ github.ref }}
   cancel-in-progress: true

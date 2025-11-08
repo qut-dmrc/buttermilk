@@ -9,7 +9,9 @@ from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 
 
-def pydantic_to_bigquery_schema(model_class: type[BaseModel], extra_fields: List[Dict[str, str]] = None) -> List[bigquery.SchemaField]:
+def pydantic_to_bigquery_schema(
+    model_class: type[BaseModel], extra_fields: List[Dict[str, str]] = None
+) -> List[bigquery.SchemaField]:
     """Convert a Pydantic model to BigQuery schema fields.
 
     Args:
@@ -24,7 +26,13 @@ def pydantic_to_bigquery_schema(model_class: type[BaseModel], extra_fields: List
     # Add extra fields first (these are typically required metadata)
     if extra_fields:
         for field in extra_fields:
-            schema_fields.append(bigquery.SchemaField(name=field["name"], field_type=field["type"], mode=field.get("mode", "NULLABLE")))
+            schema_fields.append(
+                bigquery.SchemaField(
+                    name=field["name"],
+                    field_type=field["type"],
+                    mode=field.get("mode", "NULLABLE"),
+                )
+            )
 
     # Process Pydantic model fields
     for field_name, field_info in model_class.model_fields.items():
@@ -43,7 +51,9 @@ def pydantic_to_bigquery_schema(model_class: type[BaseModel], extra_fields: List
     return schema_fields
 
 
-def _convert_pydantic_field_to_bq(field_name: str, field_info: FieldInfo) -> bigquery.SchemaField:
+def _convert_pydantic_field_to_bq(
+    field_name: str, field_info: FieldInfo
+) -> bigquery.SchemaField:
     """Convert a single Pydantic field to BigQuery SchemaField."""
 
     # Get the field type
@@ -98,9 +108,16 @@ def _convert_pydantic_field_to_bq(field_name: str, field_info: FieldInfo) -> big
     if field_name == "record_id":
         mode = "REQUIRED"
     else:
-        mode = "NULLABLE" if is_optional or field_info.default is not None else "REQUIRED"
+        mode = (
+            "NULLABLE" if is_optional or field_info.default is not None else "REQUIRED"
+        )
 
-    return bigquery.SchemaField(name=field_name, field_type=bq_type, mode=mode, description=field_info.description)
+    return bigquery.SchemaField(
+        name=field_name,
+        field_type=bq_type,
+        mode=mode,
+        description=field_info.description,
+    )
 
 
 def get_record_bigquery_schema() -> List[bigquery.SchemaField]:

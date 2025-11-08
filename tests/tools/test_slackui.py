@@ -68,7 +68,9 @@ async def test_slack_ui_agent_initialization(slack_ui_agent):
     # Mock the register_chat_thread_handler to avoid deep mocking of Slack app
     with patch.object(slack_ui_agent, "register_chat_thread_handler"):
         # The agent registers handlers internally during initialization
-        await slack_ui_agent.initialize(callback_to_groupchat=callback_to_groupchat, session_id="test-session-123")
+        await slack_ui_agent.initialize(
+            callback_to_groupchat=callback_to_groupchat, session_id="test-session-123"
+        )
 
     # Verify callback was set
     assert slack_ui_agent.callback_to_groupchat == callback_to_groupchat
@@ -203,7 +205,9 @@ async def test_update_existing_input_message(slack_ui_agent):
         mock_confirm.return_value = {"text": "Confirm?", "blocks": []}
 
         # Mock send_to_thread to avoid actual API calls
-        with patch.object(slack_ui_agent, "send_to_thread", new_callable=AsyncMock) as mock_send:
+        with patch.object(
+            slack_ui_agent, "send_to_thread", new_callable=AsyncMock
+        ) as mock_send:
             mock_send.return_value = MagicMock(data={"ts": "message_ts"})
 
             await slack_ui_agent._request_input(message)
@@ -233,7 +237,9 @@ async def test_process_method(slack_ui_agent):
     assert result is None
 
 
-@pytest.mark.skip(reason="register_chat_thread_handler is a method, not a module function - test needs refactoring")
+@pytest.mark.skip(
+    reason="register_chat_thread_handler is a method, not a module function - test needs refactoring"
+)
 def test_register_chat_thread_handler():
     """Test the registration of Slack thread handlers."""
     thread_ts = "test_thread"
@@ -250,7 +256,9 @@ def test_register_chat_thread_handler():
     assert agent.app.action.call_count == 2  # confirm and cancel actions
 
 
-@pytest.mark.skip(reason="register_chat_thread_handler function doesn't exist in slackthreadchat module")
+@pytest.mark.skip(
+    reason="register_chat_thread_handler function doesn't exist in slackthreadchat module"
+)
 @pytest.mark.anyio
 async def test_handle_confirm_action():
     """Test the confirm action handler function."""

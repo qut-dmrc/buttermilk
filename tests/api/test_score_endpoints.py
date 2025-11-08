@@ -32,14 +32,21 @@ class TestDataService:
             # Create a proper mock record with actual values
             from buttermilk._core.types import Record
 
-            mock_record = Record(record_id="test_record_1", title="Test Record", content="Test content", metadata={})
+            mock_record = Record(
+                record_id="test_record_1",
+                title="Test Record",
+                content="Test content",
+                metadata={},
+            )
 
             mock_storage = Mock()
             mock_storage.get_record_by_id = Mock(return_value=mock_record)
 
             real_bm.get_storage = Mock(return_value=mock_storage)
 
-            result = await DataService.get_record_by_id("test_record_1", "test_flow", real_flow_runner)
+            result = await DataService.get_record_by_id(
+                "test_record_1", "test_flow", real_flow_runner
+            )
 
             assert result is not None
             assert result.record_id == "test_record_1"
@@ -54,7 +61,9 @@ class TestDataService:
 
             real_bm.get_storage = Mock(return_value=mock_storage)
 
-            result = await DataService.get_record_by_id("nonexistent", "test_flow", real_flow_runner)
+            result = await DataService.get_record_by_id(
+                "nonexistent", "test_flow", real_flow_runner
+            )
 
             assert result is None
 
@@ -72,7 +81,12 @@ class TestDataService:
 
             real_bm.get_storage = Mock(return_value=mock_storage)
 
-            result = await DataService.get_records_for_flow("test_flow", real_flow_runner, dataset_key="test_dataset", include_scores=False)
+            result = await DataService.get_records_for_flow(
+                "test_flow",
+                real_flow_runner,
+                dataset_key="test_dataset",
+                include_scores=False,
+            )
 
             assert len(result) == 1
             assert result[0].record_id == "test_record_1"
@@ -96,7 +110,12 @@ class TestDataService:
             # This test will fail until that feature is implemented
             # For now, just test that it doesn't crash
             try:
-                await DataService.get_records_for_flow("test_flow", real_flow_runner, dataset_key="test_dataset", include_scores=True)
+                await DataService.get_records_for_flow(
+                    "test_flow",
+                    real_flow_runner,
+                    dataset_key="test_dataset",
+                    include_scores=True,
+                )
                 # If implemented, these assertions would apply:
                 # assert len(result) == 1
                 # assert result[0].record_id == "test_record_1"
@@ -111,14 +130,27 @@ class TestDataService:
         with pytest.MonkeyPatch().context() as m:
             # Mock empty result from query
             mock_query_runner = Mock()
-            mock_query_runner.run_query = Mock(return_value=[])  # Empty list, not DataFrame
+            mock_query_runner.run_query = Mock(
+                return_value=[]
+            )  # Empty list, not DataFrame
 
-            m.setattr("buttermilk.api.services.data_service.QueryRunner", lambda bq_client: mock_query_runner)
+            m.setattr(
+                "buttermilk.api.services.data_service.QueryRunner",
+                lambda bq_client: mock_query_runner,
+            )
 
             # Setup mock flow with save config
-            real_flow_runner.flows["test_flow"].parameters = {"save": {"type": "bigquery", "dataset_id": "test_dataset", "table_id": "test_table"}}
+            real_flow_runner.flows["test_flow"].parameters = {
+                "save": {
+                    "type": "bigquery",
+                    "dataset_id": "test_dataset",
+                    "table_id": "test_table",
+                }
+            }
 
-            result = await DataService.get_scores_for_record("test_record", "test_flow", real_flow_runner)
+            result = await DataService.get_scores_for_record(
+                "test_record", "test_flow", real_flow_runner
+            )
 
             # Result should be an empty list
             assert isinstance(result, list)
@@ -138,7 +170,14 @@ class TestDataService:
                     "call_id": "call1",
                     "timestamp": datetime.datetime.now(),
                     "agent_info": json.dumps({"role": "JUDGE", "name": "GPT-4"}),
-                    "inputs": json.dumps({"inputs": {}, "parameters": {}, "context": [], "records": {"record_id": "test_record"}}),
+                    "inputs": json.dumps(
+                        {
+                            "inputs": {},
+                            "parameters": {},
+                            "context": [],
+                            "records": {"record_id": "test_record"},
+                        }
+                    ),
                     "outputs": {"violating": True, "confidence": "high"},
                     "metadata": json.dumps({}),
                     "session_info": json.dumps({}),
@@ -152,16 +191,29 @@ class TestDataService:
             mock_query_runner = Mock()
             mock_query_runner.run_query = Mock(return_value=mock_rows)
 
-            m.setattr("buttermilk.api.services.data_service.QueryRunner", lambda bq_client: mock_query_runner)
+            m.setattr(
+                "buttermilk.api.services.data_service.QueryRunner",
+                lambda bq_client: mock_query_runner,
+            )
 
             # Setup mock flow with save config
-            real_flow_runner.flows["test_flow"].parameters = {"save": {"type": "bigquery", "dataset_id": "test_dataset", "table_id": "test_table"}}
+            real_flow_runner.flows["test_flow"].parameters = {
+                "save": {
+                    "type": "bigquery",
+                    "dataset_id": "test_dataset",
+                    "table_id": "test_table",
+                }
+            }
 
-            result = await DataService.get_scores_for_record("test_record", "test_flow", real_flow_runner)
+            result = await DataService.get_scores_for_record(
+                "test_record", "test_flow", real_flow_runner
+            )
 
             # Result should be a list of ExecutionTrace objects
             assert isinstance(result, list)
-            assert len(result) >= 0  # May be 0 if reconstruction fails, which is ok for this test
+            assert (
+                len(result) >= 0
+            )  # May be 0 if reconstruction fails, which is ok for this test
 
     @pytest.mark.anyio
     async def test_get_responses_for_record(self, real_flow_runner):
@@ -177,8 +229,19 @@ class TestDataService:
                     "call_id": "call1",
                     "timestamp": datetime.datetime.now(),
                     "agent_info": json.dumps({"role": "JUDGE", "name": "GPT-4"}),
-                    "inputs": json.dumps({"inputs": {}, "parameters": {}, "context": [], "records": {"record_id": "test_record"}}),
-                    "outputs": {"conclusion": "This content violates guidelines", "violating": True, "confidence": "high"},
+                    "inputs": json.dumps(
+                        {
+                            "inputs": {},
+                            "parameters": {},
+                            "context": [],
+                            "records": {"record_id": "test_record"},
+                        }
+                    ),
+                    "outputs": {
+                        "conclusion": "This content violates guidelines",
+                        "violating": True,
+                        "confidence": "high",
+                    },
                     "metadata": json.dumps({}),
                     "session_info": json.dumps({}),
                     "parent_call_id": None,
@@ -191,16 +254,29 @@ class TestDataService:
             mock_query_runner = Mock()
             mock_query_runner.run_query = Mock(return_value=mock_rows)
 
-            m.setattr("buttermilk.api.services.data_service.QueryRunner", lambda bq_client: mock_query_runner)
+            m.setattr(
+                "buttermilk.api.services.data_service.QueryRunner",
+                lambda bq_client: mock_query_runner,
+            )
 
             # Setup mock flow with save config
-            real_flow_runner.flows["test_flow"].parameters = {"save": {"type": "bigquery", "dataset_id": "test_dataset", "table_id": "test_table"}}
+            real_flow_runner.flows["test_flow"].parameters = {
+                "save": {
+                    "type": "bigquery",
+                    "dataset_id": "test_dataset",
+                    "table_id": "test_table",
+                }
+            }
 
-            result = await DataService.get_responses_for_record("test_record", "test_flow", real_flow_runner)
+            result = await DataService.get_responses_for_record(
+                "test_record", "test_flow", real_flow_runner
+            )
 
             # Result should be a list of ExecutionTrace objects
             assert isinstance(result, list)
-            assert len(result) >= 0  # May be 0 if reconstruction fails, which is ok for this test
+            assert (
+                len(result) >= 0
+            )  # May be 0 if reconstruction fails, which is ok for this test
 
 
 class TestScoreEndpointsIntegration:
@@ -237,7 +313,9 @@ class TestScoreEndpointsIntegration:
         broken_flow_runner = Mock()
         broken_flow_runner.flows = {}  # Empty flows dict
 
-        result = await DataService.get_scores_for_record("test", "flow", broken_flow_runner)
+        result = await DataService.get_scores_for_record(
+            "test", "flow", broken_flow_runner
+        )
         # Should return empty list instead of crashing
         assert isinstance(result, list)
         assert len(result) == 0
@@ -257,6 +335,11 @@ class TestScoreAPIEndpoints:
         assert "/api/flows/{flow}/records/{record_id}" in routes
         assert "/api/flows/{flow}/datasets/{dataset}/records/{record_id}" in routes
         assert "/api/flows/{flow}/records/{record_id}/scores" in routes
-        assert "/api/flows/{flow}/datasets/{dataset}/records/{record_id}/scores" in routes
+        assert (
+            "/api/flows/{flow}/datasets/{dataset}/records/{record_id}/scores" in routes
+        )
         assert "/api/flows/{flow}/records/{record_id}/responses" in routes
-        assert "/api/flows/{flow}/datasets/{dataset}/records/{record_id}/responses" in routes
+        assert (
+            "/api/flows/{flow}/datasets/{dataset}/records/{record_id}/responses"
+            in routes
+        )

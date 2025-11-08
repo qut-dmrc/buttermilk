@@ -16,7 +16,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from buttermilk import logger
-from buttermilk.monitoring import MetricsCollector, SimpleHealthMonitor, get_metrics_collector, get_simple_health_monitor
+from buttermilk.monitoring import (
+    MetricsCollector,
+    SimpleHealthMonitor,
+    get_metrics_collector,
+    get_simple_health_monitor,
+)
 
 # Create simplified monitoring router
 monitoring_router = APIRouter(prefix="/monitoring", tags=["Basic Monitoring"])
@@ -56,7 +61,9 @@ def get_health_monitor() -> SimpleHealthMonitor:
 
 # Basic health check endpoints
 @monitoring_router.get("/health", response_model=SimpleHealthCheckResponse)
-async def health_check(health_monitor: SimpleHealthMonitor = Depends(get_health_monitor)):
+async def health_check(
+    health_monitor: SimpleHealthMonitor = Depends(get_health_monitor),
+):
     """
     Get basic system health status.
 
@@ -78,7 +85,9 @@ async def health_check(health_monitor: SimpleHealthMonitor = Depends(get_health_
 
 
 @monitoring_router.get("/fatal-errors")
-async def check_fatal_errors(health_monitor: SimpleHealthMonitor = Depends(get_health_monitor)):
+async def check_fatal_errors(
+    health_monitor: SimpleHealthMonitor = Depends(get_health_monitor),
+):
     """
     Check for fatal errors that require system exit.
 
@@ -96,7 +105,10 @@ async def check_fatal_errors(health_monitor: SimpleHealthMonitor = Depends(get_h
 
 
 @monitoring_router.post("/fatal-errors")
-async def report_fatal_error(error_message: str, health_monitor: SimpleHealthMonitor = Depends(get_health_monitor)):
+async def report_fatal_error(
+    error_message: str,
+    health_monitor: SimpleHealthMonitor = Depends(get_health_monitor),
+):
     """
     Report a fatal error that should cause system exit.
 
@@ -104,7 +116,11 @@ async def report_fatal_error(error_message: str, health_monitor: SimpleHealthMon
     """
     try:
         health_monitor.report_fatal_error(error_message)
-        return {"message": "Fatal error reported", "error_message": error_message, "timestamp": datetime.now(UTC).isoformat()}
+        return {
+            "message": "Fatal error reported",
+            "error_message": error_message,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
     except Exception as e:
         logger.error("Failed to report fatal error", error=e)
         raise HTTPException(status_code=500, detail="Failed to report fatal error")
@@ -112,7 +128,9 @@ async def report_fatal_error(error_message: str, health_monitor: SimpleHealthMon
 
 # Basic metrics endpoints
 @monitoring_router.get("/metrics/basic", response_model=BasicMetricsResponse)
-async def get_basic_metrics(health_monitor: SimpleHealthMonitor = Depends(get_health_monitor)):
+async def get_basic_metrics(
+    health_monitor: SimpleHealthMonitor = Depends(get_health_monitor),
+):
     """
     Get basic system metrics.
 
@@ -135,14 +153,20 @@ async def get_basic_metrics(health_monitor: SimpleHealthMonitor = Depends(get_he
 
 # Flow responsiveness checks
 @monitoring_router.get("/flows/{flow_name}/responsiveness")
-async def check_flow_responsiveness(flow_name: str, timeout_seconds: int = 300, health_monitor: SimpleHealthMonitor = Depends(get_health_monitor)):
+async def check_flow_responsiveness(
+    flow_name: str,
+    timeout_seconds: int = 300,
+    health_monitor: SimpleHealthMonitor = Depends(get_health_monitor),
+):
     """
     Check if a flow is responsive.
 
     Returns whether the flow is responding within the specified timeout.
     """
     try:
-        is_responsive = health_monitor.check_flow_responsiveness(flow_name, timeout_seconds)
+        is_responsive = health_monitor.check_flow_responsiveness(
+            flow_name, timeout_seconds
+        )
 
         return {
             "flow_name": flow_name,
@@ -151,13 +175,19 @@ async def check_flow_responsiveness(flow_name: str, timeout_seconds: int = 300, 
             "timestamp": datetime.now(UTC).isoformat(),
         }
     except Exception as e:
-        logger.error("Failed to check flow responsiveness", flow_name=flow_name, error=e)
-        raise HTTPException(status_code=500, detail="Failed to check flow responsiveness")
+        logger.error(
+            "Failed to check flow responsiveness", flow_name=flow_name, error=e
+        )
+        raise HTTPException(
+            status_code=500, detail="Failed to check flow responsiveness"
+        )
 
 
 @monitoring_router.get("/sessions/{session_id}/ui-timeout")
 async def check_interactive_ui_timeout(
-    session_id: str, timeout_seconds: int = 1800, health_monitor: SimpleHealthMonitor = Depends(get_health_monitor)
+    session_id: str,
+    timeout_seconds: int = 1800,
+    health_monitor: SimpleHealthMonitor = Depends(get_health_monitor),
 ):
     """
     Check if interactive flow has been without UI for too long.
@@ -165,11 +195,20 @@ async def check_interactive_ui_timeout(
     Returns whether the interactive session is still active or stuck without UI.
     """
     try:
-        is_ui_active = health_monitor.check_interactive_flow_ui_timeout(session_id, timeout_seconds)
+        is_ui_active = health_monitor.check_interactive_flow_ui_timeout(
+            session_id, timeout_seconds
+        )
 
-        return {"session_id": session_id, "ui_active": is_ui_active, "timeout_seconds": timeout_seconds, "timestamp": datetime.now(UTC).isoformat()}
+        return {
+            "session_id": session_id,
+            "ui_active": is_ui_active,
+            "timeout_seconds": timeout_seconds,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
     except Exception as e:
-        logger.error("Failed to check UI timeout for session", session_id=session_id, error=e)
+        logger.error(
+            "Failed to check UI timeout for session", session_id=session_id, error=e
+        )
         raise HTTPException(status_code=500, detail="Failed to check UI timeout")
 
 
@@ -190,4 +229,6 @@ async def get_monitoring_status():
         }
     except Exception as e:
         logger.error("Failed to get monitoring status", error=e)
-        raise HTTPException(status_code=500, detail="Failed to retrieve monitoring status")
+        raise HTTPException(
+            status_code=500, detail="Failed to retrieve monitoring status"
+        )

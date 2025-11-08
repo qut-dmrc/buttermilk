@@ -6,16 +6,16 @@
  */
 
 interface BackendHealthCache {
-	available: boolean;
-	lastCheck: number;
-	error?: string;
+  available: boolean
+  lastCheck: number
+  error?: string
 }
 
 // Cache backend health status for 30 seconds to avoid excessive health checks
-const CACHE_DURATION = 30 * 1000; // 30 seconds
-const HEALTH_CHECK_TIMEOUT = 3000; // 3 seconds
+const CACHE_DURATION = 30 * 1000 // 30 seconds
+const HEALTH_CHECK_TIMEOUT = 3000 // 3 seconds
 
-let healthCache: BackendHealthCache | null = null;
+let healthCache: BackendHealthCache | null = null
 
 /**
  * Check if backend is available by testing the session endpoint
@@ -26,43 +26,43 @@ let healthCache: BackendHealthCache | null = null;
  * @returns Promise resolving to true if backend is available
  */
 export async function checkBackendHealth(useCache: boolean = true, fetchFn?: typeof fetch): Promise<boolean> {
-	// Return cached result if valid and requested
-	if (useCache && healthCache && (Date.now() - healthCache.lastCheck) < CACHE_DURATION) {
-		return healthCache.available;
-	}
+  // Return cached result if valid and requested
+  if (useCache && healthCache && (Date.now() - healthCache.lastCheck) < CACHE_DURATION) {
+    return healthCache.available
+  }
 
-	try {
-		const useFetch = fetchFn || fetch;
-		const response = await useFetch('/api/session', {
-			method: 'GET',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT)
-		});
+  try {
+    const useFetch = fetchFn || fetch
+    const response = await useFetch("/api/session", {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT),
+    })
 
-		const available = response.ok;
+    const available = response.ok
 
-		// Update cache
-		healthCache = {
-			available,
-			lastCheck: Date.now(),
-			error: available ? undefined : `HTTP ${response.status}: ${response.statusText}`
-		};
+    // Update cache
+    healthCache = {
+      available,
+      lastCheck: Date.now(),
+      error: available ? undefined : `HTTP ${response.status}: ${response.statusText}`,
+    }
 
-		return available;
-	} catch (error) {
-		const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+    return available
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : "Unknown error"
 
-		// Update cache with error
-		healthCache = {
-			available: false,
-			lastCheck: Date.now(),
-			error: errorMsg
-		};
+    // Update cache with error
+    healthCache = {
+      available: false,
+      lastCheck: Date.now(),
+      error: errorMsg,
+    }
 
-		return false;
-	}
+    return false
+  }
 }
 
 /**
@@ -72,10 +72,10 @@ export async function checkBackendHealth(useCache: boolean = true, fetchFn?: typ
  * @returns boolean if cached data available, null otherwise
  */
 export function isBackendAvailable(): boolean | null {
-	if (!healthCache || (Date.now() - healthCache.lastCheck) >= CACHE_DURATION) {
-		return null; // No valid cached data
-	}
-	return healthCache.available;
+  if (!healthCache || (Date.now() - healthCache.lastCheck) >= CACHE_DURATION) {
+    return null // No valid cached data
+  }
+  return healthCache.available
 }
 
 /**
@@ -85,10 +85,10 @@ export function isBackendAvailable(): boolean | null {
  * @returns Error message if backend is unavailable, null if available or no cache
  */
 export function getBackendError(): string | null {
-	if (!healthCache || healthCache.available) {
-		return null;
-	}
-	return healthCache.error || 'Backend unavailable';
+  if (!healthCache || healthCache.available) {
+    return null
+  }
+  return healthCache.error || "Backend unavailable"
 }
 
 /**
@@ -96,7 +96,7 @@ export function getBackendError(): string | null {
  * Forces next health check to hit the network
  */
 export function clearBackendHealthCache(): void {
-	healthCache = null;
+  healthCache = null
 }
 
 /**
@@ -106,13 +106,13 @@ export function clearBackendHealthCache(): void {
  * @param available - Whether backend is available
  */
 export function logBackendStatus(context: string, available: boolean): void {
-	if (available) {
-		console.debug(`${context}: Backend available`);
-	} else {
-		const error = getBackendError();
-		console.log(`${context}: Backend unavailable${error ? ` (${error})` : ''}`);
-		console.warn(`${context}: Backend unavailable${error ? ` (${error})` : ''}`);
-	}
+  if (available) {
+    console.debug(`${context}: Backend available`)
+  } else {
+    const error = getBackendError()
+    console.log(`${context}: Backend unavailable${error ? ` (${error})` : ""}`)
+    console.warn(`${context}: Backend unavailable${error ? ` (${error})` : ""}`)
+  }
 }
 
 /**
@@ -122,9 +122,10 @@ export function logBackendStatus(context: string, available: boolean): void {
  * @returns Configured sessions directory path
  */
 export function getSessionsDir(): string {
-	// Use environment variable or fallback to default
-	// Use process.env for server-side (Node.js) or import.meta.env for client-side (Vite)
-	const sessionsDir = (typeof process !== 'undefined' ? process.env.SESSIONS_DIR : import.meta.env.SESSIONS_DIR) || 'data/sessions';
-	console.debug(`Using sessions directory: ${sessionsDir}`);
-	return sessionsDir;
+  // Use environment variable or fallback to default
+  // Use process.env for server-side (Node.js) or import.meta.env for client-side (Vite)
+  const sessionsDir = (typeof process !== "undefined" ? process.env.SESSIONS_DIR : import.meta.env.SESSIONS_DIR)
+    || "data/sessions"
+  console.debug(`Using sessions directory: ${sessionsDir}`)
+  return sessionsDir
 }

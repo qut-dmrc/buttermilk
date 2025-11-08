@@ -27,9 +27,9 @@ def test_score_template_with_missing_expected_shows_placeholder():
         parameters={},
         untrusted_inputs={
             "answers": [{"agent_id": "test", "result": "test result"}],
-            "criteria": ["test criterion"]
+            "criteria": ["test criterion"],
             # 'expected' is MISSING - this should trigger fail-fast
-        }
+        },
     )
 
     # CRITICAL ASSERTION: unfilled_vars should detect missing 'expected'
@@ -46,6 +46,5 @@ def test_score_template_with_missing_expected_shows_placeholder():
 
     # CRITICAL ASSERTION: Should NOT render as "Undefined"
     assert "Undefined" not in rendered, (
-        f"Should not render as 'Undefined' string, "
-        f"but found it in:\n{rendered}"
+        f"Should not render as 'Undefined' string, but found it in:\n{rendered}"
     )

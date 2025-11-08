@@ -93,12 +93,13 @@ Mode is inside RunConfig and loaded via Hydra config groups:
 class RunConfig(BaseModel):
     mode: RunMode = Field(
         default=RunMode.CONSOLE,
-        description="Execution mode (set via run=api, run=batch, etc.)"
+        description="Execution mode (set via run=api, run=batch, etc.)",
     )
     # All other execution params
     flow: str | None = None
     limit: int | None = None
     # ...
+
 
 class ButtermilkConfig(BaseModel):
     # Root level essentials only
@@ -113,6 +114,7 @@ class ButtermilkConfig(BaseModel):
 ```
 
 **Benefits**:
+
 - CLI uses Hydra config groups: `run=api` loads `conf/run/api.yaml`
 - Mode is part of the run configuration it controls
 - Each run config file (api.yaml, batch.yaml) has its own mode setting
@@ -147,6 +149,7 @@ class RunConfig(BaseModel):
 ```
 
 **Benefits**:
+
 - Single source for ALL execution parameters (including mode)
 - Clear separation: root = project essentials, run = execution
 - Easy to see what affects program behavior
@@ -161,19 +164,24 @@ Session is now directly accessible:
 class BMConfig(BaseModel):
     session_info: SessionInfo
 
+
 class ButtermilkConfig(BaseModel):
     bm: BMConfig  # Extra wrapper
 
+
 # Access: typed_cfg.bm.session_info
+
 
 # New structure
 class ButtermilkConfig(BaseModel):
     session: SessionInfo  # Direct
 
+
 # Access: typed_cfg.session
 ```
 
 **Benefits**:
+
 - Simpler structure, less nesting
 - More intuitive access pattern
 - Backward compatible via validator
@@ -188,12 +196,14 @@ class ButtermilkConfig(BaseModel):
     max_records: int | None = None
     max_jobs: int | None = None
 
+
 # New structure
 class RunConfig(BaseModel):
     limit: int | None = None  # Unified
 ```
 
 **Benefits**:
+
 - Single parameter for all limit scenarios
 - Clearer intent - how many things to process
 - Works for records, jobs, or any countable unit
@@ -217,12 +227,15 @@ def create_config_from_hydra(cfg: DictConfig) -> ButtermilkConfig:
 
     # Unify max_records/max_jobs -> limit
     if "max_records" in cfg_dict or "max_jobs" in cfg_dict:
-        cfg_dict["run"]["limit"] = cfg_dict.get("max_records") or cfg_dict.get("max_jobs")
+        cfg_dict["run"]["limit"] = cfg_dict.get("max_records") or cfg_dict.get(
+            "max_jobs"
+        )
 
     return ButtermilkConfig(**cfg_dict)
 ```
 
 **Benefits**:
+
 - Existing YAML configs continue to work
 - Incremental migration path
 - No breaking changes to deployed systems
@@ -232,6 +245,7 @@ def create_config_from_hydra(cfg: DictConfig) -> ButtermilkConfig:
 ### Run Configuration (`run_config.py`)
 
 **Run Mode Enum** (unchanged):
+
 ```python
 class RunMode(str, Enum):
     CONSOLE = "console"
@@ -246,6 +260,7 @@ class RunMode(str, Enum):
 ```
 
 **Run Config Class** (NEW - consolidated execution params):
+
 ```python
 class RunConfig(BaseModel):
     # Flow execution
@@ -266,13 +281,11 @@ class RunConfig(BaseModel):
     # Batch mode
     storage_config: dict | None = None
 
-    model_config = {
-        "extra": "allow",
-        "arbitrary_types_allowed": True
-    }
+    model_config = {"extra": "allow", "arbitrary_types_allowed": True}
 ```
 
 **Design Philosophy**:
+
 - Consolidates ALL execution parameters in one place
 - Clear defaults for each parameter
 - Mode determines which params are relevant
@@ -296,6 +309,7 @@ class PipelineConfig(BaseModel):
 ```
 
 **Benefits**:
+
 - Clear structure for pipeline stages
 - Helper methods for safe config access
 - Validation of concurrency and buffer sizes
@@ -332,6 +346,7 @@ class ButtermilkConfig(BaseModel):
 ```
 
 **Benefits**:
+
 - Clear root level: only universal essentials (no mode)
 - Single source for all execution params including mode (run config)
 - Mode loaded via Hydra config groups
@@ -353,12 +368,12 @@ job: test
 
 bm:
   session_info:
-    project_name: ${project_name}  # Interpolates
-    job: ${job}                    # Interpolates
+    project_name: ${project_name} # Interpolates
+    job: ${job} # Interpolates
 
 infrastructure:
   logging:
-    verbose: ${verbose}            # Interpolates
+    verbose: ${verbose} # Interpolates
 ```
 
 Pydantic receives the resolved values after Hydra processes interpolations.
@@ -406,14 +421,11 @@ match typed_cfg.run.mode:
         start_api_server(
             host=typed_cfg.run.host,
             port=typed_cfg.run.port,
-            workers=typed_cfg.run.workers
+            workers=typed_cfg.run.workers,
         )
     case RunMode.BATCH | RunMode.BATCH_RUN | RunMode.BATCH_ALL:
         # Unified limit parameter
-        process_batch(
-            flow=typed_cfg.run.flow,
-            limit=typed_cfg.run.limit
-        )
+        process_batch(flow=typed_cfg.run.flow, limit=typed_cfg.run.limit)
     case RunMode.PIPELINE:
         # Pipeline config in run
         run_pipeline(typed_cfg.run.pipeline)
@@ -507,6 +519,7 @@ bm.session_info.project_name
 ### Phase 1: Add Typed Models (Completed)
 
 ✅ Created typed models for:
+
 - Run configurations (all modes)
 - Pipeline configuration
 - Infrastructure configuration
@@ -537,6 +550,7 @@ Update `config_bootstrap.py` to work with typed configs:
 def get_run_mode(self) -> RunMode:
     """Get typed run mode."""
     from buttermilk._core.main_config import create_config_from_hydra
+
     typed_cfg = create_config_from_hydra(self.config)
     return typed_cfg.run.mode
 ```
@@ -544,6 +558,7 @@ def get_run_mode(self) -> RunMode:
 ### Phase 4: Testing (Next)
 
 Add tests for:
+
 - Configuration validation
 - Mode-specific behavior
 - Hydra integration
@@ -723,6 +738,7 @@ This ensures existing YAML configurations will continue to work while new config
 ### Verification:
 
 All tests pass successfully:
+
 - ✅ `tests/unit/test_bm_injection.py` - All 5 tests passing
 - ✅ `tests/runner/test_batch_cli.py` - All 9 tests passing
 - ✅ FlowRunner correctly loads from run.flows

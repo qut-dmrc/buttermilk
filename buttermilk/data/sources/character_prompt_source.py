@@ -49,7 +49,9 @@ class CharacterPromptSource(BaseModel):
         filtered = gen.reverse_mask(char, keep=self.mask_attributes)
 
         # Use provided scenarios or generate them
-        scenarios = self.scenarios if self.scenarios is not None else gen.generate_scenarios()
+        scenarios = (
+            self.scenarios if self.scenarios is not None else gen.generate_scenarios()
+        )
 
         session_id = bm.session_info.session_id
 

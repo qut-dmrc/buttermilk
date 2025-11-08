@@ -156,6 +156,7 @@ This specialized agent handles ALL testing scenarios including:
 # test_something.py in project root
 import json
 from my_module import MyClass
+
 obj = MyClass()
 result = obj.serialize()
 print("Success!")
@@ -182,6 +183,7 @@ print('Logging test complete')
 # tests/unit/test_something.py
 import pytest
 from my_module import MyClass
+
 
 def test_myclass_serialization():
     """Test that MyClass serializes correctly."""
@@ -409,6 +411,7 @@ These files affect multiple components and require MANDATORY impact analysis:
 @pytest.fixture
 def bm():
     return Buttermilk(config="minimal")  # BREAKS OTHER TESTS
+
 
 # ✅ RIGHT: Create specific fixture for your tests
 # tests/integration/test_cloud_logging.py

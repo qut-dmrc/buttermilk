@@ -12,8 +12,7 @@ from buttermilk.data.loaders import create_data_loader
 
 # Create data loader for OSB JSON file
 osb_config = DataSourceConfig(
-    type="file",
-    path="gs://prosocial-public/osb/03_osb_fulltext_summaries.json"
+    type="file", path="gs://prosocial-public/osb/03_osb_fulltext_summaries.json"
 )
 loader = create_data_loader(osb_config)
 records = list(loader)
@@ -29,7 +28,7 @@ vector_store = ChromaDBEmbeddings(
     collection_name="osb_cases",
     persist_directory="./osb_vectorstore",
     embedding_model="gemini-embedding-001",
-    dimensionality=3072
+    dimensionality=3072,
 )
 
 # Process documents
@@ -38,7 +37,7 @@ for record in records:
         record_id=record.record_id,
         title=f"OSB Case {record.record_id}",
         full_text=record.content,
-        metadata=record.metadata or {}
+        metadata=record.metadata or {},
     )
     await vector_store.process(input_doc)
 ```
@@ -50,7 +49,7 @@ for record in records:
 results = vector_store.collection.query(
     query_texts=["content moderation appeals"],
     n_results=5,
-    include=["documents", "metadatas", "distances"]
+    include=["documents", "metadatas", "distances"],
 )
 ```
 

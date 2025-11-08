@@ -6,18 +6,19 @@ $navbar-brand-font-size: 1.3rem;
 $nav-link-font-size: 1.3rem;
 
 body {
-	text-shadow: none;
+  text-shadow: none;
 }
 
 h1,
 h1 a {
-
-    font-family: "Orbitron", sans-serif;
-    color: rgb(243, 229, 0);
-	text-shadow: 2px -2px 0.1rem rgba(214, 51, 132, 0.921), -4px 4px 3rem rgba(214, 51, 132, 0.8);
-	a {
-		text-decoration: underline rgba(0, 184, 255, 1) solid 3px;
-	}
+  font-family: "Orbitron", sans-serif;
+  color: rgb(243, 229, 0);
+  text-shadow:
+    2px -2px 0.1rem rgba(214, 51, 132, 0.921),
+    -4px 4px 3rem rgba(214, 51, 132, 0.8);
+  a {
+    text-decoration: underline rgba(0, 184, 255, 1) solid 3px;
+  }
 }
 
 h2,
@@ -30,51 +31,53 @@ h5,
 h5 a,
 h6,
 h6 a {
-	a {
-		text-decoration: underline rgba(0, 184, 255, 1) solid 3px;
-	}
-	text-shadow:
-		rgba(214, 51, 132, 0.32) 1px -1px 6.4px,
-		rgba(243, 229, 0, 0.4) 1px -1px 2.4px;
-	text-size-adjust: 100%;
+  a {
+    text-decoration: underline rgba(0, 184, 255, 1) solid 3px;
+  }
+  text-shadow:
+    rgba(214, 51, 132, 0.32) 1px -1px 6.4px,
+    rgba(243, 229, 0, 0.4) 1px -1px 2.4px;
+  text-size-adjust: 100%;
 }
 
 .incorrect {
-	color: rgba(214, 51, 132, 0.921);
-	color: #CD5C5C;
+  color: rgba(214, 51, 132, 0.921);
+  color: #cd5c5c;
 }
 
 .correct {
-	color: rgba(243, 229, 0, 1);
-	color: #228B22;
+  color: rgba(243, 229, 0, 1);
+  color: #228b22;
 }
 
 .navbar.navbar-light {
-	.nav-item .nav-link {
-
-		font-family: "Orbitron", sans-serif;
-		font-size: $nav-link-font-size;
-		color: rgb(243, 229, 0);
-		text-shadow: 2px -2px 1px rgba(214, 51, 132, 0.921), -4px 4px 3rem rgba(214, 51, 132, 0.8);
-		text-transform: lowercase;
-	}
-	.glitch {
-		text-decoration: line-through rgba(26, 11, 53, 0.709) solid 0.2rem;
-		text-decoration-color: rgba(26, 11, 53, 0.7);
-		text-decoration-line: line-through;
-		text-decoration-style: solid;
-		text-decoration-thickness: 3.2px;
-		text-shadow: rgba(214, 51, 132, 0.92) 2px -2px 1px, rgba(214, 51, 132, 0.8) -4px 4px 48px;
-		text-size-adjust: 100%;
-		// &:hover {
-		// 	transform: translate(.4rem, -.2rem);
-		// }
-	}
+  .nav-item .nav-link {
+    font-family: "Orbitron", sans-serif;
+    font-size: $nav-link-font-size;
+    color: rgb(243, 229, 0);
+    text-shadow:
+      2px -2px 1px rgba(214, 51, 132, 0.921),
+      -4px 4px 3rem rgba(214, 51, 132, 0.8);
+    text-transform: lowercase;
+  }
+  .glitch {
+    text-decoration: line-through rgba(26, 11, 53, 0.709) solid 0.2rem;
+    text-decoration-color: rgba(26, 11, 53, 0.7);
+    text-decoration-line: line-through;
+    text-decoration-style: solid;
+    text-decoration-thickness: 3.2px;
+    text-shadow:
+      rgba(214, 51, 132, 0.92) 2px -2px 1px,
+      rgba(214, 51, 132, 0.8) -4px 4px 48px;
+    text-size-adjust: 100%;
+    // &:hover {
+    // 	transform: translate(.4rem, -.2rem);
+    // }
+  }
 }
-
 
 /* Make icons align properly */
 :global(.bi) {
-	vertical-align: -0.125em;
-	margin-right: 2px;
+  vertical-align: -0.125em;
+  margin-right: 2px;
 }

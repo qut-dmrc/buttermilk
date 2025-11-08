@@ -49,7 +49,7 @@ client = bm.llms.get_autogen_chat_client("gemini25flash")
 # Same interface for both wrappers
 result = await client.create(
     messages=[UserMessage(content="Hello!", source="user")],
-    schema=MySchema  # Optional structured output
+    schema=MySchema,  # Optional structured output
 )
 ```
 
@@ -248,7 +248,7 @@ LiteLLM uses specific model name formats. The `litellm_model` field in config al
     "configs": {
       "model": "gpt-4"
     },
-    "litellm_model": "azure/gpt-4",  // Override model name for both API calls and pricing
+    "litellm_model": "azure/gpt-4", // Override model name for both API calls and pricing
     "use_litellm": true
   }
 }
@@ -323,7 +323,7 @@ wrapper = LiteLLMWrapper(
     max_retries=5,  # Default: 3
     min_wait_seconds=10.0,  # Default: 5.0
     max_wait_seconds=120.0,  # Default: 60.0
-    jitter_seconds=10.0  # Default: 5.0
+    jitter_seconds=10.0,  # Default: 5.0
 )
 ```
 
@@ -334,16 +334,16 @@ Pass additional parameters to LiteLLM:
 ```python
 # Via configuration
 {
-  "my_model": {
-    "configs": {
-      "model": "gpt-4",
-      "temperature": 0.7,
-      "max_tokens": 2000,
-      "top_p": 0.9,
-      "frequency_penalty": 0.1
-    },
-    "use_litellm": true
-  }
+    "my_model": {
+        "configs": {
+            "model": "gpt-4",
+            "temperature": 0.7,
+            "max_tokens": 2000,
+            "top_p": 0.9,
+            "frequency_penalty": 0.1,
+        },
+        "use_litellm": true,
+    }
 }
 ```
 
@@ -367,7 +367,7 @@ import asyncio
 tasks = [
     client.create(messages=[...]),
     client.create(messages=[...]),
-    client.create(messages=[...])
+    client.create(messages=[...]),
 ]
 
 results = await asyncio.gather(*tasks)

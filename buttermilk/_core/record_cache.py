@@ -45,7 +45,13 @@ class RecordCache:
 
         if enabled is None:
             disabled_env = os.getenv("BM_DISABLE_RECORD_CACHE", "0")
-            self.enabled = disabled_env.strip() not in {"1", "true", "TRUE", "yes", "on"}
+            self.enabled = disabled_env.strip() not in {
+                "1",
+                "true",
+                "TRUE",
+                "yes",
+                "on",
+            }
         else:
             self.enabled = enabled
 
@@ -64,7 +70,9 @@ class RecordCache:
             if self._base_dir_config:
                 # Expand paths if provided as string
                 if isinstance(self._base_dir_config, str):
-                    expanded = os.path.expandvars(os.path.expanduser(self._base_dir_config))
+                    expanded = os.path.expandvars(
+                        os.path.expanduser(self._base_dir_config)
+                    )
                     self._base_dir = Path(expanded)
                 else:
                     self._base_dir = Path(self._base_dir_config)
@@ -72,18 +80,24 @@ class RecordCache:
                 # Try to get from bm.session_info.cache_dir and project_name if available
                 try:
                     from buttermilk import bm
+
                     # Include project_name for project isolation
                     project_name = bm.session_info.project_name
-                    self._base_dir = Path(bm.session_info.cache_dir) / project_name / "records"
+                    self._base_dir = (
+                        Path(bm.session_info.cache_dir) / project_name / "records"
+                    )
                     logger.debug(
                         "📁 RecordCache using cache_dir with project isolation",
                         base_dir=str(self._base_dir),
-                        project_name=project_name
+                        project_name=project_name,
                     )
                 except Exception:
                     # Fall back to default if bm not available
                     self._base_dir = _default_base_dir()
-                    logger.debug("📁 RecordCache using default cache dir", base_dir=str(self._base_dir))
+                    logger.debug(
+                        "📁 RecordCache using default cache dir",
+                        base_dir=str(self._base_dir),
+                    )
 
             # Log initialization
             logger.debug(
@@ -99,9 +113,13 @@ class RecordCache:
             if self.enabled:
                 try:
                     self._base_dir.mkdir(parents=True, exist_ok=True)
-                    logger.debug("📁 Created cache base directory", base_dir=str(self._base_dir))
+                    logger.debug(
+                        "📁 Created cache base directory", base_dir=str(self._base_dir)
+                    )
                 except Exception as e:  # pragma: no cover
-                    logger.debug(f"Could not create record cache base dir {self._base_dir}: {e}")
+                    logger.debug(
+                        f"Could not create record cache base dir {self._base_dir}: {e}"
+                    )
                     self.enabled = False
 
         return self._base_dir
@@ -125,7 +143,7 @@ class RecordCache:
             record_id=record_id,
             stage=stage,
             path=str(path),
-            exists=exists
+            exists=exists,
         )
         return exists
 
@@ -141,28 +159,51 @@ class RecordCache:
             logger.debug("💥 Failed reading cache file", path=str(path), error=str(e))
             return None
         if payload.get("_schema_version") != CACHE_VERSION:
-            logger.debug("🚫 Cache version mismatch", record_id=record_id, stage=stage, path=str(path))
+            logger.debug(
+                "🚫 Cache version mismatch",
+                record_id=record_id,
+                stage=stage,
+                path=str(path),
+            )
             return None
 
         # Extract record data (remove metadata fields)
-        data = {k: v for k, v in payload.items() if k not in ["_schema_version", "stage"]}
+        data = {
+            k: v for k, v in payload.items() if k not in ["_schema_version", "stage"]
+        }
         if not isinstance(data, dict) or not data.get("record_id"):
-            logger.debug("🚫 Invalid record data in cache", record_id=record_id, stage=stage, path=str(path))
+            logger.debug(
+                "🚫 Invalid record data in cache",
+                record_id=record_id,
+                stage=stage,
+                path=str(path),
+            )
             return None
 
         try:
             # Create BaseRecord directly from serialized data
             record = BaseRecord(**data)
         except Exception as e:  # pragma: no cover
-            logger.debug("💥 Failed to rehydrate Record", record_id=record_id, error=str(e))
+            logger.debug(
+                "💥 Failed to rehydrate Record", record_id=record_id, error=str(e)
+            )
             return None
 
-        logger.debug(f"⚡ Cache hit for {stage},  loaded record {record_id}", record_id=record_id, stage=stage, path=str(path))
+        logger.debug(
+            f"⚡ Cache hit for {stage},  loaded record {record_id}",
+            record_id=record_id,
+            stage=stage,
+            path=str(path),
+        )
         return record
 
     def save(self, record: BaseRecord, stage: str, include_chunks: bool = True) -> bool:
         if not self.enabled:
-            logger.debug("🚫 Cache disabled - not saving", record_id=getattr(record, "record_id", "unknown"), stage=stage)
+            logger.debug(
+                "🚫 Cache disabled - not saving",
+                record_id=getattr(record, "record_id", "unknown"),
+                stage=stage,
+            )
             return False
         if not record or not getattr(record, "record_id", None):
             logger.debug("🚫 Invalid record - not saving", record=record, stage=stage)
@@ -172,7 +213,9 @@ class RecordCache:
         try:
             stage_dir.mkdir(parents=True, exist_ok=True)
         except Exception as e:  # pragma: no cover
-            logger.debug("💥 Could not create stage dir", stage_dir=str(stage_dir), error=str(e))
+            logger.debug(
+                "💥 Could not create stage dir", stage_dir=str(stage_dir), error=str(e)
+            )
             return False
 
         path = self._record_path(stage, record.record_id)
@@ -181,23 +224,37 @@ class RecordCache:
 
         try:
             # Store complete record data with chunks included
-            record_data = scrub_serializable(record.model_dump()) if hasattr(record, "model_dump") else record
+            record_data = (
+                scrub_serializable(record.model_dump())
+                if hasattr(record, "model_dump")
+                else record
+            )
             payload: dict[str, Any] = {
                 "_schema_version": CACHE_VERSION,
                 "stage": stage,
                 "record_id": record.record_id,
-                **record_data  # Include all record data directly
+                **record_data,  # Include all record data directly
             }
             with tmp_path.open("w", encoding="utf-8") as f:
                 json.dump(payload, f, ensure_ascii=False)
             tmp_path.replace(path)
 
             logger.debug(
-                "💾 Cached record", record_id=record.record_id, stage=stage, path=str(path), chunks_count=chunks_count, include_chunks=include_chunks
+                "💾 Cached record",
+                record_id=record.record_id,
+                stage=stage,
+                path=str(path),
+                chunks_count=chunks_count,
+                include_chunks=include_chunks,
             )
             return True
         except Exception as e:  # pragma: no cover
-            logger.debug("💥 Failed to cache record", record_id=record.record_id, stage=stage, error=str(e))
+            logger.debug(
+                "💥 Failed to cache record",
+                record_id=record.record_id,
+                stage=stage,
+                error=str(e),
+            )
             try:
                 if tmp_path.exists():
                     tmp_path.unlink()

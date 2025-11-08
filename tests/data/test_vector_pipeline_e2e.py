@@ -68,7 +68,9 @@ class TestVectorPipelineE2E:
         )
 
         chunked_records = []
-        async for chunked_record in splitter.process(test_record, processor_stage="chunk"):
+        async for chunked_record in splitter.process(
+            test_record, processor_stage="chunk"
+        ):
             chunked_records.append(chunked_record)
 
         assert len(chunked_records) == 1
@@ -88,7 +90,9 @@ class TestVectorPipelineE2E:
         )
 
         embedded_records = []
-        async for embedded_record in embedding_gen.process(chunked_record, processor_stage="embed"):
+        async for embedded_record in embedding_gen.process(
+            chunked_record, processor_stage="embed"
+        ):
             embedded_records.append(embedded_record)
 
         assert len(embedded_records) == 1
@@ -145,15 +149,21 @@ class TestVectorPipelineE2E:
             # Verify chunks were stored in ChromaDB
             collection = embeddings.collection
             stored_count = collection.count()
-            assert stored_count == result.chunks_created, f"Expected {result.chunks_created} chunks in DB, got {stored_count}"
+            assert stored_count == result.chunks_created, (
+                f"Expected {result.chunks_created} chunks in DB, got {stored_count}"
+            )
 
             print(f"✅ Verified {stored_count} chunks in ChromaDB")
 
             # Verify we can query the stored chunks
-            query_results = collection.query(query_texts=["artificial intelligence"], n_results=min(3, stored_count))
+            query_results = collection.query(
+                query_texts=["artificial intelligence"], n_results=min(3, stored_count)
+            )
             assert len(query_results["ids"][0]) > 0, "Should be able to query chunks"
 
-            print(f"✅ Successfully queried ChromaDB, got {len(query_results['ids'][0])} results")
+            print(
+                f"✅ Successfully queried ChromaDB, got {len(query_results['ids'][0])} results"
+            )
 
             # Verify metadata was enhanced on chunks
             for chunk in embedded_record.chunks:
@@ -226,7 +236,9 @@ class TestVectorPipelineE2E:
             assert result.status == "processed"
             assert result.chunks_created > 0
 
-        print(f"✅ Minimal record test passed: {result.chunks_created} chunks processed")
+        print(
+            f"✅ Minimal record test passed: {result.chunks_created} chunks processed"
+        )
 
     @pytest.mark.anyio
     async def test_dict_chunks_survive_full_pipeline(self, real_bm):
@@ -250,7 +262,9 @@ class TestVectorPipelineE2E:
 
         # Real splitter
         splitter = SemanticSplitter(chunk_size=50, chunk_overlap=10)
-        chunked_records = [rec async for rec in splitter.process(test_record, processor_stage="chunk")]
+        chunked_records = [
+            rec async for rec in splitter.process(test_record, processor_stage="chunk")
+        ]
         chunked_record = chunked_records[0]
 
         # Convert chunks to dicts explicitly to test the fix
@@ -262,7 +276,9 @@ class TestVectorPipelineE2E:
                 "chunk_index": chunk.chunk_index,
                 "chunk_text": chunk.chunk_text,
                 "document_id": chunk.document_id,
-                "metadata": (chunk.metadata.copy() if hasattr(chunk, "metadata") else {}),
+                "metadata": (
+                    chunk.metadata.copy() if hasattr(chunk, "metadata") else {}
+                ),
             }
             dict_chunks.append(dict_chunk)
 
@@ -276,7 +292,12 @@ class TestVectorPipelineE2E:
             embedding_batch_size=10,
         )
 
-        embedded_records = [rec async for rec in embedding_gen.process(chunked_record, processor_stage="embed")]
+        embedded_records = [
+            rec
+            async for rec in embedding_gen.process(
+                chunked_record, processor_stage="embed"
+            )
+        ]
         embedded_record = embedded_records[0]
 
         # Verify chunks are still dicts with embeddings

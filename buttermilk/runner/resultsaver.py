@@ -20,7 +20,9 @@ from buttermilk.utils.save import upload_rows
 class ResultsCollector(BaseModel):
     """A simple collector that receives results from a queue and collates them."""
 
-    results: asyncio.Queue[ExecutionTrace] = Field(default_factory=asyncio.Queue)  # Replaced Job with ExecutionTrace
+    results: asyncio.Queue[ExecutionTrace] = Field(
+        default_factory=asyncio.Queue
+    )  # Replaced Job with ExecutionTrace
     shutdown: bool = False
     n_results: int = 0
     to_save: list = []
@@ -66,7 +68,9 @@ class ResultsCollector(BaseModel):
             self.save_with_trace()  # Save any remaining results in the batch
 
     # Process a result (expected to be ExecutionTrace) into a record dict to save
-    def process(self, response: ExecutionTrace) -> dict[str, Any]:  # Replaced Job with ExecutionTrace
+    def process(
+        self, response: ExecutionTrace
+    ) -> dict[str, Any]:  # Replaced Job with ExecutionTrace
         # Assuming the response is an ExecutionTrace, dump it
         return response.model_dump()
 
@@ -98,7 +102,9 @@ class ResultSaver(ResultsCollector):
     dest_schema: Any
 
     # Process a result (expected to be ExecutionTrace) into a record dict to save
-    def process(self, response: ExecutionTrace) -> dict[str, Any]:  # Replaced Job with ExecutionTrace
+    def process(
+        self, response: ExecutionTrace
+    ) -> dict[str, Any]:  # Replaced Job with ExecutionTrace
         # Assuming the response is an ExecutionTrace, dump it
         output = response.model_dump()
         try:

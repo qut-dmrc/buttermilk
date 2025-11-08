@@ -41,6 +41,7 @@ ButtermilkConfig (root)
 ```
 
 ### Key Changes
+
 - **Root Level**: Only universal essentials (project_name, job, verbose)
 - **Run Config**: ALL execution parameters including mode
 - **Direct Session**: No BMConfig wrapper - session is directly accessible
@@ -59,7 +60,7 @@ Run a single flow interactively:
 run:
   mode: console
   flow: my_flow
-  record_id: "test-123"  # Optional: test specific record
+  record_id: "test-123" # Optional: test specific record
 
 session:
   project_name: ${project_name}
@@ -67,6 +68,7 @@ session:
 ```
 
 **CLI Examples**:
+
 ```bash
 # Load console run config (contains mode: console)
 run=console run.flow=trans
@@ -84,17 +86,19 @@ Create and/or process batch jobs:
 
 ```yaml
 run:
-  mode: batch_all  # or batch, batch_run
+  mode: batch_all # or batch, batch_run
   flow: trans
-  limit: 50  # Process up to 50 jobs
+  limit: 50 # Process up to 50 jobs
 ```
 
 **Batch mode variants**:
+
 - `batch`: Create jobs only
 - `batch_run`: Process existing jobs
 - `batch_all`: Create and process (default)
 
 **CLI Examples**:
+
 ```bash
 # Process up to 10 jobs (run=batch loads conf/run/batch.yaml with mode: batch_run)
 run=batch run.flow=trans run.limit=10
@@ -118,13 +122,14 @@ run:
   host: 0.0.0.0
   port: 8000
   workers: 4
-  reload: false  # Set true for development
+  reload: false # Set true for development
   log_level: info
 
-flows: ${flows}  # Expose all flows
+flows: ${flows} # Expose all flows
 ```
 
 **CLI Examples**:
+
 ```bash
 # Basic API server (run=api loads conf/run/api.yaml with mode: api)
 run=api
@@ -163,6 +168,7 @@ run:
 ```
 
 **CLI Examples**:
+
 ```bash
 # Basic pipeline (run=pipeline loads conf/run/pipeline.yaml with mode: pipeline)
 run=pipeline
@@ -219,10 +225,10 @@ infrastructure:
 ```yaml
 infrastructure:
   logging:
-    type: gcp  # or local, aws, azure
+    type: gcp # or local, aws, azure
     project_id: my-project
     verbose: ${verbose}
-    console: true  # Log to stderr for MCP compatibility
+    console: true # Log to stderr for MCP compatibility
 ```
 
 **Type**: `LoggerConfig`
@@ -261,6 +267,7 @@ Buttermilk uses Hydra's composition system to build configurations from multiple
 ### Base Configuration
 
 `conf/config.yaml`:
+
 ```yaml
 defaults:
   - local
@@ -279,11 +286,12 @@ bm:
 ### Environment-Specific Overrides
 
 `conf/testing.yaml`:
+
 ```yaml
 defaults:
   - env: testing
   - flows:
-    - trans
+      - trans
   - llms: debug
   - _self_
 
@@ -297,6 +305,7 @@ storage:
 ### Run Mode Overrides
 
 `conf/run/batch.yaml`:
+
 ```yaml
 #@package _global_
 defaults:
@@ -312,6 +321,7 @@ max_jobs: 10
 ### Storage Configs
 
 `conf/storage/observations.yaml`:
+
 ```yaml
 type: bigquery
 full_table_id: "project.dataset.observations"
@@ -327,6 +337,7 @@ split_type: train
 ```python
 from buttermilk._core.main_config import create_config_from_hydra
 from buttermilk._core.run_config import RunMode
+
 
 @hydra.main(version_base="1.3", config_path="../conf", config_name="config")
 def main(conf: DictConfig) -> None:
@@ -406,12 +417,12 @@ job: test
 # Reference in nested configs
 bm:
   session_info:
-    project_name: ${project_name}  # Interpolates to "buttermilk"
-    job: ${job}                    # Interpolates to "test"
+    project_name: ${project_name} # Interpolates to "buttermilk"
+    job: ${job} # Interpolates to "test"
 
 infrastructure:
   logging:
-    verbose: ${verbose}            # Interpolates to true
+    verbose: ${verbose} # Interpolates to true
 ```
 
 ## Command-Line Overrides
@@ -440,6 +451,7 @@ run=api infrastructure.tracing.weave.enabled=true
 The configuration system provides backward compatibility:
 
 ### Old Structure (Still Supported)
+
 ```yaml
 # Old: mode at root
 mode: api
@@ -457,13 +469,14 @@ bm:
 ```
 
 ### New Structure (Recommended)
+
 ```yaml
 # New: mode inside run (loaded via run=api config group)
 run:
   mode: api
   host: 0.0.0.0
   port: 8000
-  limit: 10  # Unified from max_jobs/max_records
+  limit: 10 # Unified from max_jobs/max_records
 
 # New: direct session
 session:
@@ -474,13 +487,14 @@ session:
 ### Automatic Migration
 
 The `create_config_from_hydra()` function automatically handles:
+
 - `bm.session_info` → `session`
 - `mode` at root → `run.mode`
 - `max_records`/`max_jobs` → `run.limit`
 - Root-level execution params → `run` config
 - Removed deprecated params (enqueue_only, process_only, dataset_key, prompt)
-```
 
+````
 ## Migration Guide (Code)
 
 ### From Loose Dicts to Typed Configs
@@ -491,9 +505,10 @@ mode = conf.run.get("mode", "console")  # Dict access
 if mode == "api":
     host = conf.get("host", "0.0.0.0")  # May not exist
     session = conf.bm.session_info  # Nested wrapper
-```
+````
 
 **After**:
+
 ```python
 from buttermilk._core.run_config import RunMode
 
@@ -562,6 +577,7 @@ if typed_cfg.run.mode == RunMode.API:  # Mode inside run config
 **Problem**: Pydantic complains about missing required field
 
 **Solution**: Either provide the field or make it optional:
+
 ```python
 field: str = Field(description="Required field")
 # or
@@ -573,6 +589,7 @@ field: str | None = Field(default=None, description="Optional field")
 **Problem**: Pydantic rejects unexpected fields
 
 **Solution**: Add `extra="allow"` to model_config:
+
 ```python
 model_config = {
     "extra": "allow",  # Allow additional fields
@@ -584,6 +601,7 @@ model_config = {
 **Problem**: Field type doesn't match Hydra config
 
 **Solution**: Use union types or validators:
+
 ```python
 field: str | int  # Allow either type
 # or use validator to coerce types
@@ -592,6 +610,7 @@ field: str | int  # Allow either type
 ## Examples
 
 See example configurations in `conf/`:
+
 - `conf/testing.yaml` - Testing environment
 - `conf/local.yaml` - Local development
 - `conf/run/api.yaml` - API server mode

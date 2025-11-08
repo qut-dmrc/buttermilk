@@ -38,12 +38,26 @@ class LLMResult(BaseModel):
     """
 
     content: Any = Field(..., description="The LLM output - string or parsed object")
-    metadata: dict[str, Any] = Field(default_factory=dict, description="Usage, pricing, model info")
-    trace_id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="Unique ID for correlation")
-    template_metadata: dict[str, Any] = Field(default_factory=dict, description="Template name, hash, etc")
-    messages: list[LLMMessage] = Field(default_factory=list, description="Messages exchanged with LLM")
-    error: str | ErrorEvent | None = Field(None, description="Error message if processing failed")
-    resolved_inputs: dict[str, Any] = Field(default_factory=dict, description="All resolved inputs used for template rendering")
+    metadata: dict[str, Any] = Field(
+        default_factory=dict, description="Usage, pricing, model info"
+    )
+    trace_id: str = Field(
+        default_factory=lambda: str(uuid.uuid4()),
+        description="Unique ID for correlation",
+    )
+    template_metadata: dict[str, Any] = Field(
+        default_factory=dict, description="Template name, hash, etc"
+    )
+    messages: list[LLMMessage] = Field(
+        default_factory=list, description="Messages exchanged with LLM"
+    )
+    error: str | ErrorEvent | None = Field(
+        None, description="Error message if processing failed"
+    )
+    resolved_inputs: dict[str, Any] = Field(
+        default_factory=dict,
+        description="All resolved inputs used for template rendering",
+    )
 
 
 class LLMCore:
@@ -88,9 +102,13 @@ class LLMCore:
         # Resolve output_model if it's a string
         if isinstance(output_model, str):
             try:
-                self.output_model = import_class_from_path(output_model, expected_base_class=pydantic.BaseModel)
+                self.output_model = import_class_from_path(
+                    output_model, expected_base_class=pydantic.BaseModel
+                )
             except (ImportError, AttributeError, ValueError) as e:
-                raise ProcessingError(f"Failed to resolve output_model '{output_model}': {e}")
+                raise ProcessingError(
+                    f"Failed to resolve output_model '{output_model}': {e}"
+                )
         else:
             self.output_model = output_model
 
@@ -189,9 +207,16 @@ class LLMCore:
         if parent_trace_id:
             span_attributes["parent_trace_id"] = parent_trace_id
 
-        with tracer.start_as_current_span("llm_core.unified_process", attributes=span_attributes) as span:
+        with tracer.start_as_current_span(
+            "llm_core.unified_process", attributes=span_attributes
+        ) as span:
             try:
-                result = await self.process_with_llm(record=record, parent_trace_id=parent_trace_id, cancellation_token=cancellation_token, **kwargs)
+                result = await self.process_with_llm(
+                    record=record,
+                    parent_trace_id=parent_trace_id,
+                    cancellation_token=cancellation_token,
+                    **kwargs,
+                )
                 # Create ExecutionTrace for observability
                 duration_ms = (time.time() - start_time) * 1000
                 execution_trace = ExecutionTrace(
@@ -202,7 +227,9 @@ class LLMCore:
                         "config": self.parameters,
                         "processor_stage": processor_stage,
                     },
-                    inputs=result.resolved_inputs if result.resolved_inputs else {"record": record, **kwargs},
+                    inputs=result.resolved_inputs
+                    if result.resolved_inputs
+                    else {"record": record, **kwargs},
                     outputs=result.content,
                     messages=result.messages,
                     parameters=self.parameters,
@@ -223,7 +250,13 @@ class LLMCore:
                 span.set_status(trace.Status(trace.StatusCode.OK))
 
                 enriched_record = record.model_copy(
-                    update={self.output_col: result.content, "metadata": {**record.metadata, processor_stage: result.metadata}}
+                    update={
+                        self.output_col: result.content,
+                        "metadata": {
+                            **record.metadata,
+                            processor_stage: result.metadata,
+                        },
+                    }
                 )
                 yield enriched_record
 
@@ -237,7 +270,10 @@ class LLMCore:
                         "config": self.parameters,
                     },
                     inputs=record,
-                    error={"event": str(e), "details": {"error_type": type(e).__name__}},
+                    error={
+                        "event": str(e),
+                        "details": {"error_type": type(e).__name__},
+                    },
                     metadata={
                         "duration_ms": duration_ms,
                     },
@@ -262,7 +298,11 @@ class LLMCore:
                 raise ProcessingError(f"LLMCore processing failed: {e}") from e
 
     async def process_with_llm(  # noqa: PLR0912
-        self, inputs: Any = None, parent_trace_id: Optional[str] = None, cancellation_token: Optional[CancellationToken] = None, **kwargs: Any
+        self,
+        inputs: Any = None,
+        parent_trace_id: Optional[str] = None,
+        cancellation_token: Optional[CancellationToken] = None,
+        **kwargs: Any,
     ) -> LLMResult:
         """Process inputs through template rendering and LLM calling.
 
@@ -289,7 +329,9 @@ class LLMCore:
         if parent_trace_id:
             span_attributes["parent_trace_id"] = parent_trace_id
 
-        with tracer.start_as_current_span("llm_core.process", attributes=span_attributes) as span:
+        with tracer.start_as_current_span(
+            "llm_core.process", attributes=span_attributes
+        ) as span:
             try:
                 # Extract record and context BEFORE combining to avoid serialization
                 record = None
@@ -350,14 +392,18 @@ class LLMCore:
                     result.resolved_inputs["context"] = context
 
                 # Fill template
-                llm_messages = await self._fill_template(combined_inputs, record=record, context=context)
+                llm_messages = await self._fill_template(
+                    combined_inputs, record=record, context=context
+                )
 
                 # Store template metadata
                 result.metadata["template"] = self.template_metadata
 
                 # Call LLM
                 llm_result = await self._call_llm_with_trace(
-                    messages=llm_messages, cancellation_token=cancellation_token, parent_trace_id=parent_trace_id
+                    messages=llm_messages,
+                    cancellation_token=cancellation_token,
+                    parent_trace_id=parent_trace_id,
                 )
 
                 # Check for errors in LLM result
@@ -384,7 +430,9 @@ class LLMCore:
                     else:
                         content_str = str(result.content)
 
-                    result.messages.append(AssistantMessage(content=content_str, source=self.model))
+                    result.messages.append(
+                        AssistantMessage(content=content_str, source=self.model)
+                    )
 
                 # Collect metadata (preserve existing template metadata)
                 result.metadata = {
@@ -395,7 +443,9 @@ class LLMCore:
                 }
 
                 # Add pricing if available
-                if isinstance(llm_result, ModelOutput) and hasattr(llm_result, "metadata"):
+                if isinstance(llm_result, ModelOutput) and hasattr(
+                    llm_result, "metadata"
+                ):
                     if "pricing" in llm_result.metadata:
                         result.metadata["pricing"] = llm_result.metadata["pricing"]
 
@@ -420,7 +470,13 @@ class LLMCore:
 
         return result
 
-    async def _fill_template(self, inputs: Any, *, record: BaseRecord = None, context: list[LLMMessage] | None = None) -> list[LLMMessage]:
+    async def _fill_template(
+        self,
+        inputs: Any,
+        *,
+        record: BaseRecord = None,
+        context: list[LLMMessage] | None = None,
+    ) -> list[LLMMessage]:
         """Render the template with provided data.
 
         Args:
@@ -448,7 +504,9 @@ class LLMCore:
             try:
                 input_dict = dict(inputs)
             except (TypeError, ValueError):
-                raise ProcessingError(f"Cannot convert inputs of type {type(inputs)} to dict")
+                raise ProcessingError(
+                    f"Cannot convert inputs of type {type(inputs)} to dict"
+                )
 
         logger.debug(f"LLMCore: Using template '{template_name}'")
 
@@ -457,19 +515,27 @@ class LLMCore:
 
         # Load and render template
         rendered_template_str, unfilled_vars, template_hash = load_template(
-            template=template_name, parameters=self.parameters, untrusted_inputs=filtered_inputs
+            template=template_name,
+            parameters=self.parameters,
+            untrusted_inputs=filtered_inputs,
         )
 
         try:
-            llm_messages, processed_placeholders = make_messages(local_template=rendered_template_str, record=record, context=context)
+            llm_messages, processed_placeholders = make_messages(
+                local_template=rendered_template_str, record=record, context=context
+            )
         except Exception as e:
-            raise ProcessingError(f"Failed to create messages from template '{template_name}'") from e
+            raise ProcessingError(
+                f"Failed to create messages from template '{template_name}'"
+            ) from e
 
         unfilled_vars -= processed_placeholders
 
         # Check for missing variables
         if unfilled_vars and self._fail_on_unfilled_parameters:
-            raise ProcessingError(f"Template '{template_name}' has unfilled parameters: {', '.join(sorted(unfilled_vars))}")
+            raise ProcessingError(
+                f"Template '{template_name}' has unfilled parameters: {', '.join(sorted(unfilled_vars))}"
+            )
         elif unfilled_vars:
             logger.warning(f"Template has unfilled parameters: {unfilled_vars}")
 
@@ -480,11 +546,16 @@ class LLMCore:
             "unfilled_vars": list(unfilled_vars) if unfilled_vars else [],
         }
 
-        logger.debug(f"Template '{template_name}' rendered into {len(llm_messages)} messages")
+        logger.debug(
+            f"Template '{template_name}' rendered into {len(llm_messages)} messages"
+        )
         return llm_messages
 
     async def _call_llm_with_trace(
-        self, messages: list[LLMMessage], cancellation_token: Optional[CancellationToken], parent_trace_id: Optional[str]
+        self,
+        messages: list[LLMMessage],
+        cancellation_token: Optional[CancellationToken],
+        parent_trace_id: Optional[str],
     ) -> CreateResult | ModelOutput:
         """Call the LLM with lightweight tracing.
 
@@ -504,7 +575,9 @@ class LLMCore:
         if parent_trace_id:
             span_attributes["parent_trace_id"] = parent_trace_id
 
-        with tracer.start_as_current_span("llm_core.call_llm", attributes=span_attributes) as span:
+        with tracer.start_as_current_span(
+            "llm_core.call_llm", attributes=span_attributes
+        ) as span:
             try:
                 # Get LLM client from global BM instance
                 model_client = bm.llms.get_autogen_chat_client(self.model)
@@ -519,18 +592,30 @@ class LLMCore:
 
                 # Make the actual LLM call
                 result = await model_client.call_chat(
-                    messages=messages, tools_list=self.tools, cancellation_token=cancellation_token, schema=self.output_model
+                    messages=messages,
+                    tools_list=self.tools,
+                    cancellation_token=cancellation_token,
+                    schema=self.output_model,
                 )
 
                 # Record token usage in span if available
                 if hasattr(result, "usage") and result.usage:
                     if hasattr(result.usage, "prompt_tokens"):
-                        span.set_attribute("llm.usage.prompt_tokens", result.usage.prompt_tokens)
+                        span.set_attribute(
+                            "llm.usage.prompt_tokens", result.usage.prompt_tokens
+                        )
                     if hasattr(result.usage, "completion_tokens"):
-                        span.set_attribute("llm.usage.completion_tokens", result.usage.completion_tokens)
+                        span.set_attribute(
+                            "llm.usage.completion_tokens",
+                            result.usage.completion_tokens,
+                        )
                     # Calculate total tokens from prompt + completion
-                    if hasattr(result.usage, "prompt_tokens") and hasattr(result.usage, "completion_tokens"):
-                        total = result.usage.prompt_tokens + result.usage.completion_tokens
+                    if hasattr(result.usage, "prompt_tokens") and hasattr(
+                        result.usage, "completion_tokens"
+                    ):
+                        total = (
+                            result.usage.prompt_tokens + result.usage.completion_tokens
+                        )
                         span.set_attribute("llm.usage.total_tokens", total)
 
                 span.set_status(trace.Status(trace.StatusCode.OK))

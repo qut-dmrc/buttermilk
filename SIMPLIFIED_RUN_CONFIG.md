@@ -15,9 +15,11 @@ class BaseRunConfig(BaseModel):
     ui: str | None = None
     human_in_loop: bool = False
 
+
 class ConsoleRunConfig(BaseRunConfig):
     mode: Literal["console"] = "console"
     ui: Literal["console"] = "console"
+
 
 class APIRunConfig(BaseRunConfig):
     mode: Literal["api"] = "api"
@@ -27,7 +29,9 @@ class APIRunConfig(BaseRunConfig):
     reload: bool = False
     # ... more API-specific fields
 
+
 # ... 7 total classes
+
 
 def create_run_config(config_dict: dict) -> RunConfig:
     """Factory function to create the appropriate RunConfig based on mode."""
@@ -35,6 +39,7 @@ def create_run_config(config_dict: dict) -> RunConfig:
 ```
 
 **Problems:**
+
 - Mode-specific parameters (host, port) were duplicated in both RunConfig AND at root level
 - You accessed them via `config.host`, not `config.run.host`, making the nested structure misleading
 - Half the classes were essentially empty (just a mode field)
@@ -47,6 +52,7 @@ def create_run_config(config_dict: dict) -> RunConfig:
 # run_config.py - NEW (~100 lines)
 class RunMode(str, Enum):
     """Valid execution modes for Buttermilk."""
+
     CONSOLE = "console"
     BATCH = "batch"
     BATCH_RUN = "batch_run"
@@ -57,6 +63,7 @@ class RunMode(str, Enum):
     PUBSUB = "pub/sub"
     SLACKBOT = "slackbot"
 
+
 class RunConfig(BaseModel):
     """Configuration for Buttermilk execution mode.
 
@@ -64,12 +71,14 @@ class RunConfig(BaseModel):
     Mode-specific parameters (host, port, max_jobs, etc.) are at
     the root level of ButtermilkConfig.
     """
+
     mode: RunMode
     ui: str | None = None
     human_in_loop: bool = False
 ```
 
 **Benefits:**
+
 - Truth in advertising: params are where you access them (root level)
 - No pretense of nested structure when there isn't one
 - Simple validation using enum
@@ -82,7 +91,10 @@ class RunConfig(BaseModel):
 
 ```python
 from buttermilk._core.run_config import (
-    APIRunConfig, BatchRunConfig, ConsoleRunConfig, create_run_config
+    APIRunConfig,
+    BatchRunConfig,
+    ConsoleRunConfig,
+    create_run_config,
 )
 
 typed_cfg = create_config_from_hydra(conf)
@@ -91,7 +103,7 @@ run_config = typed_cfg.get_run_config()
 # Type guards for mode-specific logic
 if isinstance(run_config, APIRunConfig):
     host = run_config.host  # Misleading - this field doesn't exist
-    host = typed_cfg.host   # This is where it actually is
+    host = typed_cfg.host  # This is where it actually is
 ```
 
 ### After: Simple Enum Checks
@@ -189,22 +201,28 @@ mode = typed_cfg.run.mode  # Access directly
 ## Why This is Better
 
 ### 1. Honest Design
+
 The old design pretended mode-specific params were nested in the run config, but they were actually at root level. Now the design matches reality.
 
 ### 2. Simpler Code
+
 - 50% less code in run_config.py
 - No factory pattern
 - No complex inheritance hierarchy
 - No misleading type guards
 
 ### 3. Easier to Understand
+
 New developers can immediately see:
+
 - What modes are valid (enum values)
 - Where params are accessed (root level)
 - How to check mode (simple enum comparison)
 
 ### 4. Easier to Extend
+
 Adding a new mode:
+
 ```python
 # Before: Create new class, update factory, update type union
 # After: Add one line to enum
@@ -214,6 +232,7 @@ class RunMode(str, Enum):
 ```
 
 ### 5. Better Validation Error Messages
+
 ```python
 # Before
 ValidationError: 1 validation error for ButtermilkConfig

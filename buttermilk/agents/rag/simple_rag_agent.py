@@ -16,7 +16,9 @@ from buttermilk.agents.llm import LLMAgent
 class Reference(BaseModel):
     """Represents a single cited reference within a research result."""
 
-    summary: str = Field(..., description="Summary of the key information from this reference.")
+    summary: str = Field(
+        ..., description="Summary of the key information from this reference."
+    )
     citation: str = Field(..., description="Source identifier for the reference.")
 
 
@@ -65,7 +67,13 @@ class ResearchResult(BaseModel):
             if len(self.literature) > 3:
                 lit_str += f"\n- ... and {len(self.literature) - 3} more references"
 
-        return f"{header}" f"{self.summary}\n" f"Response: {self.response[:200]}...\n" f"References:\n" f"{lit_str if lit_str else '- No references'}"
+        return (
+            f"{header}"
+            f"{self.summary}\n"
+            f"Response: {self.response[:200]}...\n"
+            f"References:\n"
+            f"{lit_str if lit_str else '- No references'}"
+        )
 
     def __str__(self) -> str:
         """Returns a Markdown formatted string representation.

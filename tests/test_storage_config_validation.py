@@ -121,7 +121,11 @@ class TestStorageConfigValidation:
             "name": "test_flow",
             "storage": {
                 "file_data": {"type": "file", "path": "/data/input.json"},
-                "bigquery_data": {"type": "bigquery", "project_id": "my-project", "dataset_id": "my_dataset"},
+                "bigquery_data": {
+                    "type": "bigquery",
+                    "project_id": "my-project",
+                    "dataset_id": "my_dataset",
+                },
                 "plain_data": {"type": "plaintext", "path": "/data/text"},
             },
         }
@@ -131,8 +135,12 @@ class TestStorageConfigValidation:
 
         # Verify each storage config has correct type
         assert isinstance(orchestrator_config.storage["file_data"], FileStorageConfig)
-        assert isinstance(orchestrator_config.storage["bigquery_data"], BigQueryStorageConfig)
-        assert isinstance(orchestrator_config.storage["plain_data"], FileStorageConfig)  # plaintext uses FileStorageConfig
+        assert isinstance(
+            orchestrator_config.storage["bigquery_data"], BigQueryStorageConfig
+        )
+        assert isinstance(
+            orchestrator_config.storage["plain_data"], FileStorageConfig
+        )  # plaintext uses FileStorageConfig
 
     def test_invalid_storage_type_fallback(self):
         """Test that configs with storage type bigquery work correctly."""
@@ -172,7 +180,13 @@ class TestStorageConfigValidation:
         assert file_config.path == "/test/path.json"
 
         # Test bigquery storage
-        bq_config = StorageFactory.create_config({"type": "bigquery", "project_id": "test-project", "dataset_id": "test_dataset"})
+        bq_config = StorageFactory.create_config(
+            {
+                "type": "bigquery",
+                "project_id": "test-project",
+                "dataset_id": "test_dataset",
+            }
+        )
         assert isinstance(bq_config, BigQueryStorageConfig)
         assert bq_config.project_id == "test-project"
 
@@ -232,7 +246,11 @@ class TestOrchestratorIntegration:
             "name": "test_flow",
             "storage": {
                 "input_file": {"type": "file", "path": "/data/input.jsonl"},
-                "results_bq": {"type": "bigquery", "project_id": "my-project", "dataset_id": "results"},
+                "results_bq": {
+                    "type": "bigquery",
+                    "project_id": "my-project",
+                    "dataset_id": "results",
+                },
             },
             "agents": {},
             "observers": {},

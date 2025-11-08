@@ -11,7 +11,7 @@ from buttermilk.tools.catalog_test import THEMOVIEDB_AVAILABLE, Observation
 # Skip entire module if themoviedb is not installed
 pytestmark = pytest.mark.skipif(
     not THEMOVIEDB_AVAILABLE,
-    reason="themoviedb package not installed - install with: pip install themoviedb.py"
+    reason="themoviedb package not installed - install with: pip install themoviedb.py",
 )
 
 
@@ -25,32 +25,36 @@ class FakeTMDBProcessor:
         record = inputs["record"]  # Extract record from inputs dict
         print(f"  TMDB processing: {record.title}")
         # Yield 2 observations for each title, wrapped in dict
-        yield {"record": Observation(
-            record_id=record.record_id,
-            title=record.title,
-            year=record.year,
-            provider_name="Netflix",
-            region="US",
-            available=True,
-            source="TMDB",
-            provider_type="flatrate",
-            price=None,
-            currency=None,
-            format=None,
-        )}
-        yield {"record": Observation(
-            record_id=record.record_id,
-            title=record.title,
-            year=record.year,
-            provider_name="Amazon",
-            region="US",
-            available=True,
-            source="TMDB",
-            provider_type="flatrate",
-            price=None,
-            currency=None,
-            format=None,
-        )}
+        yield {
+            "record": Observation(
+                record_id=record.record_id,
+                title=record.title,
+                year=record.year,
+                provider_name="Netflix",
+                region="US",
+                available=True,
+                source="TMDB",
+                provider_type="flatrate",
+                price=None,
+                currency=None,
+                format=None,
+            )
+        }
+        yield {
+            "record": Observation(
+                record_id=record.record_id,
+                title=record.title,
+                year=record.year,
+                provider_name="Amazon",
+                region="US",
+                available=True,
+                source="TMDB",
+                provider_type="flatrate",
+                price=None,
+                currency=None,
+                format=None,
+            )
+        }
 
 
 class FakeUploader:

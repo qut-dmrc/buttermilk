@@ -20,7 +20,7 @@ class TestStorageRecordClass:
         config = BaseStorageConfig(
             type="test",
             dataset_name="test_dataset",
-            record_class="buttermilk.tools.catalog_test.Title"
+            record_class="buttermilk.tools.catalog_test.Title",
         )
 
         assert config.record_class == "buttermilk.tools.catalog_test.Title"
@@ -33,8 +33,10 @@ class TestStorageRecordClass:
         class TestStorage(Storage):
             def __iter__(self):
                 return iter([])
+
             def save(self, records):
                 pass
+
             def count(self):
                 return 0
 
@@ -49,14 +51,16 @@ class TestStorageRecordClass:
         config = BaseStorageConfig(
             type="test",
             dataset_name="test",
-            record_class="buttermilk.tools.catalog_test.Title"
+            record_class="buttermilk.tools.catalog_test.Title",
         )
 
         class TestStorage(Storage):
             def __iter__(self):
                 return iter([])
+
             def save(self, records):
                 pass
+
             def count(self):
                 return 0
 
@@ -69,16 +73,16 @@ class TestStorageRecordClass:
     def test_storage_invalid_record_class_falls_back(self):
         """Test that invalid record class falls back to BaseRecord."""
         config = BaseStorageConfig(
-            type="test",
-            dataset_name="test",
-            record_class="nonexistent.module.Class"
+            type="test", dataset_name="test", record_class="nonexistent.module.Class"
         )
 
         class TestStorage(Storage):
             def __iter__(self):
                 return iter([])
+
             def save(self, records):
                 pass
+
             def count(self):
                 return 0
 
@@ -95,14 +99,16 @@ class TestStorageRecordClass:
         config = BaseStorageConfig(
             type="test",
             dataset_name="test",
-            record_class="datetime.datetime"  # Valid class but not BaseRecord
+            record_class="datetime.datetime",  # Valid class but not BaseRecord
         )
 
         class TestStorage(Storage):
             def __iter__(self):
                 return iter([])
+
             def save(self, records):
                 pass
+
             def count(self):
                 return 0
 
@@ -121,8 +127,10 @@ class TestStorageRecordClass:
         class TestStorage(Storage):
             def __iter__(self):
                 return iter([])
+
             def save(self, records):
                 pass
+
             def count(self):
                 return 0
 
@@ -130,9 +138,7 @@ class TestStorageRecordClass:
 
         # Create a record
         record = storage._create_record(
-            record_id="123",
-            content="test content",
-            dataset_name="test"
+            record_id="123", content="test content", dataset_name="test"
         )
 
         assert isinstance(record, BaseRecord)
@@ -144,14 +150,16 @@ class TestStorageRecordClass:
         config = BaseStorageConfig(
             type="test",
             dataset_name="test",
-            record_class="buttermilk.tools.catalog_test.Title"
+            record_class="buttermilk.tools.catalog_test.Title",
         )
 
         class TestStorage(Storage):
             def __iter__(self):
                 return iter([])
+
             def save(self, records):
                 pass
+
             def count(self):
                 return 0
 
@@ -159,9 +167,7 @@ class TestStorageRecordClass:
 
         # Create a Title record
         record = storage._create_record(
-            record_id="tmdb_123",
-            title="Test Movie",
-            year=2024
+            record_id="tmdb_123", title="Test Movie", year=2024
         )
 
         assert isinstance(record, Title)
@@ -180,18 +186,13 @@ class TestStorageRecordClass:
         """
         # Create a temporary JSON file with title data
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump([
-                {
-                    "record_id": "tmdb_001",
-                    "title": "Movie One",
-                    "year": 2023
-                },
-                {
-                    "record_id": "tmdb_002",
-                    "title": "Movie Two",
-                    "year": 2024
-                }
-            ], f)
+            json.dump(
+                [
+                    {"record_id": "tmdb_001", "title": "Movie One", "year": 2023},
+                    {"record_id": "tmdb_002", "title": "Movie Two", "year": 2024},
+                ],
+                f,
+            )
             temp_file = f.name
 
         try:
@@ -200,7 +201,7 @@ class TestStorageRecordClass:
                 type="file",
                 path=temp_file,
                 dataset_name="tmdb_test",
-                record_class="buttermilk.tools.catalog_test.Title"
+                record_class="buttermilk.tools.catalog_test.Title",
             )
 
             storage = FileStorage(config)
@@ -227,27 +228,26 @@ class TestStorageRecordClass:
         """Test FileStorage creates BaseRecord objects by default."""
         # Create a temporary JSON file
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            json.dump([
-                {
-                    "record_id": "001",
-                    "content": "Test content 1",
-                    "dataset_name": "test"
-                },
-                {
-                    "record_id": "002",
-                    "content": "Test content 2",
-                    "dataset_name": "test"
-                }
-            ], f)
+            json.dump(
+                [
+                    {
+                        "record_id": "001",
+                        "content": "Test content 1",
+                        "dataset_name": "test",
+                    },
+                    {
+                        "record_id": "002",
+                        "content": "Test content 2",
+                        "dataset_name": "test",
+                    },
+                ],
+                f,
+            )
             temp_file = f.name
 
         try:
             # Create FileStorage without specifying record_class
-            config = FileStorageConfig(
-                type="file",
-                path=temp_file,
-                dataset_name="test"
-            )
+            config = FileStorageConfig(type="file", path=temp_file, dataset_name="test")
 
             storage = FileStorage(config)
 
@@ -273,14 +273,16 @@ class TestStorageRecordClass:
         config = BaseStorageConfig(
             type="test",
             dataset_name="test",
-            record_class="buttermilk.tools.catalog_test.Title"
+            record_class="buttermilk.tools.catalog_test.Title",
         )
 
         class TestStorage(Storage):
             def __iter__(self):
                 return iter([])
+
             def save(self, records):
                 pass
+
             def count(self):
                 return 0
 

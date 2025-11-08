@@ -16,7 +16,9 @@ from jmespath import exceptions as jmespath_exceptions  # JMESPath specific exce
 from buttermilk._core.contract import GroupchatMessageTypes  # Union type for messages
 from buttermilk._core.log import logger  # Centralized logger
 from buttermilk.utils import scrub_serializable
-from buttermilk.utils.utils import clean_empty_values  # Utility to remove empty values from dicts
+from buttermilk.utils.utils import (
+    clean_empty_values,
+)  # Utility to remove empty values from dicts
 
 
 def extract_message_data(
@@ -68,7 +70,9 @@ def extract_message_data(
     # The message content is nested under a key derived from the source.
     # e.g., if source is "AgentName-xyz", key becomes "AgentName".
     source_key = source.split("-", maxsplit=1)[0]
-    message_dict = scrub_serializable(message.model_dump())  # Serialize to dict, handling complex types
+    message_dict = scrub_serializable(
+        message.model_dump()
+    )  # Serialize to dict, handling complex types
 
     data_for_jmespath = {source_key: message_dict}
 
@@ -79,8 +83,14 @@ def extract_message_data(
                 search_result = jmespath.search(jmespath_expr, data_for_jmespath)
 
                 # Clean up search_result: remove None or empty sequences/mappings from list results
-                if isinstance(search_result, Sequence) and not isinstance(search_result, str):
-                    cleaned_sequence = [item for item in search_result if item is not None and item not in ([], {})]
+                if isinstance(search_result, Sequence) and not isinstance(
+                    search_result, str
+                ):
+                    cleaned_sequence = [
+                        item
+                        for item in search_result
+                        if item is not None and item not in ([], {})
+                    ]
                     if not cleaned_sequence:  # If list becomes empty after cleaning
                         search_result = None  # Treat as no result
                     else:
@@ -90,7 +100,9 @@ def extract_message_data(
                 if search_result is not None and search_result not in ([], {}):
                     extracted_data[target_key] = search_result
 
-            except jmespath_exceptions.JMESPathError as e:  # Catch specific JMESPath errors
+            except (
+                jmespath_exceptions.JMESPathError
+            ) as e:  # Catch specific JMESPath errors
                 logger.warning(
                     f"Error applying JMESPath expression '{jmespath_expr}' for key '{target_key}': {e!s}. Skipping this mapping.",
                 )

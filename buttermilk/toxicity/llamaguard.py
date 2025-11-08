@@ -135,7 +135,11 @@ class LlamaGuardTox(ToxicityModel):
     def make_prompt(self, content):
         # Load the message info into the output
         agent_type = "Agent"
-        content = "[INST] " + self.template.format(prompt=content, agent_type=agent_type) + "[/INST]"
+        content = (
+            "[INST] "
+            + self.template.format(prompt=content, agent_type=agent_type)
+            + "[/INST]"
+        )
 
         return content
 
@@ -227,7 +231,9 @@ class LlamaGuard1Together(LlamaGuardTox):
 
 class LlamaGuard1Replicate(LlamaGuardTox):
     categories: EnumMeta = LlamaGuardUnsafeContentCategories1
-    template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD1))
+    template: str = Field(
+        default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD1)
+    )
     model: str = "tomasmcm/llamaguard-7b:86a2d8b79335b1557fc5709d237113aa34e3ae391ee46a68cc8440180151903d"
     standard: str = "llamaguard1"
     process_chain: str = "replicate"
@@ -239,7 +245,9 @@ class LlamaGuard1Replicate(LlamaGuardTox):
 
 class LlamaGuard2Replicate(LlamaGuardTox):
     categories: EnumMeta = LlamaGuardUnsafeContentCategories2
-    template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD2))
+    template: str = Field(
+        default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD2)
+    )
     model: str = "meta/meta-llama-guard-2-8b:b063023ee937f28e922982abdbf97b041ffe34ad3b35a53d33e1d74bb19b36c4"
     standard: str = "llamaguard2"
     process_chain: str = "replicate"
@@ -251,7 +259,9 @@ class LlamaGuard2Replicate(LlamaGuardTox):
 
 class LlamaGuard2Together(LlamaGuardTox):
     categories: EnumMeta = LlamaGuardUnsafeContentCategories2
-    template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD2))
+    template: str = Field(
+        default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD2)
+    )
     standard: str = "llamaguard2"
     model: str = "meta-llama/LlamaGuard-2-8b"
     process_chain: str = "together"
@@ -264,7 +274,9 @@ class LlamaGuard2Together(LlamaGuardTox):
 
 class LlamaGuard2Local(_HF, LlamaGuardTox):
     categories: EnumMeta = LlamaGuardUnsafeContentCategories2
-    template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD2))
+    template: str = Field(
+        default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD2)
+    )
     standard: str = "llamaguard2"
     process_chain: str = "local transformers"
     model: str = "meta-llama/Meta-Llama-Guard-2-8B"
@@ -275,7 +287,9 @@ class LlamaGuard2Local(_HF, LlamaGuardTox):
 
 class LlamaGuard2HF(LlamaGuardTox):
     categories: EnumMeta = LlamaGuardUnsafeContentCategories2
-    template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD2))
+    template: str = Field(
+        default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD2)
+    )
     model: str = "meta-llama/Meta-Llama-Guard-2-8B"
     standard: str = "llamaguard2"
     process_chain: str = "huggingface API"
@@ -309,7 +323,9 @@ class _LlamaGuard3Common(LlamaGuardTox):
 class LlamaGuard3Local(_HF, _LlamaGuard3Common):
     model: str = "meta-llama/Llama-Guard-3-8B"
     categories: EnumMeta = LlamaGuardUnsafeContentCategories3
-    template: str = Field(default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD3))
+    template: str = Field(
+        default_factory=lambda: llamaguard_template(LlamaGuardTemplate.LLAMAGUARD3)
+    )
     standard: str = "llamaguard3"
     process_chain: str = "local transformers"
     options: ClassVar[dict] = dict(temperature=1.0)

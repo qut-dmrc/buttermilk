@@ -98,7 +98,9 @@ class TestInitViz:
         # Should match cyberpunk categorical colors (within tolerance)
         assert len(palette) >= 6  # At least 6 colors
 
-    @pytest.mark.skipif(not VIZ_AVAILABLE, reason="Visualization dependencies not available")
+    @pytest.mark.skipif(
+        not VIZ_AVAILABLE, reason="Visualization dependencies not available"
+    )
     def test_init_viz_configures_all_rcparams(self):
         """Test that all important rcParams are set."""
         init_viz(profile="hidpi", theme="cyberpunk")
@@ -277,7 +279,11 @@ class TestQuickFigure:
 
         # Should match print profile
         assert fig.dpi == 600  # Print DPI
-        assert fig.get_facecolor()[0:3] == (1.0, 1.0, 1.0)  # White background (academic)
+        assert fig.get_facecolor()[0:3] == (
+            1.0,
+            1.0,
+            1.0,
+        )  # White background (academic)
 
         plt.close(fig)
 
@@ -499,6 +505,10 @@ class TestEndToEnd:
         sns.scatterplot(data=data, x="x", y="y", ax=ax)
 
         # Verify background matches theme
-        assert ax.get_facecolor()[0:3] != (1.0, 1.0, 1.0)  # Not white (cyberpunk is dark)
+        assert ax.get_facecolor()[0:3] != (
+            1.0,
+            1.0,
+            1.0,
+        )  # Not white (cyberpunk is dark)
 
         plt.close(fig)

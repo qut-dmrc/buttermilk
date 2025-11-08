@@ -12,7 +12,11 @@ import pytest
 
 from buttermilk._core.contract import AgentInput
 from buttermilk._core.log import logger
-from buttermilk._core.standalone_trace import StandaloneTraceContext, create_standalone_trace, inject_parent_trace
+from buttermilk._core.standalone_trace import (
+    StandaloneTraceContext,
+    create_standalone_trace,
+    inject_parent_trace,
+)
 
 
 class TestStandaloneTraceExamples:
@@ -49,7 +53,9 @@ class TestStandaloneTraceExamples:
         - Accessing trace and call IDs
         """
         # Create a trace context with custom attributes
-        async with create_standalone_trace("batch_processing_example", batch_size=10, job_type="data_import") as trace:
+        async with create_standalone_trace(
+            "batch_processing_example", batch_size=10, job_type="data_import"
+        ) as trace:
             # The trace context is now active
             assert trace.trace_call is not None
 
@@ -99,7 +105,9 @@ class TestStandaloneTraceExamples:
         items_to_process = ["item1", "item2", "item3"]
         processed_items = []
 
-        async with create_standalone_trace("batch_processor", total_items=len(items_to_process)):
+        async with create_standalone_trace(
+            "batch_processor", total_items=len(items_to_process)
+        ):
             for item in items_to_process:
                 try:
                     # Process each item (mock processing here)
@@ -129,7 +137,9 @@ class TestStandaloneTraceExamples:
 
             # Object without parent_call_id (logs warning)
             regular_dict = {"data": "value"}
-            with patch("buttermilk._core.standalone_trace.logger.warning") as mock_warning:
+            with patch(
+                "buttermilk._core.standalone_trace.logger.warning"
+            ) as mock_warning:
                 result = inject_parent_trace(regular_dict, trace)
                 assert result == regular_dict  # Returns unchanged
                 mock_warning.assert_called_once()
@@ -164,7 +174,9 @@ class TestStandaloneTraceExamples:
         - Direct class usage vs context manager
         - Manual enter/exit handling
         """
-        context = StandaloneTraceContext("manual_trace", {"custom_field": "custom_value"})
+        context = StandaloneTraceContext(
+            "manual_trace", {"custom_field": "custom_value"}
+        )
 
         # Manual context management
         await context.__aenter__()

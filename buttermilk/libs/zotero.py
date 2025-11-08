@@ -155,9 +155,13 @@ class ZoteroSource(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
     library_id: str = Field(..., description="Zotero library ID")
-    filter: Any = Field(default=None, description="Optional RecordFilter implementation")
+    filter: Any = Field(
+        default=None, description="Optional RecordFilter implementation"
+    )
     force_full_sync: bool = Field(default=False, description="Bypass incremental sync")
-    start: int = Field(default=0, description="Item offset to start fetching from (0-based)")
+    start: int = Field(
+        default=0, description="Item offset to start fetching from (0-based)"
+    )
     max_records: int | None = Field(default=None, description="Maximum items to yield")
 
     _zot: RetryWrapper | None = PrivateAttr(default=None)
@@ -188,7 +192,9 @@ class ZoteroSource(BaseModel):
         """Get path to sync state file in centralized cache."""
         from buttermilk._core.constants import cache
 
-        return bm.session_info.get_cache_subdir(cache.ZOTERO) / ".zotero_sync_state.json"
+        return (
+            bm.session_info.get_cache_subdir(cache.ZOTERO) / ".zotero_sync_state.json"
+        )
 
     def _load_sync_state(self) -> dict[str, Any]:
         """Load last sync state.
@@ -255,7 +261,9 @@ class ZoteroSource(BaseModel):
             api_params["since"] = last_version
             logger.info(f"🔄 Incremental sync from version {last_version}")
         elif self.start > 0:
-            logger.info(f"🔄 Full sync of Zotero library starting from item {self.start}")
+            logger.info(
+                f"🔄 Full sync of Zotero library starting from item {self.start}"
+            )
         else:
             logger.info("🔄 Full sync of Zotero library")
 
@@ -285,7 +293,9 @@ class ZoteroSource(BaseModel):
                 # Use RetryWrapper's _execute_with_retry with async wrapper for sync function
                 async def _fetch_items() -> list[dict[str, Any]]:
                     """Async wrapper for synchronous zot.items() call."""
-                    return await asyncio.get_event_loop().run_in_executor(None, lambda: list(self.zot.client.items(**page_params)))
+                    return await asyncio.get_event_loop().run_in_executor(
+                        None, lambda: list(self.zot.client.items(**page_params))
+                    )
 
                 items = await self.zot._execute_with_retry(_fetch_items)
                 page_size = len(items)
@@ -307,7 +317,9 @@ class ZoteroSource(BaseModel):
 
             except Exception as e:
                 # RetryWrapper already attempted retries, so if we're here, all retries failed
-                logger.error(f"All retry attempts failed for Zotero API (page {page_num}, start={start}): {e}")
+                logger.error(
+                    f"All retry attempts failed for Zotero API (page {page_num}, start={start}): {e}"
+                )
                 raise  # Re-raise to fail the pipeline (don't silently continue with partial results)
 
             # Process items from this page
@@ -322,7 +334,9 @@ class ZoteroSource(BaseModel):
                 # Skip invalid items
                 key = item.get("key")
                 if not key:
-                    logger.warning(f"Item missing key: {item.get('data', {}).get('title', 'N/A')}")
+                    logger.warning(
+                        f"Item missing key: {item.get('data', {}).get('title', 'N/A')}"
+                    )
                     continue
 
                 item_type = item.get("data", {}).get("itemType")
@@ -383,12 +397,16 @@ class ZoteroSource(BaseModel):
                 # Use second-highest version for safety
                 safe_version = unique_versions[1]
                 logger.debug(
-                    f"Saving second-highest version {safe_version} " f"(highest was {unique_versions[0]}, {len(unique_versions)} unique versions)"
+                    f"Saving second-highest version {safe_version} "
+                    f"(highest was {unique_versions[0]}, {len(unique_versions)} unique versions)"
                 )
             else:
                 # Only one unique version - use it but log warning
                 safe_version = unique_versions[0]
-                logger.warning(f"Only one unique version ({safe_version}) seen during sync. " f"Cannot use second-highest for safety.")
+                logger.warning(
+                    f"Only one unique version ({safe_version}) seen during sync. "
+                    f"Cannot use second-highest for safety."
+                )
         else:
             # No items processed - use library version from API
             safe_version = self.zot.last_modified_version()
@@ -500,7 +518,9 @@ class ZoteroDownloadProcessor(BaseModel):
         pdf_downloaded = False  # Track if we actually downloaded a PDF
         attachment = zotero_links.get("attachment", {})
 
-        if attachment.get("attachmentType") == "application/pdf" and (pdf_href := attachment.get("href")):
+        if attachment.get("attachmentType") == "application/pdf" and (
+            pdf_href := attachment.get("href")
+        ):
             attachment_key = pdf_href.split("/")[-1]
             have_fulltext = False  # Track if we got fulltext from Zotero API
 
@@ -518,11 +538,17 @@ class ZoteroDownloadProcessor(BaseModel):
                     if index_ratio >= 0.5:  # At least 50% of pages indexed
                         content = fulltext["content"]
                         have_fulltext = True
-                        logger.debug(f"Full text retrieved: {indexed_pages}/{total_pages} pages ({index_ratio:.1%} indexed)")
+                        logger.debug(
+                            f"Full text retrieved: {indexed_pages}/{total_pages} pages ({index_ratio:.1%} indexed)"
+                        )
                     else:
-                        logger.debug(f"Full text incomplete: {indexed_pages}/{total_pages} pages ({index_ratio:.1%} indexed) - will download PDF")
+                        logger.debug(
+                            f"Full text incomplete: {indexed_pages}/{total_pages} pages ({index_ratio:.1%} indexed) - will download PDF"
+                        )
                 else:
-                    logger.debug(f"Full text metadata invalid (indexed={indexed_pages}, total={total_pages}) - will download PDF")
+                    logger.debug(
+                        f"Full text metadata invalid (indexed={indexed_pages}, total={total_pages}) - will download PDF"
+                    )
             except zotero_errors.ResourceNotFoundError:
                 logger.debug(f"Full text not available for {key}")
             except Exception as e:
@@ -532,7 +558,9 @@ class ZoteroDownloadProcessor(BaseModel):
             # CRITICAL FIX: Only download PDF if we DON'T have fulltext
             # This prevents wasting bandwidth and prevents PDFToTextProcessor from overwriting good content
             if not have_fulltext:
-                logger.debug(f"No fulltext from Zotero API, will download PDF for {key}")
+                logger.debug(
+                    f"No fulltext from Zotero API, will download PDF for {key}"
+                )
                 if not pdf_file.exists():
                     logger.debug(f"Downloading PDF for {key} to {pdf_file}")
                     # Zotero library is synchronous, don't try to async it
@@ -551,7 +579,9 @@ class ZoteroDownloadProcessor(BaseModel):
                 pdf_downloaded = True  # We have a PDF file
                 # Note: Text extraction now handled by PDFToTextProcessor in pipeline
                 # This allows using pdftotext instead of pdfminer
-                logger.debug(f"PDF downloaded successfully: {key}. Text extraction will be done by downstream processor.")
+                logger.debug(
+                    f"PDF downloaded successfully: {key}. Text extraction will be done by downstream processor."
+                )
 
                 # Set meaningful PDF metadata as content to satisfy Record contract
                 # This will be replaced by PDFToTextProcessor with actual extracted text
@@ -560,7 +590,9 @@ class ZoteroDownloadProcessor(BaseModel):
                     content = f"[PDF Document: {pdf_file.name}, Size: {pdf_size:,} bytes, Path: {pdf_file.as_posix()}]"
                     logger.debug(f"Set PDF metadata as content for {key}: {content}")
             else:
-                logger.debug(f"Skipping PDF download for {key} - already have fulltext with {len(content)} chars")
+                logger.debug(
+                    f"Skipping PDF download for {key} - already have fulltext with {len(content)} chars"
+                )
 
         else:
             # No PDF attachment found - skip this record (don't mark as failed)

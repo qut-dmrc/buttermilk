@@ -7,7 +7,11 @@ from typing import Union
 
 import regex as re
 from aioconsole import ainput  # For asynchronous console input
-from autogen_core import CancellationToken, MessageContext, message_handler  # Autogen types (used by base Agent)
+from autogen_core import (
+    CancellationToken,
+    MessageContext,
+    message_handler,
+)  # Autogen types (used by base Agent)
 from rich.console import Console
 from rich.highlighter import JSONHighlighter  # Specific highlighter for JSON
 from rich.pretty import pretty_repr  # For formatted output of complex objects
@@ -217,7 +221,13 @@ class CLIUserAgent(UIAgent):
             # If formatting is successful, print the message to the console.
             self._console.print(formatted_msg)
 
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> None:
+    async def _process(
+        self,
+        *,
+        message: AgentInput,
+        cancellation_token: CancellationToken | None = None,
+        **kwargs,
+    ) -> None:
         """Handles direct AgentInput messages, typically displaying them as requests to the user.
 
         Args:
@@ -230,9 +240,13 @@ class CLIUserAgent(UIAgent):
                    They interact via callbacks or listening methods.
 
         """
-        logger.debug("Received direct input request via _process.", agent_name=self.agent_name)
+        logger.debug(
+            "Received direct input request via _process.", agent_name=self.agent_name
+        )
         # Format and display the incoming message.
-        if formatted_msg := self._fmt_msg(message, source="controller"):  # Use := walrus operator
+        if formatted_msg := self._fmt_msg(
+            message, source="controller"
+        ):  # Use := walrus operator
             self._console.print(formatted_msg)
         else:
             # Fallback if formatting fails or returns None - use IRC style for consistency
@@ -241,7 +255,9 @@ class CLIUserAgent(UIAgent):
             fallback_text.append("🎛 ", style="white")
             fallback_text.append("controller".ljust(16), style="red")
             fallback_text.append(" │ ", style="dim")
-            fallback_text.append(f"INPUT REQ: {pretty_repr(message)[:100]}", style="yellow")
+            fallback_text.append(
+                f"INPUT REQ: {pretty_repr(message)[:100]}", style="yellow"
+            )
             self._console.print(fallback_text)
 
         # This method primarily triggers output; input is handled by _poll_input.
@@ -282,7 +298,9 @@ class CLIUserAgent(UIAgent):
 
                 # Note: QualResults removed - scorer moved to tja project
 
-                if isinstance(outputs, JudgeReasons) or (hasattr(outputs, "prediction") and hasattr(outputs, "conclusion")):
+                if isinstance(outputs, JudgeReasons) or (
+                    hasattr(outputs, "prediction") and hasattr(outputs, "conclusion")
+                ):
                     # Detailed judge output with more information
                     prediction = getattr(outputs, "prediction", None)
                     conclusion = getattr(outputs, "conclusion", "")
@@ -298,7 +316,9 @@ class CLIUserAgent(UIAgent):
 
                     # Show first 2 reasons if available with better formatting
                     if reasons and len(reasons) > 0:
-                        result.append(f"\n{' ' * 25}├ ", style="dim")  # Indent for reasons
+                        result.append(
+                            f"\n{' ' * 25}├ ", style="dim"
+                        )  # Indent for reasons
                         clean_reason1 = " ".join(str(reasons[0]).strip().split())
                         result.append(f"{clean_reason1[:200]}", style="dim white")
                         if len(reasons) > 1:
@@ -307,11 +327,15 @@ class CLIUserAgent(UIAgent):
                             result.append(f"{clean_reason2[:200]}", style="dim white")
                         if len(reasons) > 2:
                             result.append(f"\n{' ' * 25}└ ", style="dim")
-                            result.append(f"({len(reasons) - 2} more reasons...)", style="dim")
+                            result.append(
+                                f"({len(reasons) - 2} more reasons...)", style="dim"
+                            )
                     content_added = True
 
                 # Note: QualResults handling removed - scorer moved to tja project
-                elif hasattr(outputs, "assessed_call_id") and hasattr(outputs, "correctness"):
+                elif hasattr(outputs, "assessed_call_id") and hasattr(
+                    outputs, "correctness"
+                ):
                     # Compact scorer-like output - show call_id and overall score only
                     call_id = getattr(outputs, "assessed_call_id", "unknown")
                     correctness = getattr(outputs, "correctness", 0) or 0
@@ -320,7 +344,13 @@ class CLIUserAgent(UIAgent):
                     short_call_id = call_id[-8:] if len(call_id) > 8 else call_id
 
                     result.append(f"[{short_call_id}] ", style="dim")
-                    score_color = "green" if correctness > 0.7 else "yellow" if correctness > 0.4 else "red"
+                    score_color = (
+                        "green"
+                        if correctness > 0.7
+                        else "yellow"
+                        if correctness > 0.4
+                        else "red"
+                    )
                     result.append(f"Score: {correctness:.2f}", style=score_color)
 
                     # Show count of correct assessments if available
@@ -403,7 +433,9 @@ class CLIUserAgent(UIAgent):
                         result.append("\n", style="")
 
                         # Show each agent in registry
-                        for agent_id, info in list(registry.items())[:5]:  # Show first 5
+                        for agent_id, info in list(registry.items())[
+                            :5
+                        ]:  # Show first 5
                             role = info.get("role", "UNKNOWN")
                             status = info.get("status", "unknown")
                             tools = info.get("tools", [])
@@ -423,7 +455,21 @@ class CLIUserAgent(UIAgent):
                             # Model tag if available
                             if model:
                                 model_tag = get_model_tag(
-                                    type("obj", (), {"agent_info": type("info", (), {"parameters": type("params", (), {"model": model})})})()
+                                    type(
+                                        "obj",
+                                        (),
+                                        {
+                                            "agent_info": type(
+                                                "info",
+                                                (),
+                                                {
+                                                    "parameters": type(
+                                                        "params", (), {"model": model}
+                                                    )
+                                                },
+                                            )
+                                        },
+                                    )()
                                 )
                                 if model_tag:
                                     result.append(f" {model_tag}", style="dim")
@@ -436,7 +482,10 @@ class CLIUserAgent(UIAgent):
                             result.append("\n", style="")
 
                         if len(registry) > 5:
-                            result.append(" " * 25 + f"└ ... and {len(registry) - 5} more\n", style="dim")
+                            result.append(
+                                " " * 25 + f"└ ... and {len(registry) - 5} more\n",
+                                style="dim",
+                            )
                 else:
                     # Check if this is a confirmation request with options
                     options = getattr(message, "options", None)
@@ -445,12 +494,16 @@ class CLIUserAgent(UIAgent):
                     if isinstance(options, list) and options:
                         # Confirmation request with multiple choice options
                         result.append("🔔 ", style="bright_yellow")
-                        result.append("CONFIRM: ", style="bold bright_yellow on dark_blue")
+                        result.append(
+                            "CONFIRM: ", style="bold bright_yellow on dark_blue"
+                        )
                         result.append(content, style="bright_white")
 
                         # Display options in a neat format
                         result.append("\n", style="")
-                        result.append(" " * 25 + "┌─ Options ─────────────\n", style="dim")
+                        result.append(
+                            " " * 25 + "┌─ Options ─────────────\n", style="dim"
+                        )
 
                         for i, option in enumerate(options):
                             option_key = option[0].upper() if option else str(i + 1)
@@ -459,22 +512,35 @@ class CLIUserAgent(UIAgent):
                             result.append(f"{option}", style="white")
                             result.append("\n", style="")
 
-                        result.append(" " * 25 + "└───────────────────────", style="dim")
+                        result.append(
+                            " " * 25 + "└───────────────────────", style="dim"
+                        )
                         result.append("\n" + " " * 25 + "  ", style="")
-                        result.append("Press ENTER to confirm, 'n' to reject", style="dim italic")
+                        result.append(
+                            "Press ENTER to confirm, 'n' to reject", style="dim italic"
+                        )
 
                     elif options is True:
                         # Simple Yes/No confirmation
                         result.append("🔔 ", style="bright_yellow")
-                        result.append("CONFIRM: ", style="bold bright_yellow on dark_blue")
+                        result.append(
+                            "CONFIRM: ", style="bold bright_yellow on dark_blue"
+                        )
                         result.append(content, style="bright_white")
                         result.append("\n" + " " * 25 + "  ", style="")
-                        result.append("[Y/n] Press ENTER to confirm, 'n' to reject", style="dim italic")
+                        result.append(
+                            "[Y/n] Press ENTER to confirm, 'n' to reject",
+                            style="dim italic",
+                        )
 
                     else:
                         # Standard SystemPromptMessage formatting
                         result.append("REQ: ", style="bright_yellow")
-                        content_preview = content[:150].replace("\n", " ") if content else "No content"
+                        content_preview = (
+                            content[:150].replace("\n", " ")
+                            if content
+                            else "No content"
+                        )
                         result.append(content_preview, style="white")
                         if len(content) > 150:
                             result.append("...", style="dim")
@@ -484,7 +550,9 @@ class CLIUserAgent(UIAgent):
                 # Skip all TaskProcessingStarted messages to reduce noise
                 return None
 
-            elif isinstance(message, TaskProcessingComplete) or (hasattr(message, "task_index") and hasattr(message, "is_error")):
+            elif isinstance(message, TaskProcessingComplete) or (
+                hasattr(message, "task_index") and hasattr(message, "is_error")
+            ):
                 # Hide task progress messages to reduce noise - only show errors
                 is_error = getattr(message, "is_error", False)
                 if is_error:
@@ -497,7 +565,11 @@ class CLIUserAgent(UIAgent):
 
             elif isinstance(message, ToolOutput):
                 result.append(f"TOOL:{message.call_id} ", style="green")
-                content_preview = str(message.content)[:100].replace("\n", " ") if message.content else "No output"
+                content_preview = (
+                    str(message.content)[:100].replace("\n", " ")
+                    if message.content
+                    else "No output"
+                )
                 result.append(content_preview, style="dim white")
                 content_added = True
 
@@ -512,7 +584,9 @@ class CLIUserAgent(UIAgent):
                 # Show confirmation type for non-content messages
                 elif hasattr(message, "confirm") and message.confirm is not None:
                     confirm_text = "✓ CONFIRM" if message.confirm else "✗ REJECT"
-                    result.append(confirm_text, style="green" if message.confirm else "red")
+                    result.append(
+                        confirm_text, style="green" if message.confirm else "red"
+                    )
                 else:
                     result.append("(empty)", style="dim")
                 content_added = True
@@ -535,14 +609,22 @@ class CLIUserAgent(UIAgent):
             return result
 
         except Exception as e:
-            logger.error("Error formatting message", message_type=type(message), source=source, error=e)
+            logger.error(
+                "Error formatting message",
+                message_type=type(message),
+                source=source,
+                error=e,
+            )
             # Fallback IRC-style error message
             error_text = Text()
             error_text.append(f"[{format_timestamp()}] ", style="dim")
             error_text.append("⚠ ", style="red")
             error_text.append("ERROR".ljust(16), style="red")
             error_text.append(" │ ", style="dim")
-            error_text.append(f"Failed to format {type(message).__name__}: {str(e)[:100]}", style="red")
+            error_text.append(
+                f"Failed to format {type(message).__name__}: {str(e)[:100]}",
+                style="red",
+            )
             return error_text
 
     # Override individual message handlers to display messages
@@ -554,28 +636,36 @@ class CLIUserAgent(UIAgent):
         await self.callback_to_ui(message, source=source)
 
     @message_handler
-    async def handle_agent_output(self, message: AgentOutput, ctx: MessageContext) -> None:
+    async def handle_agent_output(
+        self, message: AgentOutput, ctx: MessageContext
+    ) -> None:
         """Handle AgentOutput messages by displaying them."""
         await super().handle_agent_output(message, ctx)
         source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
         await self.callback_to_ui(message, source=source)
 
     @message_handler
-    async def handle_agent_trace(self, message: ExecutionTrace, ctx: MessageContext) -> None:
+    async def handle_agent_trace(
+        self, message: ExecutionTrace, ctx: MessageContext
+    ) -> None:
         """Handle ExecutionTrace messages by displaying them."""
         await super().handle_agent_trace(message, ctx)
         source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
         await self.callback_to_ui(message, source=source)
 
     @message_handler
-    async def handle_user_response_message(self, message: UserResponseMessage, ctx: MessageContext) -> None:
+    async def handle_user_response_message(
+        self, message: UserResponseMessage, ctx: MessageContext
+    ) -> None:
         """Handle UserResponseMessage messages by displaying them."""
         await super().handle_user_response_message(message, ctx)
         source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
         await self.callback_to_ui(message, source=source)
 
     @message_handler
-    async def handle_tool_output(self, message: ToolOutput, ctx: MessageContext) -> None:
+    async def handle_tool_output(
+        self, message: ToolOutput, ctx: MessageContext
+    ) -> None:
         """Handle ToolOutput messages by displaying them."""
         await super().handle_tool_output(message, ctx)
         source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
@@ -589,7 +679,12 @@ class CLIUserAgent(UIAgent):
         **kwargs,
     ) -> OOBMessages | None:
         """Handles Out-Of-Band messages, displaying relevant ones."""
-        logger.debug("Received OOB message", agent_name=self.agent_name, source=source, message_type=type(message).__name__)
+        logger.debug(
+            "Received OOB message",
+            agent_name=self.agent_name,
+            source=source,
+            message_type=type(message).__name__,
+        )
         # Check if the specific OOB message type is one we want to display.
         # Skip TaskProcessingStarted and successful TaskProcessingComplete messages to reduce noise
         if isinstance(message, TaskProcessingStarted):
@@ -613,7 +708,10 @@ class CLIUserAgent(UIAgent):
                 self._console.print(formatted_msg)
         else:
             # Log other OOB types at debug level if not explicitly formatted.
-            logger.debug("ConsoleAgent ignoring unformatted OOB message type", message_type=type(message).__name__)
+            logger.debug(
+                "ConsoleAgent ignoring unformatted OOB message type",
+                message_type=type(message).__name__,
+            )
 
         # OOB handlers typically don't return responses unless specifically requested.
         return None
@@ -658,7 +756,18 @@ class CLIUserAgent(UIAgent):
 
                 # Handle confirmation/negation based on input
                 cleaned_input = re.sub(r"\W", "", user_input).lower()
-                is_negation = cleaned_input in ["x", "n", "no", "cancel", "abort", "stop", "quit", "q", "reject", "r"]
+                is_negation = cleaned_input in [
+                    "x",
+                    "n",
+                    "no",
+                    "cancel",
+                    "abort",
+                    "stop",
+                    "quit",
+                    "q",
+                    "reject",
+                    "r",
+                ]
                 is_confirmation = not user_input.strip()  # Empty line confirms
 
                 # Check if input matches an option (if we have options stored)
@@ -667,8 +776,10 @@ class CLIUserAgent(UIAgent):
                     # Check for single letter match (first letter of option)
                     for option in self._last_confirmation_options:
                         if option and (
-                            user_input.strip().lower() == option[0].lower()  # First letter match
-                            or user_input.strip().lower() == option.lower()  # Full option match
+                            user_input.strip().lower()
+                            == option[0].lower()  # First letter match
+                            or user_input.strip().lower()
+                            == option.lower()  # Full option match
                         ):
                             selected_option = option
                             break
@@ -683,7 +794,13 @@ class CLIUserAgent(UIAgent):
                 if selected_option:
                     # User selected a specific option
                     logger.info("User selected option", selected_option=selected_option)
-                    is_confirm = selected_option.lower() in ["confirm", "yes", "y", "accept", "ok"]
+                    is_confirm = selected_option.lower() in [
+                        "confirm",
+                        "yes",
+                        "y",
+                        "accept",
+                        "ok",
+                    ]
                     response = UserResponseMessage(
                         confirm=is_confirm,
                         interrupt=False,
@@ -694,7 +811,9 @@ class CLIUserAgent(UIAgent):
                     await self.callback_to_groupchat(response)
                 elif is_negation:
                     logger.info("User input interpreted as NEGATIVE confirmation.")
-                    response = UserResponseMessage(confirm=False, interrupt=False, content="reject")
+                    response = UserResponseMessage(
+                        confirm=False, interrupt=False, content="reject"
+                    )
                     self._last_confirmation_options = None  # Clear stored options
                     current_prompt_lines = []  # Reset prompt buffer
                     await self.callback_to_groupchat(response)
@@ -703,11 +822,21 @@ class CLIUserAgent(UIAgent):
                     # which should be treated as an interruption requiring the Conductor's attention
                     has_feedback = bool(current_prompt_lines)
                     if has_feedback:
-                        logger.info("User input interpreted as POSITIVE confirmation with feedback (interrupt).")
-                        response = UserResponseMessage(confirm=True, interrupt=True, content="\n".join(current_prompt_lines))
+                        logger.info(
+                            "User input interpreted as POSITIVE confirmation with feedback (interrupt)."
+                        )
+                        response = UserResponseMessage(
+                            confirm=True,
+                            interrupt=True,
+                            content="\n".join(current_prompt_lines),
+                        )
                     else:
-                        logger.info("User input interpreted as POSITIVE confirmation (no feedback).")
-                        response = UserResponseMessage(confirm=True, interrupt=False, content="confirm")
+                        logger.info(
+                            "User input interpreted as POSITIVE confirmation (no feedback)."
+                        )
+                        response = UserResponseMessage(
+                            confirm=True, interrupt=False, content="confirm"
+                        )
 
                     self._last_confirmation_options = None  # Clear stored options
                     current_prompt_lines = []  # Reset prompt buffer
@@ -734,14 +863,18 @@ class CLIUserAgent(UIAgent):
                 raise FatalError(f"Runtime error in CLIUserAgent: {e}")
             except Exception as e:
                 # Log errors during input polling but try to continue
-                logger.error("Error polling console input", agent_name=self.agent_name, error=e)
+                logger.error(
+                    "Error polling console input", agent_name=self.agent_name, error=e
+                )
                 # Consider adding a delay before retrying after an error
                 await asyncio.sleep(1)
                 # Re-raise if it's KeyboardInterrupt to allow stopping the application
                 if isinstance(e, KeyboardInterrupt):
                     raise
 
-    async def initialize(self, callback_to_groupchat: Callable[..., Awaitable[None]], **kwargs) -> None:
+    async def initialize(
+        self, callback_to_groupchat: Callable[..., Awaitable[None]], **kwargs
+    ) -> None:
         """Initializes the agent and starts the background input polling task if a callback is provided.
 
         Args:
@@ -773,7 +906,8 @@ class CLIUserAgent(UIAgent):
             welcome_text.append("system".ljust(16), style="yellow")
             welcome_text.append(" │ ", style="dim")
             welcome_text.append(
-                "Console UI initialized. Commands: 'exit' to quit, '!agents' to list agents, empty line to confirm, 'n'/'q' to cancel.", style="green"
+                "Console UI initialized. Commands: 'exit' to quit, '!agents' to list agents, empty line to confirm, 'n'/'q' to cancel.",
+                style="green",
             )
             self._console.print(welcome_text)
 
@@ -782,7 +916,10 @@ class CLIUserAgent(UIAgent):
             logger.debug("Input polling task created.", agent_name=self.agent_name)
         else:
             # If no callback, input polling is disabled.
-            logger.warning("Initialized without callback_to_groupchat. Console input polling disabled.", agent_name=self.agent_name)
+            logger.warning(
+                "Initialized without callback_to_groupchat. Console input polling disabled.",
+                agent_name=self.agent_name,
+            )
             self._input_task = None
 
     async def cleanup(self) -> None:
@@ -794,17 +931,28 @@ class CLIUserAgent(UIAgent):
                 # Wait for the task to acknowledge cancellation
                 await self._input_task
             except asyncio.CancelledError:
-                logger.info("Console input task successfully cancelled.", agent_name=self.agent_name)
+                logger.info(
+                    "Console input task successfully cancelled.",
+                    agent_name=self.agent_name,
+                )
             except Exception as e:
                 # Log if waiting for cancellation fails unexpectedly
-                logger.error("Error during input task cleanup", agent_name=self.agent_name, error=e)
+                logger.error(
+                    "Error during input task cleanup",
+                    agent_name=self.agent_name,
+                    error=e,
+                )
         else:
             logger.debug("No active input task to cancel.", agent_name=self.agent_name)
         # Call base class cleanup if needed
         # await super().cleanup()
 
-    async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
-        async def on_reset(self, cancellation_token: CancellationToken | None = None) -> None:
+    async def on_reset(
+        self, cancellation_token: CancellationToken | None = None
+    ) -> None:
+        async def on_reset(
+            self, cancellation_token: CancellationToken | None = None
+        ) -> None:
             """Resets the agent state, including cancelling the input task."""
             logger.info("Resetting agent state...", agent_name=self.agent_name)
             # Cancel the existing input task if it's running
@@ -813,9 +961,15 @@ class CLIUserAgent(UIAgent):
                 try:
                     await self._input_task
                 except asyncio.CancelledError:
-                    logger.debug("Input task cancelled during reset.", agent_name=self.agent_name)
+                    logger.debug(
+                        "Input task cancelled during reset.", agent_name=self.agent_name
+                    )
                 except Exception as e:
-                    logger.error("Error cancelling input task during reset", agent_name=self.agent_name, error=e)
+                    logger.error(
+                        "Error cancelling input task during reset",
+                        agent_name=self.agent_name,
+                        error=e,
+                    )
             self._input_task = None  # Ensure the task reference is cleared
             # Note: The input task will be restarted by `initialize` if called again after reset.
             # Call base class reset if needed

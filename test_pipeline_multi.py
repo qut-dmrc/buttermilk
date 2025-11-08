@@ -17,10 +17,22 @@ class MockTMDBProcessor:
         print(f"  TMDB processing: {record.title}")
         # Yield 2 observations for each title
         yield Observation(
-            record_id=record.record_id, title=record.title, year=record.year, provider_name="Netflix", region="US", available=True, source="TMDB"
+            record_id=record.record_id,
+            title=record.title,
+            year=record.year,
+            provider_name="Netflix",
+            region="US",
+            available=True,
+            source="TMDB",
         )
         yield Observation(
-            record_id=record.record_id, title=record.title, year=record.year, provider_name="Amazon", region="US", available=True, source="TMDB"
+            record_id=record.record_id,
+            title=record.title,
+            year=record.year,
+            provider_name="Amazon",
+            region="US",
+            available=True,
+            source="TMDB",
         )
 
 

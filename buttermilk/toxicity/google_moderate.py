@@ -7,7 +7,15 @@ from google.cloud import language_v2
 from .toxicity import EvalRecord, Score, ToxicityModel
 
 # These are categories that we do not interpret as relevant to an overall 'toxic' result
-NON_TOXIC_CATS = ["public safety", "health", "religion and belief", "war and conflict", "finance", "politics", "legal"]
+NON_TOXIC_CATS = [
+    "public safety",
+    "health",
+    "religion and belief",
+    "war and conflict",
+    "finance",
+    "politics",
+    "legal",
+]
 
 
 class GoogleModerate(ToxicityModel):
@@ -37,9 +45,17 @@ class GoogleModerate(ToxicityModel):
             for category in response.moderation_categories:
                 try:
                     # Google language_v2 sometimes returns a severity score
-                    outcome.scores.append(Score(measure=category.name, confidence=category.confidence, severity=category.severity))
+                    outcome.scores.append(
+                        Score(
+                            measure=category.name,
+                            confidence=category.confidence,
+                            severity=category.severity,
+                        )
+                    )
                 except:
-                    outcome.scores.append(Score(measure=category.name, confidence=category.confidence))
+                    outcome.scores.append(
+                        Score(measure=category.name, confidence=category.confidence)
+                    )
 
                 if category.confidence > 0.5:
                     outcome.labels.append(category.name)

@@ -38,7 +38,11 @@ class TestToolTypeHandling:
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "The search query"},
-                    "limit": {"type": "integer", "description": "Maximum results to return", "default": 10},
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum results to return",
+                        "default": 10,
+                    },
                 },
                 "required": ["query"],
             },
@@ -51,17 +55,29 @@ class TestToolTypeHandling:
             name=sample_tool_schema["name"],
             description=sample_tool_schema["description"],
             input_schema=sample_tool_schema["parameters"],
-            output_schema={"type": "object", "properties": {"results": {"type": "array"}, "count": {"type": "integer"}}},
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "results": {"type": "array"},
+                    "count": {"type": "integer"},
+                },
+            },
         )
 
     @pytest.fixture
-    def mixed_tools_list(self, sample_tool_schema: ToolSchema, sample_tool_object: AgentToolDefinition):
+    def mixed_tools_list(
+        self, sample_tool_schema: ToolSchema, sample_tool_object: AgentToolDefinition
+    ):
         """Create a list containing both Tool objects and ToolSchema objects."""
         # Create another ToolSchema
         another_schema: ToolSchema = {
             "name": "analyze_data",
             "description": "Analyze collected data",
-            "parameters": {"type": "object", "properties": {"data": {"type": "array"}, "method": {"type": "string"}}, "required": ["data"]},
+            "parameters": {
+                "type": "object",
+                "properties": {"data": {"type": "array"}, "method": {"type": "string"}},
+                "required": ["data"],
+            },
         }
 
         # Return mixed list: Tool object, ToolSchema, another ToolSchema
@@ -80,12 +96,17 @@ class TestToolTypeHandling:
         wrapper = Mock(spec=AutoGenWrapper)
 
         # Mock the create method with the correct signature
-        async def mock_create(messages, tools=[], schema=None, cancellation_token=None, **kwargs):
+        async def mock_create(
+            messages, tools=[], schema=None, cancellation_token=None, **kwargs
+        ):
             # This should accept both Tool and ToolSchema objects
             from autogen_core.models import RequestUsage
 
             return CreateResult(
-                content="Mock response", finish_reason="stop", usage=RequestUsage(prompt_tokens=10, completion_tokens=5), cached=False
+                content="Mock response",
+                finish_reason="stop",
+                usage=RequestUsage(prompt_tokens=10, completion_tokens=5),
+                cached=False,
             )
 
         wrapper.create = AsyncMock(side_effect=mock_create)
@@ -95,7 +116,9 @@ class TestToolTypeHandling:
 
         # This should not raise any type errors
         async def test_call():
-            result = await wrapper.create(messages=[], tools=tools_list, cancellation_token=None)
+            result = await wrapper.create(
+                messages=[], tools=tools_list, cancellation_token=None
+            )
             assert result is not None
 
         # Run the async test
@@ -134,20 +157,34 @@ class TestToolTypeHandling:
         }
 
         tools_with_duplicate = mixed_tools_list + [duplicate_schema]
-        deduped_with_duplicate = list({get_tool_name(tool): tool for tool in tools_with_duplicate}.values())
+        deduped_with_duplicate = list(
+            {get_tool_name(tool): tool for tool in tools_with_duplicate}.values()
+        )
 
         # Should have only 2 unique tools (duplicates removed)
         assert len(deduped_with_duplicate) == 2
 
         # Verify the last one wins (dictionary behavior)
-        test_search_tool = next(tool for tool in deduped_with_duplicate if get_tool_name(tool) == "test_search")
+        test_search_tool = next(
+            tool
+            for tool in deduped_with_duplicate
+            if get_tool_name(tool) == "test_search"
+        )
         assert get_tool_name(test_search_tool) == "test_search"
 
     @pytest.mark.anyio
-    async def test_structured_llmhost_deduplication_integration(self, mixed_tools_list, real_bm):
+    async def test_structured_llmhost_deduplication_integration(
+        self, mixed_tools_list, real_bm
+    ):
         """Test the deduplication works in StructuredLLMHostAgent._call_llm method."""
         host = StructuredLLMHostAgent(
-            agent_name="test_host", role="HOST", parameters={"model": "test-model", "template": "host", "human_in_loop": False}
+            agent_name="test_host",
+            role="HOST",
+            parameters={
+                "model": "test-model",
+                "template": "host",
+                "human_in_loop": False,
+            },
         )
 
         # Mock the LLM client
@@ -156,7 +193,10 @@ class TestToolTypeHandling:
 
         mock_client.call_chat = AsyncMock(
             return_value=CreateResult(
-                content="Mock response", finish_reason="stop", usage=RequestUsage(prompt_tokens=10, completion_tokens=5), cached=False
+                content="Mock response",
+                finish_reason="stop",
+                usage=RequestUsage(prompt_tokens=10, completion_tokens=5),
+                cached=False,
             )
         )
         # Mock bm.llms.get_autogen_chat_client directly (used in _call_llm)
@@ -164,7 +204,12 @@ class TestToolTypeHandling:
             mock_bm.llms.get_autogen_chat_client.return_value = mock_client
 
             # Call _call_llm with mixed tools
-            await host._call_llm(messages=[], tools=mixed_tools_list, schema=None, cancellation_token=None)
+            await host._call_llm(
+                messages=[],
+                tools=mixed_tools_list,
+                schema=None,
+                cancellation_token=None,
+            )
 
             # Verify the call was made
             assert mock_client.call_chat.called
@@ -186,7 +231,9 @@ class TestToolTypeHandling:
     # real StructuredLLMHostAgent with real tool registration and routing.
 
     @pytest.mark.anyio
-    async def test_tool_object_schema_property_usage(self, sample_tool_object: AgentToolDefinition):
+    async def test_tool_object_schema_property_usage(
+        self, sample_tool_object: AgentToolDefinition
+    ):
         """Test that Tool objects use their .schema property correctly."""
         # Verify the Tool object has the schema property
         assert hasattr(sample_tool_object, "schema")
@@ -206,7 +253,11 @@ class TestToolTypeHandling:
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "The search query"},
-                    "limit": {"type": "integer", "description": "Maximum results to return", "default": 10},
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum results to return",
+                        "default": 10,
+                    },
                 },
                 "required": ["query"],
             },
@@ -240,7 +291,10 @@ class TestToolTypeHandling:
         # Verify it's a Union that includes both types
         if hasattr(inner_type, "__args__"):  # Union type
             type_args = get_args(inner_type)
-            type_names = [arg.__name__ if hasattr(arg, "__name__") else str(arg) for arg in type_args]
+            type_names = [
+                arg.__name__ if hasattr(arg, "__name__") else str(arg)
+                for arg in type_args
+            ]
 
             # Should include both Tool and ToolSchema
             assert any("Tool" in name for name in type_names)

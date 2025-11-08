@@ -17,7 +17,10 @@
 import httpx
 
 from buttermilk._core.agent import SingleAgent  # Import SingleAgent
-from buttermilk._core.contract import AgentInput, ExecutionTrace  # Import AgentInput and ExecutionTrace
+from buttermilk._core.contract import (
+    AgentInput,
+    ExecutionTrace,
+)  # Import AgentInput and ExecutionTrace
 
 
 class Slurp(SingleAgent):
@@ -57,11 +60,15 @@ class Slurp(SingleAgent):
         outputs_list = []  # Use a local list to collect outputs
         async with httpx.AsyncClient() as client:
             while url:
-                response = await client.get(url, parameters=message.parameters)  # Access parameters from message
+                response = await client.get(
+                    url, parameters=message.parameters
+                )  # Access parameters from message
                 response.raise_for_status()  # Raise an exception for bad status codes
 
                 data = response.json()
-                outputs_list.append(data.get("data"))  # Append data to the list, handle missing key
+                outputs_list.append(
+                    data.get("data")
+                )  # Append data to the list, handle missing key
 
                 # Check for pagination information
                 paging = data.get("paging")

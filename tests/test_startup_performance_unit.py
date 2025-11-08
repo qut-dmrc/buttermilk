@@ -27,7 +27,9 @@ class TestBMInitialization:
         creation_time = time.time() - start_time
 
         # BM creation should be very fast (under 100ms)
-        assert creation_time < 0.1, f"BM creation took {creation_time:.3f}s, expected <0.1s"
+        assert creation_time < 0.1, (
+            f"BM creation took {creation_time:.3f}s, expected <0.1s"
+        )
         assert bm.session_info.project_name == "test"
         assert bm.session_info.job == "test"
 
@@ -80,7 +82,10 @@ class TestBMInitialization:
         mock_context = AsyncMock()
         mock_context.get_weave_client = AsyncMock(return_value=mock_weave_client)
 
-        with patch("buttermilk._core.execution_context.get_execution_context", return_value=mock_context):
+        with patch(
+            "buttermilk._core.execution_context.get_execution_context",
+            return_value=mock_context,
+        ):
             # First access
             weave1 = await bm.get_weave_client()
             assert mock_context.get_weave_client.call_count == 1
@@ -195,7 +200,9 @@ class TestSecretsManagerOptimizations:
 
     def test_secrets_manager_client_is_lazy(self):
         """Test that SecretManager client is not created until first access."""
-        with patch("google.cloud.secretmanager.SecretManagerServiceClient") as mock_client:
+        with patch(
+            "google.cloud.secretmanager.SecretManagerServiceClient"
+        ) as mock_client:
             from buttermilk._core.keys import SecretsManager
 
             # Create SecretsManager
@@ -212,7 +219,9 @@ class TestSecretsManagerOptimizations:
 
     def test_secrets_manager_client_is_cached(self):
         """Test that SecretManager client is cached after first access."""
-        with patch("google.cloud.secretmanager.SecretManagerServiceClient") as mock_client:
+        with patch(
+            "google.cloud.secretmanager.SecretManagerServiceClient"
+        ) as mock_client:
             from buttermilk._core.keys import SecretsManager
 
             sm = SecretsManager(type="gcp", project="test-project")
@@ -241,7 +250,12 @@ class TestConfigurationValidation:
         from buttermilk._core.storage_config import BigQueryStorageConfig
 
         # Valid config
-        config = BigQueryStorageConfig(type="bigquery", project_id="test-project", dataset_id="test_dataset", table_id="test_table")
+        config = BigQueryStorageConfig(
+            type="bigquery",
+            project_id="test-project",
+            dataset_id="test_dataset",
+            table_id="test_table",
+        )
 
         assert config.full_table_id == "test-project.test_dataset.test_table"
 
@@ -296,7 +310,9 @@ class TestStartupTiming:
         import_time = time.time() - start_time
 
         # Core imports should be under 1 second
-        assert import_time < 1.0, f"Core imports took {import_time:.3f}s, expected <1.0s"
+        assert import_time < 1.0, (
+            f"Core imports took {import_time:.3f}s, expected <1.0s"
+        )
 
     def test_fastapi_app_creation_is_fast(self):
         """Test that FastAPI app creation is reasonably fast."""
@@ -309,4 +325,6 @@ class TestStartupTiming:
         creation_time = time.time() - start_time
 
         # FastAPI creation should be very fast
-        assert creation_time < 0.05, f"FastAPI creation took {creation_time:.3f}s, expected <0.05s"
+        assert creation_time < 0.05, (
+            f"FastAPI creation took {creation_time:.3f}s, expected <0.05s"
+        )

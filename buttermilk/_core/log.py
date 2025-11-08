@@ -73,7 +73,12 @@ def configure_structlog(min_level) -> None:
         """Inject common runtime context onto every log."""
         try:
             event_dict.setdefault("pid", os.getpid())
-            event_dict.setdefault("process_name", getattr(os, "getppid", lambda: None)() and logging.getLogger().name or "python")
+            event_dict.setdefault(
+                "process_name",
+                getattr(os, "getppid", lambda: None)()
+                and logging.getLogger().name
+                or "python",
+            )
             event_dict.setdefault("thread_name", threading.current_thread().name)
             # Async task name/id if available
             task_name = None
@@ -145,7 +150,9 @@ def configure_structlog(min_level) -> None:
             # Output as JSON
             structlog.processors.JSONRenderer(),
         ],
-        wrapper_class=structlog.make_filtering_bound_logger(logging.DEBUG),  # Use DEBUG to support all handlers
+        wrapper_class=structlog.make_filtering_bound_logger(
+            logging.DEBUG
+        ),  # Use DEBUG to support all handlers
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
     )
@@ -216,7 +223,14 @@ def setup_console_logging(verbose: bool = False, enable_console: bool = True) ->
     # Create Rich handler for beautiful console output (write to stderr, not stdout)
     # This follows Python best practices and is required for MCP servers
     stderr_console = Console(stderr=True)
-    rich_handler = StructlogRichHandler(console=stderr_console, show_time=True, show_level=True, show_path=False, markup=True, rich_tracebacks=True)
+    rich_handler = StructlogRichHandler(
+        console=stderr_console,
+        show_time=True,
+        show_level=True,
+        show_path=False,
+        markup=True,
+        rich_tracebacks=True,
+    )
 
     # Keep buttermilk logger at INFO level
     console_level = logging.INFO  # logging.DEBUG if verbose else logging.INFO
@@ -234,7 +248,9 @@ def setup_console_logging(verbose: bool = False, enable_console: bool = True) ->
     logger.debug(f"Console logging configured with verbose={verbose}")
 
 
-def setup_file_logging(execution_context_id: str, verbose: bool = False, project_name: str | None = None) -> list[str]:
+def setup_file_logging(
+    execution_context_id: str, verbose: bool = False, project_name: str | None = None
+) -> list[str]:
     """Set up structured JSON logging to files.
 
     Args:
@@ -302,9 +318,15 @@ def setup_file_logging(execution_context_id: str, verbose: bool = False, project
     logging.getLogger(_LOGGER_NAME).addHandler(file_handler)
     log_files.append(str(log_path))
 
-    logger.info(f"Log file created at {log_path}", log_path=str(log_path), verbose=verbose)
+    logger.info(
+        f"Log file created at {log_path}", log_path=str(log_path), verbose=verbose
+    )
     if verbose:
-        logger.debug(f"Verbose logging enabled for {log_path}.", log_path=str(log_path), verbose=verbose)
+        logger.debug(
+            f"Verbose logging enabled for {log_path}.",
+            log_path=str(log_path),
+            verbose=verbose,
+        )
 
     # Mark file logging as configured
     _file_logging_configured = True
@@ -328,7 +350,11 @@ def setup_cloud_logging(logger_cfg, cloud_manager, session_info) -> None:
     # Check if cloud logging is already configured for this session
     session_key = f"{session_info.session_id}:{logger_cfg.project_id}"
     if session_key in _cloud_logging_sessions:
-        logger.debug("Cloud logging already configured for this session", session_id=session_info.session_id, project_id=logger_cfg.project_id)
+        logger.debug(
+            "Cloud logging already configured for this session",
+            session_id=session_info.session_id,
+            project_id=logger_cfg.project_id,
+        )
         return
     if logger_cfg and logger_cfg.type == "gcp" and cloud_manager:
         try:
@@ -344,7 +370,9 @@ def setup_cloud_logging(logger_cfg, cloud_manager, session_info) -> None:
             )
 
             # Filter out None values from labels as protobuf doesn't accept them
-            raw_labels = session_info.model_dump(include={"session_id", "project_name", "job", "platform"})
+            raw_labels = session_info.model_dump(
+                include={"session_id", "project_name", "job", "platform"}
+            )
             labels = {k: str(v) for k, v in raw_labels.items() if v is not None}
 
             cloud_handler = CloudLoggingHandler(
@@ -369,7 +397,9 @@ def setup_cloud_logging(logger_cfg, cloud_manager, session_info) -> None:
 
             # Add batch context if available
             if session_info.session_id:
-                context_vars["session_id"] = session_info.session_id[-12:]  # Last 12 chars for brevity
+                context_vars["session_id"] = session_info.session_id[
+                    -12:
+                ]  # Last 12 chars for brevity
             if session_info.batch_id:
                 context_vars["batch_id"] = session_info.batch_id[-12:]  # Last 12 chars
 
@@ -378,7 +408,10 @@ def setup_cloud_logging(logger_cfg, cloud_manager, session_info) -> None:
             # Check for existing cloud handlers to prevent duplicates
             root_logger = logging.getLogger()
             existing_cloud_handlers = [
-                h for h in root_logger.handlers if isinstance(h, CloudLoggingHandler) and getattr(h, "name", "") == session_info.project_name
+                h
+                for h in root_logger.handlers
+                if isinstance(h, CloudLoggingHandler)
+                and getattr(h, "name", "") == session_info.project_name
             ]
 
             if existing_cloud_handlers:
@@ -390,7 +423,11 @@ def setup_cloud_logging(logger_cfg, cloud_manager, session_info) -> None:
             else:
                 # Add handler only to buttermilk logger for structured logs
                 logging.getLogger(_LOGGER_NAME).addHandler(cloud_handler)
-                logger.info("Cloud logging handler added", session_id=session_info.session_id, project_id=logger_cfg.project_id)
+                logger.info(
+                    "Cloud logging handler added",
+                    session_id=session_info.session_id,
+                    project_id=logger_cfg.project_id,
+                )
 
             # Mark this session as having cloud logging configured
             _cloud_logging_sessions.add(session_key)
@@ -461,10 +498,13 @@ def validate_logging_state(verbose_expected: bool = None) -> dict[str, Any]:
 
     # Check both root and buttermilk logger for handlers
     if root_handlers == 0 and buttermilk_handlers == 0:
-        validation_results["issues"].append("No logging handlers configured on root logger")
+        validation_results["issues"].append(
+            "No logging handlers configured on root logger"
+        )
     elif root_handlers > 5:  # Arbitrary threshold for too many handlers
         validation_results["issues"].append(
-            f"Unusually high number of handlers ({root_handlers}) on root logger, " "may indicate duplicate handler registration"
+            f"Unusually high number of handlers ({root_handlers}) on root logger, "
+            "may indicate duplicate handler registration"
         )
 
     validation_results["handler_count"] = root_handlers
@@ -521,7 +561,11 @@ def reset_logging_configuration() -> None:
     WARNING: This is intended for testing only and should not be used in
     production code as it can break the fail-fast logging protection.
     """
-    global _console_logging_configured, _file_logging_configured, _structlog_configured, _cloud_logging_sessions
+    global \
+        _console_logging_configured, \
+        _file_logging_configured, \
+        _structlog_configured, \
+        _cloud_logging_sessions
 
     # Reset global state flags
     _console_logging_configured = False

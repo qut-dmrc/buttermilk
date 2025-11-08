@@ -1,4 +1,3 @@
-
 # ChromaDB Search Tool Configurations
 chromadb_search:
   _target_: buttermilk.tools.chromadb_search.ChromaDBSearchTool

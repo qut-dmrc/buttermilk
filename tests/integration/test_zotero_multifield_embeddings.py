@@ -10,12 +10,18 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from buttermilk._core.storage_config import AdditionalFieldConfig, MultiFieldEmbeddingConfig
+from buttermilk._core.storage_config import (
+    AdditionalFieldConfig,
+    MultiFieldEmbeddingConfig,
+)
 from buttermilk._core.types import Record
 from buttermilk.data.vector import ChromaDBEmbeddings
 
 # SKIP: Incomplete test with undefined 'chunks' variables - needs refactoring
-pytest.skip("Incomplete test with undefined 'chunks' variables - needs refactoring", allow_module_level=True)
+pytest.skip(
+    "Incomplete test with undefined 'chunks' variables - needs refactoring",
+    allow_module_level=True,
+)
 
 
 class TestZoteroMultiFieldEmbeddings:
@@ -66,7 +72,8 @@ class TestZoteroMultiFieldEmbeddings:
             content="""This is the main full text of the paper.
                 It contains the complete research content including introduction,
                 methods, results, and discussion sections. This will be chunked
-                into multiple pieces for embedding.""" * 10,  # Make it long enough to chunk
+                into multiple pieces for embedding."""
+            * 10,  # Make it long enough to chunk
             file_path="/tmp/test.pdf",
             metadata={
                 "title": "Advanced Machine Learning Techniques for Natural Language Processing",
@@ -75,7 +82,12 @@ class TestZoteroMultiFieldEmbeddings:
                 a new architecture that combines transformer models with graph neural
                 networks to achieve state-of-the-art results on multiple benchmarks.""",
                 "authors": ["Smith, J.", "Doe, A.", "Johnson, B."],
-                "keywords": ["machine learning", "NLP", "transformers", "graph neural networks"],
+                "keywords": [
+                    "machine learning",
+                    "NLP",
+                    "transformers",
+                    "graph neural networks",
+                ],
                 "journal": "Journal of AI Research",
                 "year": 2024,
                 "doi": "10.1234/example.2024.001",
@@ -173,11 +185,15 @@ class TestZoteroMultiFieldEmbeddings:
             assert chunk_types.get("citation", 0) == 1
 
             # Verify chunk content
-            abstract_chunks = [c for c in chunks if c.metadata.get("chunk_type") == "abstract"]
+            abstract_chunks = [
+                c for c in chunks if c.metadata.get("chunk_type") == "abstract"
+            ]
             assert len(abstract_chunks) == 1
             assert "novel approaches" in abstract_chunks[0].chunk_text
 
-            annotation_chunks = [c for c in chunks if c.metadata.get("chunk_type") == "annotation"]
+            annotation_chunks = [
+                c for c in chunks if c.metadata.get("chunk_type") == "annotation"
+            ]
             assert len(annotation_chunks) >= 1
             # Check that annotations are properly formatted
             ann_text = " ".join(c.chunk_text for c in annotation_chunks)
@@ -186,7 +202,10 @@ class TestZoteroMultiFieldEmbeddings:
 
     @pytest.mark.anyio
     async def test_multifield_embeddings_generation(
-        self, zotero_record_with_rich_metadata, mock_embeddings, mock_chromadb,
+        self,
+        zotero_record_with_rich_metadata,
+        mock_embeddings,
+        mock_chromadb,
     ):
         """Test that different field types generate different embeddings."""
         _, mock_collection = mock_chromadb
@@ -238,7 +257,9 @@ class TestZoteroMultiFieldEmbeddings:
 
             # Check that different chunk types have appropriate metadata
             content_types_in_metadata = set()
-            content_types_in_metadata.update(metadata.get("chunk_type") for metadata in metadatas)
+            content_types_in_metadata.update(
+                metadata.get("chunk_type") for metadata in metadatas
+            )
 
             assert "content" in content_types_in_metadata
             assert "abstract" in content_types_in_metadata
@@ -312,7 +333,9 @@ class TestZoteroMultiFieldEmbeddings:
             chunks = vector_store.create_multi_field_chunks_for_record(record)
 
             # Find annotation chunks
-            annotation_chunks = [c for c in chunks if c.metadata.get("chunk_type") == "annotation"]
+            annotation_chunks = [
+                c for c in chunks if c.metadata.get("chunk_type") == "annotation"
+            ]
             assert len(annotation_chunks) >= 1
 
             # Verify annotation content is properly formatted
@@ -408,13 +431,17 @@ class TestZoteroMultiFieldEmbeddings:
             chunks = vector_store.create_multi_field_chunks_for_record(record)
 
             # Check contributions formatting (list to text)
-            contrib_chunks = [c for c in chunks if c.metadata.get("chunk_type") == "contributions"]
+            contrib_chunks = [
+                c for c in chunks if c.metadata.get("chunk_type") == "contributions"
+            ]
             assert len(contrib_chunks) == 1
             assert "Novel algorithm" in contrib_chunks[0].chunk_text
             assert "Open-source implementation" in contrib_chunks[0].chunk_text
 
             # Check related works formatting (dict to text)
-            biblio_chunks = [c for c in chunks if c.metadata.get("chunk_type") == "bibliography"]
+            biblio_chunks = [
+                c for c in chunks if c.metadata.get("chunk_type") == "bibliography"
+            ]
             assert len(biblio_chunks) == 1
             assert "builds_on:" in biblio_chunks[0].chunk_text
             assert "Smith et al. 2022" in biblio_chunks[0].chunk_text

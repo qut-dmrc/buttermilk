@@ -1,4 +1,3 @@
-
 line-length = 150
 target-version = "py311"
 extend-include = ["*.ipynb"]
@@ -6,25 +5,25 @@ extend-include = ["*.ipynb"]
 [lint]
 select = ["E", "F", "W", "Q", "I", "PL"]
 extend-ignore = [
-    "RET504",  # Unnecessary variable assignment before return
-    "RET503",  # Multiple returns
-    "E501",    # Line too long
-    "TRY003",
-    "D401",     # First line of docstring must be in imperative mood
-    "EM101",   # No f-strings or string literals in exceptions
-    "RET505",  # Unnecessary else after return
-    "PLR0904",  # Too many public methods
-    "PLR0915",  # Too many public methods
-    "W293",
-    "PLR1702",
-    "PLR2004",  # Magic values used in comparisons -- we can address this later.
-    "PLC0415", # import` should be at the top-level of a file -- mainly in tests and delayed imports.
+  "RET504", # Unnecessary variable assignment before return
+  "RET503", # Multiple returns
+  "E501", # Line too long
+  "TRY003",
+  "D401", # First line of docstring must be in imperative mood
+  "EM101", # No f-strings or string literals in exceptions
+  "RET505", # Unnecessary else after return
+  "PLR0904", # Too many public methods
+  "PLR0915", # Too many public methods
+  "W293",
+  "PLR1702",
+  "PLR2004", # Magic values used in comparisons -- we can address this later.
+  "PLC0415", # import` should be at the top-level of a file -- mainly in tests and delayed imports.
 ]
 
 [lint.isort]
 combine-as-imports = true
 known-first-party = ["buttermilk"]
-#dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+# dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 [format]
 quote-style = "double"

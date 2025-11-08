@@ -55,7 +55,9 @@ async def test_image_generation_pipeline_end_to_end(real_bm, tmp_path):
     # 2. Processors: Complete pipeline stages
     processors = [
         # Stage 1: Expand to repetitions × models
-        BatchExpansionProcessor(repetitions=2, models=[VertexImagen3Fast, VertexImagen4Fast]),
+        BatchExpansionProcessor(
+            repetitions=2, models=[VertexImagen3Fast, VertexImagen4Fast]
+        ),
         # Stage 2: Generate images (real Vertex AI calls)
         # Model class is determined from record.metadata set by BatchExpansionProcessor
         ImageGenerationProcessor(),
@@ -123,7 +125,9 @@ async def test_image_generation_pipeline_end_to_end(real_bm, tmp_path):
 
     # Verify models used are from CHEAP_IMAGE_CLIENTS
     models_used = df["model"].unique()
-    assert all("VertexImagen" in m for m in models_used), f"Unexpected models: {models_used}"
+    assert all("VertexImagen" in m for m in models_used), (
+        f"Unexpected models: {models_used}"
+    )
 
     # Verify scenarios present
     scenarios = df["scenario"].unique()
@@ -134,7 +138,9 @@ async def test_image_generation_pipeline_end_to_end(real_bm, tmp_path):
     # Verify image files exist
     image_dir = tmp_path / "images"
     image_files = list(image_dir.rglob("*.png"))
-    assert len(image_files) >= 6, f"Expected at least 6 image files, found {len(image_files)}"
+    assert len(image_files) >= 6, (
+        f"Expected at least 6 image files, found {len(image_files)}"
+    )
 
     # Verify structured paths (scenario/model/filename pattern)
     for image_file in image_files:

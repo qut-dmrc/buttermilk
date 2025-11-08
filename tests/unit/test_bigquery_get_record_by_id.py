@@ -70,7 +70,11 @@ def test_get_record_by_id_happy_path(monkeypatch):
     storage = make_storage(cfg)
 
     # Pretend table has the expected logical columns
-    monkeypatch.setattr(storage, "_available_columns", lambda: {"record_id", "dataset_name", "split_type"})
+    monkeypatch.setattr(
+        storage,
+        "_available_columns",
+        lambda: {"record_id", "dataset_name", "split_type"},
+    )
 
     rec = storage.get_record_by_id("rec-1")
     assert rec is not None
@@ -109,11 +113,15 @@ def test_get_record_by_id_skips_missing_filters(monkeypatch):
 
 
 def test_get_record_by_id_respects_column_mapping(monkeypatch):
-    cfg = make_config(columns={"record_id": "id", "dataset_name": "dataset", "split_type": "fold"})
+    cfg = make_config(
+        columns={"record_id": "id", "dataset_name": "dataset", "split_type": "fold"}
+    )
     storage = make_storage(cfg)
 
     # Available columns reflect the mapped names
-    monkeypatch.setattr(storage, "_available_columns", lambda: {"id", "dataset", "fold"})
+    monkeypatch.setattr(
+        storage, "_available_columns", lambda: {"id", "dataset", "fold"}
+    )
 
     fc = FakeClient()
     storage._client = fc

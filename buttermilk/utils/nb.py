@@ -32,12 +32,20 @@ nest_asyncio.apply()
 
 def graph_defaults() -> None:
     """Legacy function - use init_viz() instead for better control."""
-    print("[yellow]⚠️  graph_defaults() is deprecated - use init_viz() for better control[/yellow]")
+    print(
+        "[yellow]⚠️  graph_defaults() is deprecated - use init_viz() for better control[/yellow]"
+    )
     init_viz(profile="notebook", theme="cyberpunk")
     print("✨ Visualization defaults applied (cyberpunk theme)")
 
 
-def nb_init(job: str, project: str = None, overrides: list[str] = [], config_dir: str = None, config_name: str = "config") -> BM:
+def nb_init(
+    job: str,
+    project: str = None,
+    overrides: list[str] = [],
+    config_dir: str = None,
+    config_name: str = "config",
+) -> BM:
     """Simple one-liner initialization for Buttermilk.
 
     Args:
@@ -72,7 +80,13 @@ def nb_init(job: str, project: str = None, overrides: list[str] = [], config_dir
     # Add notebook run type to overrides
     nb_overrides = overrides + ["run=notebook"]
 
-    bm = init(job=job, project_name=project, config_dir=config_dir, config_name=config_name, overrides=nb_overrides)
+    bm = init(
+        job=job,
+        project_name=project,
+        config_dir=config_dir,
+        config_name=config_name,
+        overrides=nb_overrides,
+    )
 
     # Initialize visualization with notebook-optimized defaults
     init_viz(profile="notebook", theme="cyberpunk")

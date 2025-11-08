@@ -31,7 +31,12 @@ async def test_zotero_sets_pdf_metadata_as_content_when_no_fulltext():
         metadata={
             "title": "Test Document",
             "zotero_item": {"key": "TEST_KEY", "data": {"title": "Test Document"}},
-            "zotero_links": {"attachment": {"attachmentType": "application/pdf", "href": "https://api.zotero.org/users/123/items/ATTACH_KEY/file"}},
+            "zotero_links": {
+                "attachment": {
+                    "attachmentType": "application/pdf",
+                    "href": "https://api.zotero.org/users/123/items/ATTACH_KEY/file",
+                }
+            },
         },
     )
 
@@ -40,14 +45,22 @@ async def test_zotero_sets_pdf_metadata_as_content_when_no_fulltext():
         with patch("buttermilk.libs.zotero.Zotero") as MockZotero:
             mock_zot = MagicMock()
             mock_zot.fulltext_item.side_effect = Exception("No fulltext available")
-            mock_zot.dump = MagicMock(side_effect=lambda key, path: Path(path).write_bytes(b"%PDF-1.4\n" + b"x" * 100000))
+            mock_zot.dump = MagicMock(
+                side_effect=lambda key, path: Path(path).write_bytes(
+                    b"%PDF-1.4\n" + b"x" * 100000
+                )
+            )
             MockZotero.return_value = mock_zot
 
-            downloader = ZoteroDownloadProcessor(library_id="test_library", save_dir=tmpdir)
+            downloader = ZoteroDownloadProcessor(
+                library_id="test_library", save_dir=tmpdir
+            )
 
             # Process the record
             results = []
-            async for result in downloader.process(test_record, processor_stage="download"):
+            async for result in downloader.process(
+                test_record, processor_stage="download"
+            ):
                 results.append(result)
 
             # Verify we got a result
@@ -87,7 +100,12 @@ async def test_zotero_uses_fulltext_when_available():
         metadata={
             "title": "Test Document",
             "zotero_item": {"key": "TEST_KEY", "data": {"title": "Test Document"}},
-            "zotero_links": {"attachment": {"attachmentType": "application/pdf", "href": "https://api.zotero.org/users/123/items/ATTACH_KEY/file"}},
+            "zotero_links": {
+                "attachment": {
+                    "attachmentType": "application/pdf",
+                    "href": "https://api.zotero.org/users/123/items/ATTACH_KEY/file",
+                }
+            },
         },
     )
 
@@ -101,18 +119,24 @@ async def test_zotero_uses_fulltext_when_available():
             }
             MockZotero.return_value = mock_zot
 
-            downloader = ZoteroDownloadProcessor(library_id="test_library", save_dir=tmpdir)
+            downloader = ZoteroDownloadProcessor(
+                library_id="test_library", save_dir=tmpdir
+            )
 
             # Process the record
             results = []
-            async for result in downloader.process(test_record, processor_stage="download"):
+            async for result in downloader.process(
+                test_record, processor_stage="download"
+            ):
                 results.append(result)
 
             assert len(results) == 1
             result = results[0]
 
             # Verify Zotero fulltext was used
-            assert result.content == "This is the extracted text from Zotero fulltext API"
+            assert (
+                result.content == "This is the extracted text from Zotero fulltext API"
+            )
             assert "[PDF Document:" not in result.content
 
             print(f"\n✅ Zotero fulltext used: {result.content[:50]}...")
@@ -154,7 +178,9 @@ async def test_pdftotext_processor_replaces_metadata_content():
         with patch("asyncio.create_subprocess_shell") as mock_subprocess:
             # Create an async mock process
             mock_process = AsyncMock()
-            mock_process.communicate = AsyncMock(return_value=(b"Extracted text from PDF", b""))
+            mock_process.communicate = AsyncMock(
+                return_value=(b"Extracted text from PDF", b"")
+            )
             mock_process.returncode = 0
 
             # Make create_subprocess_shell return an awaitable that yields the mock process

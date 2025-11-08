@@ -1,27 +1,26 @@
-
-import React, { useState } from 'react';
-import { Box, Text } from 'ink';
-import TextInput from 'ink-text-input';
-import { retroIRCTheme } from '../themes.js';
+import { Box, Text } from "ink"
+import TextInput from "ink-text-input"
+import React, { useState } from "react"
+import { retroIRCTheme } from "../themes.js"
 
 interface Props {
-  onSubmit: (text: string) => void;
+  onSubmit: (text: string) => void
 }
 
 const UserInput = ({ onSubmit }: Props) => {
-  const [value, setValue] = useState('');
+  const [value, setValue] = useState("")
 
   const handleSubmit = (text: string) => {
     if (text.trim()) {
-      onSubmit(text);
-      setValue('');
+      onSubmit(text)
+      setValue("")
     }
-  };
+  }
 
   return (
     <Box>
       {/* IRC-style prompt with proper theming */}
-      <Text color={retroIRCTheme.colors.text}>❯ </Text>
+      <Text color={retroIRCTheme.colors.text}>❯</Text>
       <Box flexGrow={1}>
         <TextInput
           value={value}
@@ -33,7 +32,7 @@ const UserInput = ({ onSubmit }: Props) => {
         />
       </Box>
     </Box>
-  );
-};
+  )
+}
 
-export default UserInput;
+export default UserInput

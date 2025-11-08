@@ -19,6 +19,7 @@ Use this to time a meaningful step (e.g., DB call, tool execution). Pass `sessio
 from buttermilk.utils.otel import span_with_session
 from buttermilk import logger
 
+
 def do_something(session_id: str | None, thing_id: str):
     with span_with_session(
         session_id,
@@ -49,8 +50,13 @@ When you’re already inside a span and just need a quick nested span.
 ```python
 from buttermilk.utils.otel import begin_span
 
+
 def fetch_user(user_id: str):
-    with begin_span("db.query", {"db.system": "postgres", "db.operation": "SELECT", "db.table": "users"}, kind="client"):
+    with begin_span(
+        "db.query",
+        {"db.system": "postgres", "db.operation": "SELECT", "db.table": "users"},
+        kind="client",
+    ):
         # run query...
         pass
 ```
@@ -61,6 +67,7 @@ Good for breadcrumbs without creating more spans.
 
 ```python
 from opentelemetry.trace import get_current_span
+
 
 def cache_lookup(key: str):
     span = get_current_span()
@@ -75,6 +82,7 @@ Ensure errors show up in traces even if they’re handled.
 
 ```python
 from buttermilk.utils.otel import span_with_session
+
 
 def risky_op(session_id: str | None):
     with span_with_session(session_id, "buttermilk.risky_op") as span:
@@ -93,7 +101,12 @@ def risky_op(session_id: str | None):
 
 ```python
 import asyncio
-from buttermilk.utils.otel import attach_session_baggage, detach_session_baggage, begin_span
+from buttermilk.utils.otel import (
+    attach_session_baggage,
+    detach_session_baggage,
+    begin_span,
+)
+
 
 def schedule_background(session_id: str):
     async def worker():
@@ -113,6 +126,7 @@ def schedule_background(session_id: str):
 Buttermilk starts a long-lived `buttermilk.session` root span when a session is created and ends it on cleanup. All flow/job spans nest under it, and the span includes `buttermilk.session.status` which updates on transitions.
 
 Benefits:
+
 - Clear tree per session
 - Automatic context inheritance for child spans
 - Easy session-level timing and status

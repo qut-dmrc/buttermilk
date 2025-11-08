@@ -31,7 +31,9 @@ def record_with_parent_call_id() -> BaseRecord:
 
 
 @pytest.mark.anyio
-async def test_parent_call_id_extraction_and_linkage(real_bm, record_with_parent_call_id: BaseRecord, real_model_name: str):
+async def test_parent_call_id_extraction_and_linkage(
+    real_bm, record_with_parent_call_id: BaseRecord, real_model_name: str
+):
     """Test that parent_call_id from record is correctly used in ExecutionTrace.
 
     This validates the fix:
@@ -44,7 +46,9 @@ async def test_parent_call_id_extraction_and_linkage(real_bm, record_with_parent
     parent_trace_id = getattr(record_with_parent_call_id, "parent_call_id", None)
 
     logger.info(f"Extracted parent_trace_id from record: {parent_trace_id}")
-    assert parent_trace_id == "judge-trace-abc123", "Should extract parent_call_id from record"
+    assert parent_trace_id == "judge-trace-abc123", (
+        "Should extract parent_call_id from record"
+    )
 
     # Create LLMCore
     llm_core = LLMCore(
@@ -95,10 +99,14 @@ async def test_parent_call_id_extraction_and_linkage(real_bm, record_with_parent
     logger.info(f"Trace parent_call_id: {trace.parent_call_id}")
 
     # 1. parent_call_id should match what we passed
-    assert trace.parent_call_id == "judge-trace-abc123", f"parent_call_id should be 'judge-trace-abc123', got '{trace.parent_call_id}'"
+    assert trace.parent_call_id == "judge-trace-abc123", (
+        f"parent_call_id should be 'judge-trace-abc123', got '{trace.parent_call_id}'"
+    )
 
     # 2. call_id should be DIFFERENT (new UUID generated)
-    assert trace.call_id != trace.parent_call_id, f"call_id should be NEW (not reuse parent), but both are: {trace.call_id}"
+    assert trace.call_id != trace.parent_call_id, (
+        f"call_id should be NEW (not reuse parent), but both are: {trace.call_id}"
+    )
 
     logger.info("✅ parent_call_id correctly set from record")
     logger.info("✅ call_id is unique (not reused)")

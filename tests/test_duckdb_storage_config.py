@@ -13,9 +13,7 @@ class TestDuckDBStorageConfig:
         from buttermilk._core.storage_config import DuckDBStorageConfig
 
         config = DuckDBStorageConfig(
-            type="duckdb",
-            database="test.db",
-            table_name="test_table"
+            type="duckdb", database="test.db", table_name="test_table"
         )
 
         assert config.type == "duckdb"
@@ -33,7 +31,7 @@ class TestDuckDBStorageConfig:
             database="test.db",
             table_name="test_table",
             schema_name="custom_schema",
-            custom_query="SELECT * FROM test WHERE id > 100"
+            custom_query="SELECT * FROM test WHERE id > 100",
         )
 
         assert config.schema_name == "custom_schema"
@@ -44,27 +42,35 @@ class TestDuckDBStorageConfig:
         from buttermilk._core.storage_config import DuckDBStorageConfig
 
         config = DuckDBStorageConfig(
-            type="duckdb",
-            database="test.db",
-            table_name="test_table"
+            type="duckdb", database="test.db", table_name="test_table"
         )
 
         common_fields = [
-            "type", "dataset_name", "randomize", "batch_size", "auto_create",
-            "filter", "columns", "limit", "name", "schema_path", "uri", "db"
+            "type",
+            "dataset_name",
+            "randomize",
+            "batch_size",
+            "auto_create",
+            "filter",
+            "columns",
+            "limit",
+            "name",
+            "schema_path",
+            "uri",
+            "db",
         ]
 
         for field in common_fields:
-            assert hasattr(config, field), f"DuckDBStorageConfig missing common field: {field}"
+            assert hasattr(config, field), (
+                f"DuckDBStorageConfig missing common field: {field}"
+            )
 
     def test_duckdb_config_has_relevant_fields_only(self):
         """DuckDBStorageConfig should only have DuckDB-specific fields."""
         from buttermilk._core.storage_config import DuckDBStorageConfig
 
         config = DuckDBStorageConfig(
-            type="duckdb",
-            database="test.db",
-            table_name="test_table"
+            type="duckdb", database="test.db", table_name="test_table"
         )
 
         # Should have DuckDB-specific fields
@@ -96,12 +102,16 @@ class TestDuckDBStorageConfig:
         from buttermilk._core.storage_config import DuckDBStorageConfig
 
         # Valid type
-        config = DuckDBStorageConfig(type="duckdb", database="test.db", table_name="test_table")
+        config = DuckDBStorageConfig(
+            type="duckdb", database="test.db", table_name="test_table"
+        )
         assert config.type == "duckdb"
 
         # Invalid type should fail
         with pytest.raises(ValueError):
-            DuckDBStorageConfig(type="invalid_type", database="test.db", table_name="test_table")
+            DuckDBStorageConfig(
+                type="invalid_type", database="test.db", table_name="test_table"
+            )
 
     def test_storage_factory_creates_duckdb_config(self):
         """StorageFactory should handle DuckDB config dicts."""
@@ -109,7 +119,7 @@ class TestDuckDBStorageConfig:
             "type": "duckdb",
             "database": "test.db",
             "table_name": "test_table",
-            "schema_name": "main"
+            "schema_name": "main",
         }
 
         config = StorageFactory.create_config(config_dict)
@@ -123,7 +133,7 @@ class TestDuckDBStorageConfig:
         config_dict = {
             "type": "duckdb",
             "database": ":memory:",
-            "table_name": "test_table"
+            "table_name": "test_table",
         }
 
         storage = StorageFactory.create_storage(config_dict)
@@ -139,5 +149,5 @@ class TestDuckDBStorageConfig:
                 type="duckdb",
                 database="test.db",
                 table_name="test_table",
-                invalid_field="should_fail"
+                invalid_field="should_fail",
             )

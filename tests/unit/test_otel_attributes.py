@@ -10,7 +10,9 @@ from buttermilk.utils.otel import span_with_session
 class TestProjectNameCapture:
     """Test project name is captured in all spans."""
 
-    def test_project_name_in_span_attributes(self, real_bm, tracer_provider, get_recorded_spans):
+    def test_project_name_in_span_attributes(
+        self, real_bm, tracer_provider, get_recorded_spans
+    ):
         """Verify project name appears as span attribute."""
         # Arrange: Set up BM with specific project name
         real_bm.session_info.project_name = "test_project_name"
@@ -33,10 +35,14 @@ class TestProjectNameCapture:
         assert span is not None
 
         # Verify attributes
-        assert "buttermilk.project.name" in span.attributes, "Project name attribute missing"
+        assert "buttermilk.project.name" in span.attributes, (
+            "Project name attribute missing"
+        )
         assert span.attributes["buttermilk.project.name"] == "test_project_name"
 
-    def test_project_name_propagates_to_child_spans(self, real_bm, tracer_provider, get_recorded_spans):
+    def test_project_name_propagates_to_child_spans(
+        self, real_bm, tracer_provider, get_recorded_spans
+    ):
         """Verify project name propagates to all child spans."""
         real_bm.session_info.project_name = "child_test_project"
 
@@ -61,7 +67,9 @@ class TestProjectNameCapture:
             assert "buttermilk.project.name" in span.attributes
             assert span.attributes["buttermilk.project.name"] == "child_test_project"
 
-    def test_project_name_fallback_when_bm_unavailable(self, tracer_provider, get_recorded_spans):
+    def test_project_name_fallback_when_bm_unavailable(
+        self, tracer_provider, get_recorded_spans
+    ):
         """Verify graceful handling when BM not available."""
         # Act: Create span without BM context (session_id but no BM)
         with span_with_session(
@@ -77,7 +85,9 @@ class TestProjectNameCapture:
         # Should either have "unknown" or omit the attribute
         # (implementation decision - using "unknown" as fallback)
         project_name = spans[0].attributes.get("buttermilk.project.name")
-        assert project_name in ["unknown", None], f"Unexpected project name: {project_name}"
+        assert project_name in ["unknown", None], (
+            f"Unexpected project name: {project_name}"
+        )
 
 
 class TestAgentTypeFormatting:
@@ -167,7 +177,10 @@ class TestAgentParameterCapture:
             agent_name="Test Judge",
             role="JUDGE",
             description="Test",
-            parameters={"template": "judge_template.jinja2", "model": "gemini-2.0-flash"},
+            parameters={
+                "template": "judge_template.jinja2",
+                "model": "gemini-2.0-flash",
+            },
         )
 
         # Act
@@ -187,7 +200,10 @@ class TestAgentParameterCapture:
             agent_name="Test Judge",
             role="JUDGE",
             description="Test",
-            parameters={"model": "gemini-2.0-flash-thinking-exp", "template": "judge.jinja2"},
+            parameters={
+                "model": "gemini-2.0-flash-thinking-exp",
+                "template": "judge.jinja2",
+            },
         )
 
         trace_info = create_agent_trace_info(judge)
@@ -205,7 +221,10 @@ class TestAgentParameterCapture:
             agent_name="Test Judge",
             role="JUDGE",
             description="Test",
-            parameters={"template": "judge_template.jinja2", "model": "gemini-2.0-flash"},
+            parameters={
+                "template": "judge_template.jinja2",
+                "model": "gemini-2.0-flash",
+            },
         )
 
         # Act: Provide template hash
@@ -249,7 +268,12 @@ class TestAgentParameterCapture:
             agent_name="Test Judge",
             role="JUDGE",
             description="Test judge agent",
-            parameters={"template": "judge.jinja2", "model": "gemini-2.0-flash", "max_tokens": 1000, "temperature": 0.7},
+            parameters={
+                "template": "judge.jinja2",
+                "model": "gemini-2.0-flash",
+                "max_tokens": 1000,
+                "temperature": 0.7,
+            },
         )
 
         trace_info = create_agent_trace_info(judge, template_hash="hash123")

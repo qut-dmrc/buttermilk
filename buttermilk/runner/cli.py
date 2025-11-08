@@ -25,7 +25,6 @@ import asyncio
 import os  # For setting environment variables (e.g., Slack tokens)
 
 import hydra  # For configuration management
-import uvicorn  # For running the FastAPI server
 from omegaconf import DictConfig, OmegaConf  # Hydra's configuration objects
 
 from buttermilk import (
@@ -35,7 +34,6 @@ from buttermilk import (
 )
 from buttermilk._core.types import RunRequest
 from buttermilk.agents.ui.console import CLIUserAgent
-from buttermilk.api.flow import create_app as create_fastapi_app
 from buttermilk.runner.flowrunner import FlowRunner
 
 
@@ -50,7 +48,11 @@ def _validate_flow_config(conf: DictConfig, mode: str) -> None:
         ValueError: If required configuration is missing or invalid
     """
     # Convert mode to string if it's an enum
-    mode_str = str(mode).split(".")[-1].lower() if hasattr(mode, "value") else str(mode).lower()
+    mode_str = (
+        str(mode).split(".")[-1].lower()
+        if hasattr(mode, "value")
+        else str(mode).lower()
+    )
 
     # Modes that require a flow to be specified
     flow_required_modes = {"console", "batch", "batch_all"}
@@ -68,8 +70,12 @@ def _validate_flow_config(conf: DictConfig, mode: str) -> None:
         # Check if the flow exists in the configuration
         flow_name = conf.run.flow
         if not hasattr(conf.run, "flows") or flow_name not in conf.run.flows:
-            available_flows = list(conf.run.flows.keys()) if hasattr(conf.run, "flows") else []
-            flows_list = ", ".join(available_flows) if available_flows else "none configured"
+            available_flows = (
+                list(conf.run.flows.keys()) if hasattr(conf.run, "flows") else []
+            )
+            flows_list = (
+                ", ".join(available_flows) if available_flows else "none configured"
+            )
             raise ValueError(
                 f"Flow '{flow_name}' not found in configuration.\n"
                 f"Available flows: {flows_list}\n"
@@ -174,7 +180,9 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
             logger.info(f"Starting flow '{run_request.flow}'...")
 
             async def run_with_shutdown() -> None:
-                await flow_runner.run_flow(run_request=run_request, wait_for_completion=True)
+                await flow_runner.run_flow(
+                    run_request=run_request, wait_for_completion=True
+                )
                 await bm.graceful_shutdown()
 
             try:
@@ -196,7 +204,11 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
                 # Get storage config from run section
                 storage_config = conf.run.storage_config or None
 
-                await flow_runner.create_batch(flow_name=flow_name, storage_config=storage_config, max_records=limit)
+                await flow_runner.create_batch(
+                    flow_name=flow_name,
+                    storage_config=storage_config,
+                    max_records=limit,
+                )
                 await bm.graceful_shutdown()
 
             try:
@@ -218,7 +230,11 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
             logger.info(f"Maximum jobs to process: {limit}")
 
             async def run_with_shutdown() -> None:
-                summary = await flow_runner.run_batch_job(max_jobs=limit, callback_to_ui=ui.make_callback(), wait_for_completion=True)
+                summary = await flow_runner.run_batch_job(
+                    max_jobs=limit,
+                    callback_to_ui=ui.make_callback(),
+                    wait_for_completion=True,
+                )
                 logger.info("\n" + summary.format_for_console())
                 await bm.graceful_shutdown()
 
@@ -233,19 +249,29 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
             # Batch all mode: Create and process jobs in one command
             flow_name = conf.run.flow
             limit = conf.run.limit or 999
-            logger.info(f"Batch all mode: Create and process jobs for flow '{flow_name}'")
+            logger.info(
+                f"Batch all mode: Create and process jobs for flow '{flow_name}'"
+            )
 
             async def run_with_shutdown() -> None:
                 # Enqueue phase
                 logger.info("Phase 1: Enqueueing batch jobs...")
                 storage_config = conf.run.storage_config or None
-                await flow_runner.create_batch(flow_name=flow_name, storage_config=storage_config, max_records=limit)
+                await flow_runner.create_batch(
+                    flow_name=flow_name,
+                    storage_config=storage_config,
+                    max_records=limit,
+                )
                 logger.info("✓ Batch jobs enqueued successfully")
 
                 # Process phase
                 ui = CLIUserAgent()
                 logger.info(f"Phase 2: Processing batch jobs (limit: {limit})...")
-                summary = await flow_runner.run_batch_job(max_jobs=limit, callback_to_ui=ui.make_callback(), wait_for_completion=True)
+                summary = await flow_runner.run_batch_job(
+                    max_jobs=limit,
+                    callback_to_ui=ui.make_callback(),
+                    wait_for_completion=True,
+                )
                 logger.info("\n" + summary.format_for_console())
 
                 await bm.graceful_shutdown()
@@ -265,18 +291,32 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
 
                 # create_dashboard_app is expected to configure and run the Streamlit app.
                 # It might need access to flow_runner or specific flow configurations.
-                streamlit_app_manager = create_dashboard_app(flow_runner=flow_runner)  # Pass FlowRunner
-                asyncio.run(streamlit_app_manager.run())  # Assuming create_dashboard_app returns an object with a run method
+                streamlit_app_manager = create_dashboard_app(
+                    flow_runner=flow_runner
+                )  # Pass FlowRunner
+                asyncio.run(
+                    streamlit_app_manager.run()
+                )  # Assuming create_dashboard_app returns an object with a run method
             except ImportError as e_streamlit:
-                logger.error(f"Failed to import Streamlit components: {e_streamlit!s}. Is Streamlit installed?")
+                logger.error(
+                    f"Failed to import Streamlit components: {e_streamlit!s}. Is Streamlit installed?"
+                )
             except Exception as e_streamlit_start:
-                logger.error(f"Error starting Streamlit interface: {e_streamlit_start!s}", exc_info=True)
+                logger.error(
+                    f"Error starting Streamlit interface: {e_streamlit_start!s}",
+                    exc_info=True,
+                )
 
         case "api":
             # API mode: Start FastAPI web server for HTTP API access
             host = str(conf.run.host or "0.0.0.0")
             port = int(conf.run.port or 8000)
             logger.info("API mode: Starting FastAPI server")
+
+            # Lazy import FastAPI dependencies only when needed
+            import uvicorn  # For running the FastAPI server
+
+            from buttermilk.api.flow import create_app as create_fastapi_app
 
             # Pass both FlowRunner and the already-initialized BM to avoid re-bootstrapping
             fastapi_app = create_fastapi_app(
@@ -286,8 +326,13 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
 
             # Verify app is ready instead of sleeping
             logger.debug("Verifying FastAPI app readiness...")
-            if not hasattr(fastapi_app.state, "flow_runner") or not fastapi_app.state.flow_runner:
-                raise RuntimeError("FlowRunner not properly initialized in FastAPI app state")
+            if (
+                not hasattr(fastapi_app.state, "flow_runner")
+                or not fastapi_app.state.flow_runner
+            ):
+                raise RuntimeError(
+                    "FlowRunner not properly initialized in FastAPI app state"
+                )
             logger.debug("✓ FastAPI app readiness verified")
 
             uvicorn_config = uvicorn.Config(
@@ -315,8 +360,12 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
             # TODO: Implement Pub/Sub listener functionality
             # This mode was previously delegated to batch_cli, which has been removed.
             # Pub/Sub integration should be implemented using the JobQueueClient with Pub/Sub backend.
-            logger.error("Pub/Sub mode is not yet implemented. Use 'batch_run' mode with a Pub/Sub job queue backend instead.")
-            raise NotImplementedError("Pub/Sub mode requires implementation. See GitHub issues for status.")
+            logger.error(
+                "Pub/Sub mode is not yet implemented. Use 'batch_run' mode with a Pub/Sub job queue backend instead."
+            )
+            raise NotImplementedError(
+                "Pub/Sub mode requires implementation. See GitHub issues for status."
+            )
 
         case "slackbot":
             # Starts a Slack bot integration.
@@ -325,20 +374,28 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
             # Retrieve Slack tokens securely from bm.credentials
             slack_creds = bm.credentials
             if not isinstance(slack_creds, dict):
-                raise TypeError(f"Expected bm.credentials to be a dict, got {type(slack_creds)}")
+                raise TypeError(
+                    f"Expected bm.credentials to be a dict, got {type(slack_creds)}"
+                )
 
             slack_bot_token = slack_creds.get("MODBOT_TOKEN")  # Standard bot token
-            slack_app_token = slack_creds.get("SLACK_APP_TOKEN")  # Socket Mode app-level token
+            slack_app_token = slack_creds.get(
+                "SLACK_APP_TOKEN"
+            )  # Socket Mode app-level token
 
             if not slack_bot_token or not slack_app_token:
-                raise ValueError("Missing MODBOT_TOKEN or SLACK_APP_TOKEN in credentials. Check secrets configuration.")
+                raise ValueError(
+                    "Missing MODBOT_TOKEN or SLACK_APP_TOKEN in credentials. Check secrets configuration."
+                )
 
             # Set environment variables for Slack Bolt library, if it relies on them.
             # Alternatively, pass tokens directly to initialize_slack_bot if supported.
             os.environ["SLACK_BOT_TOKEN"] = slack_bot_token
             os.environ["SLACK_APP_TOKEN"] = slack_app_token
 
-            from buttermilk.runner.slackbot import initialize_slack_bot  # Slack bot initialization utility
+            from buttermilk.runner.slackbot import (
+                initialize_slack_bot,
+            )  # Slack bot initialization utility
 
             event_loop = asyncio.get_event_loop()
 
@@ -389,7 +446,8 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
 
             if not hasattr(conf.run, "pipeline"):
                 raise ValueError(
-                    "Pipeline configuration missing. Ensure 'run.pipeline' is configured.\n" "Check your pipeline configurations in buttermilk/conf/"
+                    "Pipeline configuration missing. Ensure 'run.pipeline' is configured.\n"
+                    "Check your pipeline configurations in buttermilk/conf/"
                 )
 
             pipeline_conf = conf.run.pipeline
@@ -449,7 +507,16 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
                 raise
         case _:
             # Handles any unsupported modes specified in the configuration.
-            valid_modes = ["console", "batch", "batch_run", "batch_all", "api", "pipeline", "streamlit", "slackbot"]
+            valid_modes = [
+                "console",
+                "batch",
+                "batch_run",
+                "batch_all",
+                "api",
+                "pipeline",
+                "streamlit",
+                "slackbot",
+            ]
             raise ValueError(
                 f"Unsupported run mode: '{mode}'\n"
                 f"Valid modes: {', '.join(valid_modes)}\n"

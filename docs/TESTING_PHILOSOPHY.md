@@ -43,7 +43,9 @@ def test_agent(mock_process):
 def test_agent():
     # Mock only the external HTTP call
     respx.post("https://api.openai.com/v1/chat").mock(
-        return_value=httpx.Response(200, json={"choices": [{"message": {"content": "Paris"}}]})
+        return_value=httpx.Response(
+            200, json={"choices": [{"message": {"content": "Paris"}}]}
+        )
     )
 
     # Test real agent logic
@@ -62,6 +64,7 @@ def test_agent():
 ```python
 # Use respx for httpx
 import respx
+
 
 @respx.mock
 async def test_api_call():
@@ -90,6 +93,7 @@ def test_file_processing(tmp_path):
 # Use freezegun
 from freezegun import freeze_time
 
+
 @freeze_time("2024-01-01")
 def test_timestamp():
     record = create_record()
@@ -114,12 +118,12 @@ class FakeLLM:
                 return response
         return "default response"
 
+
 # Use in tests
 async def test_agent_with_fake():
-    fake_llm = FakeLLM(responses={
-        "capital of France": "Paris",
-        "population": "2.2 million"
-    })
+    fake_llm = FakeLLM(
+        responses={"capital of France": "Paris", "population": "2.2 million"}
+    )
 
     agent = Agent(llm=fake_llm)
     result = await agent.research("Tell me about Paris")

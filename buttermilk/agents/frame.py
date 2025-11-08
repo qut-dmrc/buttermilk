@@ -38,15 +38,38 @@ class FramedStatement(BaseModel):
 
     """
 
-    statement: str = Field(..., description="Exact quote of the value-laden statement from the article")
-    speaker_name: str = Field(..., description="Name of the person making the statement, or 'journalist' if narration")
-    speaker_affiliation: str = Field(..., description="Organization, role, or institutional affiliation of the speaker")
-    solution_addressee: Optional[str] = Field(None, description="Person or entity to whom the solution/action is directed")
-    problem_definition: str = Field(..., description="What is presented as the core issue or problem")
-    blame_attribution: Optional[str] = Field(None, description="Who or what is held responsible for causing the problem")
-    moral_evaluation: Optional[str] = Field(None, description="Moral judgment or evaluative stance toward the issue")
-    recommendation: Optional[str] = Field(None, description="Proposed solution or course of action")
-    confidence_score: float = Field(default=1.0, ge=0.0, le=1.0, description="Confidence level in the frame identification (0-1)")
+    statement: str = Field(
+        ..., description="Exact quote of the value-laden statement from the article"
+    )
+    speaker_name: str = Field(
+        ...,
+        description="Name of the person making the statement, or 'journalist' if narration",
+    )
+    speaker_affiliation: str = Field(
+        ...,
+        description="Organization, role, or institutional affiliation of the speaker",
+    )
+    solution_addressee: Optional[str] = Field(
+        None, description="Person or entity to whom the solution/action is directed"
+    )
+    problem_definition: str = Field(
+        ..., description="What is presented as the core issue or problem"
+    )
+    blame_attribution: Optional[str] = Field(
+        None, description="Who or what is held responsible for causing the problem"
+    )
+    moral_evaluation: Optional[str] = Field(
+        None, description="Moral judgment or evaluative stance toward the issue"
+    )
+    recommendation: Optional[str] = Field(
+        None, description="Proposed solution or course of action"
+    )
+    confidence_score: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="Confidence level in the frame identification (0-1)",
+    )
 
     def as_markdown(self, agent_id: str = None, call_id: str = None) -> str:
         """Returns a Markdown formatted string for insertion into templates.
@@ -95,9 +118,15 @@ class FrameAnalysisResults(BaseModel):
         dominant_frame (Optional[str]): The predominant framing pattern in the article.
     """
 
-    statements: list[FramedStatement] = Field(..., description="List of all framed statements identified in the article")
-    article_summary: str = Field(..., description="Brief summary of the article being analyzed")
-    dominant_frame: Optional[str] = Field(None, description="The predominant framing pattern identified in the article")
+    statements: list[FramedStatement] = Field(
+        ..., description="List of all framed statements identified in the article"
+    )
+    article_summary: str = Field(
+        ..., description="Brief summary of the article being analyzed"
+    )
+    dominant_frame: Optional[str] = Field(
+        None, description="The predominant framing pattern identified in the article"
+    )
 
     def as_markdown(self, agent_id: str = None, call_id: str = None) -> str:
         """Returns a Markdown formatted string for insertion into templates.
@@ -123,14 +152,24 @@ class FrameAnalysisResults(BaseModel):
         if self.statements:
             statement_parts = []
             for stmt in self.statements[:3]:  # Show first 3 statements
-                statement_parts.append(f'- {stmt.speaker_name}: "{stmt.statement[:100]}..."')
+                statement_parts.append(
+                    f'- {stmt.speaker_name}: "{stmt.statement[:100]}..."'
+                )
             statements_str = "\n".join(statement_parts)
             if len(self.statements) > 3:
-                statements_str += f"\n- ... and {len(self.statements) - 3} more statements"
+                statements_str += (
+                    f"\n- ... and {len(self.statements) - 3} more statements"
+                )
 
         frame_str = f"Frame: {self.dominant_frame}\n" if self.dominant_frame else ""
 
-        return f"{header}" f"{self.article_summary}\n" f"{frame_str}" f"Statements analyzed: {len(self.statements)}\n" f"{statements_str}"
+        return (
+            f"{header}"
+            f"{self.article_summary}\n"
+            f"{frame_str}"
+            f"Statements analyzed: {len(self.statements)}\n"
+            f"{statements_str}"
+        )
 
     def __str__(self) -> str:
         """Returns a Markdown formatted string representation.
@@ -244,7 +283,9 @@ class Frame(LLMAgent):
         if hasattr(message, "inputs") and isinstance(message.inputs, dict):
             message.inputs["analysis_focus"] = "climate_activism"
 
-        logger.debug(f"Frame agent '{self.agent_name}' performing climate activism analysis.")
+        logger.debug(
+            f"Frame agent '{self.agent_name}' performing climate activism analysis."
+        )
 
         return await self.analyze_article(message)
 

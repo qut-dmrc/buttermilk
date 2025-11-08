@@ -66,7 +66,9 @@ class LLMAgent(Agent):
 
     """
 
-    def __init__(self, *, output_model: type[pydantic.BaseModel] = None, **kwargs: Any) -> None:
+    def __init__(
+        self, *, output_model: type[pydantic.BaseModel] = None, **kwargs: Any
+    ) -> None:
         """Initialize an LLMAgent with the provided configuration.
 
         Extracts the model name from parameters and stores it in `_model`.
@@ -84,25 +86,40 @@ class LLMAgent(Agent):
             kwargs["name_components"] = ["role", "model", "unique_identifier"]
         super().__init__(**kwargs)
         if "model" not in self.parameters:
-            raise ValueError(f"Agent {self.agent_name}: 'model' is required in agent parameters.")
+            raise ValueError(
+                f"Agent {self.agent_name}: 'model' is required in agent parameters."
+            )
         if "template" not in self.parameters:
-            raise ValueError(f"Agent {self.agent_name}: 'template' is required in agent parameters.")
+            raise ValueError(
+                f"Agent {self.agent_name}: 'template' is required in agent parameters."
+            )
 
         # Initialize private attributes
         self.output_model: type[pydantic.BaseModel] = output_model or None
 
         # Initialize the shared LLM core
         # Filter out parameters that we're passing explicitly to avoid duplicates
-        filtered_params = {k: v for k, v in self.parameters.items()
-                          if k not in ("output_model", "tools", "fail_on_unfilled_parameters")}
+        filtered_params = {
+            k: v
+            for k, v in self.parameters.items()
+            if k not in ("output_model", "tools", "fail_on_unfilled_parameters")
+        }
         self.llm_core = LLMCore(
             output_model=output_model,
             tools=self._tools or [],
-            fail_on_unfilled_parameters=self.parameters.get("fail_on_unfilled_parameters", True),
+            fail_on_unfilled_parameters=self.parameters.get(
+                "fail_on_unfilled_parameters", True
+            ),
             **filtered_params,
         )
 
-    async def _process(self, *, message: AgentInput, cancellation_token: CancellationToken | None = None, **kwargs) -> AgentOutput:
+    async def _process(
+        self,
+        *,
+        message: AgentInput,
+        cancellation_token: CancellationToken | None = None,
+        **kwargs,
+    ) -> AgentOutput:
         """Core processing logic: uses LLMCore to process and wraps result in AgentOutput.
 
         Args:
@@ -118,7 +135,9 @@ class LLMAgent(Agent):
         Raises:
             ProcessingError: If LLM processing fails.
         """
-        logger.debug(f"Agent '{self.agent_name}' starting _process for message_id: {getattr(message, 'message_id', 'N/A')}.")
+        logger.debug(
+            f"Agent '{self.agent_name}' starting _process for message_id: {getattr(message, 'message_id', 'N/A')}."
+        )
 
         # Pass the entire message object to LLMCore for flexible input handling
         # LLMCore will extract inputs, context, and record as needed
@@ -130,14 +149,28 @@ class LLMAgent(Agent):
             merged_params = {**self.parameters, **message.parameters}
             # Filter out parameters we're passing explicitly to avoid duplicates
             # Template comes from agent config only, not message parameters
-            filtered_params = {k: v for k, v in merged_params.items()
-                              if k not in ("model", "output_model", "tools", "fail_on_unfilled_parameters", "template")}
+            filtered_params = {
+                k: v
+                for k, v in merged_params.items()
+                if k
+                not in (
+                    "model",
+                    "output_model",
+                    "tools",
+                    "fail_on_unfilled_parameters",
+                    "template",
+                )
+            }
             llm_core = LLMCore(
                 model=merged_params.get("model", ""),
-                template=self.parameters.get("template", ""),  # Use agent's template, not message override
+                template=self.parameters.get(
+                    "template", ""
+                ),  # Use agent's template, not message override
                 output_model=self.output_model,
                 tools=self._tools or [],
-                fail_on_unfilled_parameters=merged_params.get("fail_on_unfilled_parameters", True),
+                fail_on_unfilled_parameters=merged_params.get(
+                    "fail_on_unfilled_parameters", True
+                ),
                 **filtered_params,
             )
         else:
@@ -161,8 +194,16 @@ class LLMAgent(Agent):
                 **llm_result.metadata,
             }
 
-            logger.debug(f"Agent '{self.agent_name}' completed _process. Output type: {type(llm_result.content).__name__}")
-            return AgentOutput(agent_id=self.agent_id, outputs=llm_result.content, messages=llm_result.messages, metadata=output_metadata, error=[])
+            logger.debug(
+                f"Agent '{self.agent_name}' completed _process. Output type: {type(llm_result.content).__name__}"
+            )
+            return AgentOutput(
+                agent_id=self.agent_id,
+                outputs=llm_result.content,
+                messages=llm_result.messages,
+                metadata=output_metadata,
+                error=[],
+            )
 
         except ProcessingError as e:
             logger.error(f"Agent '{self.agent_id}': LLM processing failed: {e}")

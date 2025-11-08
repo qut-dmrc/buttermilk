@@ -1,67 +1,67 @@
 [
-    {
-        "name": "timestamp",
-        "type": "TIMESTAMP",
-        "mode": "REQUIRED"
-    },
-    {
-        "name": "session_id",
-        "type": "STRING",
-        "mode": "REQUIRED"
-    },
-    {
-        "name": "call_id",
-        "type": "STRING",
-        "mode": "REQUIRED"
-    },
-    {
-        "name": "parent_call_id",
-        "type": "STRING",
-        "mode": "NULLABLE"
-    },
-    {
-        "name": "session_info",
-        "type": "JSON",
-        "mode": "REQUIRED"
-    },
-    {
-        "name": "agent_info",
-        "type": "JSON",
-        "mode": "REQUIRED"
-    },
-    {
-        "name": "parameters",
-        "type": "JSON",
-        "mode": "NULLABLE"
-    },
-    {
-        "name": "inputs",
-        "type": "JSON",
-        "mode": "NULLABLE"
-    },
-    {
-        "name": "messages",
-        "type": "JSON",
-        "mode": "REPEATED"
-    },
-    {
-        "name": "outputs",
-        "type": "JSON",
-        "mode": "NULLABLE"
-    },
-    {
-        "name": "error",
-        "type": "JSON",
-        "mode": "NULLABLE"
-    },
-    {
-        "name": "metadata",
-        "type": "JSON",
-        "mode": "NULLABLE"
-    },
-    {
-        "name": "tracing_link",
-        "type": "STRING",
-        "mode": "NULLABLE"
-    }
+  {
+    "name": "timestamp",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "session_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "call_id",
+    "type": "STRING",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "parent_call_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "session_info",
+    "type": "JSON",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "agent_info",
+    "type": "JSON",
+    "mode": "REQUIRED"
+  },
+  {
+    "name": "parameters",
+    "type": "JSON",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "inputs",
+    "type": "JSON",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "messages",
+    "type": "JSON",
+    "mode": "REPEATED"
+  },
+  {
+    "name": "outputs",
+    "type": "JSON",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "error",
+    "type": "JSON",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "metadata",
+    "type": "JSON",
+    "mode": "NULLABLE"
+  },
+  {
+    "name": "tracing_link",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  }
 ]

@@ -24,10 +24,14 @@ async def test_weave_tracing_initialised_and_creates_calls(real_bm: BM):
     try:
         client = await real_bm.get_weave_client()
     except Exception:
-        pytest.skip("Weave client is not available or not configured in this environment.")
+        pytest.skip(
+            "Weave client is not available or not configured in this environment."
+        )
 
     if client is None:
-        pytest.skip("Weave client is not configured (get_weave_client returned None) in this environment.")
+        pytest.skip(
+            "Weave client is not configured (get_weave_client returned None) in this environment."
+        )
 
     # Define a minimal operation to be traced
     def _inc(x: int) -> int:
@@ -125,7 +129,9 @@ async def test_weave_collection_uses_project_name(real_bm):
     try:
         weave_client = await real_bm.get_weave_client()
         if weave_client is None:
-            pytest.skip("Weave client not initialized (may be missing credentials or disabled)")
+            pytest.skip(
+                "Weave client not initialized (may be missing credentials or disabled)"
+            )
     except Exception as e:
         # If weave initialization fails (missing credentials, etc.),
         # that's okay for this test - we're just checking the config
@@ -133,7 +139,11 @@ async def test_weave_collection_uses_project_name(real_bm):
 
     # Verify the weave project name matches our project_name
     # The weave project should be {entity}/{project_name}
-    assert EXPECTED_PROJECT_NAME in weave_client.project, f"Weave project should contain '{EXPECTED_PROJECT_NAME}', got: {weave_client.project}"
+    assert EXPECTED_PROJECT_NAME in weave_client.project, (
+        f"Weave project should contain '{EXPECTED_PROJECT_NAME}', got: {weave_client.project}"
+    )
 
     # Verify it does NOT use execution-context prefix
-    assert "execution-context" not in weave_client.project, f"Weave should not use 'execution-context' prefix, got: {weave_client.project}"
+    assert "execution-context" not in weave_client.project, (
+        f"Weave should not use 'execution-context' prefix, got: {weave_client.project}"
+    )

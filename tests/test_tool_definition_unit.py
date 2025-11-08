@@ -25,8 +25,14 @@ class TestAgentToolDefinition:
         tool_def = AgentToolDefinition(
             name="test_tool",
             description="A test tool",
-            input_schema={"type": "object", "properties": {"input": {"type": "string"}}},
-            output_schema={"type": "object", "properties": {"output": {"type": "string"}}},
+            input_schema={
+                "type": "object",
+                "properties": {"input": {"type": "string"}},
+            },
+            output_schema={
+                "type": "object",
+                "properties": {"output": {"type": "string"}},
+            },
         )
 
         assert tool_def.name == "test_tool"
@@ -50,7 +56,11 @@ class TestAgentToolDefinition:
         tool_def = AgentToolDefinition(
             name="test_tool",
             description="A test tool",
-            input_schema={"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]},
+            input_schema={
+                "type": "object",
+                "properties": {"text": {"type": "string"}},
+                "required": ["text"],
+            },
             output_schema={"type": "string"},
         )
 
@@ -66,7 +76,11 @@ class TestSchemaValidation:
 
     def test_schema_validator_valid(self):
         """Test validator with valid data."""
-        schema = {"type": "object", "properties": {"name": {"type": "string"}, "age": {"type": "integer"}}, "required": ["name"]}
+        schema = {
+            "type": "object",
+            "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+            "required": ["name"],
+        }
 
         validator = SchemaValidator(schema)
         validator.validate({"name": "John", "age": 30})
@@ -74,7 +88,11 @@ class TestSchemaValidation:
 
     def test_schema_validator_invalid(self):
         """Test validator with invalid data."""
-        schema = {"type": "object", "properties": {"count": {"type": "integer"}}, "required": ["count"]}
+        schema = {
+            "type": "object",
+            "properties": {"count": {"type": "integer"}},
+            "required": ["count"],
+        }
 
         validator = SchemaValidator(schema)
 
@@ -86,7 +104,11 @@ class TestSchemaValidation:
 
     def test_validate_partial(self):
         """Test partial validation (ignoring required)."""
-        schema = {"type": "object", "properties": {"name": {"type": "string"}, "age": {"type": "integer"}}, "required": ["name", "age"]}
+        schema = {
+            "type": "object",
+            "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+            "required": ["name", "age"],
+        }
 
         validator = SchemaValidator(schema)
         # Full validation would fail without age
@@ -100,7 +122,12 @@ class TestSchemaValidation:
         """Test data coercion to match schema."""
         schema = {
             "type": "object",
-            "properties": {"count": {"type": "integer"}, "ratio": {"type": "number"}, "active": {"type": "boolean"}, "name": {"type": "string"}},
+            "properties": {
+                "count": {"type": "integer"},
+                "ratio": {"type": "number"},
+                "active": {"type": "boolean"},
+                "name": {"type": "string"},
+            },
         }
 
         data = {"count": "123", "ratio": "3.14", "active": "true", "name": 42}
@@ -134,7 +161,11 @@ class TestSchemaValidation:
 
     def test_tool_input_validation(self):
         """Test tool input validation helper."""
-        schema = {"type": "object", "properties": {"x": {"type": "number"}}, "required": ["x"]}
+        schema = {
+            "type": "object",
+            "properties": {"x": {"type": "number"}},
+            "required": ["x"],
+        }
 
         # Valid input
         validated = validate_tool_input(schema, {"x": 3.14})

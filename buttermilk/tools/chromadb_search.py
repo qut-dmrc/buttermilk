@@ -20,8 +20,12 @@ class SearchResult(BaseModel):
     id: str = Field(..., description="Unique ID of the retrieved chunk")
     content: str = Field(..., description="The actual text content")
     document_id: str = Field(..., description="ID of the parent document")
-    document_title: Optional[str] = Field(None, description="Title of the parent document")
-    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+    document_title: Optional[str] = Field(
+        None, description="Title of the parent document"
+    )
+    metadata: dict[str, Any] = Field(
+        default_factory=dict, description="Additional metadata"
+    )
     score: Optional[float] = Field(None, description="Similarity score")
 
 
@@ -51,7 +55,9 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
             await self.ensure_cache_initialized()
             self._initialized = True
 
-            logger.info("ChromaDBSearchTool initialized", collection_name=self.collection_name)
+            logger.info(
+                "ChromaDBSearchTool initialized", collection_name=self.collection_name
+            )
 
         except Exception as e:
             logger.error("Failed to initialize ChromaDBSearchTool", error=e)
@@ -73,7 +79,11 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
         num_results = n_results if n_results > 0 else self.n_results
 
         # Query ChromaDB
-        results = self.collection.query(query_texts=[query], n_results=num_results, include=["documents", "metadatas", "distances"])
+        results = self.collection.query(
+            query_texts=[query],
+            n_results=num_results,
+            include=["documents", "metadatas", "distances"],
+        )
 
         # Parse results
         search_results = []
@@ -81,7 +91,12 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
             seen_docs = set()
 
             for i, (doc_id, doc, metadata, distance) in enumerate(
-                zip(results["ids"][0], results["documents"][0], results["metadatas"][0], results["distances"][0])
+                zip(
+                    results["ids"][0],
+                    results["documents"][0],
+                    results["metadatas"][0],
+                    results["distances"][0],
+                )
             ):
                 # Filter duplicates if requested
                 parent_doc_id = metadata.get("document_id", doc_id)
@@ -119,9 +134,13 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
         # Format results for display
         formatted_parts = []
         for i, result in enumerate(results):
-            formatted_parts.append(f"**Result {i + 1}** (Doc: {result.document_title or result.document_id})\n{result.content}")
+            formatted_parts.append(
+                f"**Result {i + 1}** (Doc: {result.document_title or result.document_id})\n{result.content}"
+            )
 
-        return "\n---\n".join(formatted_parts) if formatted_parts else "No results found."
+        return (
+            "\n---\n".join(formatted_parts) if formatted_parts else "No results found."
+        )
 
     def get_tool(self) -> FunctionTool:
         """Get this as an autogen FunctionTool.

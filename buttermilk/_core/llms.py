@@ -44,19 +44,30 @@ from autogen_core.models import (
     ModelInfo,
 )
 from autogen_core.tools import BaseTool, Tool, ToolSchema  # Autogen tool handling
-from autogen_ext.models.anthropic import AnthropicChatCompletionClient  # Autogen Anthropic client
+from autogen_ext.models.anthropic import (
+    AnthropicChatCompletionClient,
+)  # Autogen Anthropic client
 from autogen_ext.models.openai import (  # Autogen OpenAI clients
     AzureOpenAIChatCompletionClient,
     OpenAIChatCompletionClient,
 )
 
 # from google import genai  # Google Generative AI library (unused in current implementation)
-from pydantic import BaseModel, ConfigDict, Field, field_validator  # Pydantic models for configuration
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+)  # Pydantic models for configuration
 
 from buttermilk import bm, logger
 
 # ToolOutput import removed - using autogen's FunctionExecutionResult directly
-from buttermilk._core.constants import CONFIG_CACHE_FILENAME, cache, get_base_cache_dir  # Models cache constants
+from buttermilk._core.constants import (
+    CONFIG_CACHE_FILENAME,
+    cache,
+    get_base_cache_dir,
+)  # Models cache constants
 from buttermilk._core.exceptions import ProcessingError  # Custom Buttermilk exceptions
 from buttermilk.utils.pricing import calculate_token_cost  # Token cost calculation
 
@@ -130,10 +141,19 @@ class LLMConfig(BaseModel):
     )
     base_url: str | None = Field(default=None, description="Custom URL to call")
 
-    model_info: ModelInfo = Field(..., description="Model metadata (family, context size, etc.)")
-    configs: dict = Field(default_factory=dict, description="Options to pass to the constructor")
-    litellm_model: str | None = Field(default=None, description="Explicit litellm model identifier override")
-    use_litellm: bool = Field(default=False, description="Use LiteLLMWrapper instead of AutoGenWrapper (default: False for backward compatibility)")
+    model_info: ModelInfo = Field(
+        ..., description="Model metadata (family, context size, etc.)"
+    )
+    configs: dict = Field(
+        default_factory=dict, description="Options to pass to the constructor"
+    )
+    litellm_model: str | None = Field(
+        default=None, description="Explicit litellm model identifier override"
+    )
+    use_litellm: bool = Field(
+        default=False,
+        description="Use LiteLLMWrapper instead of AutoGenWrapper (default: False for backward compatibility)",
+    )
 
     @field_validator("client_type", mode="before")
     @classmethod
@@ -166,7 +186,9 @@ class LLMConfig(BaseModel):
                 raise ValueError(
                     f"Unsupported client_type '{v}'. Supported values are: {supported_values}",
                 )
-        raise ValueError(f"client_type must be a string or ClientType enum, got {type(v)}")
+        raise ValueError(
+            f"client_type must be a string or ClientType enum, got {type(v)}"
+        )
 
 
 # Generate with:
@@ -191,7 +213,13 @@ CHEAP_CHAT_MODELS = [
     "claude45haiku",
 ]
 
-MULTIMODAL_MODELS = ["gemini25pro", "llama4maverick", "gemini25flash", "gpt41", "llama32_90b"]
+MULTIMODAL_MODELS = [
+    "gemini25pro",
+    "llama4maverick",
+    "gemini25flash",
+    "gpt41",
+    "llama32_90b",
+]
 """A predefined list of identifiers for multimodal models (supporting text, images, etc.)."""
 
 
@@ -244,12 +272,24 @@ class ModelOutput(CreateResult):
         default=None,
         description="The Pydantic model instance hydrated from LLM's JSON or structured output.",
     )
-    error_message: str | None = Field(default=None, description="Descriptive message about the error")
-    error_code: int | None = Field(default=None, description="Optional error code associated with the error")
-    raw_response: Any | None = Field(default=None, description="Raw response from the LLM, if available")
-    tool_outputs: list[FunctionExecutionResult] | None = Field(default=None, description="Tool outputs if any were executed")
-    tool_calls: list[FunctionCall] | None = Field(default=None, description="Tool calls made by the LLM, if any")
-    metadata: dict[str, Any] = Field(default_factory=dict, description="Metadata including pricing information")
+    error_message: str | None = Field(
+        default=None, description="Descriptive message about the error"
+    )
+    error_code: int | None = Field(
+        default=None, description="Optional error code associated with the error"
+    )
+    raw_response: Any | None = Field(
+        default=None, description="Raw response from the LLM, if available"
+    )
+    tool_outputs: list[FunctionExecutionResult] | None = Field(
+        default=None, description="Tool outputs if any were executed"
+    )
+    tool_calls: list[FunctionCall] | None = Field(
+        default=None, description="Tool calls made by the LLM, if any"
+    )
+    metadata: dict[str, Any] = Field(
+        default_factory=dict, description="Metadata including pricing information"
+    )
 
 
 class AutoGenWrapper(BaseModel):
@@ -272,9 +312,15 @@ class AutoGenWrapper(BaseModel):
 
     """
 
-    client_factory: Callable[[], ChatCompletionClient] = Field(..., description="Factory function for creating fresh client instances.")
-    model_info: ModelInfo = Field(..., description="Model metadata (family, context size, etc.)")
-    litellm_model_name: str = Field(default=None, description="Resolved litellm model name for pricing")
+    client_factory: Callable[[], ChatCompletionClient] = Field(
+        ..., description="Factory function for creating fresh client instances."
+    )
+    model_info: ModelInfo = Field(
+        ..., description="Model metadata (family, context size, etc.)"
+    )
+    litellm_model_name: str = Field(
+        default=None, description="Resolved litellm model name for pricing"
+    )
 
     # Retry configuration (copied from RetryWrapper)
     cooldown_seconds: float = 0.5
@@ -344,7 +390,8 @@ class AutoGenWrapper(BaseModel):
             schema is not None
             and inspect.isclass(schema)
             and issubclass(schema, BaseModel)
-            and schema is not BaseModel  # Ensure it's a specific subclass, not BaseModel itself
+            and schema
+            is not BaseModel  # Ensure it's a specific subclass, not BaseModel itself
         )
 
         # Build call kwargs, omitting json_output when tools are provided
@@ -376,7 +423,9 @@ class AutoGenWrapper(BaseModel):
                         )
                         self._model = model
 
-                    async def run(self, args: BaseModel, cancellation_token: CancellationToken) -> BaseModel:
+                    async def run(
+                        self, args: BaseModel, cancellation_token: CancellationToken
+                    ) -> BaseModel:
                         # Ensure the provided args match the expected model type
                         if not isinstance(args, self._model):
                             raise ProcessingError(
@@ -412,12 +461,17 @@ class AutoGenWrapper(BaseModel):
             # First, check if the response content is empty
             if not create_result.content:
                 raise ProcessingError("Empty response content from LLM.")
-            if isinstance(create_result.content, str) and not create_result.content.strip():
+            if (
+                isinstance(create_result.content, str)
+                and not create_result.content.strip()
+            ):
                 raise ProcessingError("Empty string response from LLM.")
 
             # Next, check if content is a list and if all items are FunctionCall (valid tool call scenario)
             if isinstance(create_result.content, list):
-                if all(isinstance(item, FunctionCall) for item in create_result.content):
+                if all(
+                    isinstance(item, FunctionCall) for item in create_result.content
+                ):
                     if tools and not used_fake_schema_tool:
                         # If we have tools and didn't use a fake schema tool, return the tool calls with pricing
                         return ModelOutput(
@@ -433,16 +487,31 @@ class AutoGenWrapper(BaseModel):
                         # If we used a fake schema tool, parse the tool call
                         # we don't log this fake tool as a tool call -- leave tool_calls empty.
                         tool_calls = None
-                        if len(create_result.content) == 1 and fake_schema_tool and create_result.content[0].name == fake_schema_tool.name:
-                            parsed_object = json.loads(create_result.content[0].arguments)
+                        if (
+                            len(create_result.content) == 1
+                            and fake_schema_tool
+                            and create_result.content[0].name == fake_schema_tool.name
+                        ):
+                            parsed_object = json.loads(
+                                create_result.content[0].arguments
+                            )
                             create_result.content = json.dumps(parsed_object)
                         else:
-                            raise ProcessingError("Malformed tool call response from LLM (expected fake schema tool call).", create_result.content)
+                            raise ProcessingError(
+                                "Malformed tool call response from LLM (expected fake schema tool call).",
+                                create_result.content,
+                            )
                     else:
-                        raise ProcessingError("Malformed tool call response from LLM.", create_result.content)
+                        raise ProcessingError(
+                            "Malformed tool call response from LLM.",
+                            create_result.content,
+                        )
                 else:
                     # If we have a list but not all items are FunctionCall, or the fake tool didn't fit, raise an error
-                    raise ProcessingError("Unexpected response type from LLM when expecting tool calls or text.", create_result.content)
+                    raise ProcessingError(
+                        "Unexpected response type from LLM when expecting tool calls or text.",
+                        create_result.content,
+                    )
 
             # If we get back a pydantic model or dict, we have to normalize so
             # that .content is always a string (or tool calls).
@@ -458,7 +527,9 @@ class AutoGenWrapper(BaseModel):
             if schema and is_valid_schema_type:
                 # This will fail fast if the content cannot be parsed into the schema
                 # Parse the content (which is now always a string) with the schema
-                schema_parsed_object = await self._parse_structured_output(create_result.content, schema)
+                schema_parsed_object = await self._parse_structured_output(
+                    create_result.content, schema
+                )
                 return ModelOutput(
                     content=create_result.content,
                     finish_reason=create_result.finish_reason,
@@ -492,7 +563,9 @@ class AutoGenWrapper(BaseModel):
             )
             result.error_message = f"LLM call failed: {e!s}"
             result.error_code = getattr(e, "code", None)  # Use code if available
-            result.raw_response = create_result.content  # Store the raw response for debugging
+            result.raw_response = (
+                create_result.content
+            )  # Store the raw response for debugging
 
         return result
 
@@ -540,7 +613,11 @@ class AutoGenWrapper(BaseModel):
             raise ProcessingError(f"Failed to query LLM: {e!s}") from e
 
         # Extract pricing from initial call
-        initial_pricing = create_result.metadata.get("pricing", {}) if hasattr(create_result, "metadata") else {}
+        initial_pricing = (
+            create_result.metadata.get("pricing", {})
+            if hasattr(create_result, "metadata")
+            else {}
+        )
         aggregated_pricing = {
             "prompt_tokens": initial_pricing.get("prompt_tokens", 0),
             "completion_tokens": initial_pricing.get("completion_tokens", 0),
@@ -548,11 +625,15 @@ class AutoGenWrapper(BaseModel):
         }
 
         # Step 2: Handle tool calls if present
-        if isinstance(create_result.content, list) and all(isinstance(c, FunctionCall) for c in create_result.content):
+        if isinstance(create_result.content, list) and all(
+            isinstance(c, FunctionCall) for c in create_result.content
+        ):
             tool_calls: list[FunctionCall] = create_result.content
 
             if intercept_tools:
-                logger.debug(f"Intercepting {len(tool_calls)} tool calls without execution")
+                logger.debug(
+                    f"Intercepting {len(tool_calls)} tool calls without execution"
+                )
                 return create_result
 
             # Add the assistant message with tool calls to the history
@@ -566,7 +647,9 @@ class AutoGenWrapper(BaseModel):
                     cancellation_token=cancellation_token,
                 )
                 # Tool results are already FunctionExecutionResult objects
-                tool_result_messages = FunctionExecutionResultMessage(content=tool_outputs)
+                tool_result_messages = FunctionExecutionResultMessage(
+                    content=tool_outputs
+                )
                 messages += [tool_result_messages]
             except Exception as e:
                 # Fail-fast: surface tool execution failures immediately
@@ -582,16 +665,27 @@ class AutoGenWrapper(BaseModel):
                 )
 
                 # Aggregate pricing from synthesis call
-                if hasattr(synthesis_result, "metadata") and "pricing" in synthesis_result.metadata:
+                if (
+                    hasattr(synthesis_result, "metadata")
+                    and "pricing" in synthesis_result.metadata
+                ):
                     synthesis_pricing = synthesis_result.metadata["pricing"]
-                    aggregated_pricing["prompt_tokens"] += synthesis_pricing.get("prompt_tokens", 0)
-                    aggregated_pricing["completion_tokens"] += synthesis_pricing.get("completion_tokens", 0)
-                    aggregated_pricing["total_cost"] += synthesis_pricing.get("total_cost", 0.0)
+                    aggregated_pricing["prompt_tokens"] += synthesis_pricing.get(
+                        "prompt_tokens", 0
+                    )
+                    aggregated_pricing["completion_tokens"] += synthesis_pricing.get(
+                        "completion_tokens", 0
+                    )
+                    aggregated_pricing["total_cost"] += synthesis_pricing.get(
+                        "total_cost", 0.0
+                    )
                     synthesis_result.metadata["pricing"] = aggregated_pricing
 
                 return synthesis_result
             except Exception as e:
-                raise ProcessingError(f"Failed to synthesize after tool execution: {e!s}") from e
+                raise ProcessingError(
+                    f"Failed to synthesize after tool execution: {e!s}"
+                ) from e
 
         # Return the original result
         return create_result
@@ -614,7 +708,9 @@ class AutoGenWrapper(BaseModel):
 
         """
         arguments = json.loads(call.arguments)
-        arguments.update(arguments.pop("kwargs", {}))  # Merge 'kwargs' into arguments if present
+        arguments.update(
+            arguments.pop("kwargs", {})
+        )  # Merge 'kwargs' into arguments if present
 
         # Execute the tool
         ct: CancellationToken = cancellation_token or CancellationToken()
@@ -649,7 +745,9 @@ class AutoGenWrapper(BaseModel):
             # Find the tool by name
             tool = next((t for t in tools_list if t.name == call.name), None)
             if tool is None:
-                raise ProcessingError(f"Tool '{call.name}' requested by LLM not found in provided tools list.")
+                raise ProcessingError(
+                    f"Tool '{call.name}' requested by LLM not found in provided tools list."
+                )
 
             tasks.append(self._call_tool(call, tool, cancellation_token))
 
@@ -666,7 +764,9 @@ class AutoGenWrapper(BaseModel):
             Dictionary with pricing information
         """
         if usage is None:
-            logger.warning("LLM response had no usage data - using 0 tokens for pricing")
+            logger.warning(
+                "LLM response had no usage data - using 0 tokens for pricing"
+            )
             return {"prompt_tokens": 0, "completion_tokens": 0, "total_cost": 0.0}
 
         # Extract tokens from usage object
@@ -675,10 +775,16 @@ class AutoGenWrapper(BaseModel):
 
         # Calculate cost using the utility function with resolved litellm model name
         prompt_tokens, completion_tokens, total_cost = calculate_token_cost(
-            model=self.litellm_model_name, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens
+            model=self.litellm_model_name,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
         )
 
-        return {"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens, "total_cost": total_cost}
+        return {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_cost": total_cost,
+        }
 
     @staticmethod
     async def _parse_structured_output(  # noqa: PLR0912
@@ -706,7 +812,9 @@ class AutoGenWrapper(BaseModel):
             simple_clean_llm_json_text = getattr(_mod, "simple_clean_llm_json_text")
 
             # Try to parse as strict JSON first to preserve types (avoid coercion)
-            logger.debug(f"AutoGenWrapper: Attempting to parse string response into {schema.__name__}")
+            logger.debug(
+                f"AutoGenWrapper: Attempting to parse string response into {schema.__name__}"
+            )
             text = simple_clean_llm_json_text(content)
 
             if parsed_object is None:
@@ -777,20 +885,39 @@ def autogen_to_litellm_messages(messages: Sequence[LLMMessage]) -> list[dict[str
             litellm_messages.append({"role": "user", "content": msg.content})
         elif msg_type == "AssistantMessage":
             # Handle tool calls in assistant messages
-            if isinstance(msg.content, list) and all(isinstance(c, FunctionCall) for c in msg.content):
+            if isinstance(msg.content, list) and all(
+                isinstance(c, FunctionCall) for c in msg.content
+            ):
                 # Convert FunctionCall objects to tool_calls format
                 tool_calls = []
                 for fc in msg.content:
-                    tool_calls.append({"id": fc.id, "type": "function", "function": {"name": fc.name, "arguments": fc.arguments}})
-                litellm_messages.append({"role": "assistant", "content": None, "tool_calls": tool_calls})
+                    tool_calls.append(
+                        {
+                            "id": fc.id,
+                            "type": "function",
+                            "function": {"name": fc.name, "arguments": fc.arguments},
+                        }
+                    )
+                litellm_messages.append(
+                    {"role": "assistant", "content": None, "tool_calls": tool_calls}
+                )
             else:
                 # Regular text response
-                content = msg.content if isinstance(msg.content, str) else str(msg.content)
+                content = (
+                    msg.content if isinstance(msg.content, str) else str(msg.content)
+                )
                 litellm_messages.append({"role": "assistant", "content": content})
         elif msg_type == "FunctionExecutionResultMessage":
             # Convert tool results to tool message format
             for result in msg.content:
-                litellm_messages.append({"role": "tool", "tool_call_id": result.call_id, "name": result.name, "content": result.content})
+                litellm_messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": result.call_id,
+                        "name": result.name,
+                        "content": result.content,
+                    }
+                )
         else:
             # Fallback for unknown message types
             logger.warning(f"Unknown message type {msg_type}, treating as user message")
@@ -799,7 +926,9 @@ def autogen_to_litellm_messages(messages: Sequence[LLMMessage]) -> list[dict[str
     return litellm_messages
 
 
-def litellm_to_autogen_result(response: Any, usage: Any, model: str, schema: type[BaseModel] | None = None) -> ModelOutput:
+def litellm_to_autogen_result(
+    response: Any, usage: Any, model: str, schema: type[BaseModel] | None = None
+) -> ModelOutput:
     """Convert LiteLLM response to Autogen ModelOutput.
 
     Args:
@@ -821,17 +950,27 @@ def litellm_to_autogen_result(response: Any, usage: Any, model: str, schema: typ
 
         # Check for tool calls (check both existence and non-empty list)
         tool_calls_attr = getattr(message, "tool_calls", None)
-        if tool_calls_attr is not None and isinstance(tool_calls_attr, list) and len(tool_calls_attr) > 0:
+        if (
+            tool_calls_attr is not None
+            and isinstance(tool_calls_attr, list)
+            and len(tool_calls_attr) > 0
+        ):
             # Convert to FunctionCall objects
             tool_calls: list[FunctionCall] = []
             for tc in tool_calls_attr:
-                tool_calls.append(FunctionCall(id=tc.id, name=tc.function.name, arguments=tc.function.arguments))
+                tool_calls.append(
+                    FunctionCall(
+                        id=tc.id, name=tc.function.name, arguments=tc.function.arguments
+                    )
+                )
             content = tool_calls
         else:
             # Regular text content
             content = message.content if hasattr(message, "content") else str(message)
 
-        finish_reason = choice.finish_reason if hasattr(choice, "finish_reason") else "stop"
+        finish_reason = (
+            choice.finish_reason if hasattr(choice, "finish_reason") else "stop"
+        )
     else:
         # Fallback for unexpected response format
         content = str(response)
@@ -839,7 +978,10 @@ def litellm_to_autogen_result(response: Any, usage: Any, model: str, schema: typ
 
     # Create RequestUsage object
     if hasattr(usage, "prompt_tokens"):
-        request_usage = RequestUsage(prompt_tokens=usage.prompt_tokens or 0, completion_tokens=usage.completion_tokens or 0)
+        request_usage = RequestUsage(
+            prompt_tokens=usage.prompt_tokens or 0,
+            completion_tokens=usage.completion_tokens or 0,
+        )
     else:
         request_usage = RequestUsage(prompt_tokens=0, completion_tokens=0)
 
@@ -887,7 +1029,9 @@ class LiteLLMWrapper(BaseModel):
     litellm_model_name: str = Field(..., description="Resolved model name for LiteLLM")
     api_key: str | None = Field(default=None, description="API key for the provider")
     base_url: str | None = Field(default=None, description="Custom base URL")
-    extra_params: dict[str, Any] = Field(default_factory=dict, description="Additional LiteLLM parameters")
+    extra_params: dict[str, Any] = Field(
+        default_factory=dict, description="Additional LiteLLM parameters"
+    )
 
     # Retry configuration (matching AutoGenWrapper)
     cooldown_seconds: float = 0.5
@@ -903,9 +1047,13 @@ class LiteLLMWrapper(BaseModel):
         super().__init__(**data)
 
         if not LITELLM_AVAILABLE:
-            raise ImportError("LiteLLM is not installed. Please install it with: pip install litellm")
+            raise ImportError(
+                "LiteLLM is not installed. Please install it with: pip install litellm"
+            )
 
-    async def _execute_with_retry(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    async def _execute_with_retry(
+        self, func: Callable[..., Any], *args: Any, **kwargs: Any
+    ) -> Any:
         """Execute a function with exponential backoff retry logic.
 
         Mirrors RetryWrapper behavior for consistency.
@@ -928,14 +1076,20 @@ class LiteLLMWrapper(BaseModel):
                 error_msg = str(e).lower()
 
                 # Check if this is a retryable error
-                is_retryable = any(keyword in error_msg for keyword in ["rate limit", "timeout", "503", "429", "502", "500"])
+                is_retryable = any(
+                    keyword in error_msg
+                    for keyword in ["rate limit", "timeout", "503", "429", "502", "500"]
+                )
 
                 if attempt < self.max_retries and is_retryable:
                     # Calculate wait time with jitter
                     jitter = random.uniform(-self.jitter_seconds, self.jitter_seconds)
                     actual_wait = min(wait_time + jitter, self.max_wait_seconds)
 
-                    logger.warning(f"LiteLLM call failed (attempt {attempt + 1}/{self.max_retries + 1}): {e}. " f"Retrying in {actual_wait:.1f}s...")
+                    logger.warning(
+                        f"LiteLLM call failed (attempt {attempt + 1}/{self.max_retries + 1}): {e}. "
+                        f"Retrying in {actual_wait:.1f}s..."
+                    )
 
                     await asyncio.sleep(actual_wait)
                     wait_time *= 2  # Exponential backoff
@@ -972,7 +1126,12 @@ class LiteLLMWrapper(BaseModel):
         litellm_messages = autogen_to_litellm_messages(messages)
 
         # Build LiteLLM parameters
-        litellm_params = {"model": self.litellm_model_name, "messages": litellm_messages, **self.extra_params, **kwargs}
+        litellm_params = {
+            "model": self.litellm_model_name,
+            "messages": litellm_messages,
+            **self.extra_params,
+            **kwargs,
+        }
 
         # Add API key if provided
         if self.api_key:
@@ -986,7 +1145,9 @@ class LiteLLMWrapper(BaseModel):
         if schema and self.model_info.get("structured_output", False):
             litellm_params["response_format"] = {
                 "type": "json_object",
-                "schema": schema.model_json_schema() if hasattr(schema, "model_json_schema") else schema.schema(),
+                "schema": schema.model_json_schema()
+                if hasattr(schema, "model_json_schema")
+                else schema.schema(),
             }
 
         # Handle tools
@@ -1036,7 +1197,9 @@ class LiteLLMWrapper(BaseModel):
         pricing_metadata = self._calculate_pricing(usage)
 
         # Convert response to Autogen format (always returns ModelOutput now)
-        result = litellm_to_autogen_result(response, usage, self.litellm_model_name, schema)
+        result = litellm_to_autogen_result(
+            response, usage, self.litellm_model_name, schema
+        )
 
         # Add pricing metadata (result is always ModelOutput now)
         result.metadata = {"pricing": pricing_metadata}
@@ -1044,7 +1207,9 @@ class LiteLLMWrapper(BaseModel):
         # Parse structured output if schema was provided
         if schema:
             try:
-                parsed = await AutoGenWrapper._parse_structured_output(result.content, schema)
+                parsed = await AutoGenWrapper._parse_structured_output(
+                    result.content, schema
+                )
                 result.parsed_object = parsed
             except Exception as e:
                 result.error_message = f"Failed to parse structured output: {e}"
@@ -1085,7 +1250,11 @@ class LiteLLMWrapper(BaseModel):
             raise ProcessingError(f"Failed to query LLM: {e}") from e
 
         # Extract pricing from initial call
-        initial_pricing = create_result.metadata.get("pricing", {}) if hasattr(create_result, "metadata") else {}
+        initial_pricing = (
+            create_result.metadata.get("pricing", {})
+            if hasattr(create_result, "metadata")
+            else {}
+        )
         aggregated_pricing = {
             "prompt_tokens": initial_pricing.get("prompt_tokens", 0),
             "completion_tokens": initial_pricing.get("completion_tokens", 0),
@@ -1093,11 +1262,15 @@ class LiteLLMWrapper(BaseModel):
         }
 
         # Step 2: Handle tool calls if present
-        if isinstance(create_result.content, list) and all(isinstance(c, FunctionCall) for c in create_result.content):
+        if isinstance(create_result.content, list) and all(
+            isinstance(c, FunctionCall) for c in create_result.content
+        ):
             tool_calls: list[FunctionCall] = create_result.content
 
             if intercept_tools:
-                logger.debug(f"Intercepting {len(tool_calls)} tool calls without execution")
+                logger.debug(
+                    f"Intercepting {len(tool_calls)} tool calls without execution"
+                )
                 return create_result
 
             # Add assistant message with tool calls to history
@@ -1111,7 +1284,9 @@ class LiteLLMWrapper(BaseModel):
                     tools_list=tools_list,
                     cancellation_token=cancellation_token,
                 )
-                tool_result_messages = FunctionExecutionResultMessage(content=tool_outputs)
+                tool_result_messages = FunctionExecutionResultMessage(
+                    content=tool_outputs
+                )
                 messages.append(tool_result_messages)
             except Exception as e:
                 raise ProcessingError(f"Failed to execute tools: {e}") from e
@@ -1126,16 +1301,27 @@ class LiteLLMWrapper(BaseModel):
                 )
 
                 # Aggregate pricing
-                if hasattr(synthesis_result, "metadata") and "pricing" in synthesis_result.metadata:
+                if (
+                    hasattr(synthesis_result, "metadata")
+                    and "pricing" in synthesis_result.metadata
+                ):
                     synthesis_pricing = synthesis_result.metadata["pricing"]
-                    aggregated_pricing["prompt_tokens"] += synthesis_pricing.get("prompt_tokens", 0)
-                    aggregated_pricing["completion_tokens"] += synthesis_pricing.get("completion_tokens", 0)
-                    aggregated_pricing["total_cost"] += synthesis_pricing.get("total_cost", 0.0)
+                    aggregated_pricing["prompt_tokens"] += synthesis_pricing.get(
+                        "prompt_tokens", 0
+                    )
+                    aggregated_pricing["completion_tokens"] += synthesis_pricing.get(
+                        "completion_tokens", 0
+                    )
+                    aggregated_pricing["total_cost"] += synthesis_pricing.get(
+                        "total_cost", 0.0
+                    )
                     synthesis_result.metadata["pricing"] = aggregated_pricing
 
                 return synthesis_result
             except Exception as e:
-                raise ProcessingError(f"Failed to synthesize after tool execution: {e}") from e
+                raise ProcessingError(
+                    f"Failed to synthesize after tool execution: {e}"
+                ) from e
 
         # Return original result if no tool calls
         return create_result
@@ -1152,7 +1338,9 @@ class LiteLLMWrapper(BaseModel):
             # Find the tool by name
             tool = next((t for t in tools_list if t.name == call.name), None)
             if tool is None:
-                raise ProcessingError(f"Tool '{call.name}' requested by LLM not found in provided tools list.")
+                raise ProcessingError(
+                    f"Tool '{call.name}' requested by LLM not found in provided tools list."
+                )
 
             tasks.append(self._call_tool(call, tool, cancellation_token))
 
@@ -1180,7 +1368,9 @@ class LiteLLMWrapper(BaseModel):
     def _calculate_pricing(self, usage: Any) -> dict[str, Any]:
         """Calculate pricing information from usage data."""
         if usage is None:
-            logger.warning("LLM response had no usage data - using 0 tokens for pricing")
+            logger.warning(
+                "LLM response had no usage data - using 0 tokens for pricing"
+            )
             return {"prompt_tokens": 0, "completion_tokens": 0, "total_cost": 0.0}
 
         prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
@@ -1188,10 +1378,16 @@ class LiteLLMWrapper(BaseModel):
 
         # Use existing pricing calculation utility
         prompt_tokens, completion_tokens, total_cost = calculate_token_cost(
-            model=self.litellm_model_name, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens
+            model=self.litellm_model_name,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
         )
 
-        return {"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens, "total_cost": total_cost}
+        return {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_cost": total_cost,
+        }
 
 
 class LLMs(BaseModel):
@@ -1299,7 +1495,9 @@ class LLMs(BaseModel):
         return prefix_map.get(client_type, client_type)  # fallback / extension
 
     @staticmethod
-    def _is_already_litellm_identifier(model_name: str, registry: dict[str, Any] | None = None) -> bool:
+    def _is_already_litellm_identifier(
+        model_name: str, registry: dict[str, Any] | None = None
+    ) -> bool:
         """Heuristic: treat as already-qualified if first segment is a known provider and not an internal key."""
         # Known litellm provider prefixes
         known_litellm_providers = {
@@ -1344,7 +1542,11 @@ class LLMs(BaseModel):
         base_model = LLMs._extract_base_model_name(model_name, client_type)
 
         # For certain client types, we need the model name as-is (already has correct prefix)
-        if client_type in {"gemini", "openai", "anthropic"} and not model_name.startswith(expected_prefix + "/"):
+        if client_type in {
+            "gemini",
+            "openai",
+            "anthropic",
+        } and not model_name.startswith(expected_prefix + "/"):
             # These often use bare model names without provider prefix
             return model_name
 
@@ -1416,7 +1618,9 @@ class LLMs(BaseModel):
             return self.autogen_models[name]
 
         if name not in self.connections:
-            raise AttributeError(f"LLM configuration named '{name}' not found in connections.")
+            raise AttributeError(
+                f"LLM configuration named '{name}' not found in connections."
+            )
 
         config = self.connections[name]
         model_name = config.configs.get("model")
@@ -1428,7 +1632,10 @@ class LLMs(BaseModel):
         }
 
         # Resolve litellm model name using internal method
-        resolved_litellm = self.lookup_litellm_model_name(model_name or name, config.client_type.value) or model_name
+        resolved_litellm = (
+            self.lookup_litellm_model_name(model_name or name, config.client_type.value)
+            or model_name
+        )
 
         # Create client factory function based on config.client_type
         def create_client_factory() -> Callable[[], ChatCompletionClient]:
@@ -1437,7 +1644,8 @@ class LLMs(BaseModel):
             # Define factory functions for each client type
             def _openai_factory() -> ChatCompletionClient:
                 return OpenAIChatCompletionClient(
-                    base_url=config.base_url or "",  # Provide default empty string if None
+                    base_url=config.base_url
+                    or "",  # Provide default empty string if None
                     model_info=config.model_info,
                     **client_params,
                 )
@@ -1458,14 +1666,18 @@ class LLMs(BaseModel):
             def _anthropic_vertex_factory() -> ChatCompletionClient:
                 # Anthropic via Vertex AI
                 if not bm.gcp_credentials:
-                    raise ValueError("GCP credentials not available for Anthropic via Vertex AI.")
+                    raise ValueError(
+                        "GCP credentials not available for Anthropic via Vertex AI."
+                    )
 
                 vertex_params = {
                     "region": config.configs.get("region"),
                     "project_id": config.configs.get("project_id"),
                     "credentials": bm.gcp_credentials,
                 }
-                vertex_params = {k: v for k, v in vertex_params.items() if v is not None}
+                vertex_params = {
+                    k: v for k, v in vertex_params.items() if v is not None
+                }
 
                 try:
                     vertex_client = AsyncAnthropicVertex(**vertex_params)
@@ -1477,7 +1689,9 @@ class LLMs(BaseModel):
                     client._client = vertex_client  # type: ignore[attr-defined]
                     return client
                 except Exception as e:
-                    logger.error(f"Error initializing Anthropic client for Vertex: {e!s}")
+                    logger.error(
+                        f"Error initializing Anthropic client for Vertex: {e!s}"
+                    )
                     raise
 
             def _gemini_factory() -> ChatCompletionClient:
@@ -1544,11 +1758,17 @@ class LLMs(BaseModel):
 
         # Choose wrapper type based on configuration
         # Per-model use_litellm takes precedence over global default_wrapper
-        use_litellm = config.use_litellm if config.use_litellm is not None else (self.default_wrapper == "litellm")
+        use_litellm = (
+            config.use_litellm
+            if config.use_litellm is not None
+            else (self.default_wrapper == "litellm")
+        )
 
         if use_litellm:
             # Use LiteLLMWrapper for unified provider support
-            logger.debug(f"Using LiteLLMWrapper for model '{name}' with provider '{config.client_type.value}'")
+            logger.debug(
+                f"Using LiteLLMWrapper for model '{name}' with provider '{config.client_type.value}'"
+            )
 
             # Build extra parameters for LiteLLM
             extra_params = {}
@@ -1567,9 +1787,15 @@ class LLMs(BaseModel):
             )
         else:
             # Use AutoGenWrapper (existing behavior)
-            logger.debug(f"Using AutoGenWrapper for model '{name}' with provider '{config.client_type.value}'")
+            logger.debug(
+                f"Using AutoGenWrapper for model '{name}' with provider '{config.client_type.value}'"
+            )
             client_factory = create_client_factory()
-            wrapped_client = AutoGenWrapper(client_factory=client_factory, model_info=config.model_info, litellm_model_name=resolved_litellm)
+            wrapped_client = AutoGenWrapper(
+                client_factory=client_factory,
+                model_info=config.model_info,
+                litellm_model_name=resolved_litellm,
+            )
 
         self.autogen_models[name] = wrapped_client
         return wrapped_client
@@ -1577,7 +1803,9 @@ class LLMs(BaseModel):
     def __getattr__(self, __name: str) -> AutoGenWrapper | LiteLLMWrapper:
         """Provides attribute-style access to LLM clients (e.g., `llms.my_model`)."""
         if __name not in self.connections:
-            raise AttributeError(f"No LLM configuration found for '{__name}'. Available: {list(self.connections.keys())}")
+            raise AttributeError(
+                f"No LLM configuration found for '{__name}'. Available: {list(self.connections.keys())}"
+            )
         return self.get_autogen_chat_client(__name)
 
     def __getitem__(self, __name: str) -> AutoGenWrapper | LiteLLMWrapper:

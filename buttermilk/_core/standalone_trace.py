@@ -99,6 +99,8 @@ def inject_parent_trace(agent_input: Any, trace_context: StandaloneTraceContext)
     if hasattr(agent_input, "parent_call_id"):
         agent_input.parent_call_id = trace_context.get_call_id()
     else:
-        logger.warning(f"Agent input {type(agent_input)} does not have parent_call_id attribute")
+        logger.warning(
+            f"Agent input {type(agent_input)} does not have parent_call_id attribute"
+        )
 
     return agent_input

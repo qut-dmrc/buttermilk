@@ -14,7 +14,9 @@ class TestJMESPathTransform:
     async def test_simple_field_extraction(self):
         """Test extraction of a single field from record."""
         # Create a record with nested output data
-        record = BaseRecord(record_id="test_1", metadata={"outputs": {"result": "test_value"}})
+        record = BaseRecord(
+            record_id="test_1", metadata={"outputs": {"result": "test_value"}}
+        )
 
         # Define mapping to extract result field
         processor = JMESPathTransform(mappings={"answer": "metadata.outputs.result"})
@@ -41,12 +43,18 @@ class TestJMESPathTransform:
         # Create an ExecutionTrace-like record
         record = BaseRecord(
             record_id="trace_1",
-            metadata={"agent_info": {"agent_id": "agent_123"}, "outputs": {"conclusion": "test conclusion"}, "call_id": "call_456"},
+            metadata={
+                "agent_info": {"agent_id": "agent_123"},
+                "outputs": {"conclusion": "test conclusion"},
+                "call_id": "call_456",
+            },
         )
 
         # Define mapping to construct nested object
         processor = JMESPathTransform(
-            mappings={"answers": "{agent_id: metadata.agent_info.agent_id, result: metadata.outputs, answer_id: metadata.call_id}"}
+            mappings={
+                "answers": "{agent_id: metadata.agent_info.agent_id, result: metadata.outputs, answer_id: metadata.call_id}"
+            }
         )
 
         # Process the record
@@ -91,7 +99,16 @@ class TestJMESPathTransform:
     async def test_multiple_mappings(self):
         """Test applying multiple transformations."""
         # Create a record with multiple fields
-        record = BaseRecord(record_id="test_3", metadata={"data": {"name": "test_name", "value": 42, "nested": {"key": "nested_value"}}})
+        record = BaseRecord(
+            record_id="test_3",
+            metadata={
+                "data": {
+                    "name": "test_name",
+                    "value": 42,
+                    "nested": {"key": "nested_value"},
+                }
+            },
+        )
 
         # Define multiple mappings
         processor = JMESPathTransform(
@@ -125,7 +142,10 @@ class TestJMESPathTransform:
         """Test that original fields remain intact."""
         # Create a record with existing fields
         record = BaseRecord(
-            record_id="test_4", dataset_name="test_dataset", split_type="train", metadata={"source": "test", "data": {"value": "extracted"}}
+            record_id="test_4",
+            dataset_name="test_dataset",
+            split_type="train",
+            metadata={"source": "test", "data": {"value": "extracted"}},
         )
 
         # Define mapping to add new field
@@ -153,7 +173,7 @@ class TestJMESPathTransform:
     async def test_invalid_jmespath_expression(self):
         """Test that invalid JMESPath expressions raise ValidationError during initialization."""
         with pytest.raises(ValidationError) as exc_info:
-            processor = JMESPathTransform(
+            JMESPathTransform(
                 mappings={"result": "[[[invalid"}  # Invalid JMESPath syntax
             )
 

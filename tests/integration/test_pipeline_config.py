@@ -5,7 +5,13 @@ from omegaconf import OmegaConf
 
 def test_image_generation_config_file_exists():
     """Test that image generation pipeline config file exists and is valid YAML."""
-    config_path = Path(__file__).parent.parent.parent / "buttermilk" / "conf" / "pipelines" / "image_generation.yaml"
+    config_path = (
+        Path(__file__).parent.parent.parent
+        / "buttermilk"
+        / "conf"
+        / "pipelines"
+        / "image_generation.yaml"
+    )
 
     assert config_path.exists(), f"Config file not found at {config_path}"
 
@@ -20,12 +26,21 @@ def test_image_generation_config_file_exists():
 
 def test_image_generation_source_config():
     """Test pipeline source configuration is correct."""
-    config_path = Path(__file__).parent.parent.parent / "buttermilk" / "conf" / "pipelines" / "image_generation.yaml"
+    config_path = (
+        Path(__file__).parent.parent.parent
+        / "buttermilk"
+        / "conf"
+        / "pipelines"
+        / "image_generation.yaml"
+    )
     cfg = OmegaConf.load(config_path)
 
     # Verify source configuration
     source = cfg.pipeline.source
-    assert source._target_ == "buttermilk.data.sources.character_prompt_source.CharacterPromptSource"
+    assert (
+        source._target_
+        == "buttermilk.data.sources.character_prompt_source.CharacterPromptSource"
+    )
     assert "sexuality" in source.mask_attributes
     assert "gender" in source.mask_attributes
     assert len(source.scenarios) == 5  # Default has 5 scenarios
@@ -33,17 +48,35 @@ def test_image_generation_source_config():
 
 def test_image_generation_processors_config():
     """Test pipeline processors are configured correctly."""
-    config_path = Path(__file__).parent.parent.parent / "buttermilk" / "conf" / "pipelines" / "image_generation.yaml"
+    config_path = (
+        Path(__file__).parent.parent.parent
+        / "buttermilk"
+        / "conf"
+        / "pipelines"
+        / "image_generation.yaml"
+    )
     cfg = OmegaConf.load(config_path)
 
     processors = cfg.pipeline.processors
 
     # Verify processor types and count
     assert len(processors) == 4
-    assert processors[0]._target_ == "buttermilk.processors.batch_expansion.BatchExpansionProcessor"
-    assert processors[1]._target_ == "buttermilk.processors.image_generation.ImageGenerationProcessor"
-    assert processors[2]._target_ == "buttermilk.processors.gcs_image_storage.GCSImageStorageProcessor"
-    assert processors[3]._target_ == "buttermilk.processors.csv_metadata_logger.CSVMetadataLogger"
+    assert (
+        processors[0]._target_
+        == "buttermilk.processors.batch_expansion.BatchExpansionProcessor"
+    )
+    assert (
+        processors[1]._target_
+        == "buttermilk.processors.image_generation.ImageGenerationProcessor"
+    )
+    assert (
+        processors[2]._target_
+        == "buttermilk.processors.gcs_image_storage.GCSImageStorageProcessor"
+    )
+    assert (
+        processors[3]._target_
+        == "buttermilk.processors.csv_metadata_logger.CSVMetadataLogger"
+    )
 
     # Verify batch expansion config
     assert processors[0].repetitions == 3
@@ -52,7 +85,9 @@ def test_image_generation_processors_config():
 
 def test_image_generation_testing_override():
     """Test that testing.yaml contains overrides for image generation pipeline."""
-    testing_config_path = Path(__file__).parent.parent.parent / "buttermilk" / "conf" / "testing.yaml"
+    testing_config_path = (
+        Path(__file__).parent.parent.parent / "buttermilk" / "conf" / "testing.yaml"
+    )
     cfg = OmegaConf.load(testing_config_path)
 
     # Verify testing overrides exist for image_generation pipeline

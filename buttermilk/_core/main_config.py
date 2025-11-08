@@ -19,10 +19,19 @@ from buttermilk._core.storage_config import BaseStorageConfig
 class TracingProviderConfig(BaseModel):
     """Configuration for a single tracing provider (Weave, Traceloop, OTEL)."""
 
-    enabled: bool = Field(default=False, description="Whether this tracing provider is enabled")
-    project_id: str | None = Field(default=None, description="Project/entity ID for the tracing provider")
-    api_key: str | None = Field(default=None, description="API key for authentication (may be None for local/OTEL)")
-    endpoint: str | None = Field(default=None, description="Custom endpoint URL for the tracing provider")
+    enabled: bool = Field(
+        default=False, description="Whether this tracing provider is enabled"
+    )
+    project_id: str | None = Field(
+        default=None, description="Project/entity ID for the tracing provider"
+    )
+    api_key: str | None = Field(
+        default=None,
+        description="API key for authentication (may be None for local/OTEL)",
+    )
+    endpoint: str | None = Field(
+        default=None, description="Custom endpoint URL for the tracing provider"
+    )
 
     model_config = {
         "extra": "allow",  # Allow provider-specific fields
@@ -37,13 +46,16 @@ class TracingConfig(BaseModel):
     """
 
     weave: TracingProviderConfig = Field(
-        default_factory=lambda: TracingProviderConfig(enabled=False), description="Weights & Biases Weave tracing configuration"
+        default_factory=lambda: TracingProviderConfig(enabled=False),
+        description="Weights & Biases Weave tracing configuration",
     )
     traceloop: TracingProviderConfig = Field(
-        default_factory=lambda: TracingProviderConfig(enabled=False), description="Traceloop tracing configuration"
+        default_factory=lambda: TracingProviderConfig(enabled=False),
+        description="Traceloop tracing configuration",
     )
     otel: TracingProviderConfig = Field(
-        default_factory=lambda: TracingProviderConfig(enabled=False), description="OpenTelemetry tracing configuration"
+        default_factory=lambda: TracingProviderConfig(enabled=False),
+        description="OpenTelemetry tracing configuration",
     )
 
     model_config = {
@@ -59,19 +71,30 @@ class InfrastructureConfig(BaseModel):
     """
 
     # Cloud providers (GCP, AWS, Azure)
-    clouds: list[CloudProvider] = Field(default_factory=list, description="List of cloud provider configurations")
+    clouds: list[CloudProvider] = Field(
+        default_factory=list, description="List of cloud provider configurations"
+    )
 
     # LLM configurations
-    llms: dict[str, Any] = Field(default_factory=dict, description="LLM model configurations keyed by model identifier")
+    llms: dict[str, Any] = Field(
+        default_factory=dict,
+        description="LLM model configurations keyed by model identifier",
+    )
 
     # Unified tracing configuration
-    tracing: TracingConfig | dict[str, Any] = Field(default_factory=TracingConfig, description="Tracing provider configurations")
+    tracing: TracingConfig | dict[str, Any] = Field(
+        default_factory=TracingConfig, description="Tracing provider configurations"
+    )
 
     # Logging configuration
-    logging: LoggerConfig | dict[str, Any] | None = Field(default=None, description="Logging configuration")
+    logging: LoggerConfig | dict[str, Any] | None = Field(
+        default=None, description="Logging configuration"
+    )
 
     # Dataset configurations
-    datasets: dict[str, BaseStorageConfig] = Field(default_factory=dict, description="Named dataset storage configurations")
+    datasets: dict[str, BaseStorageConfig] = Field(
+        default_factory=dict, description="Named dataset storage configurations"
+    )
 
     model_config = {
         "extra": "allow",  # Allow additional infrastructure components
@@ -123,15 +146,19 @@ class ButtermilkConfig(BaseModel):
 
     # Run configuration: All execution parameters (including mode)
     run: RunConfig | dict[str, Any] = Field(
-        default_factory=RunConfig, description="All execution parameters including mode (flow, limit, host, port, pipeline, etc.)"
+        default_factory=RunConfig,
+        description="All execution parameters including mode (flow, limit, host, port, pipeline, etc.)",
     )
 
     # Session information (direct, no wrapper)
-    session: SessionInfo = Field(description="Session-specific information and tracking")
+    session: SessionInfo = Field(
+        description="Session-specific information and tracking"
+    )
 
     # Infrastructure configuration
     infrastructure: InfrastructureConfig = Field(
-        default_factory=InfrastructureConfig, description="Infrastructure components (clouds, LLMs, tracing, logging)"
+        default_factory=InfrastructureConfig,
+        description="Infrastructure components (clouds, LLMs, tracing, logging)",
     )
 
     # Flow definitions (configuration, not execution)
@@ -139,7 +166,9 @@ class ButtermilkConfig(BaseModel):
     #     flows: dict[str, Any] = Field(default_factory=dict, description="Flow definitions keyed by flow name")
 
     # Storage configurations
-    storage: dict[str, BaseStorageConfig | dict[str, Any]] = Field(default_factory=dict, description="Named storage configurations")
+    storage: dict[str, BaseStorageConfig | dict[str, Any]] = Field(
+        default_factory=dict, description="Named storage configurations"
+    )
 
     model_config = {
         "extra": "allow",  # Allow additional fields for flexibility

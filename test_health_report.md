@@ -13,6 +13,7 @@
 ## Failures by Error Type
 
 ### Other (25 issues)
+
 - `tests/api/test_score_endpoints.py`
   - Test: `TestScoreAPIEndpoints::test_endpoint_registration
 FAILED tests/agents/test_markdown.py::TestFramedStatementMarkdown::test_framed_statement_as_markdown
@@ -42,6 +43,7 @@ FAILED tests/groupchat/test_agent_centric_tools.py::test_tool_calling_flow`
   - ... and 22 more
 
 ### Import Error (9 issues)
+
 - `tests/endtoend/flows/test_embeddings.py ___________`
   - Error: `ImportError while importing test module '/home/nic/src/buttermilk/tests/endtoend/flows/test_embeddings.py'.
 Hint: make sure your test modules/packages have valid Python names.
@@ -61,6 +63,7 @@ Traceback:
   - ... and 6 more
 
 ### Assertion Error (2 issues)
+
 - `tests/test_lazy_loading_unit.py`
   - Test: `TestAsyncBackgroundOperations::test_background_config_saving
 FAILED tests/test_record_content_validation.py::TestRecordContentValidation::test_osb_field_mapping_scenario
@@ -118,7 +121,9 @@ FAILED tests/tools/test_id_generator.py::test_sexuality_iv`
 - `tests/tools/test_utils.py`
   - Test: `test_b64_str_validator`
   - Error: `AssertionError: as......`
+
 ### Value Error (1 issues)
+
 - `tests/groupchat/test_agent_announcement_behavior.py`
   - Test: `TestAgentAnnouncementBehavior::test_agent_does_not_respond_to_non_host_announcement
 FAILED tests/api/test_session_persistence.py::TestSessionGCSArchival::test_archive_to_gcs_no_bm_instance

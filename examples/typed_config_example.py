@@ -61,7 +61,11 @@ def example_run_modes():
             print(f"API mode: {typed_cfg.run.host}:{typed_cfg.run.port}")
             print(f"Workers: {typed_cfg.run.workers}")
 
-        elif typed_cfg.run.mode in (RunMode.BATCH, RunMode.BATCH_RUN, RunMode.BATCH_ALL):
+        elif typed_cfg.run.mode in (
+            RunMode.BATCH,
+            RunMode.BATCH_RUN,
+            RunMode.BATCH_ALL,
+        ):
             print(f"Batch mode: {typed_cfg.run.mode}")
             # NEW: Unified limit parameter
             if typed_cfg.run.limit:
@@ -195,7 +199,7 @@ def example_validation():
 
     # This will fail validation
     try:
-        invalid_config = ButtermilkConfig(
+        ButtermilkConfig(
             verbose=True,
             project_name="test",
             job="example",

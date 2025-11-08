@@ -39,8 +39,13 @@ class BaseRecord(BaseModel):
         default_factory=lambda: str(shortuuid.ShortUUID().uuid()),
         description="Unique identifier for the record.",
     )
-    dataset_name: str | None = Field(default=None, description="Name of the dataset this record belongs to.")
-    split_type: str | None = Field(default=None, description="Dataset split this record belongs to, e.g., 'train', 'test'.")
+    dataset_name: str | None = Field(
+        default=None, description="Name of the dataset this record belongs to."
+    )
+    split_type: str | None = Field(
+        default=None,
+        description="Dataset split this record belongs to, e.g., 'train', 'test'.",
+    )
     content: str | None = Field(default=None, description="Main content of the record.")
     metadata: dict[str, Any] = Field(
         default_factory=dict,
@@ -184,7 +189,10 @@ class BaseRecord(BaseModel):
         # Check if data specifies a record class
         record_class_path = data.get("record_class")
 
-        if record_class_path and record_class_path != f"{cls.__module__}.{cls.__name__}":
+        if (
+            record_class_path
+            and record_class_path != f"{cls.__module__}.{cls.__name__}"
+        ):
             # Need to reconstruct as a different class
             try:
                 module_path, class_name = record_class_path.rsplit(".", 1)
@@ -193,13 +201,17 @@ class BaseRecord(BaseModel):
 
                 # Verify it's a BaseRecord subclass
                 if not issubclass(RecordClass, BaseRecord):
-                    logger.warning(f"Class '{record_class_path}' is not a BaseRecord subclass. Using {cls.__name__}.")
+                    logger.warning(
+                        f"Class '{record_class_path}' is not a BaseRecord subclass. Using {cls.__name__}."
+                    )
                     return cls(**data)
 
                 return RecordClass(**data)
 
             except (ImportError, AttributeError, ValueError) as e:
-                logger.warning(f"Failed to resolve record_class '{record_class_path}': {e}. Using {cls.__name__}.")
+                logger.warning(
+                    f"Failed to resolve record_class '{record_class_path}': {e}. Using {cls.__name__}."
+                )
                 return cls(**data)
 
         # No special class specified, or it matches current class
@@ -281,9 +293,11 @@ class Record(BaseRecord):
         default=None,
         description="Textual description or transcript of media content within this record.",
     )
-    ground_truth: dict[str, Any] | list[str | dict[str, str]] | str | None = Field(  # Added type hint for dict value
-        default=None,
-        description="Optional ground truth data associated with this record for evaluation.",
+    ground_truth: dict[str, Any] | list[str | dict[str, str]] | str | None = (
+        Field(  # Added type hint for dict value
+            default=None,
+            description="Optional ground truth data associated with this record for evaluation.",
+        )
     )
     content: str | Sequence[str | Image] | None = Field(
         default=None,
@@ -357,7 +371,9 @@ class Record(BaseRecord):
 
         # Add computed fields to exclusion for simple text content
         if isinstance(self.content, str):
-            current_exclude.update({"title", "images", "record_hash", "ground_truth_hash"})
+            current_exclude.update(
+                {"title", "images", "record_hash", "ground_truth_hash"}
+            )
 
         kwargs["exclude"] = current_exclude
         return super().model_dump(**kwargs)
@@ -407,10 +423,14 @@ class Record(BaseRecord):
             if text_parts_from_content:
                 parts.append("\n".join(text_parts_from_content))
 
-            if has_non_text and self.alt_text:  # If there was image content and alt_text is available
+            if (
+                has_non_text and self.alt_text
+            ):  # If there was image content and alt_text is available
                 parts.append(f"\n**Alternative Text for Media**: {self.alt_text}")
             elif has_non_text and not self.alt_text:
-                parts.append("\n[Non-text content present, no alternative text provided]")
+                parts.append(
+                    "\n[Non-text content present, no alternative text provided]"
+                )
 
         elif self.alt_text:  # Fallback to alt_text if content is not a simple string and not handled above
             parts.append(self.alt_text)
@@ -423,7 +443,12 @@ class Record(BaseRecord):
         populate_by_name=True,  # Allow population by field name or alias
         exclude_unset=True,  # Exclude fields not explicitly set during serialization
         exclude_none=True,  # Exclude fields with None values during serialization
-        exclude={"title", "images", "record_hash", "ground_truth_hash"},  # Exclude computed properties from model_dump
+        exclude={
+            "title",
+            "images",
+            "record_hash",
+            "ground_truth_hash",
+        },  # Exclude computed properties from model_dump
         # positional_args=True, # Removed as it's less common and can be ambiguous
     )
 
@@ -444,22 +469,32 @@ class Record(BaseRecord):
     def validate_content(cls, v):
         """Validate that content is not empty or None."""
         if v is None:
-            raise ValueError("Content cannot be None - Record must have meaningful content")
+            raise ValueError(
+                "Content cannot be None - Record must have meaningful content"
+            )
 
         if isinstance(v, str):
             if not v.strip():
-                raise ValueError("Content cannot be empty string - Record must have meaningful content")
+                raise ValueError(
+                    "Content cannot be empty string - Record must have meaningful content"
+                )
         elif isinstance(v, Sequence):
             if not v:
-                raise ValueError("Content sequence cannot be empty - Record must have meaningful content")
+                raise ValueError(
+                    "Content sequence cannot be empty - Record must have meaningful content"
+                )
             # Check that at least one item in sequence is meaningful
             has_meaningful_content = False
             for item in v:
-                if (isinstance(item, str) and item.strip()) or not isinstance(item, str):
+                if (isinstance(item, str) and item.strip()) or not isinstance(
+                    item, str
+                ):
                     has_meaningful_content = True
                     break
             if not has_meaningful_content:
-                raise ValueError("Content sequence must contain at least one meaningful item")
+                raise ValueError(
+                    "Content sequence must contain at least one meaningful item"
+                )
 
         return v
 
@@ -492,9 +527,13 @@ class Record(BaseRecord):
 
                 # Check for conflicts with existing metadata or computed fields
                 elif key in self.metadata:
-                    raise ValueError(f"Extra field '{key}' conflicts with existing metadata key in Record.")
+                    raise ValueError(
+                        f"Extra field '{key}' conflicts with existing metadata key in Record."
+                    )
                 elif key in self.model_computed_fields:
-                    raise ValueError(f"Extra field '{key}' conflicts with a computed field name in Record.")
+                    raise ValueError(
+                        f"Extra field '{key}' conflicts with a computed field name in Record."
+                    )
                 elif value is not None:  # Add to metadata if value is not None
                     self.metadata[key] = value
         return self
@@ -530,7 +569,9 @@ class Record(BaseRecord):
             return AssistantMessage(content=self.as_markdown(), source=self.record_id)
 
         # For user messages, content can be str or List[Union[str, Dict]] (for multimodal)
-        message_content: str | list[Any]  # Use Any for list items to match Autogen's expectation for multimodal
+        message_content: (
+            str | list[Any]
+        )  # Use Any for list items to match Autogen's expectation for multimodal
 
         if isinstance(self.content, str):
             message_content = self.content
@@ -571,7 +612,9 @@ class Record(BaseRecord):
             if not record.metadata:
                 record.metadata = {}
             record.metadata["fetch_source_uri"] = uri
-            record.metadata["fetch_timestamp_utc"] = datetime.datetime.now(datetime.UTC).isoformat()
+            record.metadata["fetch_timestamp_utc"] = datetime.datetime.now(
+                datetime.UTC
+            ).isoformat()
             return record
 
         raise ProcessingError(f"Record not found for URI: {uri}")
@@ -738,7 +781,9 @@ class RunRequest(BaseModel):
             parts.append(str(criteria))
 
         # Join non-empty, non-None stringified parts
-        display_name = " ".join(str(part) for part in parts if part is not None and str(part).strip())
+        display_name = " ".join(
+            str(part) for part in parts if part is not None and str(part).strip()
+        )
         return display_name.strip() if display_name else "UnnamedRunRequest"
 
 
@@ -748,10 +793,18 @@ class ProcessingResult(BaseModel):
     record: BaseRecord | None
     status: Literal["processed", "skipped", "failed"]
     reason: str = Field(default="", description="Reason for skipping or failure")
-    chunks_created: int = Field(default=0, description="Number of chunks created during processing")
-    embedding_model: str = Field(default="n/a", description="Embedding model used for processing")
-    processing_time_ms: float = Field(default=-1, description="Time taken to process the record in milliseconds")
-    metadata: dict[str, Any] = Field(default={}, description="Additional metadata about the processing result")
+    chunks_created: int = Field(
+        default=0, description="Number of chunks created during processing"
+    )
+    embedding_model: str = Field(
+        default="n/a", description="Embedding model used for processing"
+    )
+    processing_time_ms: float = Field(
+        default=-1, description="Time taken to process the record in milliseconds"
+    )
+    metadata: dict[str, Any] = Field(
+        default={}, description="Additional metadata about the processing result"
+    )
 
 
 @dataclass
@@ -782,10 +835,15 @@ class ProcessingSummary(BaseModel):
     """
 
     attempted: int = Field(default=0, description="Number of items attempted")
-    processed: int = Field(default=0, description="Number of items successfully processed")
+    processed: int = Field(
+        default=0, description="Number of items successfully processed"
+    )
     skipped: int = Field(default=0, description="Number of items intentionally skipped")
     failed: int = Field(default=0, description="Number of items that failed processing")
-    start_time: float = Field(default_factory=lambda: time.time(), description="Unix timestamp when processing started")
+    start_time: float = Field(
+        default_factory=lambda: time.time(),
+        description="Unix timestamp when processing started",
+    )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

@@ -73,7 +73,9 @@ class TestBasicUsageExamples:
 
         # Step 2: Set up file logging (first call succeeds)
         execution_context_id = f"basic_example_{uuid.uuid4().hex[:8]}"
-        setup_file_logging(execution_context_id=execution_context_id, verbose=True, project_name="test")
+        setup_file_logging(
+            execution_context_id=execution_context_id, verbose=True, project_name="test"
+        )
 
         # Step 3: Verify logging is working
         logger.debug("This debug message will be logged")
@@ -86,11 +88,17 @@ class TestBasicUsageExamples:
         assert validation["file_configured"] is True
 
         # Step 5: Demonstrate protection (these will fail fast)
-        with pytest.raises(RuntimeError, match="Console logging has already been configured"):
+        with pytest.raises(
+            RuntimeError, match="Console logging has already been configured"
+        ):
             setup_console_logging(verbose=False)  # Would break verbose mode
 
-        with pytest.raises(RuntimeError, match="File logging has already been configured"):
-            setup_file_logging(execution_context_id="different", verbose=False, project_name="test")  # Would conflict
+        with pytest.raises(
+            RuntimeError, match="File logging has already been configured"
+        ):
+            setup_file_logging(
+                execution_context_id="different", verbose=False, project_name="test"
+            )  # Would conflict
 
         # Step 6: Verify logging still works after failed attempts
         logger.debug("Logging still works perfectly")
@@ -109,7 +117,9 @@ class TestBasicUsageExamples:
         # Example A: Verbose logging setup
         setup_console_logging(verbose=True)
         execution_context_id = f"verbose_example_{uuid.uuid4().hex[:8]}"
-        setup_file_logging(execution_context_id=execution_context_id, verbose=True, project_name="test")
+        setup_file_logging(
+            execution_context_id=execution_context_id, verbose=True, project_name="test"
+        )
 
         # Verify DEBUG level is configured
         buttermilk_logger = logging.getLogger("buttermilk")
@@ -141,7 +151,11 @@ class TestBasicUsageExamples:
         # Set up non-verbose logging
         setup_console_logging(verbose=False)
         execution_context_id = f"non_verbose_example_{uuid.uuid4().hex[:8]}"
-        setup_file_logging(execution_context_id=execution_context_id, verbose=False, project_name="test")
+        setup_file_logging(
+            execution_context_id=execution_context_id,
+            verbose=False,
+            project_name="test",
+        )
 
         # Verify INFO level is configured
         buttermilk_logger = logging.getLogger("buttermilk")
@@ -186,7 +200,9 @@ class TestExecutionContextExamples:
 
     @patch("buttermilk._core.execution_context.setup_console_logging")
     @patch("buttermilk._core.execution_context.setup_file_logging")
-    def test_example_safe_execution_context_pattern(self, mock_setup_file, mock_setup_console):
+    def test_example_safe_execution_context_pattern(
+        self, mock_setup_file, mock_setup_console
+    ):
         """
         Example of the safe ExecutionContext usage pattern.
 
@@ -219,7 +235,9 @@ class TestExecutionContextExamples:
 
     @patch("buttermilk._core.execution_context.setup_console_logging")
     @patch("buttermilk._core.execution_context.setup_file_logging")
-    def test_example_dangerous_execution_context_pattern(self, mock_setup_file, mock_setup_console):
+    def test_example_dangerous_execution_context_pattern(
+        self, mock_setup_file, mock_setup_console
+    ):
         """
         Example of the dangerous ExecutionContext pattern that fails fast.
 
@@ -298,7 +316,9 @@ class TestValidationAndDebuggingExamples:
         # Step 4: Fix the detected issues
         setup_console_logging(verbose=True)
         execution_context_id = f"debugging_example_{uuid.uuid4().hex[:8]}"
-        setup_file_logging(execution_context_id=execution_context_id, verbose=True, project_name="test")
+        setup_file_logging(
+            execution_context_id=execution_context_id, verbose=True, project_name="test"
+        )
 
         # Step 5: Verify the fixes worked
         fixed_validation = validate_logging_state(verbose_expected=True)
@@ -320,7 +340,11 @@ class TestValidationAndDebuggingExamples:
         # Step 1: Set up logging with verbose=False
         setup_console_logging(verbose=False)
         execution_context_id = f"mismatch_example_{uuid.uuid4().hex[:8]}"
-        setup_file_logging(execution_context_id=execution_context_id, verbose=False, project_name="test")
+        setup_file_logging(
+            execution_context_id=execution_context_id,
+            verbose=False,
+            project_name="test",
+        )
 
         # Step 2: Validate expecting verbose=True (will detect mismatch)
         validation = validate_logging_state(verbose_expected=True)
@@ -332,8 +356,12 @@ class TestValidationAndDebuggingExamples:
         assert "Verbose mode expected but buttermilk logger level is" in issues_text
 
         # Step 4: The protection prevents "fixing" this by reconfiguring
-        with pytest.raises(RuntimeError, match="Console logging has already been configured"):
-            setup_console_logging(verbose=True)  # Would like to fix, but protection prevents it
+        with pytest.raises(
+            RuntimeError, match="Console logging has already been configured"
+        ):
+            setup_console_logging(
+                verbose=True
+            )  # Would like to fix, but protection prevents it
 
         # Step 5: Validate with correct expectation (verbose=False)
         correct_validation = validate_logging_state(verbose_expected=False)
@@ -354,7 +382,9 @@ class TestValidationAndDebuggingExamples:
         # Step 1: Set up proper logging
         setup_console_logging(verbose=True)
         execution_context_id = f"monitoring_example_{uuid.uuid4().hex[:8]}"
-        setup_file_logging(execution_context_id=execution_context_id, verbose=True, project_name="test")
+        setup_file_logging(
+            execution_context_id=execution_context_id, verbose=True, project_name="test"
+        )
 
         # Step 2: Initial health check
         health_check_1 = validate_logging_state(verbose_expected=True)
@@ -369,7 +399,9 @@ class TestValidationAndDebuggingExamples:
         # Step 4: Regular health check during operations
         health_check_2 = validate_logging_state(verbose_expected=True)
         assert health_check_2["valid"] is True
-        assert health_check_2["handler_count"] == initial_handler_count  # No handler proliferation
+        assert (
+            health_check_2["handler_count"] == initial_handler_count
+        )  # No handler proliferation
 
         # Step 5: Simulate attempt to add duplicate handlers (protection prevents this)
         with pytest.raises(RuntimeError):
@@ -378,7 +410,9 @@ class TestValidationAndDebuggingExamples:
         # Step 6: Verify health after protection triggered
         health_check_3 = validate_logging_state(verbose_expected=True)
         assert health_check_3["valid"] is True
-        assert health_check_3["handler_count"] == initial_handler_count  # Still same count
+        assert (
+            health_check_3["handler_count"] == initial_handler_count
+        )  # Still same count
 
         # Step 7: Use ensure_logging_properly_initialized() for critical operations
         ensure_logging_properly_initialized()  # Fail-fast if logging is broken
@@ -424,12 +458,18 @@ class TestRealWorldScenarioExamples:
             """Initialize application logging once during startup."""
             setup_console_logging(verbose=True)
             execution_context_id = f"app_startup_{uuid.uuid4().hex[:8]}"
-            log_files = setup_file_logging(execution_context_id=execution_context_id, verbose=True, project_name="test")
+            log_files = setup_file_logging(
+                execution_context_id=execution_context_id,
+                verbose=True,
+                project_name="test",
+            )
 
             # Validate the setup
             validation = validate_logging_state(verbose_expected=True)
             if not validation["valid"]:
-                raise RuntimeError(f"Logging initialization failed: {validation['issues']}")
+                raise RuntimeError(
+                    f"Logging initialization failed: {validation['issues']}"
+                )
 
             logger.info("Application logging initialized successfully")
             return log_files
@@ -439,7 +479,9 @@ class TestRealWorldScenarioExamples:
         assert len(log_files) == 1
 
         # Step 3: Subsequent calls to initialize_logging() will fail fast
-        with pytest.raises(RuntimeError, match="Console logging has already been configured"):
+        with pytest.raises(
+            RuntimeError, match="Console logging has already been configured"
+        ):
             initialize_logging()
 
         # Step 4: But logging continues to work normally
@@ -463,7 +505,9 @@ class TestRealWorldScenarioExamples:
         # Step 1: Initialize logging once for the application
         setup_console_logging(verbose=True)
         execution_context_id = f"multi_session_{uuid.uuid4().hex[:8]}"
-        setup_file_logging(execution_context_id=execution_context_id, verbose=True, project_name="test")
+        setup_file_logging(
+            execution_context_id=execution_context_id, verbose=True, project_name="test"
+        )
 
         # Step 2: Create multiple processing sessions
         session_results = []
@@ -478,7 +522,9 @@ class TestRealWorldScenarioExamples:
             except RuntimeError as e:
                 # Protection worked - logging already configured
                 assert "already been configured" in str(e)
-                logger.debug(f"Session {session_id}: Logging already configured (protection working)")
+                logger.debug(
+                    f"Session {session_id}: Logging already configured (protection working)"
+                )
 
             # Session continues with its work
             logger.debug(f"Session {session_id}: Processing data")
@@ -525,13 +571,17 @@ class TestRealWorldScenarioExamples:
                 raise
 
         # Step 1: Initially, logging is not configured (broken state)
-        with pytest.raises(RuntimeError, match="Logging system is not properly initialized"):
+        with pytest.raises(
+            RuntimeError, match="Logging system is not properly initialized"
+        ):
             critical_operation_with_logging_check()
 
         # Step 2: Fix the logging configuration
         setup_console_logging(verbose=True)
         execution_context_id = f"error_recovery_{uuid.uuid4().hex[:8]}"
-        setup_file_logging(execution_context_id=execution_context_id, verbose=True, project_name="test")
+        setup_file_logging(
+            execution_context_id=execution_context_id, verbose=True, project_name="test"
+        )
 
         # Step 3: Now critical operation can proceed
         result = critical_operation_with_logging_check()

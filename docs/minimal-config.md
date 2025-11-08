@@ -12,6 +12,7 @@ The `minimal.yaml` configuration provides a way to use Buttermilk without requir
 ## What's Included
 
 ### Enabled Features
+
 - Local logging
 - Session management
 - Record handling and manipulation
@@ -20,6 +21,7 @@ The `minimal.yaml` configuration provides a way to use Buttermilk without requir
 - Local file storage
 
 ### Disabled Features
+
 - Cloud storage (GCS, BigQuery)
 - Cloud logging
 - Secret Manager
@@ -45,9 +47,7 @@ bm, resolved_conf = bootstrap_session_with_config(config=cfg)
 from buttermilk._core.types import Record
 
 record = Record(
-    content="Test content",
-    mime="text/plain",
-    metadata={"source": "local_test"}
+    content="Test content", mime="text/plain", metadata={"source": "local_test"}
 )
 ```
 
@@ -65,11 +65,13 @@ def test_my_local_feature(local_bm):
 ## Testing
 
 Integration tests for minimal configuration are in:
+
 ```
 tests/endtoend/test_local_minimal_init.py
 ```
 
 Run them with:
+
 ```bash
 uv run pytest tests/endtoend/test_local_minimal_init.py -v --tb=short
 ```
@@ -85,20 +87,20 @@ bm:
     sessions_dir: "data/sessions"
 
 infrastructure:
-  clouds: []  # No cloud configuration
-  llms: {}    # No LLM configuration
+  clouds: [] # No cloud configuration
+  llms: {} # No LLM configuration
 
   tracing:
-    weave: {enabled: false}
-    traceloop: {enabled: false}
-    otel: {enabled: false}
+    weave: { enabled: false }
+    traceloop: { enabled: false }
+    otel: { enabled: false }
 
   logging:
-    type: local  # Only local logging
+    type: local # Only local logging
     verbose: false
 
-storage: {}   # No storage by default
-pipeline: null  # No pipeline by default
+storage: {} # No storage by default
+pipeline: null # No pipeline by default
 ```
 
 ## Adding Features
@@ -106,6 +108,7 @@ pipeline: null  # No pipeline by default
 To add specific features to the minimal config:
 
 ### Local Storage
+
 ```yaml
 storage:
   my_data:
@@ -115,30 +118,35 @@ storage:
 ```
 
 ### ChromaDB (local)
+
 ```yaml
 storage:
   vectors:
     type: chromadb
     collection_name: my_collection
     persist_directory: ".cache/chromadb"
-    embedding_model: "local-model"  # Use local embeddings
+    embedding_model: "local-model" # Use local embeddings
     dimensionality: 384
 ```
 
 ## Use Cases
 
 ### MCP Servers
+
 The osbchatmcp and zotmcp servers use this pattern - they need buttermilk to BUILD the ChromaDB databases (with full cloud access), but at RUNTIME they only use the local database files without any cloud dependencies.
 
 ### Testing
+
 Tests can use `local_bm` fixture to verify functionality that doesn't require external services.
 
 ### Development
+
 Developers can work on local features without needing GCP credentials configured.
 
 ## Limitations
 
 Without cloud access, you cannot:
+
 - Call LLMs (Gemini, OpenAI, etc.)
 - Access BigQuery datasets
 - Read from/write to GCS buckets

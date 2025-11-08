@@ -12,6 +12,7 @@ init_viz()
 
 # Now just plot as normal
 import matplotlib.pyplot as plt
+
 fig, ax = plt.subplots()
 ax.plot([1, 2, 3], [1, 4, 9])
 plt.show()
@@ -63,6 +64,7 @@ init_viz(profile="hidpi", theme="cyberpunk")
 
 ```python
 from buttermilk.utils.viz import cyberpunk_glow
+
 # Add neon glow to your plots
 ax.plot(x, y)
 cyberpunk_glow(ax, intensity=0.6)
@@ -151,6 +153,7 @@ bm = nb_init(job="my_analysis", project="my_project")
 
 # Ready to plot!
 import matplotlib.pyplot as plt
+
 fig, ax = plt.subplots()
 ax.plot(data)
 ```

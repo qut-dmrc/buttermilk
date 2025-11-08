@@ -71,8 +71,7 @@ async def test_osb_flow():
 
         # Wait for host's greeting and initial prompt
         prompt = await client.wait_for_ui_message(
-            pattern="proceed|confirm|start",
-            timeout=30
+            pattern="proceed|confirm|start", timeout=30
         )
 
         # Send natural response
@@ -80,8 +79,7 @@ async def test_osb_flow():
 
         # Wait for agents to work
         results = await client.wait_for_agent_results(
-            expected_agents=["researcher", "policy_analyst"],
-            timeout=120
+            expected_agents=["researcher", "policy_analyst"], timeout=120
         )
 
         # Verify results

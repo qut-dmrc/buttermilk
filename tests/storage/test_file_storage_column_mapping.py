@@ -62,7 +62,16 @@ class TestFileStorageColumnMapping:
         which is the foundation for more complex mappings.
         """
         # Configuration similar to tox.yaml
-        storage = self.create_test_storage({"type": "file", "columns": {"content": "alt_text", "ground_truth": "expected", "record_id": "id"}})
+        storage = self.create_test_storage(
+            {
+                "type": "file",
+                "columns": {
+                    "content": "alt_text",
+                    "ground_truth": "expected",
+                    "record_id": "id",
+                },
+            }
+        )
 
         # Test data
         test_data = [
@@ -140,7 +149,10 @@ class TestFileStorageColumnMapping:
 
         # Validate direct field mappings
         assert record.record_id == "OSB-TEST-001"
-        assert record.content == "This is the main fulltext content for vector processing..."
+        assert (
+            record.content
+            == "This is the main fulltext content for vector processing..."
+        )
 
         # Validate nested metadata mapping
         expected_metadata = {
@@ -155,7 +167,9 @@ class TestFileStorageColumnMapping:
 
         for key, expected_value in expected_metadata.items():
             assert key in record.metadata, f"Missing metadata key: {key}"
-            assert record.metadata[key] == expected_value, f"Metadata mismatch for {key}"
+            assert record.metadata[key] == expected_value, (
+                f"Metadata mismatch for {key}"
+            )
 
         # Validate that unmapped fields are preserved
         assert "unmapped_field" in record.metadata
@@ -168,7 +182,14 @@ class TestFileStorageColumnMapping:
         and nested metadata mapping work correctly together.
         """
         storage = self.create_test_storage(
-            {"type": "file", "columns": {"content": "text", "ground_truth": "expected", "metadata": {"title": "title", "summary": "description"}}}
+            {
+                "type": "file",
+                "columns": {
+                    "content": "text",
+                    "ground_truth": "expected",
+                    "metadata": {"title": "title", "summary": "description"},
+                },
+            }
         )
 
         test_data = [
@@ -238,13 +259,19 @@ class TestFileStorageColumnMapping:
                 "type": "summary",
                 "location": "Somalia",
                 "case_date": "2023-11-22",
-                "topics": ["War and conflict", "Dangerous individuals and organizations"],
+                "topics": [
+                    "War and conflict",
+                    "Dangerous individuals and organizations",
+                ],
                 "standards": ["Dangerous Individuals and Organizations policy"],
                 "reasons": [
                     'The policy prohibits content that "praises" dangerous organizations...',
                     "In the first post, the caption describes a military operation...",
                 ],
-                "recommendations": ["Enhance training and accuracy of reviewers...", "Add criteria and illustrative examples..."],
+                "recommendations": [
+                    "Enhance training and accuracy of reviewers...",
+                    "Add criteria and illustrative examples...",
+                ],
                 "job_id": "2Luac3REAVKPnF52dZqtc4",
                 "timestamp": 1732052347313,
             }
@@ -261,7 +288,10 @@ class TestFileStorageColumnMapping:
 
         # Validate all metadata fields are correctly mapped
         assert record.metadata["title"] == "Mention of Al-Shabaab"
-        assert record.metadata["description"] == "The first post included a picture showing weapons..."
+        assert (
+            record.metadata["description"]
+            == "The first post included a picture showing weapons..."
+        )
         assert record.metadata["result"] == "leave up"
         assert record.metadata["type"] == "summary"
         assert record.metadata["location"] == "Somalia"
@@ -298,7 +328,14 @@ class TestFileStorageColumnMapping:
             }
         )
 
-        test_data = [{"record_id": "test-001", "content": "Direct content field", "title": "Document Title", "other_field": "Should go to metadata"}]
+        test_data = [
+            {
+                "record_id": "test-001",
+                "content": "Direct content field",
+                "title": "Document Title",
+                "other_field": "Should go to metadata",
+            }
+        ]
 
         self.create_test_data_file(test_data, storage.config.path)
 
@@ -354,7 +391,10 @@ class TestFileStorageColumnMapping:
         assert record.metadata["title"] == "This exists"
 
         # Missing metadata field should be absent (not create empty entries)
-        assert "description" not in record.metadata or record.metadata["description"] is None
+        assert (
+            "description" not in record.metadata
+            or record.metadata["description"] is None
+        )
 
         # Other fields should be preserved
         assert record.metadata["other_field"] == "Should be preserved"
@@ -375,7 +415,13 @@ class TestFileStorageColumnMapping:
             }
         )
 
-        test_data = [{"text": "Main content", "title": "Document Title", "other_field": "Should be preserved"}]
+        test_data = [
+            {
+                "text": "Main content",
+                "title": "Document Title",
+                "other_field": "Should be preserved",
+            }
+        ]
 
         self.create_test_data_file(test_data, storage.config.path)
 
@@ -415,7 +461,16 @@ class TestFileStorageRegressionTests:
         break existing simple column mappings used in tox configuration.
         """
         # Configuration matching tox.yaml (drag dataset)
-        storage = self.create_test_storage({"type": "file", "columns": {"content": "alt_text", "ground_truth": "expected", "title": "name"}})
+        storage = self.create_test_storage(
+            {
+                "type": "file",
+                "columns": {
+                    "content": "alt_text",
+                    "ground_truth": "expected",
+                    "title": "name",
+                },
+            }
+        )
 
         test_data = [
             {
@@ -494,7 +549,14 @@ class TestFileStorageIntegration:
         temp_file = tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False)
 
         config = FileStorageConfig(
-            **{"type": "file", "path": temp_file.name, "columns": {"content": "fulltext", "metadata": {"title": "title", "summary": "description"}}}
+            **{
+                "type": "file",
+                "path": temp_file.name,
+                "columns": {
+                    "content": "fulltext",
+                    "metadata": {"title": "title", "summary": "description"},
+                },
+            }
         )
 
         storage = FileStorage(config)
@@ -515,9 +577,9 @@ class TestFileStorageIntegration:
         assert len(records) == 2
 
         for i, record in enumerate(records):
-            assert record.content == f"Content {i+1}"
-            assert record.metadata["title"] == f"Title {i+1}"
-            assert record.metadata["summary"] == f"Desc {i+1}"
+            assert record.content == f"Content {i + 1}"
+            assert record.metadata["title"] == f"Title {i + 1}"
+            assert record.metadata["summary"] == f"Desc {i + 1}"
 
     def test_cloud_path_simulation(self):
         """Test that cloud paths work with column mapping.
@@ -535,7 +597,15 @@ class TestFileStorageIntegration:
             **{
                 "type": "file",  # FileStorage handles both local and cloud paths
                 "path": temp_file.name,  # In real scenario this would be gs://...
-                "columns": {"record_id": "record_id", "content": "fulltext", "metadata": {"title": "title", "case_type": "type", "result": "result"}},
+                "columns": {
+                    "record_id": "record_id",
+                    "content": "fulltext",
+                    "metadata": {
+                        "title": "title",
+                        "case_type": "type",
+                        "result": "result",
+                    },
+                },
             }
         )
 
@@ -543,7 +613,13 @@ class TestFileStorageIntegration:
 
         # Simulate OSB-like cloud data
         test_data = [
-            {"record_id": "CLOUD-001", "fulltext": "Cloud-stored content", "title": "Cloud Test Case", "type": "summary", "result": "upheld"}
+            {
+                "record_id": "CLOUD-001",
+                "fulltext": "Cloud-stored content",
+                "title": "Cloud Test Case",
+                "type": "summary",
+                "result": "upheld",
+            }
         ]
 
         with open(temp_file.name, "w") as f:

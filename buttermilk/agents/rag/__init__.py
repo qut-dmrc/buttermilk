@@ -1,4 +1,3 @@
-
 """RAG (Retrieval Augmented Generation) agents."""
 
 from .rag_zotero import RagZotero, ZoteroReference, ZoteroResearchResult

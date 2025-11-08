@@ -26,7 +26,13 @@ def mock_host_agent(monkeypatch):
     # Patch RoutedAgent.publish_message before creating the agent
     monkeypatch.setattr(RoutedAgent, "publish_message", publish_mock)
 
-    agent = HostAgent(agent_id="test-host", agent_name="TestHost", role="HOST", description="Test host agent", parameters={"human_in_loop": False})
+    agent = HostAgent(
+        agent_id="test-host",
+        agent_name="TestHost",
+        role="HOST",
+        description="Test host agent",
+        parameters={"human_in_loop": False},
+    )
 
     # Store the mock on the agent for test access
     agent.publish_message = publish_mock
@@ -44,7 +50,9 @@ def mock_host_agent(monkeypatch):
 
     # Set up tool routing attributes for _route_tool_calls_to_agents
     agent._tool_to_agent_map = {"researcher_call": "researcher-agent-id"}
-    agent._agent_registry = {"researcher-agent-id": MagicMock(agent_config=MagicMock(role="researcher"))}
+    agent._agent_registry = {
+        "researcher-agent-id": MagicMock(agent_config=MagicMock(role="researcher"))
+    }
     agent.human_in_loop = False
 
     return agent
@@ -57,7 +65,11 @@ class TestHostTopicRouting:
     async def test_step_request_routes_to_role_topic(self, mock_host_agent):
         """Test that StepRequest messages are routed to role-specific topics."""
         # Create a StepRequest
-        step = StepRequest(role="RESEARCHER", content="Execute researcher step", inputs={"query": "test query"})
+        step = StepRequest(
+            role="RESEARCHER",
+            content="Execute researcher step",
+            inputs={"query": "test query"},
+        )
 
         # Execute the step
         await mock_host_agent._execute_step(step)
@@ -165,7 +177,9 @@ class TestHostTopicRouting:
         await mock_host_agent._publish(test_message, topic_id=test_topic)
 
         # Verify message was published to custom topic
-        mock_host_agent.publish_message.assert_called_once_with(test_message, topic_id=test_topic, cancellation_token=None)
+        mock_host_agent.publish_message.assert_called_once_with(
+            test_message, topic_id=test_topic, cancellation_token=None
+        )
 
     @pytest.mark.anyio
     async def test_base_agent_publish_defaults_to_agent_topic(self, mock_host_agent):
@@ -176,4 +190,6 @@ class TestHostTopicRouting:
         await mock_host_agent._publish(test_message)
 
         # Verify message was published to agent's default topic
-        mock_host_agent.publish_message.assert_called_once_with(test_message, topic_id=mock_host_agent._topic_id, cancellation_token=None)
+        mock_host_agent.publish_message.assert_called_once_with(
+            test_message, topic_id=mock_host_agent._topic_id, cancellation_token=None
+        )

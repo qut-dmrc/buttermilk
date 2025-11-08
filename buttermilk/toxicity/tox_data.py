@@ -91,7 +91,6 @@ class ImplicitHatePipe(ToxicPipe):
     source = "implicit_hate"
 
     def __init__(self, split: Literal["STG1", "STG2", "STG3", "SAP"] = "SAP"):
-
         BASE_URI = "gs://dmrc-platforms/data/implicit-hate-corpus"
         base = cp.CloudPath(BASE_URI)
 
@@ -116,7 +115,12 @@ class ImplicitHatePipe(ToxicPipe):
 
     def __iter__(self):
         for _, record in self.data.iterrows():
-            example = Record(record_id=record.record_id, content=record.content, metadata={"source": record.source}, ground_truth=record.ground_truth)
+            example = Record(
+                record_id=record.record_id,
+                content=record.content,
+                metadata={"source": record.source},
+                ground_truth=record.ground_truth,
+            )
             yield example
 
 
@@ -471,7 +475,9 @@ class BinaryHateSpeech(ToxicDataSetPipe):
     def __iter__(self):
         for record in self.data:
             example = InputRecord(
-                source=self.source, labels=record["label"], text=record["text"],
+                source=self.source,
+                labels=record["label"],
+                text=record["text"],
             )
             yield example
 
@@ -506,11 +512,17 @@ def toxic_record() -> Record:
     datasource = ImplicitHatePipe()
     example = None
     for _, record in datasource.data.sample(1).iterrows():
-        example = Record(record_id=record.record_id, content=record.content, metadata={"source": record.source}, ground_truth=record.ground_truth)
+        example = Record(
+            record_id=record.record_id,
+            content=record.content,
+            metadata={"source": record.source},
+            ground_truth=record.ground_truth,
+        )
         break
     return example
 
 
 if __name__ == "__main__":
     from rich import print
+
     print(toxic_record())

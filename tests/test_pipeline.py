@@ -43,7 +43,9 @@ class FakeUploader:
 
     async def process(self, record, **kwargs):
         """Pass through and track."""
-        print(f"  Uploading: {type(record).__name__} - {record.record_id} - provider: {getattr(record, 'provider_name', 'N/A')}")
+        print(
+            f"  Uploading: {type(record).__name__} - {record.record_id} - provider: {getattr(record, 'provider_name', 'N/A')}"
+        )
         self.uploaded.append(record)
         yield record  # Pass through unchanged
 
@@ -142,7 +144,9 @@ async def test_multi_processor_pipeline(real_bm):
     print("About to iterate over orchestrator...")
     async for record in orchestrator():
         print(f"Got record: {record}")
-        print(f"Final output: {type(record).__name__} - {record.record_id} - provider: {getattr(record, 'provider_name', 'N/A')}")
+        print(
+            f"Final output: {type(record).__name__} - {record.record_id} - provider: {getattr(record, 'provider_name', 'N/A')}"
+        )
         results.append(record)
     print(f"Iteration complete, got {len(results)} results")
 
@@ -172,7 +176,9 @@ class MetadataAddingProcessor:
 
     async def process(self, record, **kwargs):
         """Add metadata to record without changing record_id."""
-        print(f"  MetadataAddingProcessor processing: {record.record_id} - {self.metadata_key}")
+        print(
+            f"  MetadataAddingProcessor processing: {record.record_id} - {self.metadata_key}"
+        )
 
         # Create updated record with additional metadata but same record_id
         updated_metadata = record.metadata.copy() if record.metadata else {}
@@ -195,8 +201,17 @@ class SplittingProcessor:
         for i in range(self.split_count):
             # Create split record with same record_id but additional fields
             metadata = record.metadata.copy() if record.metadata else {}
-            metadata["split_info"] = {"split_index": i, "split_id": f"{record.record_id}_split_{i}", "total_splits": self.split_count}
-            updated_record = record.model_copy(update={"content": f"Split {i} of {record.content}", "metadata": metadata})
+            metadata["split_info"] = {
+                "split_index": i,
+                "split_id": f"{record.record_id}_split_{i}",
+                "total_splits": self.split_count,
+            }
+            updated_record = record.model_copy(
+                update={
+                    "content": f"Split {i} of {record.content}",
+                    "metadata": metadata,
+                }
+            )
             yield updated_record
 
 
@@ -229,7 +244,9 @@ async def test_metadata_accumulation_and_record_id_preservation():
     print("Starting to iterate over orchestrator...")
     async for record in orchestrator():
         print(f"Got record: {record}")
-        print(f"Final result: {record.record_id} - metadata keys: {list(record.metadata.keys())}")
+        print(
+            f"Final result: {record.record_id} - metadata keys: {list(record.metadata.keys())}"
+        )
         results.append(record)
     print(f"Finished iteration, got {len(results)} results")
 
@@ -264,7 +281,11 @@ async def test_one_to_n_transformation_with_output_indexing():
     async def source():
         from buttermilk._core.types import Record
 
-        record = Record(record_id="split_test", content="Content to split", metadata={"source": "test"})
+        record = Record(
+            record_id="split_test",
+            content="Content to split",
+            metadata={"source": "test"},
+        )
         yield record
 
     # Create splitting processor and pass-through processor
@@ -379,7 +400,9 @@ async def test_pipeline_tracks_processing_summary():
     async def source():
         from buttermilk._core.types import Record
 
-        records = [Record(record_id=f"test_{i}", content=f"Content {i}") for i in range(3)]
+        records = [
+            Record(record_id=f"test_{i}", content=f"Content {i}") for i in range(3)
+        ]
         for record in records:
             yield record
 

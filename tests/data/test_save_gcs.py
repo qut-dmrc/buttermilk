@@ -22,7 +22,9 @@ def test_upload_dataframe_json_success(mock_blob_from_string, mock_storage_clien
 @patch("google.cloud.storage.blob.Blob.from_string")
 def test_upload_dataframe_json_empty_df(mock_blob_from_string, mock_storage_client):
     """Test uploading an empty DataFrame."""
-    pytest.skip("Test needs updating to match new upload_dataframe_json implementation - empty DataFrames now create placeholder files")
+    pytest.skip(
+        "Test needs updating to match new upload_dataframe_json implementation - empty DataFrames now create placeholder files"
+    )
 
 
 @patch("google.cloud.storage.Client")
@@ -48,6 +50,10 @@ def test_upload_dataframe_json_invalid_data():
 
 @patch("google.cloud.storage.Client")
 @patch("google.cloud.storage.blob.Blob.from_string")
-def test_upload_dataframe_json_duplicate_columns(mock_blob_from_string, mock_storage_client):
+def test_upload_dataframe_json_duplicate_columns(
+    mock_blob_from_string, mock_storage_client
+):
     """Test that duplicate columns are handled correctly."""
-    pytest.skip("Test needs updating to match new upload_dataframe_json implementation - duplicate column handling has changed")
+    pytest.skip(
+        "Test needs updating to match new upload_dataframe_json implementation - duplicate column handling has changed"
+    )

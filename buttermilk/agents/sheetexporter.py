@@ -12,7 +12,10 @@ from pydantic import ConfigDict, Field, PrivateAttr  # Pydantic components
 
 from buttermilk import logger  # Centralized logger
 from buttermilk._core.agent import Agent  # Buttermilk base Agent class
-from buttermilk._core.contract import AgentInput, AgentOutput  # Buttermilk message contracts
+from buttermilk._core.contract import (
+    AgentInput,
+    AgentOutput,
+)  # Buttermilk message contracts
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk.utils.gsheet import GSheet  # Utility for Google Sheets interaction
 
@@ -47,6 +50,7 @@ class GSheetExporter(Agent):
         Returns an `ExecutionTrace` where the `outputs` field contains a dictionary
         with details of the saved sheet, including `sheet_url` and `sheet_id`.
     """
+
     # Note: 'name' and 'flow' are Pydantic fields with init=False, meaning they are
     # class variables or intended to be set post-initialization, not via constructor.
     # Their usage pattern might need clarification if they are meant for dynamic config.
@@ -104,7 +108,10 @@ class GSheetExporter(Agent):
         from buttermilk.utils.gsheet import format_strings  # Local import for utility
 
         if not message.inputs:
-            logger.warning("GSheetExporter received message with no inputs to export.", agent_id=self.agent_id)
+            logger.warning(
+                "GSheetExporter received message with no inputs to export.",
+                agent_id=self.agent_id,
+            )
             # Return an empty or error trace
             raise ProcessingError("No data in message.inputs to export.")
 
@@ -115,17 +122,30 @@ class GSheetExporter(Agent):
         elif isinstance(message.inputs, list):
             input_data_list = message.inputs  # type: ignore # Assuming list of dicts
         else:
-            logger.error("GSheetExporter message.inputs is not a dict or list of dicts.", agent_id=self.agent_id, type=type(message.inputs))
-            raise ProcessingError(f"message.inputs type {type(message.inputs)} not supported.")
+            logger.error(
+                "GSheetExporter message.inputs is not a dict or list of dicts.",
+                agent_id=self.agent_id,
+                type=type(message.inputs),
+            )
+            raise ProcessingError(
+                f"message.inputs type {type(message.inputs)} not supported."
+            )
 
         try:
             dataset_df = pd.DataFrame.from_records(input_data_list)
         except Exception as e:
-            logger.error("GSheetExporter failed to create DataFrame from inputs", agent_id=self.agent_id, error=e)
+            logger.error(
+                "GSheetExporter failed to create DataFrame from inputs",
+                agent_id=self.agent_id,
+                error=e,
+            )
             raise ProcessingError(f"Failed to create DataFrame: {e!s}") from e
 
         if dataset_df.empty:
-            logger.info("GSheetExporter input data resulted in an empty DataFrame. Nothing to export.", agent_id=self.agent_id)
+            logger.info(
+                "GSheetExporter input data resulted in an empty DataFrame. Nothing to export.",
+                agent_id=self.agent_id,
+            )
             # Empty dataset - return None or minimal output
             return AgentOutput(
                 agent_id=self.agent_id,
@@ -141,16 +161,34 @@ class GSheetExporter(Agent):
         if self.save:  # self.save is a configuration object from AgentConfig
             save_config_params = self.save.model_dump(exclude_none=True)
         else:
-            logger.warning("GSheetExporter no 'save' configuration found. Attempting to save to GSheet with default parameters if GSheet utility supports it.", agent_id=self.agent_id)
+            logger.warning(
+                "GSheetExporter no 'save' configuration found. Attempting to save to GSheet with default parameters if GSheet utility supports it.",
+                agent_id=self.agent_id,
+            )
             # Depending on GSheet.save_gsheet behavior, this might fail or use defaults.
 
         try:
-            sheet_info = self._gsheet.save_gsheet(df=formatted_contents_df, **save_config_params)
+            sheet_info = self._gsheet.save_gsheet(
+                df=formatted_contents_df, **save_config_params
+            )
             # Assuming sheet_info has 'id' and 'url' attributes as per original code
-            output_payload = {"sheet_url": sheet_info.url, "sheet_id": sheet_info.id, **save_config_params}
-            logger.info("GSheetExporter successfully saved data to Google Sheet.", agent_id=self.agent_id, url=sheet_info.url, sheet_id=sheet_info.id)
+            output_payload = {
+                "sheet_url": sheet_info.url,
+                "sheet_id": sheet_info.id,
+                **save_config_params,
+            }
+            logger.info(
+                "GSheetExporter successfully saved data to Google Sheet.",
+                agent_id=self.agent_id,
+                url=sheet_info.url,
+                sheet_id=sheet_info.id,
+            )
         except Exception as e:
-            logger.error("GSheetExporter failed to save data to Google Sheet", agent_id=self.agent_id, error=e)
+            logger.error(
+                "GSheetExporter failed to save data to Google Sheet",
+                agent_id=self.agent_id,
+                error=e,
+            )
             raise ProcessingError(f"GSheet save error: {e!s}") from e
 
         return AgentOutput(

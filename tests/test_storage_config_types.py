@@ -18,7 +18,11 @@ class TestTypeSpecificStorageConfigs:
     def test_vector_config_has_relevant_fields_only(self):
         """ChromaDB/vector configs should only have vector-specific fields."""
         config = VectorStorageConfig(
-            type="chromadb", persist_directory="./data/chromadb", collection_name="test", embedding_model="gemini-embedding-001", dimensionality=3072
+            type="chromadb",
+            persist_directory="./data/chromadb",
+            collection_name="test",
+            embedding_model="gemini-embedding-001",
+            dimensionality=3072,
         )
 
         # Should have vector-specific fields
@@ -68,7 +72,12 @@ class TestTypeSpecificStorageConfigs:
 
     def test_bigquery_config_has_relevant_fields_only(self):
         """BigQuery configs should only have BigQuery-specific fields."""
-        config = BigQueryStorageConfig(type="bigquery", project_id="test-project", dataset_id="test_dataset", table_id="test_table")
+        config = BigQueryStorageConfig(
+            type="bigquery",
+            project_id="test-project",
+            dataset_id="test_dataset",
+            table_id="test_table",
+        )
 
         # Should have BigQuery-specific fields
         assert hasattr(config, "project_id")
@@ -96,7 +105,9 @@ class TestTypeSpecificStorageConfigs:
 
     def test_huggingface_config_has_relevant_fields_only(self):
         """HuggingFace configs should only have HF-specific fields."""
-        config = HuggingFaceStorageConfig(type="huggingface", dataset_id="imdb", split="train")
+        config = HuggingFaceStorageConfig(
+            type="huggingface", dataset_id="imdb", split="train"
+        )
 
         # Should have HuggingFace-specific fields
         assert hasattr(config, "dataset_id")
@@ -127,7 +138,12 @@ class TestTypeSpecificStorageConfigs:
 
         file_dict = {"type": "file", "path": "./data/files", "glob": "**/*.json"}
 
-        bigquery_dict = {"type": "bigquery", "project_id": "test-project", "dataset_id": "test_dataset", "table_id": "test_table"}
+        bigquery_dict = {
+            "type": "bigquery",
+            "project_id": "test-project",
+            "dataset_id": "test_dataset",
+            "table_id": "test_table",
+        }
 
         # These should not raise exceptions
         try:
@@ -179,7 +195,9 @@ class TestTypeSpecificStorageConfigs:
 
         for config in configs:
             for field in common_fields:
-                assert hasattr(config, field), f"{config.__class__.__name__} missing common field: {field}"
+                assert hasattr(config, field), (
+                    f"{config.__class__.__name__} missing common field: {field}"
+                )
 
     def test_type_validation_enforced(self):
         """Type fields should enforce allowed values."""

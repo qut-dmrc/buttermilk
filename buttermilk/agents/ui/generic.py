@@ -30,13 +30,17 @@ class UIAgent(Agent):
         super().__init__(**kwargs)
 
         # Common fields that all UI implementations should have - moved from Field declaration
-        self.callback_to_groupchat: Callable[..., Awaitable[None]] | None = kwargs.get("callback_to_groupchat")
+        self.callback_to_groupchat: Callable[..., Awaitable[None]] | None = kwargs.get(
+            "callback_to_groupchat"
+        )
 
         # Private attributes for internal state management - moved from PrivateAttr declaration
         self._input_task: asyncio.Task | None = None
         self._trace_this = False  # Controls whether this agent's messages are traced
 
-    async def initialize(self, callback_to_groupchat: Callable[..., Awaitable[None]], **kwargs) -> None:
+    async def initialize(
+        self, callback_to_groupchat: Callable[..., Awaitable[None]], **kwargs
+    ) -> None:
         """Initialize the UI agent with necessary callbacks and session info.
 
         Args:
@@ -96,7 +100,11 @@ class UIAgent(Agent):
         UI agents typically need to listen to control messages to update the UI.
 
         """
-        logger.debug("Received OOB message", agent_name=self.__class__.__name__, message_type=type(message).__name__)
+        logger.debug(
+            "Received OOB message",
+            agent_name=self.__class__.__name__,
+            message_type=type(message).__name__,
+        )
         return None
 
     # Default implementations for UI display - subclasses should override as needed
@@ -108,7 +116,11 @@ class UIAgent(Agent):
             source: The source of the message
 
         """
-        logger.debug("Received message for display", agent_name=self.__class__.__name__, source=source)
+        logger.debug(
+            "Received message for display",
+            agent_name=self.__class__.__name__,
+            source=source,
+        )
 
     async def cleanup(self) -> None:
         """Clean up resources when the agent is no longer needed.
@@ -119,7 +131,11 @@ class UIAgent(Agent):
         logger.debug("Cleaning up", agent_name=self.__class__.__name__)
 
         # Cancel any input polling task if it exists
-        if hasattr(self, "_input_task") and self._input_task and not self._input_task.done():
+        if (
+            hasattr(self, "_input_task")
+            and self._input_task
+            and not self._input_task.done()
+        ):
             self._input_task.cancel()
             try:
                 await self._input_task
@@ -136,4 +152,6 @@ class UIAgent(Agent):
             A callable that can be used as a callback function
 
         """
-        raise NotImplementedError(f"{self.__class__.__name__} must implement make_callback")
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement make_callback"
+        )

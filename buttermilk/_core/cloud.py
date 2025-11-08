@@ -12,7 +12,10 @@ from google.cloud.logging_v2.client import Client as CloudLoggingClient
 from buttermilk._core.config import CloudProviderCfg
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.log import logger
-from buttermilk._core.utils.lazy_loading import cached_property, refreshable_cached_property
+from buttermilk._core.utils.lazy_loading import (
+    cached_property,
+    refreshable_cached_property,
+)
 
 
 class CloudManager:
@@ -38,14 +41,22 @@ class CloudManager:
         if self.gcp_cloud_cfg:
             project_id = getattr(self.gcp_cloud_cfg, "project_id", None)
             location = getattr(self.gcp_cloud_cfg, "location", None)
-            quota_project_id = getattr(self.gcp_cloud_cfg, "quota_project_id", project_id)
+            quota_project_id = getattr(
+                self.gcp_cloud_cfg, "quota_project_id", project_id
+            )
 
             if project_id:
-                os.environ["GOOGLE_CLOUD_PROJECT"] = os.environ.get("GOOGLE_CLOUD_PROJECT", project_id)
+                os.environ["GOOGLE_CLOUD_PROJECT"] = os.environ.get(
+                    "GOOGLE_CLOUD_PROJECT", project_id
+                )
             if location:
-                os.environ["GOOGLE_CLOUD_LOCATION"] = os.environ.get("GOOGLE_CLOUD_LOCATION", location)
+                os.environ["GOOGLE_CLOUD_LOCATION"] = os.environ.get(
+                    "GOOGLE_CLOUD_LOCATION", location
+                )
             if quota_project_id:
-                os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = os.environ.get("GOOGLE_CLOUD_QUOTA_PROJECT", quota_project_id)
+                os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = os.environ.get(
+                    "GOOGLE_CLOUD_QUOTA_PROJECT", quota_project_id
+                )
 
     def _needs_credentials_refresh(self, credentials: GoogleCredentials) -> bool:
         """Check if credentials need to be refreshed."""
@@ -220,7 +231,11 @@ class CloudManager:
             if not cloud or not hasattr(cloud, "type"):
                 continue  # Skip invalid cloud entries
 
-            if cloud.type == "gcp" and hasattr(cloud, "has_service") and cloud.has_service("vertex"):
+            if (
+                cloud.type == "gcp"
+                and hasattr(cloud, "has_service")
+                and cloud.has_service("vertex")
+            ):
                 self._init_vertex_ai(cloud)
 
     def _init_vertex_ai(self, cloud: CloudProviderCfg) -> None:
@@ -241,7 +256,9 @@ class CloudManager:
                     location=location,
                     staging_bucket=bucket,
                 )
-                logger.info(f"Initialized Vertex AI: project={project_id}, location={location}")
+                logger.info(
+                    f"Initialized Vertex AI: project={project_id}, location={location}"
+                )
             except Exception as e:
                 logger.warning(f"Failed to initialize Vertex AI: {e}")
         else:

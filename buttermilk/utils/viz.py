@@ -63,7 +63,14 @@ PALETTES = {
             "#FF0054",  # Red
         ],
         # Sequential palette (light to dark)
-        "sequential": ["#0A0E27", "#1A3A52", "#2D6A6A", "#4A9B83", "#7FD1AE", "#B8FFE5"],
+        "sequential": [
+            "#0A0E27",
+            "#1A3A52",
+            "#2D6A6A",
+            "#4A9B83",
+            "#7FD1AE",
+            "#B8FFE5",
+        ],
     },
     "academic": {
         "primary": "#0173B2",  # Blue (colorblind safe)
@@ -87,7 +94,14 @@ PALETTES = {
             "#949494",  # Gray
             "#ECE133",  # Yellow
         ],
-        "sequential": ["#F7FBFF", "#DEEBF7", "#C6DBEF", "#9ECAE1", "#6BAED6", "#3182BD"],
+        "sequential": [
+            "#F7FBFF",
+            "#DEEBF7",
+            "#C6DBEF",
+            "#9ECAE1",
+            "#6BAED6",
+            "#3182BD",
+        ],
     },
     "minimal": {
         "primary": "#2E3440",  # Dark gray
@@ -100,8 +114,22 @@ PALETTES = {
         "surface": "#ECEFF4",  # Light gray
         "text": "#2E3440",  # Dark gray
         "grid": "#E5E9F0",  # Very light gray
-        "categorical": ["#5E81AC", "#BF616A", "#A3BE8C", "#EBCB8B", "#B48EAD", "#88C0D0"],
-        "sequential": ["#ECEFF4", "#E5E9F0", "#D8DEE9", "#88C0D0", "#5E81AC", "#4C566A"],
+        "categorical": [
+            "#5E81AC",
+            "#BF616A",
+            "#A3BE8C",
+            "#EBCB8B",
+            "#B48EAD",
+            "#88C0D0",
+        ],
+        "sequential": [
+            "#ECEFF4",
+            "#E5E9F0",
+            "#D8DEE9",
+            "#88C0D0",
+            "#5E81AC",
+            "#4C566A",
+        ],
     },
 }
 
@@ -305,7 +333,9 @@ def _apply_plotly_style(profile: dict, palette: dict, theme: str) -> None:
 
     # Layout defaults
     template.layout = go.Layout(
-        font=dict(family="sans-serif", size=profile["font_size"], color=palette["text"]),
+        font=dict(
+            family="sans-serif", size=profile["font_size"], color=palette["text"]
+        ),
         plot_bgcolor=palette["background"],
         paper_bgcolor=palette["background"],
         title=dict(font=dict(size=profile["title_size"], color=palette["text"])),
@@ -351,7 +381,9 @@ def get_palette(theme: ThemeType = "cyberpunk") -> dict:
     return PALETTES[theme].copy()
 
 
-def get_categorical_colors(theme: ThemeType = "cyberpunk", n: int | None = None) -> list[str]:
+def get_categorical_colors(
+    theme: ThemeType = "cyberpunk", n: int | None = None
+) -> list[str]:
     """Get categorical color list.
 
     Args:
@@ -370,7 +402,9 @@ def get_categorical_colors(theme: ThemeType = "cyberpunk", n: int | None = None)
     return [colors[i % len(colors)] for i in range(n)]
 
 
-def get_sequential_colors(theme: ThemeType = "cyberpunk", n: int = 6, reverse: bool = False) -> list[str]:
+def get_sequential_colors(
+    theme: ThemeType = "cyberpunk", n: int = 6, reverse: bool = False
+) -> list[str]:
     """Get sequential color gradient.
 
     Args:
@@ -393,7 +427,10 @@ def get_sequential_colors(theme: ThemeType = "cyberpunk", n: int = 6, reverse: b
     from matplotlib.colors import LinearSegmentedColormap
 
     cmap = LinearSegmentedColormap.from_list("custom", colors, N=n)
-    return [f"#{int(r*255):02x}{int(g*255):02x}{int(b*255):02x}" for r, g, b, _ in cmap(np.linspace(0, 1, n))]
+    return [
+        f"#{int(r * 255):02x}{int(g * 255):02x}{int(b * 255):02x}"
+        for r, g, b, _ in cmap(np.linspace(0, 1, n))
+    ]
 
 
 def quick_figure(
@@ -484,7 +521,9 @@ class temp_style:
         >>> # Original style restored
     """
 
-    def __init__(self, profile: ProfileType | None = None, theme: ThemeType | None = None):
+    def __init__(
+        self, profile: ProfileType | None = None, theme: ThemeType | None = None
+    ):
         self.profile = profile
         self.theme = theme
         self.old_rc = None

@@ -9,7 +9,9 @@ from buttermilk.processors.jmespath_transform import JMESPathTransform
 async def main():
     # Test 1: Simple field extraction
     print("Test 1: Simple field extraction")
-    record = BaseRecord(record_id="test_1", metadata={"outputs": {"result": "test_value"}})
+    record = BaseRecord(
+        record_id="test_1", metadata={"outputs": {"result": "test_value"}}
+    )
 
     processor = JMESPathTransform(mappings={"answer": "metadata.outputs.result"})
 
@@ -22,11 +24,18 @@ async def main():
     # Test 2: Nested object construction
     print("\nTest 2: Nested object construction")
     record2 = BaseRecord(
-        record_id="trace_1", metadata={"agent_info": {"agent_id": "agent_123"}, "outputs": {"conclusion": "test conclusion"}, "call_id": "call_456"}
+        record_id="trace_1",
+        metadata={
+            "agent_info": {"agent_id": "agent_123"},
+            "outputs": {"conclusion": "test conclusion"},
+            "call_id": "call_456",
+        },
     )
 
     processor2 = JMESPathTransform(
-        mappings={"answers": "{agent_id: metadata.agent_info.agent_id, result: metadata.outputs, answer_id: metadata.call_id}"}
+        mappings={
+            "answers": "{agent_id: metadata.agent_info.agent_id, result: metadata.outputs, answer_id: metadata.call_id}"
+        }
     )
 
     async for result in processor2.process(record2, processor_stage="transform"):

@@ -9,9 +9,11 @@ bm = init(config_name="testing")
 
 print("\n=== Logger Hierarchy ===")
 print(f"Root logger handlers: {logging.getLogger().handlers}")
-print(f'Buttermilk logger handlers: {logging.getLogger("buttermilk").handlers}')
-print(f'Buttermilk logger level: {logging.getLevelName(logging.getLogger("buttermilk").level)}')
-print(f'Buttermilk logger propagate: {logging.getLogger("buttermilk").propagate}')
+print(f"Buttermilk logger handlers: {logging.getLogger('buttermilk').handlers}")
+print(
+    f"Buttermilk logger level: {logging.getLevelName(logging.getLogger('buttermilk').level)}"
+)
+print(f"Buttermilk logger propagate: {logging.getLogger('buttermilk').propagate}")
 
 print("\n=== Handler Details ===")
 for i, handler in enumerate(logging.getLogger("buttermilk").handlers):

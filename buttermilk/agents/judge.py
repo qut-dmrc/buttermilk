@@ -49,7 +49,10 @@ class Reasons(BaseModel):
 
         """
         reasons_str = "\n\n\t".join(f"- {reason}" for reason in self.reasons)
-        return f"**Conclusion:** {self.conclusion}\n\n" f"**Reasoning Steps:**\n\t{reasons_str or 'No specific reasons provided.'}"
+        return (
+            f"**Conclusion:** {self.conclusion}\n\n"
+            f"**Reasoning Steps:**\n\t{reasons_str or 'No specific reasons provided.'}"
+        )
 
 
 class JudgeReasons(Reasons):
@@ -99,7 +102,13 @@ class JudgeReasons(Reasons):
         # Format reasons as bullet points
         reasons_str = "\n".join(f"- {reason}" for reason in self.reasons)
 
-        return f"{header}" f"{self.conclusion}\n" f"Conclusion: {conclusion_type}\n" f"{reasons_str}\n" f"Prediction: {self.prediction}"
+        return (
+            f"{header}"
+            f"{self.conclusion}\n"
+            f"Conclusion: {conclusion_type}\n"
+            f"{reasons_str}\n"
+            f"Prediction: {self.prediction}"
+        )
 
     def __str__(self) -> str:
         """Returns a Markdown formatted string representation.

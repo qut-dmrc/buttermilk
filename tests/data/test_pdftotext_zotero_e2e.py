@@ -101,9 +101,9 @@ async def test_pdftotext_extracts_from_real_zotero_pdf(real_bm):
 
     # Log comparison for manual verification
     pdftotext_length = len(result.content)
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("PDF Extraction Comparison")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"Record ID: {result.record_id}")
     print(f"PDF: {pdf_path.name}")
     print(f"PDF size: {pdf_path.stat().st_size / 1024:.1f} KB")
@@ -112,7 +112,7 @@ async def test_pdftotext_extracts_from_real_zotero_pdf(real_bm):
     print(f"Difference: {pdftotext_length - pdfminer_length:+,} chars")
     print("\nFirst 200 chars of pdftotext output:")
     print(result.content[:200])
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     # Basic sanity checks
     assert pdftotext_length > 100, "Extracted text seems too short"
@@ -121,7 +121,9 @@ async def test_pdftotext_extracts_from_real_zotero_pdf(real_bm):
     if pdfminer_length > 100:
         # Both should extract similar amounts (within 50% difference)
         ratio = pdftotext_length / pdfminer_length
-        assert 0.5 < ratio < 2.0, f"Extraction lengths differ significantly: {ratio:.2f}x"
+        assert 0.5 < ratio < 2.0, (
+            f"Extraction lengths differ significantly: {ratio:.2f}x"
+        )
 
 
 @pytest.mark.anyio
@@ -160,7 +162,9 @@ async def test_pdftotext_handles_problematic_pdfs_gracefully(real_bm):
         # 1. Raise ProcessingError (preferred)
         # 2. Return minimal/empty text (acceptable)
         try:
-            results = [r async for r in processor.process(record, processor_stage="test")]
+            results = [
+                r async for r in processor.process(record, processor_stage="test")
+            ]
 
             if results:
                 result = results[0]
@@ -169,7 +173,9 @@ async def test_pdftotext_handles_problematic_pdfs_gracefully(real_bm):
 
                 # Very small PDFs typically can't be extracted
                 # pdftotext might return error text or empty string
-                assert len(result.content) < 1000, "Unexpected: large content from tiny PDF"
+                assert len(result.content) < 1000, (
+                    "Unexpected: large content from tiny PDF"
+                )
 
         except ProcessingError as e:
             # Expected for corrupt PDFs
@@ -216,15 +222,17 @@ async def test_full_pipeline_with_pdftotext(real_bm):
 
     # Verify results
     assert results is not None
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Pipeline E2E Test Results")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"Records processed: {results.get('records_processed', 'unknown')}")
     print(f"Status: {results.get('status', 'unknown')}")
     if "errors" in results and results["errors"]:
         print(f"Errors: {results['errors']}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     # Basic assertions
-    assert results.get("status") in ["completed", "success"], f"Pipeline failed: {results}"
+    assert results.get("status") in ["completed", "success"], (
+        f"Pipeline failed: {results}"
+    )
     assert results.get("records_processed", 0) > 0, "No records were processed"

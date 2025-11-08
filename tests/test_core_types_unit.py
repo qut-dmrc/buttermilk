@@ -23,7 +23,9 @@ def test_record_with_metadata():
 
 def test_record_serialization():
     """Test that Record can be serialized and deserialized."""
-    record = Record(content="Serialization test", mime="text/plain", metadata={"test": True})
+    record = Record(
+        content="Serialization test", mime="text/plain", metadata={"test": True}
+    )
 
     # Test model_dump
     dumped = record.model_dump()
@@ -57,7 +59,11 @@ def test_record_equality():
 
 def test_record_hash_computation():
     """Test that record_hash is computed correctly from as_markdown() output."""
-    record = Record(content="Test content for hashing", metadata={"title": "Test Record"}, record_id="test_hash_123")
+    record = Record(
+        content="Test content for hashing",
+        metadata={"title": "Test Record"},
+        record_id="test_hash_123",
+    )
 
     # Access the computed field to trigger computation
     hash_value = record.record_hash
@@ -70,7 +76,11 @@ def test_record_hash_computation():
     assert record.metadata["record_hash"] == hash_value
 
     # Verify hash is consistent - same content should produce same hash
-    record2 = Record(content="Test content for hashing", metadata={"title": "Test Record"}, record_id="test_hash_123")
+    record2 = Record(
+        content="Test content for hashing",
+        metadata={"title": "Test Record"},
+        record_id="test_hash_123",
+    )
     assert record2.record_hash == hash_value
 
 
@@ -167,7 +177,11 @@ def test_ground_truth_hash_uniqueness():
 
 def test_ground_truth_hash_complex_data():
     """Test ground truth hash with complex nested data structures."""
-    complex_gt = {"answers": ["A", "B", "C"], "metadata": {"source": "test", "nested": {"deep": "value"}}, "scores": [1, 2, 3]}
+    complex_gt = {
+        "answers": ["A", "B", "C"],
+        "metadata": {"source": "test", "nested": {"deep": "value"}},
+        "scores": [1, 2, 3],
+    }
 
     record = Record(content="Test", ground_truth=complex_gt)
     gt_hash = record.ground_truth_hash
@@ -179,7 +193,11 @@ def test_ground_truth_hash_complex_data():
 
 def test_hash_fields_metadata_accessibility():
     """Test that hash values are easily accessible via metadata."""
-    record = Record(content="Test content", ground_truth={"test": "data"}, metadata={"existing": "data"})
+    record = Record(
+        content="Test content",
+        ground_truth={"test": "data"},
+        metadata={"existing": "data"},
+    )
 
     # Trigger computation by accessing computed fields
     record_hash = record.record_hash

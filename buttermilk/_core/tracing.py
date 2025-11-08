@@ -82,7 +82,9 @@ class EmptyTraceFilter:
         output = trace_data.get("output")
         if output is None or output in ({}, ""):
             # This appears to be a no-op handler, filter it out
-            logger.debug(f"Filtering empty message handler trace: op_name={op_name}, inputs={trace_data.get('inputs', {})}")
+            logger.debug(
+                f"Filtering empty message handler trace: op_name={op_name}, inputs={trace_data.get('inputs', {})}"
+            )
             return None
 
         # Output has some value, keep the trace
@@ -103,4 +105,6 @@ async def get_parent_call_weave(
     Returns:
         None: Weave is no longer used
     """
-    logger.debug("get_parent_call_weave called but weave has been removed, returning None")
+    logger.debug(
+        "get_parent_call_weave called but weave has been removed, returning None"
+    )

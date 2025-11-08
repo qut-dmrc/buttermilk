@@ -66,7 +66,12 @@ class ButtermilkSearchPathPlugin(SearchPathPlugin):
         external_packages = []
 
         # Common patterns for research configuration packages
-        patterns = ["buttermilk_*_configs", "*_buttermilk_flows", "research_*_configs", "*_research_flows"]
+        patterns = [
+            "buttermilk_*_configs",
+            "*_buttermilk_flows",
+            "research_*_configs",
+            "*_research_flows",
+        ]
 
         try:
             import importlib.util
@@ -74,11 +79,15 @@ class ButtermilkSearchPathPlugin(SearchPathPlugin):
 
             # Check for installed packages matching our patterns
             for module_name in sys.modules:
-                if any(self._matches_pattern(module_name, pattern) for pattern in patterns):
+                if any(
+                    self._matches_pattern(module_name, pattern) for pattern in patterns
+                ):
                     try:
                         spec = importlib.util.find_spec(f"{module_name}.conf")
                         if spec is not None:
-                            external_packages.append((module_name, f"pkg://{module_name}.conf"))
+                            external_packages.append(
+                                (module_name, f"pkg://{module_name}.conf")
+                            )
                     except ImportError:
                         continue
 

@@ -13,11 +13,7 @@ class TestObservationModel:
     def test_title_inherits_from_basemodel(self):
         """Verify Title properly inherits from BaseModel."""
         # Create a Title instance
-        title = Title(
-            record_id="tmdb_123",
-            title="Test Movie",
-            year=2024
-        )
+        title = Title(record_id="tmdb_123", title="Test Movie", year=2024)
 
         assert title.record_id == "tmdb_123"
         assert title.title == "Test Movie"
@@ -34,7 +30,7 @@ class TestObservationModel:
             year=2024,
             region="US",
             available=True,
-            source="TMDB"
+            source="TMDB",
         )
 
         # Verify call_id is generated
@@ -54,7 +50,7 @@ class TestObservationModel:
             year=2024,
             region="US",
             available=True,
-            source="TMDB"
+            source="TMDB",
         )
 
         # Test default serialization
@@ -82,7 +78,7 @@ class TestObservationModel:
             region="US",
             available=True,
             source="TMDB",
-            metadata={"movie_id": "123"}
+            metadata={"movie_id": "123"},
         )
 
         assert obs.provider_id == "456"
@@ -102,7 +98,7 @@ class TestObservationModel:
             region="US",
             available=False,
             source="TMDB",
-            metadata={"movie_id": "123"}
+            metadata={"movie_id": "123"},
         )
 
         assert obs.available is False
@@ -118,10 +114,7 @@ class TestObservationModel:
         """Test creating observation with error information."""
         from buttermilk._core.contract import ErrorEvent
 
-        error_event = ErrorEvent(
-            content="Rate limit exceeded",
-            source="TMDB"
-        )
+        error_event = ErrorEvent(content="Rate limit exceeded", source="TMDB")
 
         obs = Observation(
             record_id="123",  # Foreign key to titles table
@@ -130,11 +123,8 @@ class TestObservationModel:
             region="US",
             available=False,
             source="TMDB",
-            metadata={
-                "movie_id": "123",
-                "error_type": "availability_check_failure"
-            },
-            error=[error_event]
+            metadata={"movie_id": "123", "error_type": "availability_check_failure"},
+            error=[error_event],
         )
 
         assert obs.error == [error_event]
@@ -154,7 +144,7 @@ class TestObservationModel:
                 # Missing title field
                 region="US",
                 available=True,
-                source="TMDB"
+                source="TMDB",
             )
 
         assert "title" in str(exc_info.value).lower()

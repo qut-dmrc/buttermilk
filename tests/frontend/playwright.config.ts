@@ -1,4 +1,4 @@
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig, devices } from "@playwright/test"
 
 /**
  * Playwright Configuration for Buttermilk Terminal Interface Testing
@@ -13,10 +13,10 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   // Test directory
-  testDir: '.',
+  testDir: ".",
 
   // Run tests in files matching this pattern
-  testMatch: '**/*.spec.ts',
+  testMatch: "**/*.spec.ts",
 
   // Timeout for each test
   timeout: 60000,
@@ -35,25 +35,25 @@ export default defineConfig({
 
   // Reporting configuration
   reporter: [
-    ['html', { outputFolder: 'playwright-report' }],
-    ['json', { outputFile: 'test-results.json' }],
-    ['junit', { outputFile: 'junit-results.xml' }],
-    ['list']
+    ["html", { outputFolder: "playwright-report" }],
+    ["json", { outputFile: "test-results.json" }],
+    ["junit", { outputFile: "junit-results.xml" }],
+    ["list"],
   ],
 
   // Global test settings
   use: {
     // Base URL for the frontend application
-    baseURL: process.env.FRONTEND_URL || 'http://localhost:5173',
+    baseURL: process.env.FRONTEND_URL || "http://localhost:5173",
 
     // Browser context options
-    trace: 'on-first-retry',
-    screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    trace: "on-first-retry",
+    screenshot: "only-on-failure",
+    video: "retain-on-failure",
 
     // Network settings
     extraHTTPHeaders: {
-      'Accept': 'application/json',
+      "Accept": "application/json",
     },
 
     // Ignore HTTPS errors in development
@@ -64,76 +64,76 @@ export default defineConfig({
   projects: [
     // Desktop Browsers
     {
-      name: 'chromium',
+      name: "chromium",
       use: {
-        ...devices['Desktop Chrome'],
+        ...devices["Desktop Chrome"],
         // Additional Chrome-specific settings
         launchOptions: {
-          args: ['--disable-web-security', '--disable-features=VizDisplayCompositor'],
+          args: ["--disable-web-security", "--disable-features=VizDisplayCompositor"],
         },
       },
     },
 
     {
-      name: 'firefox',
+      name: "firefox",
       use: {
-        ...devices['Desktop Firefox'],
+        ...devices["Desktop Firefox"],
         // Firefox-specific settings
         launchOptions: {
           firefoxUserPrefs: {
-            'dom.webnotifications.enabled': false,
+            "dom.webnotifications.enabled": false,
           },
         },
       },
     },
 
     {
-      name: 'webkit',
+      name: "webkit",
       use: {
-        ...devices['Desktop Safari'],
+        ...devices["Desktop Safari"],
         // WebKit-specific settings
       },
     },
 
     // Mobile Browsers
     {
-      name: 'Mobile Chrome',
+      name: "Mobile Chrome",
       use: {
-        ...devices['Pixel 5'],
+        ...devices["Pixel 5"],
       },
     },
 
     {
-      name: 'Mobile Safari',
+      name: "Mobile Safari",
       use: {
-        ...devices['iPhone 12'],
+        ...devices["iPhone 12"],
       },
     },
 
     // Performance Testing
     {
-      name: 'performance',
+      name: "performance",
       use: {
-        ...devices['Desktop Chrome'],
+        ...devices["Desktop Chrome"],
         // Throttle network for performance testing
         launchOptions: {
-          args: ['--disable-web-security'],
+          args: ["--disable-web-security"],
         },
       },
-      testMatch: '**/*performance*.spec.ts',
+      testMatch: "**/*performance*.spec.ts",
     },
 
     // Accessibility Testing
     {
-      name: 'accessibility',
+      name: "accessibility",
       use: {
-        ...devices['Desktop Chrome'],
+        ...devices["Desktop Chrome"],
         // Enable accessibility features
         launchOptions: {
-          args: ['--force-prefers-reduced-motion', '--enable-accessibility-logging'],
+          args: ["--force-prefers-reduced-motion", "--enable-accessibility-logging"],
         },
       },
-      testMatch: '**/*accessibility*.spec.ts',
+      testMatch: "**/*accessibility*.spec.ts",
     },
   ],
 
@@ -141,35 +141,35 @@ export default defineConfig({
   webServer: [
     {
       // Frontend SvelteKit dev server
-      command: 'npm run dev',
-      url: 'http://localhost:5173',
-      cwd: '../../buttermilk/frontend/chat',
+      command: "npm run dev",
+      url: "http://localhost:5173",
+      cwd: "../../buttermilk/frontend/chat",
       // reuseExistingServer: !process.env.CI,
       reuseExistingServer: true,
       timeout: 120000,
       env: {
-        NODE_ENV: 'test',
+        NODE_ENV: "test",
       },
     },
     {
       // Backend FastAPI server
-      command: 'python -m uvicorn buttermilk.api.flow:create_app --reload --host 0.0.0.0 --port 8000',
-      url: 'http://localhost:8000',
-      cwd: '../..',
+      command: "python -m uvicorn buttermilk.api.flow:create_app --reload --host 0.0.0.0 --port 8000",
+      url: "http://localhost:8000",
+      cwd: "../..",
       reuseExistingServer: !process.env.CI,
       // reuseExistingServer: true,  // Add this line
       timeout: 120000,
       env: {
-        PYTHONPATH: '../../',
-        ENVIRONMENT: 'test',
+        PYTHONPATH: "../../",
+        ENVIRONMENT: "test",
       },
     },
   ],
 
   // Test output directories
-  outputDir: 'test-results/',
+  outputDir: "test-results/",
 
   // Global test setup
-  globalSetup: require.resolve('./global-setup.ts'),
-  globalTeardown: require.resolve('./global-teardown.ts'),
-});
+  globalSetup: require.resolve("./global-setup.ts"),
+  globalTeardown: require.resolve("./global-teardown.ts"),
+})

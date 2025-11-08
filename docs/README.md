@@ -5,11 +5,13 @@ Welcome to the Buttermilk documentation! This guide will help you get started wi
 ## 🚀 Quick Navigation
 
 ### Getting Started
+
 - **[Installation](getting-started/installation.md)** - Set up your development environment
 - **[Quick Start](getting-started/quickstart.md)** - Get your first flow running in minutes
 - **[Your First Flow](getting-started/first-flow.md)** - Step-by-step tutorial
 
 ### User Guide
+
 - **[Running Flows](user-guide/flows.md)** - Complete guide to running and managing flows
 - **[Configuration](user-guide/configuration.md)** - Hydra configuration management
 - **[External Configuration](user-guide/external-configuration.md)** - Setting up external config directories
@@ -19,6 +21,7 @@ Welcome to the Buttermilk documentation! This guide will help you get started wi
 - **[CLI Reference](user-guide/cli-reference.md)** - Command-line interface
 
 ### Developer Guide
+
 - **[Architecture](developer-guide/architecture.md)** - System architecture and design
 - **[Creating Agents](developer-guide/creating-agents.md)** - How to build custom agents
 - **[Tool Definitions](developer-guide/TOOL_DEFINITIONS.md)** - Structured tool definition system
@@ -27,6 +30,7 @@ Welcome to the Buttermilk documentation! This guide will help you get started wi
 - **[Contributing](developer-guide/contributing.md)** - Development standards and process
 
 ### Reference
+
 - **[Core Concepts](reference/concepts.md)** - Understanding flows, agents, and orchestrators
 - **[Troubleshooting](reference/troubleshooting.md)** - Common issues and solutions
 
@@ -64,6 +68,7 @@ Buttermilk is an opinionated framework for HASS (Humanities, Arts, and Social Sc
 5. **Contribute**: [Developer Guide](developer-guide/contributing.md)
 
 ### For LLM Developers
+
 - **Essential**: [Bot Knowledge Bank](bots/README.md) - Core patterns and guidelines
 - **Debugging**: [Debugging Guide](bots/debugging.md) - Tools and strategies
 - **Architecture**: [System Map](bots/map.md) - Project structure overview

@@ -13,7 +13,9 @@ from typing import Any
 
 import regex as re  # For regular expression operations
 from bs4 import BeautifulSoup  # For HTML parsing
-from readabilipy import simple_json_from_html_string  # For extracting main content from HTML
+from readabilipy import (
+    simple_json_from_html_string,
+)  # For extracting main content from HTML
 
 from buttermilk._core.image import read_image  # Utility for reading image data
 from buttermilk._core.log import logger  # Centralized logger
@@ -28,14 +30,18 @@ from buttermilk.utils.utils import (  # General utilities
 
 
 async def download_and_convert(
-    obj: bytes | str | Any | None = None,  # Changed: obj can also be str if it's a URI/filepath
+    obj: bytes
+    | str
+    | Any
+    | None = None,  # Changed: obj can also be str if it's a URI/filepath
     mime: str = "application/octet-stream",
     *,  # Keyword-only arguments follow
     uri: str | None = None,
     b64: str | None = None,
     html: str | None = None,
     text: str | None = None,
-    label: str | None = None,  # Added label to docstring, though not directly used to create Record
+    label: str
+    | None = None,  # Added label to docstring, though not directly used to create Record
     filepath: str | None = None,
     allow_arbitrarily_large_downloads: bool = False,
     max_size: int = 1024 * 1024 * 10,  # 10 MB default max size
@@ -90,7 +96,9 @@ async def download_and_convert(
 
     """
     if not obj and not uri and not b64 and not text and not html and not filepath:
-        logger.debug("download_and_convert: No input data provided (obj, uri, b64, text, html, or filepath). Returning None.")
+        logger.debug(
+            "download_and_convert: No input data provided (obj, uri, b64, text, html, or filepath). Returning None."
+        )
         return None
 
     # Initialize metadata from kwargs, filtering out None values.
@@ -102,7 +110,9 @@ async def download_and_convert(
     # Attempt to decode obj if it's bytes (e.g. from a file read or download)
     # This is a general attempt; specific handling below might re-process `obj`.
     if isinstance(obj, bytes):
-        with contextlib.suppress(Exception):  # Suppress decoding errors if it's not valid UTF-8
+        with contextlib.suppress(
+            Exception
+        ):  # Suppress decoding errors if it's not valid UTF-8
             obj = obj.decode("utf-8")
 
     # Handle URI or URI-like string in obj
@@ -116,14 +126,20 @@ async def download_and_convert(
             max_size=max_size,
         )
         # Update active_mime if a more specific one was detected and current is generic
-        if detected_mimetype and (not active_mime or active_mime == "application/octet-stream"):
+        if detected_mimetype and (
+            not active_mime or active_mime == "application/octet-stream"
+        ):
             active_mime = detected_mimetype
 
-        obj = downloaded_content  # The downloaded content becomes the new obj to process
+        obj = (
+            downloaded_content  # The downloaded content becomes the new obj to process
+        )
         # Attempt to decode if it's bytes (common for downloads)
         if isinstance(obj, bytes):
             with contextlib.suppress(Exception):
-                obj = obj.decode("utf-8", errors="replace")  # Replace errors to avoid crash
+                obj = obj.decode(
+                    "utf-8", errors="replace"
+                )  # Replace errors to avoid crash
         source_uri = final_uri  # Track the source URI
 
     # Handle filepath or filepath-like string in obj
@@ -133,72 +149,117 @@ async def download_and_convert(
         obj = read_file(final_filepath)  # obj becomes file content (bytes or str)
         # Try to guess MIME from filepath extension if current is generic
         import mimetypes
+
         guessed_type, _ = mimetypes.guess_type(final_filepath)
-        if guessed_type and (not active_mime or active_mime == "application/octet-stream"):
+        if guessed_type and (
+            not active_mime or active_mime == "application/octet-stream"
+        ):
             active_mime = guessed_type
         source_uri = final_filepath  # Track the source filepath
 
     # Determine final content and process based on type/mime
     final_content: Any
-    if html or (isinstance(obj, str) and (active_mime and active_mime.startswith("text/html"))):
+    if html or (
+        isinstance(obj, str) and (active_mime and active_mime.startswith("text/html"))
+    ):
         logger.debug("download_and_convert: Processing as HTML content.")
         html_content_to_parse = html or str(obj)
         # Extract main content and metadata from HTML
         doc_metadata = extract_main_content(html=html_content_to_parse)
         "\n".join(doc_metadata.pop("paragraphs", []))
         # Add additional metadata to the record
-        active_metadata.update({k: doc_metadata.get(k) for k in ["title", "keywords", "byline", "authors", "date", "publish_date"] if doc_metadata.get(k)})
+        active_metadata.update(
+            {
+                k: doc_metadata.get(k)
+                for k in [
+                    "title",
+                    "keywords",
+                    "byline",
+                    "authors",
+                    "date",
+                    "publish_date",
+                ]
+                if doc_metadata.get(k)
+            }
+        )
 
         # Convert plain_text from list of dicts to string
-        plain_text_data = doc_metadata.pop("plain_text", []) if isinstance(doc_metadata, dict) else []
+        plain_text_data = (
+            doc_metadata.pop("plain_text", []) if isinstance(doc_metadata, dict) else []
+        )
         if isinstance(plain_text_data, list):
             # Extract text from list of dicts with "text" keys
-            text_parts = [item.get("text", "") for item in plain_text_data if isinstance(item, dict) and "text" in item]
+            text_parts = [
+                item.get("text", "")
+                for item in plain_text_data
+                if isinstance(item, dict) and "text" in item
+            ]
             final_content = " ".join(text_parts).strip()
         else:
             # Fallback if plain_text is already a string
             final_content = str(plain_text_data).strip()
-        if isinstance(doc_metadata, dict): active_metadata.update(doc_metadata)  # Add extracted HTML metadata
-        if not active_mime or active_mime == "application/octet-stream":  # Ensure mime is text/html
+        if isinstance(doc_metadata, dict):
+            active_metadata.update(doc_metadata)  # Add extracted HTML metadata
+        if (
+            not active_mime or active_mime == "application/octet-stream"
+        ):  # Ensure mime is text/html
             active_mime = "text/html"
 
     elif b64:  # Explicit base64 input
         logger.debug("download_and_convert: Processing as explicit base64 image.")
         # read_image handles base64 and returns an ImageRecord (which is a Record)
         # We want to create a new Record, so extract info from ImageRecord if needed.
-        image_rec_from_b64 = read_image(data=b64)  # Assuming read_image can take b64 string
-        final_content = image_rec_from_b64.content  # This should be a list with PIL images
-        if image_rec_from_b64.mime: active_mime = image_rec_from_b64.mime
+        image_rec_from_b64 = read_image(
+            data=b64
+        )  # Assuming read_image can take b64 string
+        final_content = (
+            image_rec_from_b64.content
+        )  # This should be a list with PIL images
+        if image_rec_from_b64.mime:
+            active_mime = image_rec_from_b64.mime
         active_metadata.update(image_rec_from_b64.metadata)
 
-    elif text or (isinstance(obj, str) and (not uri or active_mime.startswith("text/"))):  # Explicit text or obj is string and looks like text
+    elif text or (
+        isinstance(obj, str) and (not uri or active_mime.startswith("text/"))
+    ):  # Explicit text or obj is string and looks like text
         logger.debug("download_and_convert: Processing as plain text.")
         final_content = text or str(obj)
         if not active_mime or active_mime == "application/octet-stream":
             active_mime = "text/plain"
 
-    elif isinstance(obj, bytes) or (isinstance(obj, str) and is_b64(obj)):  # Raw bytes or obj is a b64 string (implicit image)
+    elif isinstance(obj, bytes) or (
+        isinstance(obj, str) and is_b64(obj)
+    ):  # Raw bytes or obj is a b64 string (implicit image)
         # Check if mime type indicates it's text
         if active_mime and active_mime.startswith("text/"):
             logger.debug("download_and_convert: Processing bytes as text.")
-            final_content = obj.decode("utf-8", errors="replace") if isinstance(obj, bytes) else obj
+            final_content = (
+                obj.decode("utf-8", errors="replace") if isinstance(obj, bytes) else obj
+            )
             if not active_mime or active_mime == "application/octet-stream":
                 active_mime = "text/plain"
         else:
-            logger.debug(f"download_and_convert: Processing as implicit image/binary data (type: {type(obj)}).")
+            logger.debug(
+                f"download_and_convert: Processing as implicit image/binary data (type: {type(obj)})."
+            )
             # read_image handles bytes or base64 string and returns an ImageRecord
             image_rec_from_obj = read_image(data=obj)
             final_content = image_rec_from_obj.content
-            if image_rec_from_obj.mime: active_mime = image_rec_from_obj.mime
+            if image_rec_from_obj.mime:
+                active_mime = image_rec_from_obj.mime
             active_metadata.update(image_rec_from_obj.metadata)
 
     elif obj is not None:  # Fallback for other types of obj not caught above
-        logger.debug(f"download_and_convert: Processing obj of type {type(obj)} as generic content.")
+        logger.debug(
+            f"download_and_convert: Processing obj of type {type(obj)} as generic content."
+        )
         final_content = str(obj)  # Convert to string as a last resort
         if not active_mime or active_mime == "application/octet-stream":
             active_mime = "text/plain"  # Assume text if unknown
     else:  # Should have been caught by the initial check, but as a safeguard
-        logger.error("download_and_convert: Reached final content determination with no valid data.")
+        logger.error(
+            "download_and_convert: Reached final content determination with no valid data."
+        )
         return None
 
     if source_uri:
@@ -227,12 +288,16 @@ def get_news_record_from_uri(uri: str) -> Record:
     try:
         import newspaper  # Dynamically import to keep as optional dependency
     except ImportError as e:
-        logger.error("The 'newspaper3k' library is required for get_news_record_from_uri. Please install it.")
-        raise ImportError("newspaper3k library not found. Please install with `pip install newspaper3k`.") from e
+        logger.error(
+            "The 'newspaper3k' library is required for get_news_record_from_uri. Please install it."
+        )
+        raise ImportError(
+            "newspaper3k library not found. Please install with `pip install newspaper3k`."
+        ) from e
 
     article = newspaper.Article(uri)  # Initialize Article object
     article.download()  # Download HTML content
-    article.parse()    # Parse content to extract elements
+    article.parse()  # Parse content to extract elements
 
     # Just use the full article text as content
     content = article.text.strip() if article.text else ""
@@ -242,7 +307,9 @@ def get_news_record_from_uri(uri: str) -> Record:
         "title": article.title or "N/A",
         "keywords": article.keywords or [],
         "authors": article.authors or [],
-        "publish_date": article.publish_date.isoformat() if article.publish_date else None,
+        "publish_date": article.publish_date.isoformat()
+        if article.publish_date
+        else None,
         "source_type": "newspaper3k_article",
     }
     # Filter out None metadata values for cleanliness
@@ -290,7 +357,9 @@ def extract_main_content(html: str, **kwargs: Any) -> dict[str, Any]:
                 chunk = text_span.get("text", "").strip()
                 if chunk:  # Add non-empty text to current paragraph buffer
                     current_paragraph_buffer.append(chunk)
-                elif current_paragraph_buffer:  # Empty chunk signifies paragraph break if buffer has content
+                elif (
+                    current_paragraph_buffer
+                ):  # Empty chunk signifies paragraph break if buffer has content
                     extracted_paragraphs.append(" ".join(current_paragraph_buffer))
                     current_paragraph_buffer = []  # Reset buffer
 
@@ -298,7 +367,9 @@ def extract_main_content(html: str, **kwargs: Any) -> dict[str, Any]:
     if current_paragraph_buffer:
         extracted_paragraphs.append(" ".join(current_paragraph_buffer))
 
-    doc_parts["paragraphs"] = extracted_paragraphs  # Add the processed paragraphs list to the output
+    doc_parts["paragraphs"] = (
+        extracted_paragraphs  # Add the processed paragraphs list to the output
+    )
 
     return doc_parts
 
@@ -326,11 +397,17 @@ def extract_main_content_bs(html: bytes | str) -> str:
     # Ordered list of selectors to try for finding the main content
     potential_main_selectors = [
         # More specific selectors first
-        {"id": re.compile(r".*(content|main|article).*(text|body|main).*", re.IGNORECASE)},
+        {
+            "id": re.compile(
+                r".*(content|main|article).*(text|body|main).*", re.IGNORECASE
+            )
+        },
         "main",
         "article",
         {"id": re.compile(r".*(content|main|article).*", re.IGNORECASE)},
-        {"class_": re.compile(r".*(content|main|article).*", re.IGNORECASE)},  # class_ for BeautifulSoup
+        {
+            "class_": re.compile(r".*(content|main|article).*", re.IGNORECASE)
+        },  # class_ for BeautifulSoup
     ]
 
     for selector in potential_main_selectors:
@@ -344,14 +421,20 @@ def extract_main_content_bs(html: bytes | str) -> str:
 
     # Fallback to using the whole body if no specific main content element is found
     if not main_content_element:
-        main_content_element = soup.body or soup  # Use soup itself if body is also missing
+        main_content_element = (
+            soup.body or soup
+        )  # Use soup itself if body is also missing
 
     if not main_content_element:  # Should not happen if HTML is valid, but safeguard
         return ""
 
     # Extract text, joining lines and cleaning whitespace
     # get_text(separator=" ") joins text nodes with a space, then splitlines handles various newline types
-    text_lines = [line.strip() for line in main_content_element.get_text(separator=" ").splitlines() if line.strip()]
+    text_lines = [
+        line.strip()
+        for line in main_content_element.get_text(separator=" ").splitlines()
+        if line.strip()
+    ]
     cleaned_text = " ".join(text_lines)
 
     # Further reduce multiple spaces to single spaces

@@ -20,7 +20,6 @@ from buttermilk.utils.utils import scrub_serializable
 
 
 class AsyncDataUploader:
-
     def __init__(
         self,
         storage: Storage,
@@ -33,7 +32,9 @@ class AsyncDataUploader:
         use_timestamp_suffix: bool | None = None,
         output_col: str = "uri",
     ):
-        self.storage: Storage = bm.get_storage(storage) if not isinstance(storage, Storage) else storage
+        self.storage: Storage = (
+            bm.get_storage(storage) if not isinstance(storage, Storage) else storage
+        )
 
         self.buffer_size = buffer_size
         self.flush_interval = flush_interval
@@ -47,7 +48,9 @@ class AsyncDataUploader:
             self.use_timestamp_suffix = use_timestamp_suffix
         else:
             # No explicit value - auto-detect based on file existence
-            self.use_timestamp_suffix = hasattr(self.storage, "exists") and self.storage.exists()
+            self.use_timestamp_suffix = (
+                hasattr(self.storage, "exists") and self.storage.exists()
+            )
 
         self.original_storage = self.storage  # Keep reference to original
 
@@ -101,7 +104,10 @@ class AsyncDataUploader:
                     pass
 
                 # Check if we should flush
-                should_flush = len(self.buffer) >= self.buffer_size or time.time() - self.last_flush >= self.flush_interval
+                should_flush = (
+                    len(self.buffer) >= self.buffer_size
+                    or time.time() - self.last_flush >= self.flush_interval
+                )
 
                 if should_flush and self.buffer:
                     await self._flush()
@@ -166,6 +172,7 @@ class AsyncDataUploader:
 
         # Import here to avoid circular imports
         from buttermilk.storage.file import FileStorage
+
         return FileStorage(new_config)
 
     async def _flush(self):
@@ -183,7 +190,10 @@ class AsyncDataUploader:
             self.last_flush = time.time()
             self.buffer = []
             await self._clear_backup()
-            logger.debug(f"{buffer_size} traces flushed to storage and buffer cleared.", buffer_size=buffer_size)
+            logger.debug(
+                f"{buffer_size} traces flushed to storage and buffer cleared.",
+                buffer_size=buffer_size,
+            )
         except RetryError as e:
             # All retries exhausted - dump to emergency file
             logger.error(
@@ -197,7 +207,11 @@ class AsyncDataUploader:
 
             # Emergency dump to disk
             emergency_file = bm.save(self.buffer, extension=".json")
-            logger.error(f"Emergency data saved to: {emergency_file}", emergency_file=emergency_file, buffer_size=buffer_size)
+            logger.error(
+                f"Emergency data saved to: {emergency_file}",
+                emergency_file=emergency_file,
+                buffer_size=buffer_size,
+            )
 
             # Clear buffer to prevent infinite retry loop
             self.buffer = []
@@ -250,7 +264,9 @@ class AsyncDataUploader:
                 target_storage = self._create_timestamped_storage()
                 target_storage.save(self.buffer)
             except Exception as e:
-                logger.error(f"Error during final sync flush: {e}. Falling back to emergency save.")
+                logger.error(
+                    f"Error during final sync flush: {e}. Falling back to emergency save."
+                )
                 bm.save(self.buffer, extension=".json")
 
                 # Clean backup files synchronously

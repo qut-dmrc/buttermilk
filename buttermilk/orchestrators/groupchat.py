@@ -56,7 +56,9 @@ class InterruptHandler(BaseModel):
     interrupt: asyncio.Event = Field(default_factory=asyncio.Event)
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    async def on_publish(self, message: Any, *, message_context: MessageContext) -> Any | type[DropMessage]:
+    async def on_publish(
+        self, message: Any, *, message_context: MessageContext
+    ) -> Any | type[DropMessage]:
         """Called when a message is published to the AgentRuntime using :meth:`autogen_core.base.AgentRuntime.publish_message`."""
         if isinstance(message, UserResponseMessage):
             if message.interrupt:
@@ -69,11 +71,15 @@ class InterruptHandler(BaseModel):
                 self.interrupt.clear()
         return message
 
-    async def on_send(self, message: Any, *, message_context: MessageContext, recipient: AgentId) -> Any | type[DropMessage]:
+    async def on_send(
+        self, message: Any, *, message_context: MessageContext, recipient: AgentId
+    ) -> Any | type[DropMessage]:
         """Called when a message is submitted to the AgentRuntime using :meth:`autogen_core.base.AgentRuntime.send_message`."""
         return message
 
-    async def on_response(self, message: Any, *, sender: AgentId, recipient: AgentId | None) -> Any | type[DropMessage]:
+    async def on_response(
+        self, message: Any, *, sender: AgentId, recipient: AgentId | None
+    ) -> Any | type[DropMessage]:
         """Called when a response is received by the AgentRuntime from an Agent's message handler returning a value."""
         return message
 
@@ -92,7 +98,9 @@ class TerminationHandler(DefaultInterventionHandler):
 
     def request_termination(self):
         """Signal that the flow should terminate"""
-        self._termination_value = StepRequest(role="END", content="Termination requested")
+        self._termination_value = StepRequest(
+            role="END", content="Termination requested"
+        )
 
     @property
     def termination_value(self) -> StepRequest | None:
@@ -124,22 +132,32 @@ class AutogenOrchestrator(Orchestrator):
 
     # Private attributes managed internally. Use PrivateAttr for Pydantic integration.
     _runtime: SingleThreadedAgentRuntime = PrivateAttr()
-    _agent_types: dict[str, list[tuple[AgentType, Any]]] = PrivateAttr(default_factory=dict)
-    _pending_messages: list[tuple[FlowMessage, TopicId]] = PrivateAttr(default_factory=list)
+    _agent_types: dict[str, list[tuple[AgentType, Any]]] = PrivateAttr(
+        default_factory=dict
+    )
+    _pending_messages: list[tuple[FlowMessage, TopicId]] = PrivateAttr(
+        default_factory=list
+    )
     _is_initialized: bool = PrivateAttr(default=False)
 
     # Dynamically generates a unique topic ID for this specific orchestrator run.
     # Ensures messages within this run don't interfere with other concurrent runs.
     _topic: TopicId = PrivateAttr(default=None)
 
-    async def _setup(self, request: RunRequest) -> tuple[TerminationHandler, InterruptHandler]:
+    async def _setup(
+        self, request: RunRequest
+    ) -> tuple[TerminationHandler, InterruptHandler]:
         """Initializes the Autogen runtime and registers all configured agents."""
         # Initialize the topic ID if not already set
         if self._topic is None:
-            self._topic = DefaultTopicId(type=f"{bm.session_info.project_name}-{bm.session_info.job}-{shortuuid.uuid()[:8]}")
+            self._topic = DefaultTopicId(
+                type=f"{bm.session_info.project_name}-{bm.session_info.job}-{shortuuid.uuid()[:8]}"
+            )
 
         msg = f"Setting up AutogenOrchestrator for topic: {self._topic.type}"
-        logger.info(f"[AutogenOrchestrator._setup] {msg} (callback_to_ui: {'set' if request.callback_to_ui else 'not set'})")
+        logger.info(
+            f"[AutogenOrchestrator._setup] {msg} (callback_to_ui: {'set' if request.callback_to_ui else 'not set'})"
+        )
 
         termination_handler = TerminationHandler()
         interrupt_handler = InterruptHandler()
@@ -163,16 +181,22 @@ class AutogenOrchestrator(Orchestrator):
         await self.register_ui(callback_to_ui=request.callback_to_ui)
 
         # Send a broadcast message to initialize all agents subscribed to the group chat
-        logger.info(f"Broadcasting initialization message to topic '{self._topic.type}' to wake up all agents")
+        logger.info(
+            f"Broadcasting initialization message to topic '{self._topic.type}' to wake up all agents"
+        )
         await self._runtime.publish_message(
-            FlowEvent(source="orchestrator", content="Initializing group chat participants"),
+            FlowEvent(
+                source="orchestrator", content="Initializing group chat participants"
+            ),
             topic_id=self._topic,
         )
 
         # Send a welcome message to the UI
         flow_event = FlowEvent(source="orchestrator", content=msg)
         topic = DefaultTopicId(type=MANAGER)
-        logger.debug("[AutogenOrchestrator._setup] Publishing welcome message to MANAGER topic")
+        logger.debug(
+            "[AutogenOrchestrator._setup] Publishing welcome message to MANAGER topic"
+        )
         await self._runtime.publish_message(flow_event, topic_id=topic)
 
         # Start up the host agent with participants and their tools
@@ -199,7 +223,9 @@ class AutogenOrchestrator(Orchestrator):
 
         # Process any messages that were queued before initialization
         if self._pending_messages:
-            logger.debug(f"[AutogenOrchestrator._setup] Processing {len(self._pending_messages)} pending messages")
+            logger.debug(
+                f"[AutogenOrchestrator._setup] Processing {len(self._pending_messages)} pending messages"
+            )
             for pending_message, topic_id in self._pending_messages:
                 await self._runtime.publish_message(pending_message, topic_id=topic_id)
 
@@ -224,9 +250,13 @@ class AutogenOrchestrator(Orchestrator):
         registration_tasks = []
         role_mapping = {}  # Maps task index to (role_name, actual_role)
 
-        for role_name, step_config in itertools.chain(self.agents.items(), self.observers.items()):
+        for role_name, step_config in itertools.chain(
+            self.agents.items(), self.observers.items()
+        ):
             # `get_configs` yields tuples of (AgentClass, agent_variant_config)
-            for agent_cls, variant_config in step_config.get_configs(params=params, flow_default_params=self.parameters):
+            for agent_cls, variant_config in step_config.get_configs(
+                params=params, flow_default_params=self.parameters
+            ):
                 actual_role = step_config.role.upper()
                 task_index = len(registration_tasks)
                 role_mapping[task_index] = (role_name, actual_role)
@@ -243,7 +273,9 @@ class AutogenOrchestrator(Orchestrator):
 
         # Execute all registrations in parallel
         try:
-            registration_results = await asyncio.gather(*registration_tasks, return_exceptions=True)
+            registration_results = await asyncio.gather(
+                *registration_tasks, return_exceptions=True
+            )
         except Exception as e:
             logger.critical(f"Critical error during parallel agent registration: {e}")
             raise
@@ -267,7 +299,9 @@ class AutogenOrchestrator(Orchestrator):
 
         # Log summary
         for role_name, agents in self._agent_types.items():
-            logger.debug(f"Registered {len(agents)} agent variants for role '{role_name}'.")
+            logger.debug(
+                f"Registered {len(agents)} agent variants for role '{role_name}'."
+            )
 
     async def _register_single_agent(
         self,
@@ -290,7 +324,11 @@ class AutogenOrchestrator(Orchestrator):
             # Define a factory function required by Autogen's registration.
             # Check if this is a Buttermilk Agent subclass
             if issubclass(agent_cls, Agent):
-                config_with_session = {**variant_config.model_dump(), "session_id": params.session_id, "topic_id": self._topic}
+                config_with_session = {
+                    **variant_config.model_dump(),
+                    "session_id": params.session_id,
+                    "topic_id": self._topic,
+                }
 
                 # Add BM instance if available from orchestrator
                 if hasattr(self, "get_effective_bm"):
@@ -312,7 +350,9 @@ class AutogenOrchestrator(Orchestrator):
                 agent_type: AgentType = await Agent.register(
                     runtime=self._runtime,
                     type=variant_config.agent_id,  # Use the specific variant ID for registration
-                    factory=lambda orch=self, v_cfg=config_with_session, a_cls=agent_cls: agent_factory(
+                    factory=lambda orch=self,
+                    v_cfg=config_with_session,
+                    a_cls=agent_cls: agent_factory(
                         orch,
                         cfg=v_cfg,
                         cls=a_cls,
@@ -323,7 +363,9 @@ class AutogenOrchestrator(Orchestrator):
                 agent_type: AgentType = await agent_cls.register(
                     runtime=self._runtime,
                     type=variant_config.agent_id,  # Use the specific variant ID for registration
-                    factory=lambda params=variant_config.parameters, cls=agent_cls: cls(**params),
+                    factory=lambda params=variant_config.parameters, cls=agent_cls: cls(
+                        **params
+                    ),
                 )
 
             # Subscribe the newly registered agent type to the main group chat topic.
@@ -364,16 +406,25 @@ class AutogenOrchestrator(Orchestrator):
 
         """
         if not callback_to_ui:
-            logger.warning("No UI callback provided. Messages will not be sent to the UI.")
+            logger.warning(
+                "No UI callback provided. Messages will not be sent to the UI."
+            )
 
-        async def output_result(_ctx: ClosureContext, message: AllMessages, ctx: MessageContext) -> None:
+        async def output_result(
+            _ctx: ClosureContext, message: AllMessages, ctx: MessageContext
+        ) -> None:
             try:
                 await callback_to_ui(message)
             except Exception as e:
-                logger.error(f"[MANAGER ClosureAgent] ❌ Error calling callback_to_ui: {e}", exc_info=True)
+                logger.error(
+                    f"[MANAGER ClosureAgent] ❌ Error calling callback_to_ui: {e}",
+                    exc_info=True,
+                )
 
         # Register the closure function as an agent named MANAGER.
-        logger.debug(f"[AutogenOrchestrator.register_ui] Attempting to register ClosureAgent with type: {MANAGER}")
+        logger.debug(
+            f"[AutogenOrchestrator.register_ui] Attempting to register ClosureAgent with type: {MANAGER}"
+        )
         await ClosureAgent.register_closure(
             runtime=self._runtime,
             type=MANAGER,  # Agent ID/Name.
@@ -391,7 +442,9 @@ class AutogenOrchestrator(Orchestrator):
             # If a message arrives that isn't handled, just ignore it silently.
             # unknown_type_policy="ignore",
         )
-        logger.debug(f"[AutogenOrchestrator.register_ui] ClosureAgent registered successfully for type: {MANAGER}")
+        logger.debug(
+            f"[AutogenOrchestrator.register_ui] ClosureAgent registered successfully for type: {MANAGER}"
+        )
 
     async def _run(self, request: RunRequest, flow_name: str = "") -> None:
         """Simplified main execution loop for the orchestrator.
@@ -415,7 +468,9 @@ class AutogenOrchestrator(Orchestrator):
         try:
             # 1. Setup the runtime and agents
             try:
-                logger.debug(f"[AutogenOrchestrator._run] Calling _setup with request.callback_to_ui: {request.callback_to_ui is not None}")
+                logger.debug(
+                    f"[AutogenOrchestrator._run] Calling _setup with request.callback_to_ui: {request.callback_to_ui is not None}"
+                )
                 termination_handler, interrupt_handler = await self._setup(request)
             except Exception as e:
                 logger.error(f"Error during setup: {e}")
@@ -436,8 +491,12 @@ class AutogenOrchestrator(Orchestrator):
                             topic_id=DefaultTopicId(type=MANAGER),
                         )
                         # Publish a TaskProcessingComplete message to the UI
-                        logger.debug("[AutogenOrchestrator._run] Publishing TaskProcessingComplete message.")
-                        logger.debug("[AutogenOrchestrator._run] Publishing TaskProcessingComplete message to MANAGER topic.")
+                        logger.debug(
+                            "[AutogenOrchestrator._run] Publishing TaskProcessingComplete message."
+                        )
+                        logger.debug(
+                            "[AutogenOrchestrator._run] Publishing TaskProcessingComplete message to MANAGER topic."
+                        )
                         await self._runtime.publish_message(
                             TaskProcessingComplete(
                                 agent_id="orchestrator",
@@ -446,7 +505,9 @@ class AutogenOrchestrator(Orchestrator):
                             ),
                             topic_id=DefaultTopicId(type=MANAGER),
                         )
-                        logger.debug("[AutogenOrchestrator._run] TaskProcessingComplete message published.")
+                        logger.debug(
+                            "[AutogenOrchestrator._run] TaskProcessingComplete message published."
+                        )
                         break
                     if interrupt_handler.interrupt.is_set():
                         logger.info("Flow is paused. Waiting for resume...")
@@ -469,7 +530,9 @@ class AutogenOrchestrator(Orchestrator):
             logger.info("Flow terminated by user.")
             raise
         except (FatalError, Exception) as e:
-            logger.exception(f"Unexpected and unhandled fatal error: {e}", exc_info=True)
+            logger.exception(
+                f"Unexpected and unhandled fatal error: {e}", exc_info=True
+            )
             raise
         finally:
             # Cleanup is now handled by the orchestrator lifecycle management
@@ -484,11 +547,19 @@ class AutogenOrchestrator(Orchestrator):
         """
 
         async def publish_callback(message: FlowMessage) -> None:
-            logger.debug(f"[AutogenOrchestrator.make_publish_callback] Publishing message to runtime: {message}")
+            logger.debug(
+                f"[AutogenOrchestrator.make_publish_callback] Publishing message to runtime: {message}"
+            )
 
             # If runtime is not initialized yet, queue the message
-            if not self._is_initialized or not hasattr(self, "_runtime") or self._runtime is None:
-                logger.info(f"[AutogenOrchestrator] Runtime not initialized yet, queueing message: {message}")
+            if (
+                not self._is_initialized
+                or not hasattr(self, "_runtime")
+                or self._runtime is None
+            ):
+                logger.info(
+                    f"[AutogenOrchestrator] Runtime not initialized yet, queueing message: {message}"
+                )
                 self._pending_messages.append((message, self._topic))
                 return
 

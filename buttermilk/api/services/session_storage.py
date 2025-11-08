@@ -81,7 +81,9 @@ class SessionStorageService:
                 with open(session_file, "r", encoding="utf-8") as f:
                     return json.load(f)
             except json.JSONDecodeError:
-                logger.warning("Corrupted session file, creating new", session_file=session_file)
+                logger.warning(
+                    "Corrupted session file, creating new", session_file=session_file
+                )
 
         # Create new session data if file doesn't exist or is corrupted
         return self._create_new_session_data(session_id)
@@ -118,7 +120,11 @@ class SessionStorageService:
             if message.message_id:
                 for existing_msg in session_data["messages"]:
                     if existing_msg.get("message_id") == message.message_id:
-                        logger.debug("Skipping duplicate message", message_id=message.message_id, session_id=session_id)
+                        logger.debug(
+                            "Skipping duplicate message",
+                            message_id=message.message_id,
+                            session_id=session_id,
+                        )
                         return
 
             # Add the new message
@@ -130,10 +136,16 @@ class SessionStorageService:
             with open(session_file, "w", encoding="utf-8") as f:
                 json.dump(session_data, f, indent=2)
 
-            logger.debug("Saved message to session", message_id=message.message_id, session_id=session_id)
+            logger.debug(
+                "Saved message to session",
+                message_id=message.message_id,
+                session_id=session_id,
+            )
 
         except Exception as e:
-            logger.error("Failed to save message to session", session_id=session_id, error=e)
+            logger.error(
+                "Failed to save message to session", session_id=session_id, error=e
+            )
 
     def save_parameters(self, session_id: str, parameters: dict) -> None:
         """Save flow parameters to the session file.
@@ -157,10 +169,16 @@ class SessionStorageService:
             with open(session_file, "w", encoding="utf-8") as f:
                 json.dump(session_data, f, indent=2)
 
-            logger.debug("Saved parameters for session", parameters=parameters, session_id=session_id)
+            logger.debug(
+                "Saved parameters for session",
+                parameters=parameters,
+                session_id=session_id,
+            )
 
         except Exception as e:
-            logger.error("Failed to save parameters for session", session_id=session_id, error=e)
+            logger.error(
+                "Failed to save parameters for session", session_id=session_id, error=e
+            )
 
     def update_flow_status(self, session_id: str, status: str) -> None:
         """Update the flow status for a session.
@@ -187,7 +205,11 @@ class SessionStorageService:
             logger.debug("Updated flow status", status=status, session_id=session_id)
 
         except Exception as e:
-            logger.error("Failed to update flow status for session", session_id=session_id, error=e)
+            logger.error(
+                "Failed to update flow status for session",
+                session_id=session_id,
+                error=e,
+            )
 
     def get_flow_status(self, session_id: str) -> str:
         """Get the current flow status for a session.
@@ -210,7 +232,9 @@ class SessionStorageService:
             return session_data.get("flow_status", "idle")
 
         except Exception as e:
-            logger.error("Failed to read flow status for session", session_id=session_id, error=e)
+            logger.error(
+                "Failed to read flow status for session", session_id=session_id, error=e
+            )
             return "idle"
 
     def get_session_parameters(self, session_id: str) -> dict:
@@ -234,7 +258,9 @@ class SessionStorageService:
             return session_data.get("parameters", {})
 
         except Exception as e:
-            logger.error("Failed to read parameters for session", session_id=session_id, error=e)
+            logger.error(
+                "Failed to read parameters for session", session_id=session_id, error=e
+            )
             return {}
 
     def is_session_stale(self, session_id: str, stale_minutes: int = 30) -> bool:
@@ -266,7 +292,9 @@ class SessionStorageService:
             return last_activity < stale_threshold
 
         except Exception as e:
-            logger.error("Failed to check staleness for session", session_id=session_id, error=e)
+            logger.error(
+                "Failed to check staleness for session", session_id=session_id, error=e
+            )
             return True
 
     def get_session_messages(self, session_id: str) -> List[ChatMessage]:
@@ -295,10 +323,18 @@ class SessionStorageService:
                     message = ChatMessage(**msg_data)
                     messages.append(message)
                 except Exception as e:
-                    logger.warning("Failed to parse message in session", session_id=session_id, error=e)
+                    logger.warning(
+                        "Failed to parse message in session",
+                        session_id=session_id,
+                        error=e,
+                    )
                     continue
 
-            logger.info("Retrieved messages for session", message_count=len(messages), session_id=session_id)
+            logger.info(
+                "Retrieved messages for session",
+                message_count=len(messages),
+                session_id=session_id,
+            )
             return messages
 
         except json.JSONDecodeError as e:
@@ -406,7 +442,9 @@ class SessionStorageService:
                 "message_count": len(session_data.get("messages", [])),
             }
         except Exception as e:
-            logger.error("Failed to read session metadata", session_id=session_id, error=e)
+            logger.error(
+                "Failed to read session metadata", session_id=session_id, error=e
+            )
             return None
 
     def list_sessions(self) -> List[dict]:
@@ -440,22 +478,32 @@ class SessionStorageService:
         try:
             # Check if session exists
             if not self.session_exists(session_id):
-                logger.warning("Cannot archive non-existent session", session_id=session_id)
+                logger.warning(
+                    "Cannot archive non-existent session", session_id=session_id
+                )
                 return False
 
             # Try to get BM instance to access save_dir
             try:
                 # Check if save_dir is configured and points to GCS
                 if not bm.session_info.save_dir:
-                    logger.debug("No save_dir configured, skipping GCS archival for session", session_id=session_id)
+                    logger.debug(
+                        "No save_dir configured, skipping GCS archival for session",
+                        session_id=session_id,
+                    )
                     return False
 
                 if not bm.session_info.save_dir.startswith(("gs://", "gcs://")):
-                    logger.debug("save_dir is not GCS path, skipping archival for session", session_id=session_id)
+                    logger.debug(
+                        "save_dir is not GCS path, skipping archival for session",
+                        session_id=session_id,
+                    )
                     return False
 
             except Exception as e:
-                logger.warning("Could not access BM instance for session archival", error=e)
+                logger.warning(
+                    "Could not access BM instance for session archival", error=e
+                )
                 return False
 
             # Get session data
@@ -474,14 +522,20 @@ class SessionStorageService:
             )
 
             if saved_path:
-                logger.info("Successfully archived session to GCS", session_id=session_id, saved_path=saved_path)
+                logger.info(
+                    "Successfully archived session to GCS",
+                    session_id=session_id,
+                    saved_path=saved_path,
+                )
                 return True
             else:
                 logger.error("Failed to archive session to GCS", session_id=session_id)
                 return False
 
         except Exception as e:
-            logger.error("Error archiving session to GCS", session_id=session_id, error=e)
+            logger.error(
+                "Error archiving session to GCS", session_id=session_id, error=e
+            )
             return False
 
     def finalize_session(self, session_id: str, final_status: str) -> None:
@@ -512,9 +566,14 @@ class SessionStorageService:
             # Always attempt archival for terminal states
             archive_success = self.archive_to_gcs(session_id)
             if archive_success:
-                logger.info("Session archived to GCS after finalization", session_id=session_id)
+                logger.info(
+                    "Session archived to GCS after finalization", session_id=session_id
+                )
             else:
-                logger.debug("Session not archived (GCS not configured or archival failed)", session_id=session_id)
+                logger.debug(
+                    "Session not archived (GCS not configured or archival failed)",
+                    session_id=session_id,
+                )
 
         except Exception as e:
             logger.error("Error finalizing session", session_id=session_id, error=e)

@@ -40,7 +40,9 @@ def compute_record_hash(record_markdown: str) -> str:
     return compute_sha256_hash(record_markdown)
 
 
-def compute_ground_truth_hash(ground_truth: dict[str, Any] | list[Any] | None) -> str | None:
+def compute_ground_truth_hash(
+    ground_truth: dict[str, Any] | list[Any] | None,
+) -> str | None:
     """Compute hash of ground truth data.
 
     Args:

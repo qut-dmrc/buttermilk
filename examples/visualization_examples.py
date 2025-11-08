@@ -35,7 +35,13 @@ def example_line_plot():
     # Plot multiple lines
     ax.plot(x, np.sin(x), label="sin(x)", color=palette["primary"], linewidth=3)
     ax.plot(x, np.cos(x), label="cos(x)", color=palette["secondary"], linewidth=3)
-    ax.plot(x, np.sin(x) * np.cos(x), label="sin(x)·cos(x)", color=palette["accent"], linewidth=3)
+    ax.plot(
+        x,
+        np.sin(x) * np.cos(x),
+        label="sin(x)·cos(x)",
+        color=palette["accent"],
+        linewidth=3,
+    )
 
     # Add glow effect for cyberpunk aesthetic
     cyberpunk_glow(ax, intensity=0.6)
@@ -69,7 +75,9 @@ def example_scatter_plot():
 
     for i, (cat, color) in enumerate(zip(["Group A", "Group B", "Group C"], colors)):
         mask = categories == cat
-        ax.scatter(x[mask], y[mask], label=cat, color=color, s=50, alpha=0.7, edgecolors="none")
+        ax.scatter(
+            x[mask], y[mask], label=cat, color=color, s=50, alpha=0.7, edgecolors="none"
+        )
 
     ax.set_xlabel("Variable X")
     ax.set_ylabel("Variable Y")
@@ -156,7 +164,9 @@ def example_seaborn_integration():
     axes[0, 1].set_title("Box Plot")
 
     # Scatter plot
-    sns.scatterplot(data=tips, x="total_bill", y="tip", hue="time", ax=axes[1, 0], s=100, alpha=0.7)
+    sns.scatterplot(
+        data=tips, x="total_bill", y="tip", hue="time", ax=axes[1, 0], s=100, alpha=0.7
+    )
     axes[1, 0].set_title("Scatter Plot")
 
     # Bar plot

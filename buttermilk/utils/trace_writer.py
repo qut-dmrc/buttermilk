@@ -40,7 +40,11 @@ class TraceWriter:
         try:
             # Debug logging for configuration investigation
             cfg = getattr(bm, "cfg", None)
-            logger.debug("TraceWriter lazy initialization", has_bm_cfg=cfg is not None, bm_cfg_type=type(cfg).__name__)
+            logger.debug(
+                "TraceWriter lazy initialization",
+                has_bm_cfg=cfg is not None,
+                bm_cfg_type=type(cfg).__name__,
+            )
 
             # Look for traces storage configuration
             if cfg is not None and hasattr(cfg, "storage"):
@@ -48,12 +52,20 @@ class TraceWriter:
 
                 logger.debug(
                     "Storage configuration debug",
-                    storage_config_keys=list(storage_configs.keys()) if isinstance(storage_configs, dict) else None,
-                    has_traces_config="traces" in storage_configs if isinstance(storage_configs, dict) else hasattr(storage_configs, "traces"),
+                    storage_config_keys=list(storage_configs.keys())
+                    if isinstance(storage_configs, dict)
+                    else None,
+                    has_traces_config="traces" in storage_configs
+                    if isinstance(storage_configs, dict)
+                    else hasattr(storage_configs, "traces"),
                 )
 
                 # Check for traces storage config
-                traces_config = storage_configs.get("traces") if isinstance(storage_configs, dict) else getattr(storage_configs, "traces", None)
+                traces_config = (
+                    storage_configs.get("traces")
+                    if isinstance(storage_configs, dict)
+                    else getattr(storage_configs, "traces", None)
+                )
                 if traces_config:
                     logger.debug("Found traces config", traces_config=traces_config)
                     # Create storage instance
@@ -68,11 +80,22 @@ class TraceWriter:
                     logger.info("TraceWriter initialized with traces storage")
                 else:
                     self.uploader = None
-                    storage_keys = list(storage_configs.keys()) if isinstance(storage_configs, dict) else None
-                    logger.warning("No traces storage configuration found", storage_keys=storage_keys)
+                    storage_keys = (
+                        list(storage_configs.keys())
+                        if isinstance(storage_configs, dict)
+                        else None
+                    )
+                    logger.warning(
+                        "No traces storage configuration found",
+                        storage_keys=storage_keys,
+                    )
             else:
                 self.uploader = None
-                logger.warning("No storage configuration available", has_bm_cfg=hasattr(bm, "cfg"), cfg_type=type(getattr(bm, "cfg", None)).__name__)
+                logger.warning(
+                    "No storage configuration available",
+                    has_bm_cfg=hasattr(bm, "cfg"),
+                    cfg_type=type(getattr(bm, "cfg", None)).__name__,
+                )
 
         except Exception as e:
             logger.error(f"Failed to initialize TraceWriter: {e}")

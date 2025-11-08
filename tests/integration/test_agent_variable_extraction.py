@@ -121,7 +121,9 @@ class TestAgentVariableExtraction:
         # Note: The template now uses record.ground_truth, not a separate 'expected' field
         assert "answers" in inputs
 
-    def test_extract_record_from_real_fetch_output(self, real_scorer_config, sample_record_with_ground_truth: Record):
+    def test_extract_record_from_real_fetch_output(
+        self, real_scorer_config, sample_record_with_ground_truth: Record
+    ):
         """Test extraction using REAL JMESPath expressions from scorer config.
 
         The current config extracts 'record' (which contains ground_truth inside it).
@@ -173,11 +175,15 @@ class TestAgentVariableExtraction:
             record_dict = record_data
 
         # Verify ground_truth is accessible
-        assert "ground_truth" in record_dict, f"ground_truth not found in extracted record. Keys: {record_dict.keys()}"
+        assert "ground_truth" in record_dict, (
+            f"ground_truth not found in extracted record. Keys: {record_dict.keys()}"
+        )
         assert "reasons" in record_dict["ground_truth"]
         assert len(record_dict["ground_truth"]["reasons"]) == 4
 
-    def test_jmespath_record_extraction_patterns(self, real_scorer_config, sample_record_with_ground_truth: Record):
+    def test_jmespath_record_extraction_patterns(
+        self, real_scorer_config, sample_record_with_ground_truth: Record
+    ):
         """Test the JMESPath expression for record extraction with different message structures.
 
         The config uses: "[FETCH.outputs]||*.record||*.inputs.record"
@@ -197,21 +203,43 @@ class TestAgentVariableExtraction:
 
         # Test 1: FETCH message structure
         print("\n[Test 1] FETCH message: {FETCH: {outputs: <record>}}")
-        fetch_data = {"FETCH": {"outputs": scrub_serializable(sample_record_with_ground_truth.model_dump())}}
+        fetch_data = {
+            "FETCH": {
+                "outputs": scrub_serializable(
+                    sample_record_with_ground_truth.model_dump()
+                )
+            }
+        }
         result1 = jmespath.search(record_expr, fetch_data)
         print(f"  Result: {type(result1)} with {len(result1) if result1 else 0} items")
         assert result1 is not None, "FETCH.outputs pattern failed"
 
         # Test 2: Message with record at top level
         print("\n[Test 2] Message with top-level record: {JUDGE: {record: <record>}}")
-        judge_data_toplevel = {"JUDGE": {"record": scrub_serializable(sample_record_with_ground_truth.model_dump())}}
+        judge_data_toplevel = {
+            "JUDGE": {
+                "record": scrub_serializable(
+                    sample_record_with_ground_truth.model_dump()
+                )
+            }
+        }
         result2 = jmespath.search(record_expr, judge_data_toplevel)
         print(f"  Result: {type(result2)} with {len(result2) if result2 else 0} items")
         assert result2 is not None, "*.record pattern failed"
 
         # Test 3: Message with record in inputs (REAL structure from JUDGE/SYNTH)
-        print("\n[Test 3] Message with record in inputs: {JUDGE: {inputs: {record: <record>}}}")
-        judge_data_inputs = {"JUDGE": {"inputs": {"record": scrub_serializable(sample_record_with_ground_truth.model_dump())}}}
+        print(
+            "\n[Test 3] Message with record in inputs: {JUDGE: {inputs: {record: <record>}}}"
+        )
+        judge_data_inputs = {
+            "JUDGE": {
+                "inputs": {
+                    "record": scrub_serializable(
+                        sample_record_with_ground_truth.model_dump()
+                    )
+                }
+            }
+        }
         result3 = jmespath.search(record_expr, judge_data_inputs)
         print(f"  Result: {type(result3)} with {len(result3) if result3 else 0} items")
 
@@ -221,9 +249,13 @@ class TestAgentVariableExtraction:
             print("Testing the fallback patterns separately:")
 
             # Test each part of the OR separately
-            print(f"\n  [FETCH.outputs]: {jmespath.search('[FETCH.outputs]', judge_data_inputs)}")
+            print(
+                f"\n  [FETCH.outputs]: {jmespath.search('[FETCH.outputs]', judge_data_inputs)}"
+            )
             print(f"  *.record: {jmespath.search('*.record', judge_data_inputs)}")
-            print(f"  *.inputs.record: {jmespath.search('*.inputs.record', judge_data_inputs)}")
+            print(
+                f"  *.inputs.record: {jmespath.search('*.inputs.record', judge_data_inputs)}"
+            )
 
             pytest.fail(
                 "BUG: The JMESPath expression fails to extract record from JUDGE/SYNTH outputs!\n"
@@ -234,7 +266,9 @@ class TestAgentVariableExtraction:
 
         assert result3 is not None, "*.inputs.record pattern failed for JUDGE structure"
 
-    def test_template_rendering_succeeds_with_proper_extraction(self, real_scorer_config, sample_record_with_ground_truth: Record):
+    def test_template_rendering_succeeds_with_proper_extraction(
+        self, real_scorer_config, sample_record_with_ground_truth: Record
+    ):
         """Test that template renders successfully when extraction works.
 
         Uses the REAL scorer template with properly extracted data.
@@ -251,25 +285,39 @@ class TestAgentVariableExtraction:
             "answers": [
                 {
                     "agent_id": "JUDGE-TEST",
-                    "result": JudgeReasons(reasons=["Reason 1", "Reason 2"], prediction=True, conclusion="Test conclusion", uncertainty="medium"),
+                    "result": JudgeReasons(
+                        reasons=["Reason 1", "Reason 2"],
+                        prediction=True,
+                        conclusion="Test conclusion",
+                        uncertainty="medium",
+                    ),
                     "answer_id": "call-123",
                 }
             ],
-            "criteria": ["Test criterion 1", "Test criterion 2"],  # Required by score template
+            "criteria": [
+                "Test criterion 1",
+                "Test criterion 2",
+            ],  # Required by score template
             "instructions": "Evaluate the judge's reasoning against the ground truth",  # Required
             "source": sample_record_with_ground_truth.content,  # Required - the source content being judged
         }
 
         # Render the REAL template with proper data
-        rendered, undefined_vars, template_hash = load_template(template=real_template, parameters=proper_inputs)
+        rendered, undefined_vars, template_hash = load_template(
+            template=real_template, parameters=proper_inputs
+        )
 
         # MUST render without undefined variables
-        assert len(undefined_vars) == 0, f"Template has undefined variables: {undefined_vars}"
+        assert len(undefined_vars) == 0, (
+            f"Template has undefined variables: {undefined_vars}"
+        )
 
         # Verify ground truth reasons appear in output
         for reason in sample_record_with_ground_truth.ground_truth["reasons"]:
             # Check if part of the reason appears
-            assert any(word in rendered for word in reason.split()[:3]), f"Ground truth reason not found in output: {reason[:50]}..."
+            assert any(word in rendered for word in reason.split()[:3]), (
+                f"Ground truth reason not found in output: {reason[:50]}..."
+            )
 
 
 if __name__ == "__main__":

@@ -26,7 +26,9 @@ class DebugAgent(Agent):
         self._puppet_client: Optional[FlowTestClient] = None
         self._puppet_listening: bool = False
 
-    async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentOutput | None:
+    async def _process(
+        self, *, message: AgentInput, **kwargs: Any
+    ) -> AgentOutput | None:
         """Process debugging requests."""
         # This agent is primarily tool-based, so _process just returns a helpful message
         return AgentOutput(
@@ -105,7 +107,13 @@ class DebugAgent(Agent):
 
     # WebSocket client tools
 
-    async def start_websocket_client(self, flow_id: str, host: str = "localhost", port: int = 8000, use_direct_ws: bool = False) -> dict[str, str]:
+    async def start_websocket_client(
+        self,
+        flow_id: str,
+        host: str = "localhost",
+        port: int = 8000,
+        use_direct_ws: bool = False,
+    ) -> dict[str, str]:
         """Start a WebSocket client for testing a flow.
 
         Args:
@@ -118,24 +126,37 @@ class DebugAgent(Agent):
             Status message and connection details
         """
         if flow_id in self._active_clients:
-            return {"status": "error", "message": f"Client already running for flow_id: {flow_id}"}
+            return {
+                "status": "error",
+                "message": f"Client already running for flow_id: {flow_id}",
+            }
 
         try:
             if use_direct_ws:
                 client = FlowTestClient(direct_ws_url=f"ws://{host}:{port}/ws")
             else:
-                client = FlowTestClient(base_url=f"http://{host}:{port}", ws_url=f"ws://{host}:{port}/ws")
+                client = FlowTestClient(
+                    base_url=f"http://{host}:{port}", ws_url=f"ws://{host}:{port}/ws"
+                )
 
             await client.connect()
             self._active_clients[flow_id] = client
 
-            return {"status": "success", "message": f"Started WebSocket client for {flow_id}", "session_id": client.session_id or "direct_connection"}
+            return {
+                "status": "success",
+                "message": f"Started WebSocket client for {flow_id}",
+                "session_id": client.session_id or "direct_connection",
+            }
 
         except Exception as e:
             return {"status": "error", "message": f"Failed to start client: {str(e)}"}
 
     async def send_websocket_message(
-        self, flow_id: str, message_type: str, content: Optional[str] = None, flow_name: Optional[str] = None
+        self,
+        flow_id: str,
+        message_type: str,
+        content: Optional[str] = None,
+        flow_name: Optional[str] = None,
     ) -> dict[str, str]:
         """Send a message to an active WebSocket client.
 
@@ -149,30 +170,47 @@ class DebugAgent(Agent):
             Status of the send operation
         """
         if flow_id not in self._active_clients:
-            return {"status": "error", "message": f"No active client for flow_id: {flow_id}"}
+            return {
+                "status": "error",
+                "message": f"No active client for flow_id: {flow_id}",
+            }
 
         client = self._active_clients[flow_id]
 
         try:
             if message_type == "run_flow":
                 if not flow_name:
-                    return {"status": "error", "message": "flow_name required for run_flow message"}
+                    return {
+                        "status": "error",
+                        "message": "flow_name required for run_flow message",
+                    }
                 await client.start_flow(flow_name, content or "")
                 return {"status": "success", "message": f"Started flow {flow_name}"}
 
             elif message_type == "manager_response":
                 if content is None:
-                    return {"status": "error", "message": "content required for manager_response"}
+                    return {
+                        "status": "error",
+                        "message": "content required for manager_response",
+                    }
                 await client.send_manager_response(content)
                 return {"status": "success", "message": f"Sent response: {content}"}
 
             else:
-                return {"status": "error", "message": f"Unknown message type: {message_type}"}
+                return {
+                    "status": "error",
+                    "message": f"Unknown message type: {message_type}",
+                }
 
         except Exception as e:
             return {"status": "error", "message": f"Failed to send message: {str(e)}"}
 
-    def get_websocket_messages(self, flow_id: str, last_n: Optional[int] = None, message_type: Optional[str] = None) -> list[dict[str, Any]]:
+    def get_websocket_messages(
+        self,
+        flow_id: str,
+        last_n: Optional[int] = None,
+        message_type: Optional[str] = None,
+    ) -> list[dict[str, Any]]:
         """Get messages from a WebSocket client.
 
         Args:
@@ -212,7 +250,13 @@ class DebugAgent(Agent):
 
         # Convert to dict format
         return [
-            {"type": msg.type, "timestamp": msg.timestamp.isoformat(), "content": msg.content, "agent_role": msg.agent_role, "data": msg.data}
+            {
+                "type": msg.type,
+                "timestamp": msg.timestamp.isoformat(),
+                "content": msg.content,
+                "agent_role": msg.agent_role,
+                "data": msg.data,
+            }
             for msg in messages
         ]
 
@@ -264,7 +308,10 @@ class DebugAgent(Agent):
             Status of the stop operation
         """
         if flow_id not in self._active_clients:
-            return {"status": "error", "message": f"No active client for flow_id: {flow_id}"}
+            return {
+                "status": "error",
+                "message": f"No active client for flow_id: {flow_id}",
+            }
 
         try:
             client = self._active_clients[flow_id]
@@ -286,7 +333,9 @@ class DebugAgent(Agent):
 
     # Puppet mode - continuous listening for LLM control
 
-    async def start_puppet_mode(self, host: str = "localhost", port: int = 8000) -> dict[str, str]:
+    async def start_puppet_mode(
+        self, host: str = "localhost", port: int = 8000
+    ) -> dict[str, str]:
         """Start puppet mode - continuous WebSocket client that acts as UI replacement.
 
         Args:
@@ -305,7 +354,9 @@ class DebugAgent(Agent):
                 await self._puppet_client.disconnect()
 
             # Create new puppet client
-            self._puppet_client = FlowTestClient(base_url=f"http://{host}:{port}", ws_url=f"ws://{host}:{port}/ws")
+            self._puppet_client = FlowTestClient(
+                base_url=f"http://{host}:{port}", ws_url=f"ws://{host}:{port}/ws"
+            )
 
             await self._puppet_client.connect()
             self._puppet_listening = True
@@ -320,9 +371,14 @@ class DebugAgent(Agent):
 
         except Exception as e:
             self._puppet_listening = False
-            return {"status": "error", "message": f"Failed to start puppet mode: {str(e)}"}
+            return {
+                "status": "error",
+                "message": f"Failed to start puppet mode: {str(e)}",
+            }
 
-    async def puppet_start_flow(self, flow_name: str, prompt: str = "", record: str = "", criteria: str = "") -> dict[str, str]:
+    async def puppet_start_flow(
+        self, flow_name: str, prompt: str = "", record: str = "", criteria: str = ""
+    ) -> dict[str, str]:
         """Start a flow in puppet mode.
 
         Args:
@@ -335,7 +391,10 @@ class DebugAgent(Agent):
             Status and initial response summary
         """
         if not self._puppet_client or not self._puppet_listening:
-            return {"status": "error", "message": "Puppet mode not active. Start with start_puppet_mode() first."}
+            return {
+                "status": "error",
+                "message": "Puppet mode not active. Start with start_puppet_mode() first.",
+            }
 
         try:
             await self._puppet_client.start_flow(flow_name, prompt, record, criteria)
@@ -373,7 +432,10 @@ class DebugAgent(Agent):
             Status and response details
         """
         if not self._puppet_client or not self._puppet_listening:
-            return {"status": "error", "message": "Puppet mode not active. Start with start_puppet_mode() first."}
+            return {
+                "status": "error",
+                "message": "Puppet mode not active. Start with start_puppet_mode() first.",
+            }
 
         try:
             await self._puppet_client.send_manager_response(content)
@@ -388,7 +450,9 @@ class DebugAgent(Agent):
         except Exception as e:
             return {"status": "error", "message": f"Failed to send response: {str(e)}"}
 
-    def puppet_get_messages(self, last_n: Optional[int] = 10, message_type: Optional[str] = None) -> list[dict[str, Any]]:
+    def puppet_get_messages(
+        self, last_n: Optional[int] = 10, message_type: Optional[str] = None
+    ) -> list[dict[str, Any]]:
         """Get recent messages from puppet mode client.
 
         Args:
@@ -399,7 +463,11 @@ class DebugAgent(Agent):
             List of recent messages
         """
         if not self._puppet_client or not self._puppet_listening:
-            return [{"error": "Puppet mode not active. Start with start_puppet_mode() first."}]
+            return [
+                {
+                    "error": "Puppet mode not active. Start with start_puppet_mode() first."
+                }
+            ]
 
         collector = self._puppet_client.collector
 
@@ -426,7 +494,13 @@ class DebugAgent(Agent):
 
         # Convert to dict format
         return [
-            {"type": msg.type, "timestamp": msg.timestamp.isoformat(), "content": msg.content, "agent_role": msg.agent_role, "data": msg.data}
+            {
+                "type": msg.type,
+                "timestamp": msg.timestamp.isoformat(),
+                "content": msg.content,
+                "agent_role": msg.agent_role,
+                "data": msg.data,
+            }
             for msg in messages
         ]
 
@@ -437,13 +511,17 @@ class DebugAgent(Agent):
             Summary of puppet client state and messages
         """
         if not self._puppet_client or not self._puppet_listening:
-            return {"error": "Puppet mode not active. Start with start_puppet_mode() first."}
+            return {
+                "error": "Puppet mode not active. Start with start_puppet_mode() first."
+            }
 
         summary = self._puppet_client.get_message_summary()
         summary["puppet_mode"] = {
             "active": self._puppet_listening,
             "session_id": self._puppet_client.session_id,
-            "connection_status": "connected" if self._puppet_client.ws else "disconnected",
+            "connection_status": "connected"
+            if self._puppet_client.ws
+            else "disconnected",
         }
 
         return summary
@@ -462,8 +540,14 @@ class DebugAgent(Agent):
             self._puppet_client = None
             self._puppet_listening = False
 
-            return {"status": "success", "message": "Puppet mode stopped and cleaned up"}
+            return {
+                "status": "success",
+                "message": "Puppet mode stopped and cleaned up",
+            }
 
         except Exception as e:
             self._puppet_listening = False
-            return {"status": "error", "message": f"Error stopping puppet mode: {str(e)}"}
+            return {
+                "status": "error",
+                "message": f"Error stopping puppet mode: {str(e)}",
+            }

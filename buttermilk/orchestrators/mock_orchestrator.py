@@ -46,19 +46,30 @@ class MockOrchestrator(Orchestrator):
     """
 
     # Flag to control whether to generate random messages or follow a fixed flow
-    random_generation: bool = Field(default=True, description="Generate random messages if True, follow fixed flow if False")
+    random_generation: bool = Field(
+        default=True,
+        description="Generate random messages if True, follow fixed flow if False",
+    )
 
     # Controls frequency of message generation
-    message_interval: float = Field(default=2.0, description="Seconds between random message generation")
+    message_interval: float = Field(
+        default=2.0, description="Seconds between random message generation"
+    )
 
     # Private state
-    _termination_handler: TerminationHandler | None = PrivateAttr(default_factory=lambda: None)
+    _termination_handler: TerminationHandler | None = PrivateAttr(
+        default_factory=lambda: None
+    )
     _interrupt_handler: InterruptHandler
     _simulation_task: asyncio.Task | None = PrivateAttr(default_factory=lambda: None)
     _client_websocket: Any = PrivateAttr(default_factory=lambda: None)
-    _topic_type: str = PrivateAttr(default_factory=lambda: f"mock-flow-{shortuuid.uuid()[:8]}")
+    _topic_type: str = PrivateAttr(
+        default_factory=lambda: f"mock-flow-{shortuuid.uuid()[:8]}"
+    )
 
-    _agent_ids: list[str] = PrivateAttr(default_factory=lambda: [f"agent-{i + 1}" for i in range(5)])  # Use simpler, consistent IDs
+    _agent_ids: list[str] = PrivateAttr(
+        default_factory=lambda: [f"agent-{i + 1}" for i in range(5)]
+    )  # Use simpler, consistent IDs
 
     async def _setup(self, request: RunRequest) -> None:
         """Setup the mock orchestrator environment"""
@@ -94,30 +105,44 @@ class MockOrchestrator(Orchestrator):
 
         await asyncio.sleep(0.1)  # Small delay for cleanup
 
-    async def _run(self, request: RunRequest | None = None, **ignored_tracing_kwargs) -> None:  # noqa
+    async def _run(
+        self, request: RunRequest | None = None, **ignored_tracing_kwargs
+    ) -> None:  # noqa
         """Override run to generate fake messages instead of using real agents"""
         try:
             # Setup the mock environment
             await self._setup(request or RunRequest(flow="mock_flow"))
 
             # Set callback on request if provided
-            if request and hasattr(request, "callback_to_ui") and request.callback_to_ui:
+            if (
+                request
+                and hasattr(request, "callback_to_ui")
+                and request.callback_to_ui
+            ):
                 self._client_websocket = request.callback_to_ui
 
             # Start generating messages
             if self.random_generation:
                 # Random, continuous message generation
-                self._simulation_task = asyncio.create_task(self._generate_random_messages())
+                self._simulation_task = asyncio.create_task(
+                    self._generate_random_messages()
+                )
             else:
                 # Structured flow simulation
                 self._simulation_task = asyncio.create_task(self._simulate_flow())
 
             # Wait for termination signal
             while True:
-                if self._termination_handler and self._termination_handler.has_terminated:
+                if (
+                    self._termination_handler
+                    and self._termination_handler.has_terminated
+                ):
                     logger.info("Termination message received.")
                     break
-                if self._interrupt_handler and self._interrupt_handler.interrupt.is_set():
+                if (
+                    self._interrupt_handler
+                    and self._interrupt_handler.interrupt.is_set()
+                ):
                     await self._interrupt_handler.interrupt.wait()
                 await asyncio.sleep(0.1)
 
@@ -147,7 +172,10 @@ class MockOrchestrator(Orchestrator):
                 # Choose a message type randomly with weights
                 message_generators = [
                     (self._generate_agent_trace, 4),  # Higher weight for agent traces
-                    (self._generate_progress_update, 4),  # Medium weight for progress updates
+                    (
+                        self._generate_progress_update,
+                        4,
+                    ),  # Medium weight for progress updates
                     (self._generate_error_event, 1),  # Lower weight for errors
                     (self._generate_ui_message, 4),  # Medium weight for UI messages
                     (self._generate_record, 1),  # Lower weight for records
@@ -260,9 +288,15 @@ class MockOrchestrator(Orchestrator):
 
             # Add critic analysis with Differences output
             # Generate random experts using the new method
-            experts_pos1 = [self._generate_expert() for _ in range(random.randint(1, 3))]
-            experts_pos2 = [self._generate_expert() for _ in range(random.randint(1, 3))]
-            experts_pos3 = [self._generate_expert() for _ in range(random.randint(1, 3))]
+            experts_pos1 = [
+                self._generate_expert() for _ in range(random.randint(1, 3))
+            ]
+            experts_pos2 = [
+                self._generate_expert() for _ in range(random.randint(1, 3))
+            ]
+            experts_pos3 = [
+                self._generate_expert() for _ in range(random.randint(1, 3))
+            ]
 
             differences = Differences(
                 conclusion="Revise the document to address these points before finalization",
@@ -270,9 +304,18 @@ class MockOrchestrator(Orchestrator):
                     Divergence(
                         topic="Methodology",
                         positions=[
-                            Position(experts=experts_pos1, position="The conclusion section could be strengthened with additional examples"),
-                            Position(experts=experts_pos2, position="Some statistical methods might benefit from more detailed explanation"),
-                            Position(experts=experts_pos3, position="Consider addressing alternative interpretations of the findings"),
+                            Position(
+                                experts=experts_pos1,
+                                position="The conclusion section could be strengthened with additional examples",
+                            ),
+                            Position(
+                                experts=experts_pos2,
+                                position="Some statistical methods might benefit from more detailed explanation",
+                            ),
+                            Position(
+                                experts=experts_pos3,
+                                position="Consider addressing alternative interpretations of the findings",
+                            ),
                         ],
                     ),
                 ],
@@ -290,7 +333,9 @@ class MockOrchestrator(Orchestrator):
             judge_reasons = JudgeReasons(
                 conclusion="The content adheres to guidelines with minor concerns about citation formatting.",
                 prediction=random.choice([True, False]),  # Randomize prediction
-                uncertainty=random.choice(["low", "medium", "high"]),  # Randomize uncertainty
+                uncertainty=random.choice(
+                    ["low", "medium", "high"]
+                ),  # Randomize uncertainty
                 reasons=[
                     "Content is factually accurate and well-supported",
                     "No harmful, misleading, or inappropriate material detected",
@@ -301,7 +346,10 @@ class MockOrchestrator(Orchestrator):
             judge_result = self._generate_agent_trace(
                 agent_id=random.choice(self._agent_ids),  # Use agent_ids list
                 outputs=judge_reasons,
-                metadata={"evaluation_criteria": "academic_standards", "model": "claude-3"},
+                metadata={
+                    "evaluation_criteria": "academic_standards",
+                    "model": "claude-3",
+                },
             )
             await self._publish_message(judge_result)
             await asyncio.sleep(1)
@@ -357,9 +405,18 @@ class MockOrchestrator(Orchestrator):
         """Generate a fake Expert object using a consistent agent_id."""
         # Use the aliased ExpertType from buttermilk._core.types
         agent_id = random.choice(self._agent_ids)
-        return Expert(name=f"Expert {agent_id}", answer_id=agent_id)  # Use agent_id for answer_id for consistency
+        return Expert(
+            name=f"Expert {agent_id}", answer_id=agent_id
+        )  # Use agent_id for answer_id for consistency
 
-    def _generate_agent_trace(self, agent_id=None, outputs=None, metadata=None, parent_call_id=None, tool_code=None) -> ExecutionTrace:
+    def _generate_agent_trace(
+        self,
+        agent_id=None,
+        outputs=None,
+        metadata=None,
+        parent_call_id=None,
+        tool_code=None,
+    ) -> ExecutionTrace:
         """Generate a fake agent trace"""
         from buttermilk._core.contract import AgentConfig, ExecutionTrace
         from buttermilk.agents.differences import (  # Corrected import and added nested models
@@ -367,7 +424,9 @@ class MockOrchestrator(Orchestrator):
             Divergence,
             Position,
         )
-        from buttermilk.agents.judge import JudgeReasons  # Import JudgeReasons if used in outputs
+        from buttermilk.agents.judge import (
+            JudgeReasons,
+        )  # Import JudgeReasons if used in outputs
 
         if agent_id is None:
             agent_types = ["ASSISTANT", "RESEARCHER", "JUDGE", "ANALYST", "CRITIC"]
@@ -400,9 +459,15 @@ class MockOrchestrator(Orchestrator):
                 # Position requires experts (list of Expert) and position (string)
                 # Expert requires name and answer_id
                 # Generate random experts using the new method
-                experts_pos1 = [self._generate_expert() for _ in range(random.randint(1, 3))]
-                experts_pos2 = [self._generate_expert() for _ in range(random.randint(1, 3))]
-                experts_pos3 = [self._generate_expert() for _ in range(random.randint(1, 3))]
+                experts_pos1 = [
+                    self._generate_expert() for _ in range(random.randint(1, 3))
+                ]
+                experts_pos2 = [
+                    self._generate_expert() for _ in range(random.randint(1, 3))
+                ]
+                experts_pos3 = [
+                    self._generate_expert() for _ in range(random.randint(1, 3))
+                ]
 
                 outputs = Differences(
                     conclusion="Overall, there are some notable differences in the expert opinions.",
@@ -428,7 +493,9 @@ class MockOrchestrator(Orchestrator):
                                     position="Methodology is considered sound.",
                                 ),
                                 Position(
-                                    experts=[self._generate_expert()],  # Single expert position
+                                    experts=[
+                                        self._generate_expert()
+                                    ],  # Single expert position
                                     position="Concerns raised about sample size.",
                                 ),
                             ],
@@ -482,7 +549,9 @@ class MockOrchestrator(Orchestrator):
         message=None,
         total_steps=None,
         current_step=None,
-    ) -> FlowProgressUpdate | FlowEvent | TaskProcessingComplete | TaskProcessingStarted:
+    ) -> (
+        FlowProgressUpdate | FlowEvent | TaskProcessingComplete | TaskProcessingStarted
+    ):
         """Generate a fake progress update or flow event"""
         from buttermilk._core.contract import (
             FlowEvent,
@@ -499,7 +568,8 @@ class MockOrchestrator(Orchestrator):
             if event_class == TaskProcessingStarted:
                 # TaskProcessingStarted requires agent_id, role, task_index
                 return TaskProcessingStarted(
-                    agent_id=source or random.choice(self._agent_ids),  # Use agent_ids list
+                    agent_id=source
+                    or random.choice(self._agent_ids),  # Use agent_ids list
                     role=role or random.choice(["ASSISTANT", "RESEARCHER", "ANALYST"]),
                     task_index=random.randint(0, 5),  # Mock task index
                     # task_id and flow_id are not part of TaskProcessingStarted based on contract.py
@@ -508,7 +578,8 @@ class MockOrchestrator(Orchestrator):
             if event_class == TaskProcessingComplete:
                 # TaskProcessingComplete requires agent_id, role, task_index, more_tasks_remain, is_error
                 return TaskProcessingComplete(
-                    agent_id=source or random.choice(self._agent_ids),  # Use agent_ids list
+                    agent_id=source
+                    or random.choice(self._agent_ids),  # Use agent_ids list
                     role=role or random.choice(["ASSISTANT", "RESEARCHER", "ANALYST"]),
                     task_index=random.randint(0, 5),  # Mock task index
                     more_tasks_remain=random.choice([True, False]),
@@ -517,7 +588,9 @@ class MockOrchestrator(Orchestrator):
                 )
             # FlowEvent
             # FlowEvent requires source and content
-            event_type = random.choice(["flow_started", "flow_completed", "agent_selected", "error_occurred"])
+            event_type = random.choice(
+                ["flow_started", "flow_completed", "agent_selected", "error_occurred"]
+            )
 
             generated_source = source or "ORCHESTRATOR"  # Default source for FlowEvent
             generated_content = f"Flow event: {event_type}"  # Default content
@@ -544,7 +617,9 @@ class MockOrchestrator(Orchestrator):
             elif event_type == "agent_selected":
                 details.update(
                     {
-                        "agent_id": random.choice(self._agent_ids),  # Use agent_ids list
+                        "agent_id": random.choice(
+                            self._agent_ids
+                        ),  # Use agent_ids list
                         "task_description": "Processing a mock task.",
                     },
                 )
@@ -553,7 +628,9 @@ class MockOrchestrator(Orchestrator):
                 details.update(
                     {
                         "error_message": "A simulated error occurred.",
-                        "error_type": random.choice(["ValueError", "RuntimeError", "TimeoutError"]),
+                        "error_type": random.choice(
+                            ["ValueError", "RuntimeError", "TimeoutError"]
+                        ),
                     },
                 )
                 generated_content = f"Error occurred: {details.get('error_type')} - {details.get('error_message')}"
@@ -660,9 +737,13 @@ class MockOrchestrator(Orchestrator):
 
         if metadata is None:
             metadata = {
-                "source": random.choice(["database", "api", "user_upload", "web_scrape"]),
+                "source": random.choice(
+                    ["database", "api", "user_upload", "web_scrape"]
+                ),
                 "timestamp": datetime.now(UTC).isoformat(),
-                "category": random.choice(["document", "report", "article", "data", "message"]),
+                "category": random.choice(
+                    ["document", "report", "article", "data", "message"]
+                ),
                 "confidence": round(random.uniform(0.7, 0.99), 2),
                 "word_count": random.randint(100, 5000),
             }
@@ -685,15 +766,21 @@ class MockOrchestrator(Orchestrator):
             record_id=record_id,
             content=content,
             metadata=metadata,
-            mime=random.choice(["text/plain", "text/markdown", "text/html", "application/json"]),
+            mime=random.choice(
+                ["text/plain", "text/markdown", "text/html", "application/json"]
+            ),
         )
 
-    def _generate_error_event(self, error_type=None, message=None, details=None) -> ErrorEvent:
+    def _generate_error_event(
+        self, error_type=None, message=None, details=None
+    ) -> ErrorEvent:
         """Generate a fake error event message"""
         from buttermilk._core.contract import ErrorEvent
 
         if error_type is None:
-            error_type = random.choice(["ValueError", "RuntimeError", "TimeoutError", "APIError"])
+            error_type = random.choice(
+                ["ValueError", "RuntimeError", "TimeoutError", "APIError"]
+            )
 
         if message is None:
             messages = [
@@ -706,8 +793,12 @@ class MockOrchestrator(Orchestrator):
         # ErrorEvent requires source and content
         # error_type, details, timestamp, agent_id, call_id are not part of ErrorEvent based on contract.py
 
-        generated_source = random.choice(["ASSISTANT", "RESEARCHER", "JUDGE", "ANALYST", "CRITIC", "ORCHESTRATOR"])
-        generated_content = f"ERROR: {error_type} - {message}"  # Combine type and message into content
+        generated_source = random.choice(
+            ["ASSISTANT", "RESEARCHER", "JUDGE", "ANALYST", "CRITIC", "ORCHESTRATOR"]
+        )
+        generated_content = (
+            f"ERROR: {error_type} - {message}"  # Combine type and message into content
+        )
 
         return ErrorEvent(
             source=generated_source,

@@ -59,7 +59,9 @@ async def negotiate_response(
 ) -> Response:
     accept_header = request.headers.get("accept", "")
     if "text/html" in accept_header:
-        logger.debug(f"Returning HTML template '{template_name}' based on Accept header for {request.url.path}")
+        logger.debug(
+            f"Returning HTML template '{template_name}' based on Accept header for {request.url.path}"
+        )
         return templates.TemplateResponse(
             template_name,
             {"request": request, **context_data},
@@ -76,7 +78,9 @@ async def negotiate_response(
 async def get_session_endpoint(
     request: Request,
     flows: Annotated[FlowRunner, Depends(get_flows)],
-    session_id: str = Query(None, description="Optional existing session ID to validate"),
+    session_id: str = Query(
+        None, description="Optional existing session ID to validate"
+    ),
 ):
     """Get or create a session for WebSocket connection."""
     logger.debug(f"Session request received. Existing ID: {session_id}")
@@ -93,7 +97,9 @@ async def get_session_endpoint(
                         {
                             "sessionId": session_id,
                             "status": session.status.value,
-                            "created_at": session.created_at.isoformat() if hasattr(session, "created_at") else None,
+                            "created_at": session.created_at.isoformat()
+                            if hasattr(session, "created_at")
+                            else None,
                         },
                     )
 
@@ -107,7 +113,9 @@ async def get_session_endpoint(
             # Ensure the session manager is started
             await flows._ensure_session_manager_started()
             # Pre-create the session so WebSocket can find it
-            await flows.session_manager.get_or_create_session(new_session_id, websocket=None)
+            await flows.session_manager.get_or_create_session(
+                new_session_id, websocket=None
+            )
             logger.info(f"Pre-created session {new_session_id} in session manager")
 
         return JSONResponse(
@@ -167,12 +175,18 @@ async def get_session_messages_endpoint(
             },
         }
 
-        logger.info(f"Returning {len(message_dicts)} messages for session {session_id} (status: {flow_status}, resumable: {is_resumable})")
+        logger.info(
+            f"Returning {len(message_dicts)} messages for session {session_id} (status: {flow_status}, resumable: {is_resumable})"
+        )
         return JSONResponse(response_data)
 
     except Exception as e:
-        logger.error(f"Error retrieving session messages for {session_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to retrieve session messages")
+        logger.error(
+            f"Error retrieving session messages for {session_id}: {e}", exc_info=True
+        )
+        raise HTTPException(
+            status_code=500, detail="Failed to retrieve session messages"
+        )
 
 
 @flow_data_router.get("/api/flows")
@@ -181,14 +195,20 @@ async def get_flows_endpoint(
     flows: Annotated[FlowRunner, Depends(get_flows)],
     templates: Annotated[Jinja2Templates, Depends(get_templates)],
 ):
-    logger.debug(f"Request received for /api/flows (Accept: {request.headers.get('accept', '')})")
+    logger.debug(
+        f"Request received for /api/flows (Accept: {request.headers.get('accept', '')})"
+    )
     try:
         flow_choices = list(flows.flows.keys())
         context_data = {"flow_choices": flow_choices}
-        return await negotiate_response(request, context_data, "partials/flow_options.html", templates)
+        return await negotiate_response(
+            request, context_data, "partials/flow_options.html", templates
+        )
     except Exception as e:
         logger.error(f"Error getting flows: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error retrieving flows")
+        raise HTTPException(
+            status_code=500, detail="Internal server error retrieving flows"
+        )
 
 
 @flow_data_router.get("/api/flows/{flow}/records")
@@ -197,10 +217,14 @@ async def get_records_list_endpoint_flow_only(
     flows: Annotated[FlowRunner, Depends(get_flows)],
     templates: Annotated[Jinja2Templates, Depends(get_templates)],
     flow: str = Path(..., description="The flow name"),
-    include_scores: bool = Query(False, description="Include summary scores in list view"),
+    include_scores: bool = Query(
+        False, description="Include summary scores in list view"
+    ),
 ):
     """Get records for a specific flow"""
-    return await _get_records_impl(request, flows, templates, flow, None, include_scores)
+    return await _get_records_impl(
+        request, flows, templates, flow, None, include_scores
+    )
 
 
 @flow_data_router.get("/api/flows/{flow}/datasets/{dataset}/records")
@@ -210,10 +234,14 @@ async def get_records_list_endpoint_with_dataset(
     templates: Annotated[Jinja2Templates, Depends(get_templates)],
     flow: str = Path(..., description="The flow name"),
     dataset: str = Path(..., description="The dataset name"),
-    include_scores: bool = Query(False, description="Include summary scores in list view"),
+    include_scores: bool = Query(
+        False, description="Include summary scores in list view"
+    ),
 ):
     """Get records for a specific flow and dataset"""
-    return await _get_records_impl(request, flows, templates, flow, dataset, include_scores)
+    return await _get_records_impl(
+        request, flows, templates, flow, dataset, include_scores
+    )
 
 
 async def _get_records_impl(
@@ -226,10 +254,14 @@ async def _get_records_impl(
 ):
     """Enhanced records list with optional score summaries"""
     accept_header = request.headers.get("accept", "")
-    logger.debug(f"Records list request received for flow: {flow}, dataset: {dataset}, include_scores: {include_scores} (Accept: {accept_header})")
+    logger.debug(
+        f"Records list request received for flow: {flow}, dataset: {dataset}, include_scores: {include_scores} (Accept: {accept_header})"
+    )
 
     if not flow:
-        logger.warning("Request to /api/flows/{flow}/records missing 'flow' path parameter.")
+        logger.warning(
+            "Request to /api/flows/{flow}/records missing 'flow' path parameter."
+        )
         error_msg = "Missing 'flow' path parameter."
         if "application/json" in accept_header:
             return JSONResponse(content={"error": error_msg}, status_code=400)
@@ -246,7 +278,9 @@ async def _get_records_impl(
     if not dataset:
         try:
             available_datasets = await DataService.get_datasets_for_flow(flow, flows)
-            logger.debug(f"Returning {len(available_datasets)} available datasets for flow {flow}")
+            logger.debug(
+                f"Returning {len(available_datasets)} available datasets for flow {flow}"
+            )
 
             if "application/json" in accept_header:
                 return JSONResponse(
@@ -264,7 +298,13 @@ async def _get_records_impl(
                 "available_datasets": available_datasets,
                 "flow": flow,
             }
-            return await negotiate_response(request, context_data, "partials/records_list.html", templates, status_code=400)
+            return await negotiate_response(
+                request,
+                context_data,
+                "partials/records_list.html",
+                templates,
+                status_code=400,
+            )
 
         except Exception as e:
             logger.error(f"Error getting datasets for flow {flow}: {e}", exc_info=True)
@@ -272,7 +312,9 @@ async def _get_records_impl(
             return JSONResponse(content=error_content, status_code=500)
 
     try:
-        records = await DataService.get_records_for_flow(flow, flows, include_scores=include_scores, dataset_key=dataset)
+        records = await DataService.get_records_for_flow(
+            flow, flows, include_scores=include_scores, dataset_key=dataset
+        )
         logger.debug(f"Returning data for {len(records)} records")
 
         if "application/json" in accept_header:
@@ -282,8 +324,15 @@ async def _get_records_impl(
 
         # For HTML response, use Pydantic model_dump() as well
         records_data = [record.model_dump() for record in records]
-        context_data = {"records": records_data, "flow": flow, "dataset": dataset, "include_scores": include_scores}
-        return await negotiate_response(request, context_data, "partials/records_list.html", templates)
+        context_data = {
+            "records": records_data,
+            "flow": flow,
+            "dataset": dataset,
+            "include_scores": include_scores,
+        }
+        return await negotiate_response(
+            request, context_data, "partials/records_list.html", templates
+        )
 
     except Exception as e:
         logger.error(f"Error getting records for flow {flow}: {e}", exc_info=True)
@@ -309,7 +358,9 @@ async def get_flowinfo_endpoint(
     flow: str = Path(..., description="The flow name"),
 ):
     accept_header = request.headers.get("accept", "")
-    logger.info(f"Flow data request received for flow: {flow} (Accept: {accept_header})")
+    logger.info(
+        f"Flow data request received for flow: {flow} (Accept: {accept_header})"
+    )
 
     if not flow:
         logger.warning("Request to /api/flowinfo/ missing 'flow' parameter.")
@@ -328,11 +379,20 @@ async def get_flowinfo_endpoint(
         records = []
         models = await DataService.get_models_for_flow(flow, flows)
         datasets = await DataService.get_datasets_for_flow(flow, flows)
-        logger.debug(f"Returning data for {len(criteria)} criteria options, {len(records)} record options, and {len(datasets)} dataset options")
+        logger.debug(
+            f"Returning data for {len(criteria)} criteria options, {len(records)} record options, and {len(datasets)} dataset options"
+        )
         # Use model_dump() to serialize Record objects
         record_data = [record.model_dump() for record in records]
-        context_data = {"criteria": criteria, "record_ids": record_data, "models": models, "datasets": datasets}
-        return await negotiate_response(request, context_data, "partials/flow_dependent_data.html", templates)
+        context_data = {
+            "criteria": criteria,
+            "record_ids": record_data,
+            "models": models,
+            "datasets": datasets,
+        }
+        return await negotiate_response(
+            request, context_data, "partials/flow_dependent_data.html", templates
+        )
 
     except Exception as e:
         logger.error(f"Error getting data for flow {flow}: {e}", exc_info=True)
@@ -352,7 +412,9 @@ async def get_flowinfo_endpoint(
 
 @flow_data_router.get("/api/pull_task")
 async def pull_task_endpoint(request: Request) -> StreamingResponse:
-    logger.debug(f"Request received for /api/pull_task (Accept: {request.headers.get('accept', '')})")
+    logger.debug(
+        f"Request received for /api/pull_task (Accept: {request.headers.get('accept', '')})"
+    )
     try:
         flow_runner = request.app.state.flow_runner
         job_queue = JobQueueClient()
@@ -370,17 +432,23 @@ async def pull_task_endpoint(request: Request) -> StreamingResponse:
             run_request.session_id = session_id
 
         # Pre-create a session without websocket; UI can attach later using /api/session and /ws
-        session = await flow_runner.get_websocket_session_async(session_id=session_id, websocket=None)
+        session = await flow_runner.get_websocket_session_async(
+            session_id=session_id, websocket=None
+        )
         if not session:
             # Fallback to session manager direct create
-            await flow_runner.session_manager.get_or_create_session(session_id=session_id, websocket=None)
+            await flow_runner.session_manager.get_or_create_session(
+                session_id=session_id, websocket=None
+            )
 
         # Configure UI callback to route messages to session storage/websocket when attached
         # Using the FlowRunContext's send method ensures persistence even if no WebSocket is attached yet
         if session and hasattr(session, "send_message_to_ui"):
             run_request.callback_to_ui = session.send_message_to_ui
         else:
-            run_request.callback_to_ui = None  # Orchestrator will set via run_flow as fallback
+            run_request.callback_to_ui = (
+                None  # Orchestrator will set via run_flow as fallback
+            )
 
         # Kick off the flow in background
         asyncio.create_task(
@@ -392,9 +460,13 @@ async def pull_task_endpoint(request: Request) -> StreamingResponse:
 
         # Defer Pub/Sub ack until the background task completes successfully
         try:
-            flow_runner.schedule_ack_on_completion(session_id=session_id, ack_id=ack_id, worker=job_queue)
+            flow_runner.schedule_ack_on_completion(
+                session_id=session_id, ack_id=ack_id, worker=job_queue
+            )
         except Exception as e:
-            logger.warning(f"Failed to schedule ack on completion for session {session_id}: {e}")
+            logger.warning(
+                f"Failed to schedule ack on completion for session {session_id}: {e}"
+            )
 
         # Respond with session info so a UI can connect over websocket to monitor
         return JSONResponse(
@@ -408,7 +480,9 @@ async def pull_task_endpoint(request: Request) -> StreamingResponse:
 
     except Exception as e:
         logger.error(f"Error pulling task: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error pulling task")
+        raise HTTPException(
+            status_code=500, detail="Internal server error pulling task"
+        )
 
 
 # --- New Score Pages API Endpoints ---
@@ -442,7 +516,9 @@ async def _get_record_impl(
     flows: FlowRunner,
 ):
     """Get individual record details"""
-    logger.debug(f"Request received for /api/flows/{flow}/records/{record_id} with dataset {dataset}")
+    logger.debug(
+        f"Request received for /api/flows/{flow}/records/{record_id} with dataset {dataset}"
+    )
 
     if not flow or flow.strip() == "":
         raise HTTPException(status_code=422, detail="Missing 'flow' path parameter")
@@ -454,7 +530,9 @@ async def _get_record_impl(
         raise HTTPException(status_code=422, detail=f"Invalid flow: {flow}")
 
     try:
-        record = await DataService.get_record_by_id(record_id, flow, flows, dataset_key=dataset)
+        record = await DataService.get_record_by_id(
+            record_id, flow, flows, dataset_key=dataset
+        )
 
         if not record:
             raise HTTPException(
@@ -472,8 +550,12 @@ async def _get_record_impl(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error getting record {record_id} for flow {flow}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error retrieving record")
+        logger.error(
+            f"Error getting record {record_id} for flow {flow}: {e}", exc_info=True
+        )
+        raise HTTPException(
+            status_code=500, detail="Internal server error retrieving record"
+        )
 
 
 @flow_data_router.get("/api/flows/{flow}/records/{record_id}/scores")
@@ -507,7 +589,9 @@ async def _get_record_scores_impl(
     flows: FlowRunner,
 ):
     """Get toxicity scores for a specific record"""
-    logger.debug(f"Request received for /api/flows/{flow}/records/{record_id}/scores with session: {session_id}")
+    logger.debug(
+        f"Request received for /api/flows/{flow}/records/{record_id}/scores with session: {session_id}"
+    )
 
     if not flow or flow.strip() == "":
         raise HTTPException(status_code=422, detail="Missing 'flow' path parameter")
@@ -519,7 +603,9 @@ async def _get_record_scores_impl(
         raise HTTPException(status_code=422, detail=f"Invalid flow: {flow}")
 
     try:
-        agent_traces = await DataService.get_scores_for_record(record_id, flow, flows, session_id)
+        agent_traces = await DataService.get_scores_for_record(
+            record_id, flow, flows, session_id
+        )
 
         # Send native ExecutionTrace objects directly using Pydantic's model_dump()
         scores_data = {
@@ -531,7 +617,9 @@ async def _get_record_scores_impl(
 
     except Exception as e:
         logger.error(f"Error getting scores for record {record_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error retrieving scores")
+        raise HTTPException(
+            status_code=500, detail="Internal server error retrieving scores"
+        )
 
 
 @flow_data_router.get("/api/flows/{flow}/records/{record_id}/responses")
@@ -543,10 +631,14 @@ async def get_record_responses_endpoint_flow_only(
     flows: Annotated[FlowRunner, Depends(get_flows)] = None,
 ):
     """Get detailed AI responses for a specific record (flow only)"""
-    return await _get_record_responses_impl(record_id, flow, None, session_id, include_reasoning, flows)
+    return await _get_record_responses_impl(
+        record_id, flow, None, session_id, include_reasoning, flows
+    )
 
 
-@flow_data_router.get("/api/flows/{flow}/datasets/{dataset}/records/{record_id}/responses")
+@flow_data_router.get(
+    "/api/flows/{flow}/datasets/{dataset}/records/{record_id}/responses"
+)
 async def get_record_responses_endpoint_with_dataset(
     record_id: str = Path(..., description="The record ID"),
     flow: str = Path(..., description="The flow name for data context"),
@@ -556,7 +648,9 @@ async def get_record_responses_endpoint_with_dataset(
     flows: Annotated[FlowRunner, Depends(get_flows)] = None,
 ):
     """Get detailed AI responses for a specific record with dataset"""
-    return await _get_record_responses_impl(record_id, flow, dataset, session_id, include_reasoning, flows)
+    return await _get_record_responses_impl(
+        record_id, flow, dataset, session_id, include_reasoning, flows
+    )
 
 
 async def _get_record_responses_impl(
@@ -568,7 +662,9 @@ async def _get_record_responses_impl(
     flows: FlowRunner,
 ):
     """Get detailed AI responses for a specific record"""
-    logger.debug(f"Request received for /api/flows/{flow}/records/{record_id}/responses with session: {session_id}")
+    logger.debug(
+        f"Request received for /api/flows/{flow}/records/{record_id}/responses with session: {session_id}"
+    )
 
     if not flow or flow.strip() == "":
         raise HTTPException(status_code=422, detail="Missing 'flow' path parameter")
@@ -580,7 +676,9 @@ async def _get_record_responses_impl(
         raise HTTPException(status_code=422, detail=f"Invalid flow: {flow}")
 
     try:
-        agent_traces = await DataService.get_responses_for_record(record_id, flow, flows, session_id, include_reasoning)
+        agent_traces = await DataService.get_responses_for_record(
+            record_id, flow, flows, session_id, include_reasoning
+        )
 
         # Send native ExecutionTrace objects directly using Pydantic's model_dump()
         responses_data = {
@@ -591,8 +689,12 @@ async def _get_record_responses_impl(
         return JSONResponse(content=responses_data)
 
     except Exception as e:
-        logger.error(f"Error getting responses for record {record_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error retrieving responses")
+        logger.error(
+            f"Error getting responses for record {record_id}: {e}", exc_info=True
+        )
+        raise HTTPException(
+            status_code=500, detail="Internal server error retrieving responses"
+        )
 
 
 # --- Score Page Routes ---
@@ -620,7 +722,9 @@ async def get_score_page_endpoint_with_dataset(
     flows: Annotated[FlowRunner, Depends(get_flows)] = None,
 ):
     """Score page route using flow and dataset"""
-    return await _get_score_page_impl(request, record_id, flow, dataset, templates, flows)
+    return await _get_score_page_impl(
+        request, record_id, flow, dataset, templates, flows
+    )
 
 
 async def _get_score_page_impl(
@@ -658,8 +762,12 @@ async def _get_score_page_impl(
         )
 
     except Exception as e:
-        logger.error(f"Error loading score page for record {record_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Internal server error loading score page")
+        logger.error(
+            f"Error loading score page for record {record_id}: {e}", exc_info=True
+        )
+        raise HTTPException(
+            status_code=500, detail="Internal server error loading score page"
+        )
 
 
 # --- Admin Configuration Management Endpoints ---
@@ -688,16 +796,24 @@ async def reload_configuration_endpoint(
 
         # Log the result
         if reload_result["success"]:
-            logger.info(f"Configuration reload successful: {len(reload_result['flows_loaded'])} flows loaded")
+            logger.info(
+                f"Configuration reload successful: {len(reload_result['flows_loaded'])} flows loaded"
+            )
         else:
             logger.error(f"Configuration reload failed: {reload_result['errors']}")
 
         return JSONResponse(content=reload_result, status_code=status_code)
 
     except Exception as e:
-        logger.error(f"Unexpected error during configuration reload: {e}", exc_info=True)
+        logger.error(
+            f"Unexpected error during configuration reload: {e}", exc_info=True
+        )
         return JSONResponse(
-            content={"success": False, "errors": [f"Unexpected error: {str(e)}"], "timestamp": datetime.datetime.now(datetime.UTC).isoformat()},
+            content={
+                "success": False,
+                "errors": [f"Unexpected error: {str(e)}"],
+                "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
+            },
             status_code=500,
         )
 
@@ -740,6 +856,9 @@ async def get_configuration_status_endpoint(
     except Exception as e:
         logger.error(f"Error getting configuration status: {e}", exc_info=True)
         return JSONResponse(
-            content={"error": f"Failed to get configuration status: {str(e)}", "timestamp": datetime.datetime.now(datetime.UTC).isoformat()},
+            content={
+                "error": f"Failed to get configuration status: {str(e)}",
+                "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
+            },
             status_code=500,
         )

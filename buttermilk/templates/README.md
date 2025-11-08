@@ -17,22 +17,32 @@ Add to `TEMPLATE_TEST_CASES`:
 ```python
 TEMPLATE_TEST_CASES = [
     # ... existing cases ...
-
     # YOUR NEW TEMPLATE
-    ("your_template_name", ["required_var1", "required_var2"], {
-        # Provide ALL other variables EXCEPT the required ones being tested
-        "optional_var": "value",
-        "another_var": "value"
-    }),
+    (
+        "your_template_name",
+        ["required_var1", "required_var2"],
+        {
+            # Provide ALL other variables EXCEPT the required ones being tested
+            "optional_var": "value",
+            "another_var": "value",
+        },
+    ),
 ]
 ```
 
 **Example**:
+
 ```python
 # analyst template - requires criteria
-("analyst", ["criteria"], {
-    "record": "test record content"  # Provide record, omit criteria
-}),
+(
+    (
+        "analyst",
+        ["criteria"],
+        {
+            "record": "test record content"  # Provide record, omit criteria
+        },
+    ),
+)
 ```
 
 #### 2. Type Mismatch Detection Test
@@ -42,28 +52,36 @@ Add to `TYPE_MISMATCH_TEST_CASES` for **each variable that expects a dict/list**
 ```python
 TYPE_MISMATCH_TEST_CASES = [
     # ... existing cases ...
-
     # YOUR NEW TEMPLATE - test dict variable with JSON string
-    ("your_template", "dict_var_name",
-     {"key": "value"},          # Correct: dict
-     '{"key": "value"}',        # Wrong: JSON string
-     {
-         # All other required variables
-         "other_var": "value"
-     }),
+    (
+        "your_template",
+        "dict_var_name",
+        {"key": "value"},  # Correct: dict
+        '{"key": "value"}',  # Wrong: JSON string
+        {
+            # All other required variables
+            "other_var": "value"
+        },
+    ),
 ]
 ```
 
 **Example**:
+
 ```python
 # score template - expected should be dict, not string
-("score", "expected",
- {"reasons": ["reason 1"], "violating": False},  # Correct: dict
- '{"reasons": ["reason 1"], "violating": false}',  # Wrong: JSON string
- {
-     "answers": [{"agent_id": "test", "result": "test result"}],
-     "criteria": ["test criterion"]
- }),
+(
+    (
+        "score",
+        "expected",
+        {"reasons": ["reason 1"], "violating": False},  # Correct: dict
+        '{"reasons": ["reason 1"], "violating": false}',  # Wrong: JSON string
+        {
+            "answers": [{"agent_id": "test", "result": "test result"}],
+            "criteria": ["test criterion"],
+        },
+    ),
+)
 ```
 
 ### Why This Matters
@@ -75,6 +93,7 @@ TYPE_MISMATCH_TEST_CASES = [
 3. ❌ **pprint filter bug** - `{{ var | pprint }}` doesn't trigger variable tracking
 
 These tests ensure your template:
+
 - ✅ Detects missing required variables
 - ✅ Rejects or clearly errors on wrong data types
 - ✅ Doesn't silently render invalid data

@@ -184,9 +184,9 @@ Edit `tests/performance/conftest.py`:
 @pytest.fixture(scope="function")
 def benchmark(benchmark):
     benchmark.pedantic(
-        iterations=20,      # More iterations
-        rounds=10,          # More rounds
-        warmup_rounds=2,    # More warmup
+        iterations=20,  # More iterations
+        rounds=10,  # More rounds
+        warmup_rounds=2,  # More warmup
     )
     return benchmark
 ```
@@ -197,6 +197,7 @@ def benchmark(benchmark):
 import cProfile
 import pstats
 
+
 def test_with_profiling():
     profiler = cProfile.Profile()
     profiler.enable()
@@ -206,7 +207,7 @@ def test_with_profiling():
 
     profiler.disable()
     stats = pstats.Stats(profiler)
-    stats.sort_stats('cumulative')
+    stats.sort_stats("cumulative")
     stats.print_stats(20)  # Top 20 functions
 ```
 
@@ -271,8 +272,7 @@ ls -la .benchmarks/reports/
 ```python
 @pytest.mark.performance
 @pytest.mark.slow
-def test_something():
-    ...
+def test_something(): ...
 ```
 
 This allows selective execution:

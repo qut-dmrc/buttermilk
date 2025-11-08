@@ -16,10 +16,18 @@ class TestModelOutputPricing:
         """Test ModelOutput can store pricing in metadata."""
         usage = RequestUsage(prompt_tokens=100, completion_tokens=50)
 
-        model_output = ModelOutput(content="Test response", finish_reason="stop", usage=usage, cached=False)
+        model_output = ModelOutput(
+            content="Test response", finish_reason="stop", usage=usage, cached=False
+        )
 
         # Add pricing to metadata
-        model_output.metadata = {"pricing": {"prompt_tokens": 100, "completion_tokens": 50, "total_cost": 0.003}}
+        model_output.metadata = {
+            "pricing": {
+                "prompt_tokens": 100,
+                "completion_tokens": 50,
+                "total_cost": 0.003,
+            }
+        }
 
         assert model_output.metadata["pricing"]["total_cost"] == 0.003
         assert model_output.usage.prompt_tokens == 100
@@ -48,10 +56,20 @@ class TestAutoGenWrapperPricing:
         mock_client.create.return_value = mock_result
 
         # Create proper model info
-        model_info = ModelInfo(family="gpt-4", vision=False, function_calling=True, json_output=True, structured_output=False)
+        model_info = ModelInfo(
+            family="gpt-4",
+            vision=False,
+            function_calling=True,
+            json_output=True,
+            structured_output=False,
+        )
 
         # Create wrapper with proper model info
-        wrapper = AutoGenWrapper(client_factory=lambda: mock_client, model_info=model_info, litellm_model_name="openai/gpt-4")
+        wrapper = AutoGenWrapper(
+            client_factory=lambda: mock_client,
+            model_info=model_info,
+            litellm_model_name="openai/gpt-4",
+        )
 
         # Call create
         messages = [UserMessage(content="Hello", source="user")]
@@ -100,10 +118,20 @@ class TestAutoGenWrapperPricing:
         mock_client.create.side_effect = [mock_result1, mock_result2]
 
         # Create proper model info
-        model_info = ModelInfo(family="gpt-4", vision=False, function_calling=True, json_output=True, structured_output=False)
+        model_info = ModelInfo(
+            family="gpt-4",
+            vision=False,
+            function_calling=True,
+            json_output=True,
+            structured_output=False,
+        )
 
         # Create wrapper
-        wrapper = AutoGenWrapper(client_factory=lambda: mock_client, model_info=model_info, litellm_model_name="openai/gpt-4")
+        wrapper = AutoGenWrapper(
+            client_factory=lambda: mock_client,
+            model_info=model_info,
+            litellm_model_name="openai/gpt-4",
+        )
 
         # Mock tool execution
         from autogen_core.models import FunctionExecutionResult
@@ -113,10 +141,20 @@ class TestAutoGenWrapperPricing:
         mock_tool.run_json = AsyncMock(return_value="tool result")
         mock_tool.return_value_as_string = MagicMock(return_value="tool result")
 
-        with patch.object(wrapper, "_execute_tools", return_value=[FunctionExecutionResult(call_id="1", name="test_tool", content="tool result")]):
+        with patch.object(
+            wrapper,
+            "_execute_tools",
+            return_value=[
+                FunctionExecutionResult(
+                    call_id="1", name="test_tool", content="tool result"
+                )
+            ],
+        ):
             # Call call_chat with tools
             messages = [UserMessage(content="Hello", source="user")]
-            result = await wrapper.call_chat(messages=messages, cancellation_token=None, tools_list=[mock_tool])
+            result = await wrapper.call_chat(
+                messages=messages, cancellation_token=None, tools_list=[mock_tool]
+            )
 
         # Verify aggregated pricing
         assert isinstance(result, ModelOutput)
@@ -134,16 +172,28 @@ class TestAutoGenWrapperPricing:
         mock_result = MagicMock()
         mock_result.content = "Test response"
         mock_result.finish_reason = "stop"
-        mock_result.usage = RequestUsage(prompt_tokens=0, completion_tokens=0)  # Empty usage data
+        mock_result.usage = RequestUsage(
+            prompt_tokens=0, completion_tokens=0
+        )  # Empty usage data
         mock_result.cached = False
         mock_result.thought = None
         mock_client.create.return_value = mock_result
 
         # Create proper model info
-        model_info = ModelInfo(family="gpt-4", vision=False, function_calling=True, json_output=True, structured_output=False)
+        model_info = ModelInfo(
+            family="gpt-4",
+            vision=False,
+            function_calling=True,
+            json_output=True,
+            structured_output=False,
+        )
 
         # Create wrapper
-        wrapper = AutoGenWrapper(client_factory=lambda: mock_client, model_info=model_info, litellm_model_name="openai/gpt-4")
+        wrapper = AutoGenWrapper(
+            client_factory=lambda: mock_client,
+            model_info=model_info,
+            litellm_model_name="openai/gpt-4",
+        )
 
         # Call create
         messages = [UserMessage(content="Hello", source="user")]
@@ -162,10 +212,14 @@ class TestLiteLLMModelNameResolution:
     def test_gemini_vertex_openai_resolution(self):
         """Test that Gemini models with vertex_openai client resolve correctly."""
         # This is the key test case - should strip google/ prefix for litellm compatibility
-        result = LLMs.lookup_litellm_model_name("google/gemini-2.5-flash", "vertex_openai")
+        result = LLMs.lookup_litellm_model_name(
+            "google/gemini-2.5-flash", "vertex_openai"
+        )
         assert result == "vertex_ai/gemini-2.5-flash"
 
-        result = LLMs.lookup_litellm_model_name("google/gemini-2.5-pro", "vertex_openai")
+        result = LLMs.lookup_litellm_model_name(
+            "google/gemini-2.5-pro", "vertex_openai"
+        )
         assert result == "vertex_ai/gemini-2.5-pro"
 
     def test_gemini_direct_api_resolution(self):
@@ -178,7 +232,9 @@ class TestLiteLLMModelNameResolution:
 
     def test_anthropic_vertex_resolution(self):
         """Test Anthropic models on Vertex resolve correctly."""
-        result = LLMs.lookup_litellm_model_name("claude-sonnet-4@20250514", "anthropic_vertex")
+        result = LLMs.lookup_litellm_model_name(
+            "claude-sonnet-4@20250514", "anthropic_vertex"
+        )
         assert result == "vertex_ai/claude-sonnet-4@20250514"
 
         result = LLMs.lookup_litellm_model_name("claude-opus-4-1", "anthropic_vertex")
@@ -186,7 +242,9 @@ class TestLiteLLMModelNameResolution:
 
     def test_anthropic_direct_api_resolution(self):
         """Test Anthropic models with direct API stay as-is."""
-        result = LLMs.lookup_litellm_model_name("claude-3-5-sonnet-20241022", "anthropic")
+        result = LLMs.lookup_litellm_model_name(
+            "claude-3-5-sonnet-20241022", "anthropic"
+        )
         assert result == "claude-3-5-sonnet-20241022"
 
     def test_openai_azure_resolution(self):
@@ -204,7 +262,9 @@ class TestLiteLLMModelNameResolution:
 
     def test_llama_vertex_openai_resolution(self):
         """Test Llama models on Vertex OpenAI endpoint resolve correctly."""
-        result = LLMs.lookup_litellm_model_name("meta/llama-4-maverick-17b-128e-instruct-maas", "vertex_openai")
+        result = LLMs.lookup_litellm_model_name(
+            "meta/llama-4-maverick-17b-128e-instruct-maas", "vertex_openai"
+        )
         assert result == "vertex_ai/meta/llama-4-maverick-17b-128e-instruct-maas"
 
     def test_existing_prefix_handling(self):
@@ -247,12 +307,16 @@ class TestLiteLLMModelNameResolution:
     def test_base_model_name_extraction(self):
         """Test that _extract_base_model_name handles various patterns."""
         # For vertex_openai with google/ models, strip the google/ prefix for litellm compatibility
-        result = LLMs._extract_base_model_name("google/gemini-2.5-flash", "vertex_openai")
+        result = LLMs._extract_base_model_name(
+            "google/gemini-2.5-flash", "vertex_openai"
+        )
         assert result == "gemini-2.5-flash"
 
         # For other cases, strip mismatched prefixes
         result = LLMs._extract_base_model_name("azure/gpt-4", "openai")
-        assert result == "azure/gpt-4"  # Keep full name for cross-provider compatibility
+        assert (
+            result == "azure/gpt-4"
+        )  # Keep full name for cross-provider compatibility
 
         # No prefix found, return as-is
         result = LLMs._extract_base_model_name("gpt-4", "openai")
@@ -261,14 +325,20 @@ class TestLiteLLMModelNameResolution:
     def test_real_world_model_registry_examples(self):
         """Test with real model names from the model registry."""
         # Test current gemini models that were causing issues - should strip google/ prefix
-        result = LLMs.lookup_litellm_model_name("google/gemini-2.5-flash", "vertex_openai")
+        result = LLMs.lookup_litellm_model_name(
+            "google/gemini-2.5-flash", "vertex_openai"
+        )
         assert result == "vertex_ai/gemini-2.5-flash"
 
-        result = LLMs.lookup_litellm_model_name("google/gemini-2.5-pro", "vertex_openai")
+        result = LLMs.lookup_litellm_model_name(
+            "google/gemini-2.5-pro", "vertex_openai"
+        )
         assert result == "vertex_ai/gemini-2.5-pro"
 
         # Test Llama model - should preserve meta/ prefix for vertex_openai
-        result = LLMs.lookup_litellm_model_name("meta/llama-4-maverick-17b-128e-instruct-maas", "vertex_openai")
+        result = LLMs.lookup_litellm_model_name(
+            "meta/llama-4-maverick-17b-128e-instruct-maas", "vertex_openai"
+        )
         assert result == "vertex_ai/meta/llama-4-maverick-17b-128e-instruct-maas"
 
         # Test Azure models
@@ -276,7 +346,9 @@ class TestLiteLLMModelNameResolution:
         assert result == "azure/gpt-5-chat"
 
         # Test Anthropic on Vertex
-        result = LLMs.lookup_litellm_model_name("claude-sonnet-4@20250514", "anthropic_vertex")
+        result = LLMs.lookup_litellm_model_name(
+            "claude-sonnet-4@20250514", "anthropic_vertex"
+        )
         assert result == "vertex_ai/claude-sonnet-4@20250514"
 
 
@@ -284,14 +356,20 @@ class TestLiteLLMIntegration:
     """Test that generated model names actually work with litellm cost_per_token."""
 
     @pytest.mark.skipif(
-        not hasattr(__import__("litellm.cost_calculator", fromlist=["cost_per_token"]), "cost_per_token"), reason="litellm not available"
+        not hasattr(
+            __import__("litellm.cost_calculator", fromlist=["cost_per_token"]),
+            "cost_per_token",
+        ),
+        reason="litellm not available",
     )
     def test_gemini_vertex_openai_litellm_compatibility(self):
         """Test that generated model names work with actual litellm cost_per_token."""
         from litellm.cost_calculator import cost_per_token
 
         # Test the key case that was failing - google/gemini-2.5-flash with vertex_openai
-        resolved_name = LLMs.lookup_litellm_model_name("google/gemini-2.5-flash", "vertex_openai")
+        resolved_name = LLMs.lookup_litellm_model_name(
+            "google/gemini-2.5-flash", "vertex_openai"
+        )
         assert resolved_name == "vertex_ai/gemini-2.5-flash"
 
         # Test that this model name actually works with litellm
@@ -310,7 +388,11 @@ class TestLiteLLMIntegration:
             pytest.fail(f"litellm cost_per_token failed for {resolved_name}: {e}")
 
     @pytest.mark.skipif(
-        not hasattr(__import__("litellm.cost_calculator", fromlist=["cost_per_token"]), "cost_per_token"), reason="litellm not available"
+        not hasattr(
+            __import__("litellm.cost_calculator", fromlist=["cost_per_token"]),
+            "cost_per_token",
+        ),
+        reason="litellm not available",
     )
     def test_gemini_models_litellm_compatibility(self):
         """Test multiple gemini model variations with litellm."""
@@ -335,10 +417,16 @@ class TestLiteLLMIntegration:
                 assert isinstance(prompt_cost, (int, float))
                 assert isinstance(completion_cost, (int, float))
             except Exception as e:
-                pytest.fail(f"litellm cost_per_token failed for {resolved_name} (from {model_name}+{client_type}): {e}")
+                pytest.fail(
+                    f"litellm cost_per_token failed for {resolved_name} (from {model_name}+{client_type}): {e}"
+                )
 
     @pytest.mark.skipif(
-        not hasattr(__import__("litellm.cost_calculator", fromlist=["cost_per_token"]), "cost_per_token"), reason="litellm not available"
+        not hasattr(
+            __import__("litellm.cost_calculator", fromlist=["cost_per_token"]),
+            "cost_per_token",
+        ),
+        reason="litellm not available",
     )
     def test_bad_model_names_should_fail(self):
         """Test that malformed model names properly fail with litellm."""

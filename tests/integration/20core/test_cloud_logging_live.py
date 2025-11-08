@@ -20,7 +20,9 @@ def test_cloud_logging_configured(real_bm):
 
     # Verify cloud manager is configured
     assert real_bm.cloud_manager is not None, "Cloud manager must be available"
-    assert len(real_bm.cloud_manager.clouds) > 0, "At least one cloud must be configured"
+    assert len(real_bm.cloud_manager.clouds) > 0, (
+        "At least one cloud must be configured"
+    )
 
     # Verify first cloud has required fields
     cloud = real_bm.cloud_manager.clouds[0]
@@ -57,7 +59,11 @@ async def test_async_logging_performance(real_logger):
 
     async def log_message(msg_num: int):
         """Log a message asynchronously."""
-        real_logger.info(f"Async test message {msg_num}: {test_run_id}", msg_num=msg_num, test_run_id=test_run_id)
+        real_logger.info(
+            f"Async test message {msg_num}: {test_run_id}",
+            msg_num=msg_num,
+            test_run_id=test_run_id,
+        )
         await asyncio.sleep(0.01)  # Simulate some async work
         return msg_num
 

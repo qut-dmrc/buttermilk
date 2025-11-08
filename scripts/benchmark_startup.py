@@ -29,7 +29,12 @@ def measure_startup_time(timeout=60):
     print("🚀 Starting Buttermilk API server...")
 
     # Ensure no server is already running
-    subprocess.run(["pkill", "-f", "buttermilk.runner.cli"], check=False, capture_output=True, timeout=10)
+    subprocess.run(
+        ["pkill", "-f", "buttermilk.runner.cli"],
+        check=False,
+        capture_output=True,
+        timeout=10,
+    )
     time.sleep(2)  # Wait for cleanup
 
     # Verify no server is running
@@ -37,7 +42,12 @@ def measure_startup_time(timeout=60):
         response = requests.get("http://localhost:8000/api/flows", timeout=1)
         if response.status_code == 200:
             print("⚠️  Server already running, killing it...")
-            subprocess.run(["pkill", "-f", "buttermilk.runner.cli"], check=False, capture_output=True, timeout=10)
+            subprocess.run(
+                ["pkill", "-f", "buttermilk.runner.cli"],
+                check=False,
+                capture_output=True,
+                timeout=10,
+            )
             time.sleep(3)
     except requests.exceptions.RequestException:
         pass  # Good, no server running
@@ -45,12 +55,25 @@ def measure_startup_time(timeout=60):
     # Start timing from here
     start_time = time.time()
 
-    cmd = [sys.executable, "-m", "buttermilk.runner.cli", "+flows=[trans, tox_allinone]", "run=api", "+llms=lite"]
+    cmd = [
+        sys.executable,
+        "-m",
+        "buttermilk.runner.cli",
+        "+flows=[trans, tox_allinone]",
+        "run=api",
+        "+llms=lite",
+    ]
 
     print(f"📋 Command: {' '.join(cmd)}")
 
     # Start server in background
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=Path(__file__).parent.parent, text=True)
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        cwd=Path(__file__).parent.parent,
+        text=True,
+    )
 
     # Wait for server to be ready
     url = "http://localhost:8000/api/flows"
@@ -68,7 +91,9 @@ def measure_startup_time(timeout=60):
                     # Quick test to make sure it's working
                     data = response.json()
                     if "flow_choices" in data:
-                        print(f"✅ Server functional with {len(data['flow_choices'])} flows")
+                        print(
+                            f"✅ Server functional with {len(data['flow_choices'])} flows"
+                        )
 
                     return startup_time, True
             except requests.exceptions.RequestException:
@@ -191,7 +216,10 @@ def test_specific_endpoints():
         return False
 
     # Test MCP endpoints
-    endpoints = [("http://localhost:8000/api/flows", "Core API"), ("http://localhost:8000/mcp/tools", "MCP Tools")]
+    endpoints = [
+        ("http://localhost:8000/api/flows", "Core API"),
+        ("http://localhost:8000/mcp/tools", "MCP Tools"),
+    ]
 
     all_success = True
 
@@ -208,7 +236,12 @@ def test_specific_endpoints():
             all_success = False
 
     # Clean up
-    subprocess.run(["pkill", "-f", "buttermilk.runner.cli"], check=False, capture_output=True, timeout=10)
+    subprocess.run(
+        ["pkill", "-f", "buttermilk.runner.cli"],
+        check=False,
+        capture_output=True,
+        timeout=10,
+    )
 
     return all_success
 

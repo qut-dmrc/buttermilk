@@ -18,11 +18,9 @@ storage = bm.get_bigquery_storage("my_dataset")
 
 # Custom configuration via BM factory
 from buttermilk.storage import StorageConfig
+
 config = StorageConfig(
-    type="bigquery",
-    dataset_name="my_dataset",
-    randomize=False,
-    batch_size=500
+    type="bigquery", dataset_name="my_dataset", randomize=False, batch_size=500
 )
 storage = bm.get_storage(config)
 
@@ -36,6 +34,7 @@ storage = bm.get_storage(config)
 ```python
 # Don't do this - bypasses BM singleton benefits
 from buttermilk.storage import BigQueryStorage, StorageConfig
+
 config = StorageConfig(type="bigquery", dataset_name="test")
 storage = BigQueryStorage(config, bm=None)  # Missing BM integration
 ```
@@ -87,11 +86,7 @@ for record in storage:
     print(record.content)
 
 # Read from file with filtering
-config = StorageConfig(
-    type="file",
-    path="data.jsonl",
-    limit=100
-)
+config = StorageConfig(type="file", path="data.jsonl", limit=100)
 storage = bm.get_storage(config)
 records = list(storage)
 ```
@@ -135,9 +130,11 @@ Old patterns are supported but deprecated:
 ```python
 # DEPRECATED - use bm.get_bigquery_storage() instead
 from buttermilk.data.bigquery_loader import BigQueryRecordLoader
+
 loader = BigQueryRecordLoader(dataset_name="test")
 
 # DEPRECATED - use bm.get_storage() instead
 from buttermilk.storage.compat import BigQueryRecordLoader
+
 loader = BigQueryRecordLoader(config=config)
 ```

@@ -45,6 +45,8 @@ async def test_config():
 
     # Test that bm.save_dir uses proper session-based format.
     # Expected format: {base}/{project_name}/{job}/session-{timestamp}-{uuid}/
-    assert "pipeline_example" in bm.session_info.save_dir, f"save_dir should contain project 'pipeline_example', got: {bm.session_info.save_dir}"
+    assert "pipeline_example" in bm.session_info.save_dir, (
+        f"save_dir should contain project 'pipeline_example', got: {bm.session_info.save_dir}"
+    )
 
     assert bm.cfg.pipeline.source.vector_store == bm.cfg.pipeline.processors[2]

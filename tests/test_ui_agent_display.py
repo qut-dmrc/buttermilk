@@ -17,10 +17,7 @@ class TestUIAgentDisplay:
     @pytest.fixture
     def console_agent(self):
         """Create a CLIUserAgent for testing."""
-        agent = CLIUserAgent(
-            role="MANAGER",
-            description="Console UI for testing"
-        )
+        agent = CLIUserAgent(role="MANAGER", description="Console UI for testing")
         agent._console = MagicMock(spec=Console)
         return agent
 
@@ -32,18 +29,20 @@ class TestUIAgentDisplay:
             agent_config=AgentConfig(
                 role="WORKER",
                 description="Test worker agent",
-                unique_identifier="worker123"
+                unique_identifier="worker123",
             ),
             available_tools=["process", "analyze"],
             announcement_type="initial",
-            status="joining"
+            status="joining",
         )
 
     @pytest.mark.anyio
     async def test_announcement_formatting(self, console_agent, sample_announcement):
         """Test that agent announcements are properly formatted for display."""
         # Format the announcement
-        formatted = console_agent._fmt_msg(sample_announcement, source="WORKER-worker123")
+        formatted = console_agent._fmt_msg(
+            sample_announcement, source="WORKER-worker123"
+        )
 
         # Verify formatting
         assert formatted is not None
@@ -64,14 +63,14 @@ class TestUIAgentDisplay:
                 "HOST-host123": {
                     "role": "HOST",
                     "status": "active",
-                    "tools": ["orchestrate", "manage"]
+                    "tools": ["orchestrate", "manage"],
                 },
                 "WORKER-worker456": {
                     "role": "WORKER",
                     "status": "active",
-                    "tools": ["process", "analyze"]
-                }
-            }
+                    "tools": ["process", "analyze"],
+                },
+            },
         )
 
         # Format the message
@@ -88,7 +87,7 @@ class TestUIAgentDisplay:
         statuses = [
             ("joining", "green"),
             ("active", "bright_blue"),
-            ("leaving", "yellow")
+            ("leaving", "yellow"),
         ]
 
         for status, expected_color in statuses:
@@ -96,7 +95,7 @@ class TestUIAgentDisplay:
                 content=f"Agent is {status}",
                 agent_config=AgentConfig(role="TEST", description="Test"),
                 announcement_type="update",
-                status=status
+                status=status,
             )
 
             formatted = console_agent._fmt_msg(announcement, source="TEST-123")
@@ -118,15 +117,15 @@ class TestUIAgentDisplay:
                     "role": "JUDGE",
                     "status": "active",
                     "tools": ["evaluate", "score"],
-                    "model": "gpt-4"
+                    "model": "gpt-4",
                 },
                 "SCORER-s456": {
                     "role": "SCORER",
                     "status": "active",
                     "tools": ["calculate"],
-                    "model": "claude-3-sonnet"
-                }
-            }
+                    "model": "claude-3-sonnet",
+                },
+            },
         )
 
         # Display the message
@@ -141,7 +140,7 @@ class TestUIAgentDisplay:
         announcement_types = [
             ("initial", "🆕", None),
             ("response", "↩️", "HOST-123"),  # response type needs responding_to
-            ("update", "🔄", None)
+            ("update", "🔄", None),
         ]
 
         for ann_type, expected_icon, responding_to in announcement_types:
@@ -149,7 +148,7 @@ class TestUIAgentDisplay:
                 "content": f"Announcement type: {ann_type}",
                 "agent_config": AgentConfig(role="TEST", description="Test"),
                 "announcement_type": ann_type,
-                "status": "active"
+                "status": "active",
             }
             if responding_to:
                 kwargs["responding_to"] = responding_to
@@ -168,7 +167,7 @@ class TestUIAgentDisplay:
             agent_config=AgentConfig(role="TOOLBOX", description="Multi-tool agent"),
             available_tools=["search", "extract", "analyze", "summarize", "visualize"],
             announcement_type="initial",
-            status="joining"
+            status="joining",
         )
 
         formatted = console_agent._fmt_msg(announcement, source="TOOLBOX-123")
@@ -188,25 +187,24 @@ class TestUIAgentDisplay:
                 "role": "HOST",
                 "status": "active",
                 "tools": ["orchestrate"],
-                "model": "gpt-4"
+                "model": "gpt-4",
             },
             "JUDGE-j1": {
                 "role": "JUDGE",
                 "status": "active",
                 "tools": ["evaluate", "score"],
-                "model": "claude-3-opus"
+                "model": "claude-3-opus",
             },
             "WORKER-w1": {
                 "role": "WORKER",
                 "status": "leaving",
                 "tools": ["process"],
-                "model": "llama-3"
-            }
+                "model": "llama-3",
+            },
         }
 
         ui_msg = SystemPromptMessage(
-            content="Agent Status Report",
-            agent_registry_summary=registry_summary
+            content="Agent Status Report", agent_registry_summary=registry_summary
         )
 
         formatted = console_agent._fmt_msg(ui_msg, source="system")

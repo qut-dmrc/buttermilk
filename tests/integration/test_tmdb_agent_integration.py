@@ -27,7 +27,10 @@ async def run_function_tool(function_tool: FunctionTool, **kwargs) -> Any:
 # Pytest markers for conditional test execution
 pytestmark = [
     pytest.mark.integration,
-    pytest.mark.skipif(not THEMOVIEDB_AVAILABLE, reason="themoviedb package not installed - install with: pip install themoviedb.py"),
+    pytest.mark.skipif(
+        not THEMOVIEDB_AVAILABLE,
+        reason="themoviedb package not installed - install with: pip install themoviedb.py",
+    ),
 ]
 
 
@@ -40,7 +43,9 @@ def tmdb_tool_for_agent() -> TMDBTool:
 class TestTMDBAgentIntegration:
     """Test TMDB tool integration with autogen agents."""
 
-    def test_tool_as_function_tool_creation(self, tmdb_tool_for_agent: TMDBTool) -> None:
+    def test_tool_as_function_tool_creation(
+        self, tmdb_tool_for_agent: TMDBTool
+    ) -> None:
         """Test that TMDBTool can be converted to FunctionTool for agent use."""
         function_tool = tmdb_tool_for_agent.as_tool()
 
@@ -48,13 +53,18 @@ class TestTMDBAgentIntegration:
         assert isinstance(function_tool, FunctionTool)
         assert function_tool.name == "tmdb_search"
         assert "movie availability" in function_tool.description.lower()
-        assert "TMDB" in function_tool.description or "Movie Database" in function_tool.description
+        assert (
+            "TMDB" in function_tool.description
+            or "Movie Database" in function_tool.description
+        )
 
         # Verify it has the run method for execution
         assert hasattr(function_tool, "run")
         assert callable(function_tool.run)
 
-    def test_tool_function_signature_compatibility(self, tmdb_tool_for_agent: TMDBTool) -> None:
+    def test_tool_function_signature_compatibility(
+        self, tmdb_tool_for_agent: TMDBTool
+    ) -> None:
         """Test that the tool function signature is compatible with autogen."""
         function_tool = tmdb_tool_for_agent.as_tool()
 
@@ -72,7 +82,9 @@ class TestTMDBAgentIntegration:
         assert "title" in required
 
     @pytest.mark.anyio
-    async def test_tool_execution_through_function_tool(self, tmdb_tool_for_agent: TMDBTool) -> None:
+    async def test_tool_execution_through_function_tool(
+        self, tmdb_tool_for_agent: TMDBTool
+    ) -> None:
         """Test executing the tool through FunctionTool interface."""
         function_tool = tmdb_tool_for_agent.as_tool()
 
@@ -89,7 +101,9 @@ class TestTMDBAgentIntegration:
             mock_tmdb.search.return_value = mock_search
 
             # Execute through FunctionTool using helper
-            result = await run_function_tool(function_tool, title="Fight Club", year=1999)
+            result = await run_function_tool(
+                function_tool, title="Fight Club", year=1999
+            )
 
             # Verify results - search_movie returns a Title object or None
             assert isinstance(result, Title)
@@ -98,12 +112,18 @@ class TestTMDBAgentIntegration:
             assert result.year == 1999
             assert isinstance(result.metadata, dict)
 
-    def test_tool_metadata_for_agent_discovery(self, tmdb_tool_for_agent: TMDBTool) -> None:
+    def test_tool_metadata_for_agent_discovery(
+        self, tmdb_tool_for_agent: TMDBTool
+    ) -> None:
         """Test that tool metadata is suitable for agent discovery and routing."""
         function_tool = tmdb_tool_for_agent.as_tool()
 
         # Tool should have descriptive name for routing
-        assert function_tool.name.lower() in {"tmdb_search", "movie_search", "tmdb_tool"}
+        assert function_tool.name.lower() in {
+            "tmdb_search",
+            "movie_search",
+            "tmdb_tool",
+        }
 
         # Description should be informative for LLM agents
         description = function_tool.description.lower()
@@ -112,10 +132,14 @@ class TestTMDBAgentIntegration:
         # Should contain relevant keywords
         found_keywords = [kw for kw in keywords if kw in description]
         min_keywords = 3
-        assert len(found_keywords) >= min_keywords, f"Description should contain movie-related keywords. Found: {found_keywords}"
+        assert len(found_keywords) >= min_keywords, (
+            f"Description should contain movie-related keywords. Found: {found_keywords}"
+        )
 
     @pytest.mark.anyio
-    async def test_tool_error_handling_for_agents(self, tmdb_tool_for_agent: TMDBTool) -> None:
+    async def test_tool_error_handling_for_agents(
+        self, tmdb_tool_for_agent: TMDBTool
+    ) -> None:
         """Test that tool errors are handled gracefully when called by agents."""
         function_tool = tmdb_tool_for_agent.as_tool()
 
@@ -131,7 +155,9 @@ class TestTMDBAgentIntegration:
             # search_movie returns None on error
             assert result is None
 
-    def test_tool_parameter_validation_for_agents(self, tmdb_tool_for_agent: TMDBTool) -> None:
+    def test_tool_parameter_validation_for_agents(
+        self, tmdb_tool_for_agent: TMDBTool
+    ) -> None:
         """Test that tool validates parameters appropriately for agent use."""
         function_tool = tmdb_tool_for_agent.as_tool()
 
@@ -151,7 +177,9 @@ class TestTMDBAgentIntegration:
         assert year_prop.get("type") == "integer" or "anyOf" in year_prop
 
     @pytest.mark.anyio
-    async def test_tool_observability_integration(self, tmdb_tool_for_agent: TMDBTool) -> None:
+    async def test_tool_observability_integration(
+        self, tmdb_tool_for_agent: TMDBTool
+    ) -> None:
         """Test that tool execution is properly observable when called by agents."""
         function_tool = tmdb_tool_for_agent.as_tool()
 
@@ -192,7 +220,9 @@ class TestTMDBAgentIntegration:
         assert tool.region == "US"
 
     @pytest.mark.anyio
-    async def test_tool_concurrent_execution_safety(self, tmdb_tool_for_agent: TMDBTool) -> None:
+    async def test_tool_concurrent_execution_safety(
+        self, tmdb_tool_for_agent: TMDBTool
+    ) -> None:
         """Test that tool can be safely used by multiple agents concurrently."""
         function_tool = tmdb_tool_for_agent.as_tool()
 
@@ -209,7 +239,9 @@ class TestTMDBAgentIntegration:
             # Execute multiple concurrent calls
             import asyncio  # noqa: F401
 
-            tasks = [run_function_tool(function_tool, title=f"Movie {i}") for i in range(3)]
+            tasks = [
+                run_function_tool(function_tool, title=f"Movie {i}") for i in range(3)
+            ]
 
             results_list = await asyncio.gather(*tasks)
 
@@ -219,7 +251,9 @@ class TestTMDBAgentIntegration:
             for result in results_list:
                 assert isinstance(result, Title)
 
-    def test_tool_integration_with_strict_mode(self, tmdb_tool_for_agent: TMDBTool) -> None:
+    def test_tool_integration_with_strict_mode(
+        self, tmdb_tool_for_agent: TMDBTool
+    ) -> None:
         """Test that tool works with autogen's strict mode."""
         function_tool = tmdb_tool_for_agent.as_tool()
 

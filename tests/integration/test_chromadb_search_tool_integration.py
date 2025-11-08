@@ -13,7 +13,9 @@ from buttermilk.tools.chromadb_search import ChromaDBSearchTool, SearchResult
 
 
 @pytest.mark.integration
-@pytest.mark.skip(reason="Requires zot flow configuration which is not in testing.yaml - needs environment-specific config")
+@pytest.mark.skip(
+    reason="Requires zot flow configuration which is not in testing.yaml - needs environment-specific config"
+)
 class TestChromaDBSearchToolIntegration:
     """Integration tests for ChromaDBSearchTool with real ChromaDB instance."""
 
@@ -58,9 +60,13 @@ class TestChromaDBSearchToolIntegration:
             logger.info("Search Result", result_num=i + 1)
             logger.info("  Document", document_title=result.document_title or "Unknown")
             logger.info("  Score", score=result.score)
-            logger.info("  Content preview", content_preview=f"{result.content[:200]}...")
+            logger.info(
+                "  Content preview", content_preview=f"{result.content[:200]}..."
+            )
             if result.metadata:
-                logger.info("  Metadata keys", metadata_keys=list(result.metadata.keys()))
+                logger.info(
+                    "  Metadata keys", metadata_keys=list(result.metadata.keys())
+                )
 
     @pytest.mark.anyio
     async def test_search_with_filter(self, search_tool):
@@ -96,7 +102,9 @@ class TestChromaDBSearchToolIntegration:
         # Verify no duplicate documents
         seen_docs = set()
         for result in results:
-            assert result.document_id not in seen_docs, f"Found duplicate document: {result.document_id}"
+            assert result.document_id not in seen_docs, (
+                f"Found duplicate document: {result.document_id}"
+            )
             seen_docs.add(result.document_id)
 
     @pytest.mark.anyio
@@ -110,7 +118,11 @@ class TestChromaDBSearchToolIntegration:
         """Test getting collection information."""
         # Get collection stats
         count = search_tool.collection.count()
-        logger.info("Collection info", collection_name=search_tool.collection_name, num_embeddings=count)
+        logger.info(
+            "Collection info",
+            collection_name=search_tool.collection_name,
+            num_embeddings=count,
+        )
 
         assert count > 0, "Collection should not be empty"
 
@@ -119,7 +131,11 @@ class TestChromaDBSearchToolIntegration:
         if peek_results and "metadatas" in peek_results:
             logger.info("\nSample metadata fields:")
             for i, metadata in enumerate(peek_results["metadatas"][:3]):
-                logger.info("  Document metadata keys", document_num=i + 1, metadata_keys=list(metadata.keys()))
+                logger.info(
+                    "  Document metadata keys",
+                    document_num=i + 1,
+                    metadata_keys=list(metadata.keys()),
+                )
 
     @pytest.mark.anyio
     async def test_tool_function_interface(self, search_tool):
@@ -132,7 +148,9 @@ class TestChromaDBSearchToolIntegration:
         assert function_tool.description
 
         # Test calling through the function interface
-        result = await function_tool.run_json({"query": "prosocial theory", "n_results": 2})
+        result = await function_tool.run_json(
+            {"query": "prosocial theory", "n_results": 2}
+        )
 
         assert "results" in result
         assert isinstance(result["results"], list)

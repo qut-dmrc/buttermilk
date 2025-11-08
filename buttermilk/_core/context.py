@@ -24,7 +24,11 @@ batch_id_var: ContextVar[str | None] = ContextVar("batch_id_var", default=None)
 agent_id_var: ContextVar[str | None] = ContextVar("agent_id_var", default=None)
 
 
-def set_logging_context(session_id: str | None = None, batch_id: str | None = None, agent_id: str | None = None) -> None:
+def set_logging_context(
+    session_id: str | None = None,
+    batch_id: str | None = None,
+    agent_id: str | None = None,
+) -> None:
     """Sets the simplified logging context.
 
     Args:

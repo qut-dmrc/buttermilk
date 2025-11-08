@@ -44,7 +44,10 @@ class TestRecordContentValidation:
 
     def test_record_rejects_meaningless_sequence_content(self):
         """Test that Record rejects sequences with only empty strings."""
-        with pytest.raises(ValidationError, match="Content sequence must contain at least one meaningful item"):
+        with pytest.raises(
+            ValidationError,
+            match="Content sequence must contain at least one meaningful item",
+        ):
             Record(content=["", "   ", ""])
 
     def test_record_accepts_valid_string_content(self):
@@ -75,7 +78,10 @@ class TestRecordContentValidation:
             Record(
                 record_id="test-id",
                 content=None,  # This now gets validated properly
-                metadata={"title": "Test Document", "fulltext": "This should have been mapped to content field"},
+                metadata={
+                    "title": "Test Document",
+                    "fulltext": "This should have been mapped to content field",
+                },
             )
 
         # Case 2: Content field gets None due to wrong source field
@@ -83,7 +89,10 @@ class TestRecordContentValidation:
             Record(
                 record_id="test-id",
                 content=None,  # Would happen if JSON field name is wrong
-                metadata={"title": "Test Document", "fulltext": "This text is orphaned in metadata"},
+                metadata={
+                    "title": "Test Document",
+                    "fulltext": "This text is orphaned in metadata",
+                },
             )
 
         # Case 3: Correct mapping should work
@@ -110,7 +119,8 @@ class TestRecordContentValidation:
         # Valid case should work
         record = Record(
             record_id="OSB-123",
-            content="This is substantial content that can be chunked into multiple pieces. " * 30,
+            content="This is substantial content that can be chunked into multiple pieces. "
+            * 30,
             metadata={"title": "Some Document", "summary": "Document summary"},
         )
         assert len(record.as_text()) > 1200
@@ -128,7 +138,14 @@ class TestRecordFieldCounts:
         actual_fields = set(Record.model_fields.keys())
 
         # Expected core fields for a data record
-        expected_core_fields = {"record_id", "content", "metadata", "alt_text", "ground_truth", "mime"}
+        expected_core_fields = {
+            "record_id",
+            "content",
+            "metadata",
+            "alt_text",
+            "ground_truth",
+            "mime",
+        }
 
         # Expected BaseRecord fields
         expected_base_fields = {"dataset_name", "split_type", "error"}
@@ -136,17 +153,25 @@ class TestRecordFieldCounts:
         # Expected vector processing fields (these were added for the vector workflow)
         expected_vector_fields = {"file_path", "chunks", "chunks_path"}
 
-        expected_all_fields = expected_core_fields | expected_base_fields | expected_vector_fields
+        expected_all_fields = (
+            expected_core_fields | expected_base_fields | expected_vector_fields
+        )
 
         # Check that we don't have unexpected extra fields
         unexpected_fields = actual_fields - expected_all_fields
-        assert unexpected_fields == set(), f"Unexpected fields found: {unexpected_fields}"
+        assert unexpected_fields == set(), (
+            f"Unexpected fields found: {unexpected_fields}"
+        )
 
         # Check that we have the core fields
         missing_core_fields = expected_core_fields - actual_fields
-        assert missing_core_fields == set(), f"Missing core fields: {missing_core_fields}"
+        assert missing_core_fields == set(), (
+            f"Missing core fields: {missing_core_fields}"
+        )
 
-        print(f"✅ Record has {len(actual_fields)} fields (expected ~{len(expected_all_fields)})")
+        print(
+            f"✅ Record has {len(actual_fields)} fields (expected ~{len(expected_all_fields)})"
+        )
         print(f"   Core fields: {expected_core_fields}")
         print(f"   Base fields: {expected_base_fields}")
         print(f"   Vector fields: {expected_vector_fields}")
@@ -168,27 +193,39 @@ class TestStructuredDataHandling:
                 "type": "summary",
                 "location": "Somalia",
                 "case_date": "2023-11-22",
-                "topics": ["War and conflict", "Dangerous individuals and organizations"],
+                "topics": [
+                    "War and conflict",
+                    "Dangerous individuals and organizations",
+                ],
                 "standards": ["Dangerous Individuals and Organizations policy"],
                 "reasons": [
                     "The policy prohibits content that 'praises' dangerous organizations...",
                     "In the first post, the caption describes a military operation...",
                 ],
-                "recommendations": ["Enhance training and accuracy of reviewers...", "Add criteria and illustrative examples..."],
+                "recommendations": [
+                    "Enhance training and accuracy of reviewers...",
+                    "Add criteria and illustrative examples...",
+                ],
                 "job_id": "2Luac3REAVKPnF52dZqtc4",
                 "timestamp": 1732052347313,
             },
         )
 
         # Verify structured data is preserved
-        assert osb_like_record.metadata["topics"] == ["War and conflict", "Dangerous individuals and organizations"]
+        assert osb_like_record.metadata["topics"] == [
+            "War and conflict",
+            "Dangerous individuals and organizations",
+        ]
         assert len(osb_like_record.metadata["reasons"]) == 2
         assert len(osb_like_record.metadata["recommendations"]) == 2
         assert osb_like_record.metadata["timestamp"] == 1732052347313
 
         # Verify content is accessible for vector processing
         assert len(osb_like_record.as_text()) > 30  # Should be substantial enough
-        assert osb_like_record.content == "This is the fulltext content for vector processing"
+        assert (
+            osb_like_record.content
+            == "This is the fulltext content for vector processing"
+        )
 
     def test_record_metadata_types_preserved(self):
         """Test that different data types in metadata are preserved correctly."""

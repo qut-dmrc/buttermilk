@@ -53,11 +53,11 @@ flow_config = {
             "agent": "ExplorerHost",
             "parameters": {
                 "exploration_mode": "interactive",
-                "prioritize_unexplored": True
-            }
+                "prioritize_unexplored": True,
+            },
         },
         "ANALYST": {...},
-        "CRITIC": {...}
+        "CRITIC": {...},
     }
 }
 

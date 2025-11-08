@@ -1,4 +1,3 @@
-
 from buttermilk import logger
 from buttermilk._core.log import logger  # noqa
 

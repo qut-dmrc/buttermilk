@@ -54,13 +54,19 @@ class WebSocketTestSession:
         start_time = time.time()
 
         try:
-            self.websocket = await asyncio.wait_for(websockets.connect(self.uri), timeout=timeout)
+            self.websocket = await asyncio.wait_for(
+                websockets.connect(self.uri), timeout=timeout
+            )
 
             self.connection_time = time.time() - start_time
             self.is_connected = True
             self.connection_events.append(("connected", time.time()))
 
-            logger.debug("WebSocket connected", session_id=self.session_id, connection_time=f"{self.connection_time:.3f}s")
+            logger.debug(
+                "WebSocket connected",
+                session_id=self.session_id,
+                connection_time=f"{self.connection_time:.3f}s",
+            )
             return True
 
         except asyncio.TimeoutError:
@@ -69,7 +75,9 @@ class WebSocketTestSession:
             return False
         except Exception as e:
             self.connection_events.append(("connect_error", time.time(), str(e)))
-            logger.error("WebSocket connection failed", session_id=self.session_id, error=e)
+            logger.error(
+                "WebSocket connection failed", session_id=self.session_id, error=e
+            )
             return False
 
     async def disconnect(self):
@@ -81,9 +89,15 @@ class WebSocketTestSession:
                 self.connection_events.append(("disconnected", time.time()))
                 logger.debug("WebSocket disconnected", session_id=self.session_id)
             except Exception as e:
-                logger.warning("Error during WebSocket disconnect", session_id=self.session_id, error=e)
+                logger.warning(
+                    "Error during WebSocket disconnect",
+                    session_id=self.session_id,
+                    error=e,
+                )
 
-    async def send_message(self, message: Dict[str, Any], track_latency: bool = True) -> bool:
+    async def send_message(
+        self, message: Dict[str, Any], track_latency: bool = True
+    ) -> bool:
         """Send message with optional latency tracking."""
         if not self.is_connected or not self.websocket:
             return False
@@ -95,19 +109,25 @@ class WebSocketTestSession:
             await self.websocket.send(message_json)
 
             # Track message
-            self.messages_sent.append({"message": message, "timestamp": send_time, "size": len(message_json)})
+            self.messages_sent.append(
+                {"message": message, "timestamp": send_time, "size": len(message_json)}
+            )
 
             # Track OSB-specific metrics
             if message.get("type") == "run_flow" and message.get("flow") == "osb":
                 self.osb_queries_sent += 1
 
-            self.connection_events.append(("message_sent", send_time, message.get("type", "unknown")))
+            self.connection_events.append(
+                ("message_sent", send_time, message.get("type", "unknown"))
+            )
             return True
 
         except Exception as e:
             self.error_count += 1
             self.connection_events.append(("send_error", time.time(), str(e)))
-            logger.error("Failed to send message in session", session_id=self.session_id, error=e)
+            logger.error(
+                "Failed to send message in session", session_id=self.session_id, error=e
+            )
             return False
 
     async def receive_message(self, timeout: float = 5.0) -> Optional[Dict[str, Any]]:
@@ -122,7 +142,13 @@ class WebSocketTestSession:
             message = json.loads(message_str)
 
             # Track message
-            self.messages_received.append({"message": message, "timestamp": receive_time, "size": len(message_str)})
+            self.messages_received.append(
+                {
+                    "message": message,
+                    "timestamp": receive_time,
+                    "size": len(message_str),
+                }
+            )
 
             # Track OSB-specific metrics
             if message.get("type") in ["osb_status", "osb_partial", "osb_complete"]:
@@ -135,7 +161,9 @@ class WebSocketTestSession:
                         self.agent_interactions[agent] = 0
                     self.agent_interactions[agent] += 1
 
-            self.connection_events.append(("message_received", receive_time, message.get("type", "unknown")))
+            self.connection_events.append(
+                ("message_received", receive_time, message.get("type", "unknown"))
+            )
             return message
 
         except asyncio.TimeoutError:
@@ -144,12 +172,22 @@ class WebSocketTestSession:
         except Exception as e:
             self.error_count += 1
             self.connection_events.append(("receive_error", time.time(), str(e)))
-            logger.error("Failed to receive message in session", session_id=self.session_id, error=e)
+            logger.error(
+                "Failed to receive message in session",
+                session_id=self.session_id,
+                error=e,
+            )
             return None
 
     async def send_osb_query(self, query: str, **kwargs) -> bool:
         """Send OSB-specific query message."""
-        osb_message = {"type": "run_flow", "flow": "osb", "query": query, "session_id": self.session_id, **kwargs}
+        osb_message = {
+            "type": "run_flow",
+            "flow": "osb",
+            "query": query,
+            "session_id": self.session_id,
+            **kwargs,
+        }
         return await self.send_message(osb_message)
 
     def get_performance_metrics(self) -> Dict[str, Any]:
@@ -187,9 +225,15 @@ class WebSocketStressTestRunner:
         self.sessions: List[WebSocketTestSession] = []
         self.results = {}
 
-    async def run_concurrent_connection_test(self, num_sessions: int = 5, duration_seconds: int = 30) -> Dict[str, Any]:
+    async def run_concurrent_connection_test(
+        self, num_sessions: int = 5, duration_seconds: int = 30
+    ) -> Dict[str, Any]:
         """Test concurrent WebSocket connections under load."""
-        logger.info("Starting concurrent connection test", num_sessions=num_sessions, duration_seconds=duration_seconds)
+        logger.info(
+            "Starting concurrent connection test",
+            num_sessions=num_sessions,
+            duration_seconds=duration_seconds,
+        )
 
         start_time = time.time()
 
@@ -197,21 +241,33 @@ class WebSocketStressTestRunner:
         connect_tasks = []
         for i in range(num_sessions):
             session_id = f"stress-test-session-{i}"
-            session = WebSocketTestSession(session_id, f"{self.base_uri}/ws/{session_id}")
+            session = WebSocketTestSession(
+                session_id, f"{self.base_uri}/ws/{session_id}"
+            )
             self.sessions.append(session)
             connect_tasks.append(session.connect())
 
         # Wait for all connections
-        connection_results = await asyncio.gather(*connect_tasks, return_exceptions=True)
-        successful_connections = sum(1 for result in connection_results if result is True)
+        connection_results = await asyncio.gather(
+            *connect_tasks, return_exceptions=True
+        )
+        successful_connections = sum(
+            1 for result in connection_results if result is True
+        )
 
-        logger.info("Connected sessions", successful_connections=successful_connections, num_sessions=num_sessions)
+        logger.info(
+            "Connected sessions",
+            successful_connections=successful_connections,
+            num_sessions=num_sessions,
+        )
 
         # Run message exchange test
         message_tasks = []
         for session in self.sessions:
             if session.is_connected:
-                message_tasks.append(self._session_message_loop(session, duration_seconds))
+                message_tasks.append(
+                    self._session_message_loop(session, duration_seconds)
+                )
 
         # Wait for message exchange to complete
         await asyncio.gather(*message_tasks, return_exceptions=True)
@@ -228,14 +284,18 @@ class WebSocketStressTestRunner:
             "sessions_requested": num_sessions,
             "sessions_connected": successful_connections,
             "connection_success_rate": successful_connections / num_sessions,
-            "session_metrics": [session.get_performance_metrics() for session in self.sessions],
+            "session_metrics": [
+                session.get_performance_metrics() for session in self.sessions
+            ],
             "aggregate_metrics": self._calculate_aggregate_metrics(),
         }
 
         self.results = results
         return results
 
-    async def _session_message_loop(self, session: WebSocketTestSession, duration_seconds: int):
+    async def _session_message_loop(
+        self, session: WebSocketTestSession, duration_seconds: int
+    ):
         """Message exchange loop for individual session during stress test."""
         end_time = time.time() + duration_seconds
         message_count = 0
@@ -243,15 +303,21 @@ class WebSocketStressTestRunner:
         while time.time() < end_time and session.is_connected:
             try:
                 # Send OSB query
-                query = f"Stress test query {message_count + 1} from {session.session_id}"
-                await session.send_osb_query(query, case_number=f"STRESS-{message_count:03d}")
+                query = (
+                    f"Stress test query {message_count + 1} from {session.session_id}"
+                )
+                await session.send_osb_query(
+                    query, case_number=f"STRESS-{message_count:03d}"
+                )
 
                 # Brief pause between messages
                 await asyncio.sleep(0.5)
                 message_count += 1
 
             except Exception as e:
-                logger.error("Error in message loop", session_id=session.session_id, error=e)
+                logger.error(
+                    "Error in message loop", session_id=session.session_id, error=e
+                )
                 break
 
     def _calculate_aggregate_metrics(self) -> Dict[str, Any]:
@@ -263,13 +329,17 @@ class WebSocketStressTestRunner:
         total_messages_received = sum(len(s.messages_received) for s in self.sessions)
         total_errors = sum(s.error_count for s in self.sessions)
 
-        connection_times = [s.connection_time for s in self.sessions if s.connection_time]
+        connection_times = [
+            s.connection_time for s in self.sessions if s.connection_time
+        ]
 
         return {
             "total_messages_sent": total_messages_sent,
             "total_messages_received": total_messages_received,
             "total_errors": total_errors,
-            "average_connection_time": sum(connection_times) / len(connection_times) if connection_times else 0,
+            "average_connection_time": sum(connection_times) / len(connection_times)
+            if connection_times
+            else 0,
             "max_connection_time": max(connection_times) if connection_times else 0,
             "min_connection_time": min(connection_times) if connection_times else 0,
             "error_rate": total_errors / (total_messages_sent + total_messages_received)
@@ -384,7 +454,9 @@ class WebSocketMessageValidator:
 
 
 @asynccontextmanager
-async def websocket_test_context(session_ids: List[str], base_uri: str) -> AsyncGenerator[List[WebSocketTestSession], None]:
+async def websocket_test_context(
+    session_ids: List[str], base_uri: str
+) -> AsyncGenerator[List[WebSocketTestSession], None]:
     """Context manager for WebSocket test sessions with automatic cleanup."""
     sessions = []
 
@@ -403,7 +475,9 @@ async def websocket_test_context(session_ids: List[str], base_uri: str) -> Async
         await asyncio.gather(*disconnect_tasks, return_exceptions=True)
 
 
-async def simulate_osb_workflow(session: WebSocketTestSession, query: str, expected_agents: List[str] = None) -> Dict[str, Any]:
+async def simulate_osb_workflow(
+    session: WebSocketTestSession, query: str, expected_agents: List[str] = None
+) -> Dict[str, Any]:
     """Simulate complete OSB workflow and validate responses."""
     if expected_agents is None:
         expected_agents = ["researcher", "policy_analyst", "fact_checker", "explorer"]
@@ -463,7 +537,10 @@ async def simulate_osb_workflow(session: WebSocketTestSession, query: str, expec
 
 # Utility functions for test setup and teardown
 
-def validate_websocket_test_results(results: Dict[str, Any], expected_criteria: Dict[str, Any]) -> tuple[bool, List[str]]:
+
+def validate_websocket_test_results(
+    results: Dict[str, Any], expected_criteria: Dict[str, Any]
+) -> tuple[bool, List[str]]:
     """Validate WebSocket test results against expected criteria."""
     validation_errors = []
 
@@ -472,29 +549,41 @@ def validate_websocket_test_results(results: Dict[str, Any], expected_criteria: 
         expected_rate = expected_criteria["connection_success_rate"]
         actual_rate = results.get("connection_success_rate", 0)
         if actual_rate < expected_rate:
-            validation_errors.append(f"Connection success rate {actual_rate:.2f} below expected {expected_rate:.2f}")
+            validation_errors.append(
+                f"Connection success rate {actual_rate:.2f} below expected {expected_rate:.2f}"
+            )
 
     # Check error rate
     if "max_error_rate" in expected_criteria:
         max_error_rate = expected_criteria["max_error_rate"]
         actual_error_rate = results.get("aggregate_metrics", {}).get("error_rate", 1.0)
         if actual_error_rate > max_error_rate:
-            validation_errors.append(f"Error rate {actual_error_rate:.2f} exceeds maximum {max_error_rate:.2f}")
+            validation_errors.append(
+                f"Error rate {actual_error_rate:.2f} exceeds maximum {max_error_rate:.2f}"
+            )
 
     # Check average connection time
     if "max_connection_time" in expected_criteria:
         max_connection_time = expected_criteria["max_connection_time"]
-        actual_connection_time = results.get("aggregate_metrics", {}).get("average_connection_time", float("inf"))
+        actual_connection_time = results.get("aggregate_metrics", {}).get(
+            "average_connection_time", float("inf")
+        )
         if actual_connection_time > max_connection_time:
-            validation_errors.append(f"Average connection time {actual_connection_time:.3f}s exceeds maximum {max_connection_time:.3f}s")
+            validation_errors.append(
+                f"Average connection time {actual_connection_time:.3f}s exceeds maximum {max_connection_time:.3f}s"
+            )
 
     # Check message throughput
     if "min_messages_per_second" in expected_criteria:
         min_throughput = expected_criteria["min_messages_per_second"]
-        total_messages = results.get("aggregate_metrics", {}).get("total_messages_sent", 0)
+        total_messages = results.get("aggregate_metrics", {}).get(
+            "total_messages_sent", 0
+        )
         test_duration = results.get("test_duration", 1)
         actual_throughput = total_messages / test_duration
         if actual_throughput < min_throughput:
-            validation_errors.append(f"Message throughput {actual_throughput:.2f} msg/s below minimum {min_throughput:.2f} msg/s")
+            validation_errors.append(
+                f"Message throughput {actual_throughput:.2f} msg/s below minimum {min_throughput:.2f} msg/s"
+            )
 
     return len(validation_errors) == 0, validation_errors

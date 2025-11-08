@@ -95,7 +95,9 @@ def test_span_with_session_creates_span_without_session_root(otel_setup):
 
     # ACT: Create span WITHOUT session root span
     # This simulates the desired behavior after removing session root span
-    with span_with_session(session_id, name="independent.span", attributes={"test": "independent"}):
+    with span_with_session(
+        session_id, name="independent.span", attributes={"test": "independent"}
+    ):
         pass
 
     # ASSERT: Verify span was created
@@ -110,7 +112,9 @@ def test_span_with_session_creates_span_without_session_root(otel_setup):
     # CRITICAL: Verify this is a root span (no parent)
     # After fix, span_with_session spans should be root spans when
     # no other context is active
-    assert span.parent is None, "Span should be a root span when no session root span exists"
+    assert span.parent is None, (
+        "Span should be a root span when no session root span exists"
+    )
 
 
 def test_multiple_span_with_session_calls_create_independent_spans(otel_setup):
@@ -143,7 +147,8 @@ def test_multiple_span_with_session_calls_create_independent_spans(otel_setup):
     # This is the key fix - spans are independent, not nested
     root_spans = [s for s in spans if s.parent is None]
     assert len(root_spans) == 3, (
-        f"Expected 3 root spans (independent), got {len(root_spans)}. " f"This indicates spans are still nesting under a parent span."
+        f"Expected 3 root spans (independent), got {len(root_spans)}. "
+        f"This indicates spans are still nesting under a parent span."
     )
 
 

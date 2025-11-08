@@ -3,12 +3,14 @@
 ## Core Technologies
 
 ### Language & Runtime
+
 - **Python 3.10+** (3.12 recommended)
   - Modern async/await support
   - Type hints throughout
   - Rich ecosystem for data science
 
 ### Package Management
+
 - **uv**: Fast, reliable Python package manager
   - Always use: `uv run python ...`
   - Dev dependencies: `uv add --dev <package>`
@@ -17,6 +19,7 @@
 ### Key Dependencies
 
 #### Data Validation & Configuration
+
 - **Pydantic v2**: Data validation and settings
   - Strict type checking
   - Automatic validation
@@ -30,6 +33,7 @@
   - **ONLY** use YAML configs, no manual dicts
 
 #### Async & Concurrency
+
 - **anyio**: Core async support
   - All I/O operations async
   - Concurrent agent execution
@@ -41,6 +45,7 @@
   - Background processing
 
 #### AI/ML Integration
+
 - **LLM Providers**:
   - Google (Gemini models)
   - Anthropic (Claude models)
@@ -53,6 +58,7 @@
   - Secure credential storage
 
 #### Web & API
+
 - **FastAPI**: REST API framework
   - Auto-generated OpenAPI docs
   - WebSocket support
@@ -64,6 +70,7 @@
   - Timeout management
 
 #### Testing
+
 - **pytest + pytest-asyncio**: Testing framework
   - Async test support
   - Fixtures for common setups
@@ -79,6 +86,7 @@
 ### Agent-Based Architecture
 
 #### Core Components
+
 1. **Agent** (`buttermilk._core.agent.Agent`)
    - Base class for all processing units
    - Async `_process()` method
@@ -96,6 +104,7 @@
    - Validated data flow
 
 #### Agent Types
+
 - **LLMAgent**: Interfaces with language models
 - **HostAgent**: Coordinates group chats
 - **StructuredLLMHostAgent**: Tool-based coordination
@@ -104,6 +113,7 @@
 ### Configuration Architecture
 
 #### Hydra Composition
+
 ```yaml
 defaults:
   - _self_
@@ -117,6 +127,7 @@ defaults:
 ```
 
 #### Key Patterns
+
 - **Interpolation**: `${llms.general}` references
 - **Overrides**: `+flows=[osb,trans]` additions
 - **Composition**: Build from multiple files
@@ -132,12 +143,14 @@ defaults:
 ### Storage Architecture
 
 #### Storage Types
+
 - **Local**: File-based storage
 - **BigQuery**: Structured data warehouse
 - **GCS**: Object storage for large files
 - **Vector DBs**: For RAG applications
 
 #### Factory Pattern
+
 - `StorageFactory.create_config()` for validation
 - Discriminated unions for type safety
 - Environment-specific configurations
@@ -145,30 +158,34 @@ defaults:
 ### Architecture Principles
 
 #### Async-First
+
 - Better resource utilization
 - Responsive user experience
 - Natural fit for I/O-heavy workloads
 
 #### Modularity
+
 - Small, focused components
 - Clear interfaces
 - Composition over inheritance
 
 #### Type Safety
+
 - Pydantic models everywhere
 - Type hints required
 - Runtime validation
 
 #### Configuration-Driven
+
 - Behavior defined in YAML
 - No hardcoded values
 - Environment-specific overrides
 
 #### Error Handling
+
 - Fail fast with clear messages
 - Validation at boundaries
 - No defensive programming
 - Trust data contracts
-
 
 Remember: Every technical decision should support HASS researchers' needs. Performance optimizations should never compromise usability or reproducibility.

@@ -23,11 +23,18 @@ from buttermilk.utils.trace_writer import get_trace_writer
 @pytest.fixture
 def sample_record() -> BaseRecord:
     """Create a simple test record with all key fields populated."""
-    return BaseRecord(text="What is the capital of France?", dataset_name="test_llmcore", split_type="test", metadata={"test": "llmcore_tracing"})
+    return BaseRecord(
+        text="What is the capital of France?",
+        dataset_name="test_llmcore",
+        split_type="test",
+        metadata={"test": "llmcore_tracing"},
+    )
 
 
 @pytest.mark.anyio
-async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, real_model_name: str):
+async def test_llmcore_with_bigquery_trace(
+    real_bm, sample_record: BaseRecord, real_model_name: str
+):
     """Test LLMCore processes request and uploads ExecutionTrace to BigQuery.
 
     This test:
@@ -51,7 +58,10 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
     logger.info("Processing LLMCore request...")
     results = []
     async for result in llm_core.process(
-        record=sample_record, processor_stage="test_stage", component_name="test_llmcore", prompt="What is the capital of France?"
+        record=sample_record,
+        processor_stage="test_stage",
+        component_name="test_llmcore",
+        prompt="What is the capital of France?",
     ):
         results.append(result)
 
@@ -134,9 +144,15 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
 
         agent_info = json.loads(agent_info)
 
-    assert agent_info.get("component_name") == "test_llmcore", "Should have correct component_name"
-    assert agent_info.get("execution_type") == "llm_processing", "Should be llm_processing type"
-    assert agent_info.get("processor_stage") == "test_stage", "Should have correct processor_stage"
+    assert agent_info.get("component_name") == "test_llmcore", (
+        "Should have correct component_name"
+    )
+    assert agent_info.get("execution_type") == "llm_processing", (
+        "Should be llm_processing type"
+    )
+    assert agent_info.get("processor_stage") == "test_stage", (
+        "Should have correct processor_stage"
+    )
 
     # Validate metadata contains LLM info
     metadata = trace.metadata
@@ -167,16 +183,30 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
 
         record_in_inputs = json.loads(record_in_inputs)
 
-    assert isinstance(record_in_inputs, dict), f"Record should be a dict, got {type(record_in_inputs).__name__}"
+    assert isinstance(record_in_inputs, dict), (
+        f"Record should be a dict, got {type(record_in_inputs).__name__}"
+    )
     assert "record_id" in record_in_inputs, "Record should have record_id field"
-    assert record_in_inputs["record_id"] is not None, "Record record_id should not be None"
-    assert len(record_in_inputs["record_id"]) > 0, "Record record_id should not be empty"
+    assert record_in_inputs["record_id"] is not None, (
+        "Record record_id should not be None"
+    )
+    assert len(record_in_inputs["record_id"]) > 0, (
+        "Record record_id should not be empty"
+    )
 
     # Note: clean_empty_values drops None fields, so these should be present with actual values
-    assert "dataset_name" in record_in_inputs, f"Record should have dataset_name field. Record keys: {record_in_inputs.keys()}"
-    assert "split_type" in record_in_inputs, f"Record should have split_type field. Record keys: {record_in_inputs.keys()}"
-    assert record_in_inputs["dataset_name"] == "test_llmcore", "Record should preserve dataset_name value"
-    assert record_in_inputs["split_type"] == "test", "Record should preserve split_type value"
+    assert "dataset_name" in record_in_inputs, (
+        f"Record should have dataset_name field. Record keys: {record_in_inputs.keys()}"
+    )
+    assert "split_type" in record_in_inputs, (
+        f"Record should have split_type field. Record keys: {record_in_inputs.keys()}"
+    )
+    assert record_in_inputs["dataset_name"] == "test_llmcore", (
+        "Record should preserve dataset_name value"
+    )
+    assert record_in_inputs["split_type"] == "test", (
+        "Record should preserve split_type value"
+    )
 
     logger.info(
         f"✅ Record structure validated: record_id={record_in_inputs['record_id']}, "
@@ -215,44 +245,66 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
 
     # FAIL-FAST: Messages must already be a list, not a string or other type
     assert messages is not None, "Messages field should not be None"
-    assert isinstance(messages, list), f"Messages should be a list, got {type(messages).__name__}. Data should be stored in correct format."
+    assert isinstance(messages, list), (
+        f"Messages should be a list, got {type(messages).__name__}. Data should be stored in correct format."
+    )
     assert len(messages) > 0, "Messages list should not be empty"
 
     # Parse JSON strings into dicts (BigQuery stores messages as JSON strings)
     parsed_messages = []
     for i, msg in enumerate(messages):
-        assert isinstance(
-            msg, str
-        ), f"Message {i} should be a JSON string, got {type(msg).__name__}. Messages are stored as JSON strings in BigQuery."
+        assert isinstance(msg, str), (
+            f"Message {i} should be a JSON string, got {type(msg).__name__}. Messages are stored as JSON strings in BigQuery."
+        )
         try:
             parsed_msg = json.loads(msg)
             parsed_messages.append(parsed_msg)
         except json.JSONDecodeError as e:
-            pytest.fail(f"Message {i} is not valid JSON: {e}. Message content: {msg[:100]}...")
+            pytest.fail(
+                f"Message {i} is not valid JSON: {e}. Message content: {msg[:100]}..."
+            )
 
     # FAIL-FAST: Each parsed message must be a dict with expected structure
     for i, msg in enumerate(parsed_messages):
-        assert isinstance(msg, dict), f"Parsed message {i} should be a dict, got {type(msg).__name__}."
-        assert "role" in msg or "type" in msg, f"Message {i} missing role/type field. Expected message structure with role or type."
-        assert "content" in msg, f"Message {i} missing content field. Expected message structure with content."
+        assert isinstance(msg, dict), (
+            f"Parsed message {i} should be a dict, got {type(msg).__name__}."
+        )
+        assert "role" in msg or "type" in msg, (
+            f"Message {i} missing role/type field. Expected message structure with role or type."
+        )
+        assert "content" in msg, (
+            f"Message {i} missing content field. Expected message structure with content."
+        )
 
     # Validate messages contain both user/system input and assistant response
     roles = [msg.get("role", msg.get("type", "")) for msg in parsed_messages]
 
     # Check for user or system message (input)
-    has_input = any("user" in str(role).lower() or "system" in str(role).lower() for role in roles)
-    assert has_input, f"Messages should contain user or system message (input), got roles: {roles}"
+    has_input = any(
+        "user" in str(role).lower() or "system" in str(role).lower() for role in roles
+    )
+    assert has_input, (
+        f"Messages should contain user or system message (input), got roles: {roles}"
+    )
 
     # Check for assistant message (response)
     has_assistant = any("assistant" in str(role).lower() for role in roles)
-    assert has_assistant, f"Messages should contain assistant message (response), got roles: {roles}"
+    assert has_assistant, (
+        f"Messages should contain assistant message (response), got roles: {roles}"
+    )
 
     # Validate message content includes expected terms
     all_content = " ".join(msg.get("content", "") for msg in parsed_messages)
-    assert "capital" in all_content.lower() or "france" in all_content.lower(), "Messages should contain the original prompt about France's capital"
-    assert "paris" in all_content.lower(), "Messages should contain the LLM's response mentioning Paris"
+    assert "capital" in all_content.lower() or "france" in all_content.lower(), (
+        "Messages should contain the original prompt about France's capital"
+    )
+    assert "paris" in all_content.lower(), (
+        "Messages should contain the LLM's response mentioning Paris"
+    )
 
-    logger.info(f"✅ Messages field validated: {len(messages)} messages with roles {roles}")
+    logger.info(
+        f"✅ Messages field validated: {len(messages)} messages with roles {roles}"
+    )
 
     logger.info("✅ All trace validations passed")
     logger.info(f"Trace metadata: {metadata}")
@@ -278,9 +330,9 @@ async def test_trace_writer_initialization(real_bm):
     trace_writer._ensure_initialized()
 
     assert trace_writer._initialized, "TraceWriter should be marked as initialized"
-    assert (
-        trace_writer.uploader is not None
-    ), "TraceWriter should have an uploader configured. Check that conf/storage/traces.yaml exists and is valid."
+    assert trace_writer.uploader is not None, (
+        "TraceWriter should have an uploader configured. Check that conf/storage/traces.yaml exists and is valid."
+    )
 
     logger.info("✅ TraceWriter initialized successfully")
     logger.info(f"Storage type: {type(trace_writer.uploader.storage).__name__}")
@@ -299,7 +351,11 @@ async def test_trace_writer_save(real_bm):
     dummy_trace = ExecutionTrace(
         call_id=test_call_id,
         session_id=f"test-session-{test_start_time.timestamp()}",
-        agent_info={"component_name": "test_trace_writer", "processor_stage": "save_test", "execution_type": "test"},
+        agent_info={
+            "component_name": "test_trace_writer",
+            "processor_stage": "save_test",
+            "execution_type": "test",
+        },
         inputs={"prompt": "Hello, world!"},
         outputs={"response": "Hi there!"},
         metadata={"test_key": "test_value", "test_type": "trace_writer_save"},
@@ -352,7 +408,9 @@ async def test_trace_writer_save(real_bm):
     logger.info(f"✅ Trace uploaded successfully: {trace.call_id}")
 
     # Validate trace structure
-    assert trace.call_id == test_call_id, f"Expected call_id={test_call_id}, got {trace.call_id}"
+    assert trace.call_id == test_call_id, (
+        f"Expected call_id={test_call_id}, got {trace.call_id}"
+    )
 
     # Validate agent_info
     agent_info = trace.agent_info
@@ -361,8 +419,12 @@ async def test_trace_writer_save(real_bm):
 
         agent_info = json.loads(agent_info)
 
-    assert agent_info.get("component_name") == "test_trace_writer", "Should have correct component_name"
-    assert agent_info.get("processor_stage") == "save_test", "Should have correct processor_stage"
+    assert agent_info.get("component_name") == "test_trace_writer", (
+        "Should have correct component_name"
+    )
+    assert agent_info.get("processor_stage") == "save_test", (
+        "Should have correct processor_stage"
+    )
 
     # Validate metadata
     metadata = trace.metadata
@@ -372,7 +434,9 @@ async def test_trace_writer_save(real_bm):
         metadata = json.loads(metadata)
 
     assert metadata.get("test_key") == "test_value", "Metadata should contain test_key"
-    assert metadata.get("test_type") == "trace_writer_save", "Metadata should contain test_type"
+    assert metadata.get("test_type") == "trace_writer_save", (
+        "Metadata should contain test_type"
+    )
 
     # Validate inputs and outputs
     inputs = trace.inputs

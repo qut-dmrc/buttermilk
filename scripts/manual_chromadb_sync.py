@@ -39,13 +39,20 @@ def check_local_chromadb(local_path: Path) -> bool:
 def check_remote_exists(remote_path: str) -> bool:
     """Check if remote path exists."""
     try:
-        result = subprocess.run(["gsutil", "ls", remote_path], check=False, capture_output=True, text=True)
+        result = subprocess.run(
+            ["gsutil", "ls", remote_path], check=False, capture_output=True, text=True
+        )
 
         if result.returncode == 0:
             print(f"⚠️  Remote path exists: {remote_path}")
 
             # Check for sqlite file
-            sqlite_check = subprocess.run(["gsutil", "ls", f"{remote_path}/chroma.sqlite3"], check=False, capture_output=True, text=True)
+            sqlite_check = subprocess.run(
+                ["gsutil", "ls", f"{remote_path}/chroma.sqlite3"],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
 
             if sqlite_check.returncode == 0:
                 print("⚠️  Remote ChromaDB database already exists!")
@@ -109,7 +116,12 @@ def verify_remote(remote_path: str) -> bool:
         files_to_check = ["chroma.sqlite3", "chroma.sqlite3-shm", "chroma.sqlite3-wal"]
 
         for file in files_to_check:
-            result = subprocess.run(["gsutil", "ls", "-l", f"{remote_path}/{file}"], check=False, capture_output=True, text=True)
+            result = subprocess.run(
+                ["gsutil", "ls", "-l", f"{remote_path}/{file}"],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
 
             if result.returncode == 0 and result.stdout:
                 # Parse size from output
@@ -148,12 +160,29 @@ def create_backup(local_path: Path) -> bool:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Manual sync tool for ChromaDB remote storage")
-    parser.add_argument("--local", type=Path, required=True, help="Local ChromaDB directory path")
-    parser.add_argument("--remote", type=str, required=True, help="Remote storage path (e.g., gs://bucket/chromadb)")
-    parser.add_argument("--dry-run", action="store_true", help="Show what would be uploaded without actually uploading")
-    parser.add_argument("--no-backup", action="store_true", help="Skip local backup creation")
-    parser.add_argument("--force", action="store_true", help="Force sync without confirmation")
+    parser = argparse.ArgumentParser(
+        description="Manual sync tool for ChromaDB remote storage"
+    )
+    parser.add_argument(
+        "--local", type=Path, required=True, help="Local ChromaDB directory path"
+    )
+    parser.add_argument(
+        "--remote",
+        type=str,
+        required=True,
+        help="Remote storage path (e.g., gs://bucket/chromadb)",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be uploaded without actually uploading",
+    )
+    parser.add_argument(
+        "--no-backup", action="store_true", help="Skip local backup creation"
+    )
+    parser.add_argument(
+        "--force", action="store_true", help="Force sync without confirmation"
+    )
 
     args = parser.parse_args()
 

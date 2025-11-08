@@ -63,18 +63,30 @@ class TestMetadataHandling:
         This reproduces the error condition where chunk_metadata is dict_items.
         """
         # Simulate chunk_metadata being dict_items (the bug)
-        real_metadata = {"content_type": "text", "chunk_type": "semantic", "extra": "data"}
+        real_metadata = {
+            "content_type": "text",
+            "chunk_type": "semantic",
+            "extra": "data",
+        }
         chunk_metadata = real_metadata.items()  # This creates dict_items
 
         # This is the exact pattern from line 1110
         # It will fail because dict_items doesn't have .items()
-        with pytest.raises(AttributeError) as exc_info:
-            enhanced = {
-                "content_type": chunk_metadata.get("content_type", "unknown") if isinstance(chunk_metadata, dict) else "unknown",
-                "chunk_type": chunk_metadata.get("chunk_type", "unknown") if isinstance(chunk_metadata, dict) else "unknown",
+        with pytest.raises(AttributeError):
+            {
+                "content_type": chunk_metadata.get("content_type", "unknown")
+                if isinstance(chunk_metadata, dict)
+                else "unknown",
+                "chunk_type": chunk_metadata.get("chunk_type", "unknown")
+                if isinstance(chunk_metadata, dict)
+                else "unknown",
                 **{
                     k: v
-                    for k, v in (chunk_metadata.items() if isinstance(chunk_metadata, dict) else {}.items())
+                    for k, v in (
+                        chunk_metadata.items()
+                        if isinstance(chunk_metadata, dict)
+                        else {}.items()
+                    )
                     if k not in ["content_type", "chunk_type"]
                 },  # type: ignore
             }
@@ -109,7 +121,9 @@ class TestChunkMetadataOrigin:
 
         for test_input in test_cases:
             result = scrub_serializable(test_input)
-            assert isinstance(result, dict), f"scrub_serializable returned {type(result)} for {test_input}"
+            assert isinstance(result, dict), (
+                f"scrub_serializable returned {type(result)} for {test_input}"
+            )
             assert type(result).__name__ != "dict_items"
 
     def test_scrub_serializable_with_dict_items_input(self):
@@ -175,7 +189,7 @@ class TestMetadataErrorReproduction:
 
         # The ternary should go to the else branch: {}.items()
         # So this should work:
-        items_to_iterate = chunk_metadata.items() if isinstance(chunk_metadata, dict) else {}.items()
+        (chunk_metadata.items() if isinstance(chunk_metadata, dict) else {}.items())
 
         # If isinstance returns False, we get {}.items() which is fine
         # So the error must be happening differently...

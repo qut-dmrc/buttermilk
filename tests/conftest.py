@@ -5,11 +5,17 @@ import inspect
 from pathlib import Path
 
 import pytest
+
 # weave import removed
 from pytest import MarkDecorator
 
 from buttermilk import BM, init
-from buttermilk._core.llms import CHAT_MODELS, CHEAP_CHAT_MODELS, MULTIMODAL_MODELS, LLMs
+from buttermilk._core.llms import (
+    CHAT_MODELS,
+    CHEAP_CHAT_MODELS,
+    MULTIMODAL_MODELS,
+    LLMs,
+)
 from buttermilk._core.types import Record
 from buttermilk.runner.flowrunner import FlowRunContext, FlowRunner
 from buttermilk.utils.media import download_and_convert
@@ -437,7 +443,9 @@ def pytest_addoption(parser):
 @pytest.fixture
 def in_memory_span_exporter():
     """Provides in-memory span exporter for testing OTEL spans."""
-    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+        InMemorySpanExporter,
+    )
 
     return InMemorySpanExporter()
 

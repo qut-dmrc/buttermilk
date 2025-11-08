@@ -123,7 +123,9 @@ def test_only_sequential_variants(base_variant_config):
         actual_parameters.append(config.parameters)
 
     # Convert to set of tuples for order-independent comparison
-    assert set(tuple(sorted(d.items())) for d in actual_parameters) == set(tuple(sorted(d.items())) for d in expected_combinations)
+    assert set(tuple(sorted(d.items())) for d in actual_parameters) == set(
+        tuple(sorted(d.items())) for d in expected_combinations
+    )
 
 
 def test_both_parallel_and_sequential_variants(base_variant_config):
@@ -156,7 +158,9 @@ def test_both_parallel_and_sequential_variants(base_variant_config):
         actual_parameters.append(config.parameters)
 
     # Convert to set of tuples for order-independent comparison
-    assert set(tuple(sorted(d.items())) for d in actual_parameters) == set(tuple(sorted(d.items())) for d in expected_combinations)
+    assert set(tuple(sorted(d.items())) for d in actual_parameters) == set(
+        tuple(sorted(d.items())) for d in expected_combinations
+    )
 
 
 def test_num_runs_greater_than_one(base_variant_config):
@@ -224,7 +228,9 @@ def test_parameter_overwriting(base_variant_config):
     assert len(configs) == 1
     agent_class, config = configs[0]
     assert config.parameters["base_param"] == "original"  # Unchanged base param
-    assert config.parameters["model"] == "override_model"  # Overwritten by parallel variant
+    assert (
+        config.parameters["model"] == "override_model"
+    )  # Overwritten by parallel variant
 
 
 def test_omegaconf_conversion(base_variant_config):
@@ -323,22 +329,32 @@ def test_step_config_get_configs_structure_and_ids(
 
         # Check types
         assert isinstance(agent_cls, type), "First element should be a class type"
-        assert isinstance(agent_config, (AgentConfig, MockAgentConfig)), "Second element should be an AgentConfig instance (or mock)"
+        assert isinstance(agent_config, (AgentConfig, MockAgentConfig)), (
+            "Second element should be an AgentConfig instance (or mock)"
+        )
 
         # Check attributes exist
-        assert hasattr(agent_config, "agent_id"), "AgentConfig should have an 'agent_id' attribute"
+        assert hasattr(agent_config, "agent_id"), (
+            "AgentConfig should have an 'agent_id' attribute"
+        )
         # AgentConfig no longer has unique_identifier field
-        assert not hasattr(agent_config, "unique_identifier"), "AgentConfig should not have 'unique_identifier' attribute (removed)"
+        assert not hasattr(agent_config, "unique_identifier"), (
+            "AgentConfig should not have 'unique_identifier' attribute (removed)"
+        )
 
         # Check attribute types
-        assert isinstance(agent_config.agent_id, str), "AgentConfig.agent_id should be a string"
+        assert isinstance(agent_config.agent_id, str), (
+            "AgentConfig.agent_id should be a string"
+        )
         # Check agent_id instead of unique_identifier
-        assert isinstance(agent_config.agent_id, str), "AgentConfig.agent_id should be a string"
+        assert isinstance(agent_config.agent_id, str), (
+            "AgentConfig.agent_id should be a string"
+        )
 
         # Collect IDs for uniqueness check across configs
         all_config_ids.append(agent_config.agent_id)
 
     # Check the core requirement: IDs must be unique across all returned configs
-    assert len(all_config_ids) == len(
-        set(all_config_ids)
-    ), f"AgentConfig.agent_id values are not unique across returned configs. Found IDs: {all_config_ids}"
+    assert len(all_config_ids) == len(set(all_config_ids)), (
+        f"AgentConfig.agent_id values are not unique across returned configs. Found IDs: {all_config_ids}"
+    )

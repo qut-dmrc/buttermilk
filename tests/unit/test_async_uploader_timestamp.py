@@ -30,10 +30,7 @@ class TestAsyncDataUploaderTimestamp:
         try:
             # Create an existing file first
             config = FileStorageConfig(
-                type="file",
-                path=tmp_path,
-                dataset_name="test",
-                split_type="test"
+                type="file", path=tmp_path, dataset_name="test", split_type="test"
             )
 
             storage = FileStorage(config)
@@ -43,7 +40,7 @@ class TestAsyncDataUploaderTimestamp:
                 record_id="initial_001",
                 content="Initial record",
                 dataset_name="test",
-                split_type="test"
+                split_type="test",
             )
             storage.save([initial_record])
 
@@ -54,7 +51,7 @@ class TestAsyncDataUploaderTimestamp:
             uploader = AsyncDataUploader(
                 storage=storage,
                 buffer_size=1,  # Small buffer for immediate flush
-                flush_interval=1  # Short interval
+                flush_interval=1,  # Short interval
             )
 
             # Verify timestamp suffix is enabled by default
@@ -65,7 +62,7 @@ class TestAsyncDataUploaderTimestamp:
                 record_id="test_001",
                 content="Test record via uploader",
                 dataset_name="test",
-                split_type="test"
+                split_type="test",
             )
 
             await uploader.add(test_record)
@@ -90,7 +87,7 @@ class TestAsyncDataUploaderTimestamp:
                 type="file",
                 path=str(timestamped_file),
                 dataset_name="test",
-                split_type="test"
+                split_type="test",
             )
             timestamped_storage = FileStorage(timestamped_config)
             timestamped_records = list(timestamped_storage)
@@ -119,10 +116,7 @@ class TestAsyncDataUploaderTimestamp:
         try:
             # Create storage config for non-existent file
             config = FileStorageConfig(
-                type="file",
-                path=tmp_path,
-                dataset_name="test",
-                split_type="test"
+                type="file", path=tmp_path, dataset_name="test", split_type="test"
             )
 
             storage = FileStorage(config)
@@ -134,7 +128,7 @@ class TestAsyncDataUploaderTimestamp:
             uploader = AsyncDataUploader(
                 storage=storage,
                 buffer_size=1,  # Small buffer for immediate flush
-                flush_interval=1  # Short interval
+                flush_interval=1,  # Short interval
             )
 
             # Verify timestamp suffix is disabled by default
@@ -145,7 +139,7 @@ class TestAsyncDataUploaderTimestamp:
                 record_id="test_001",
                 content="Test record via uploader",
                 dataset_name="test",
-                split_type="test"
+                split_type="test",
             )
 
             await uploader.add(test_record)
@@ -182,10 +176,7 @@ class TestAsyncDataUploaderTimestamp:
         try:
             # Create an existing file first
             config = FileStorageConfig(
-                type="file",
-                path=tmp_path,
-                dataset_name="test",
-                split_type="test"
+                type="file", path=tmp_path, dataset_name="test", split_type="test"
             )
 
             storage = FileStorage(config)
@@ -195,7 +186,7 @@ class TestAsyncDataUploaderTimestamp:
                 record_id="initial_001",
                 content="Initial record",
                 dataset_name="test",
-                split_type="test"
+                split_type="test",
             )
             storage.save([initial_record])
 
@@ -204,7 +195,7 @@ class TestAsyncDataUploaderTimestamp:
                 storage=storage,
                 buffer_size=1,
                 flush_interval=1,
-                use_timestamp_suffix=False  # Explicit override
+                use_timestamp_suffix=False,  # Explicit override
             )
 
             # Verify timestamp suffix is disabled despite file existing
@@ -215,7 +206,7 @@ class TestAsyncDataUploaderTimestamp:
                 record_id="test_001",
                 content="Test record via uploader",
                 dataset_name="test",
-                split_type="test"
+                split_type="test",
             )
 
             await uploader.add(test_record)
@@ -251,23 +242,29 @@ class TestAsyncDataUploaderTimestamp:
         try:
             # Create storage
             config = FileStorageConfig(
-                type="file",
-                path=tmp_path,
-                dataset_name="test",
-                split_type="test"
+                type="file", path=tmp_path, dataset_name="test", split_type="test"
             )
 
             storage = FileStorage(config)
 
             # Create initial file
-            storage.save([Record(record_id="init", content="init", dataset_name="test", split_type="test")])
+            storage.save(
+                [
+                    Record(
+                        record_id="init",
+                        content="init",
+                        dataset_name="test",
+                        split_type="test",
+                    )
+                ]
+            )
 
             # Create uploader
             uploader = AsyncDataUploader(
                 storage=storage,
                 buffer_size=1,
                 flush_interval=1,
-                use_timestamp_suffix=True
+                use_timestamp_suffix=True,
             )
 
             # Mock datetime to get predictable timestamp

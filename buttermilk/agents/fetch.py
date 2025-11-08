@@ -14,7 +14,12 @@ from autogen_core.tools import FunctionTool, Tool
 
 from buttermilk import bm, logger
 from buttermilk._core.agent import Agent
-from buttermilk._core.contract import AgentInput, AgentOutput, ExecutionTrace, StepRequest  # Buttermilk message contracts
+from buttermilk._core.contract import (
+    AgentInput,
+    AgentOutput,
+    ExecutionTrace,
+    StepRequest,
+)  # Buttermilk message contracts
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.types import BaseRecord, Record
 from buttermilk.utils.media import download_and_convert  # Media utilities
@@ -38,7 +43,10 @@ class FetchAgent(Agent):
     def __init__(self, **data):
         super().__init__(**data)
         if storage := data.get("parameters", {}).get("storage"):
-            self._data_sources = {source_name: bm.get_storage(config) for source_name, config in storage.items()}
+            self._data_sources = {
+                source_name: bm.get_storage(config)
+                for source_name, config in storage.items()
+            }
         else:
             self._data_sources = {}
         self._tools = []
@@ -61,7 +69,9 @@ class FetchAgent(Agent):
             if not record.metadata:
                 record.metadata = {}
             record.metadata["fetch_source_uri"] = uri
-            record.metadata["fetch_timestamp_utc"] = datetime.now(datetime.UTC).isoformat()
+            record.metadata["fetch_timestamp_utc"] = datetime.now(
+                datetime.UTC
+            ).isoformat()
             return record
         # Use original_uri for the error message
         raise ProcessingError(f"Record not found for URI: {uri}")
@@ -90,10 +100,14 @@ class FetchAgent(Agent):
             raise ProcessingError(f"Record not found for ID: {record_id}: {e}") from e
 
     @message_handler(match=lambda msg, ctx: msg.role == "FETCH")
-    async def fetch_request(self, message: StepRequest, ctx) -> AgentOutput | ExecutionTrace | None:
+    async def fetch_request(
+        self, message: StepRequest, ctx
+    ) -> AgentOutput | ExecutionTrace | None:
         return await self.invoke(message=message)
 
-    async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentOutput | None:
+    async def _process(
+        self, *, message: AgentInput, **kwargs: Any
+    ) -> AgentOutput | None:
         """Process the message and return an AgentOutput or ErrorEvent."""
         result = None
 
@@ -107,7 +121,10 @@ class FetchAgent(Agent):
 
         # Check for record_id in inputs/parameters, or extract from message.record field
         record_id = (
-            message.inputs.get("record_id") or message.parameters.get("record_id") or message.inputs.get("record") or message.parameters.get("record")
+            message.inputs.get("record_id")
+            or message.parameters.get("record_id")
+            or message.inputs.get("record")
+            or message.parameters.get("record")
         )
 
         # If no record_id found but message.record exists, extract record_id from it
@@ -122,8 +139,12 @@ class FetchAgent(Agent):
                 result = await self.fetch_uri(uri=uri)
             elif record_id:
                 if not (dataset_name := message.inputs.get("dataset")):
-                    dataset_name = list(self._data_sources)[0]  # use first dataset as default
-                result = await self.fetch_record(record_id=record_id, dataset_name=dataset_name)
+                    dataset_name = list(self._data_sources)[
+                        0
+                    ]  # use first dataset as default
+                result = await self.fetch_record(
+                    record_id=record_id, dataset_name=dataset_name
+                )
         except ProcessingError as e:
             logger.error(f"FetchAgent '{self.agent_id}': {e}")
             raise

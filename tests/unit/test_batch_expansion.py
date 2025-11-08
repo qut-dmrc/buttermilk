@@ -10,9 +10,15 @@ from buttermilk.processors.batch_expansion import BatchExpansionProcessor
 @pytest.mark.anyio
 async def test_batch_expansion_multiplies_by_reps_and_models():
     """Test expansion creates reps × models records."""
-    processor = BatchExpansionProcessor(repetitions=3, models=[VertexImagen3Fast, VertexImagen4Fast])
+    processor = BatchExpansionProcessor(
+        repetitions=3, models=[VertexImagen3Fast, VertexImagen4Fast]
+    )
 
-    record = BaseRecord(record_id="prompt-001", content="test prompt", metadata={"session_id": "sess123"})
+    record = BaseRecord(
+        record_id="prompt-001",
+        content="test prompt",
+        metadata={"session_id": "sess123"},
+    )
 
     results = [r async for r in processor.process(record, processor_stage="expand")]
 
@@ -48,9 +54,13 @@ async def test_batch_expansion_preserves_metadata():
 @pytest.mark.anyio
 async def test_batch_expansion_adds_model_metadata():
     """Test that model-specific metadata is added."""
-    processor = BatchExpansionProcessor(repetitions=2, models=[VertexImagen3Fast, VertexImagen4Fast])
+    processor = BatchExpansionProcessor(
+        repetitions=2, models=[VertexImagen3Fast, VertexImagen4Fast]
+    )
 
-    record = BaseRecord(record_id="test", content="prompt", metadata={"session_id": "s1"})
+    record = BaseRecord(
+        record_id="test", content="prompt", metadata={"session_id": "s1"}
+    )
 
     results = [r async for r in processor.process(record, processor_stage="expand")]
 
@@ -70,7 +80,9 @@ async def test_batch_expansion_repetition_indices():
     """Test that repetition indices are correct."""
     processor = BatchExpansionProcessor(repetitions=3, models=[VertexImagen3Fast])
 
-    record = BaseRecord(record_id="test", content="prompt", metadata={"session_id": "s1"})
+    record = BaseRecord(
+        record_id="test", content="prompt", metadata={"session_id": "s1"}
+    )
 
     results = [r async for r in processor.process(record, processor_stage="expand")]
 

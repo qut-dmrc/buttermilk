@@ -28,7 +28,7 @@ run:
           variants:
             model: ${llms.judgers}
           inputs:
-            record: '[FETCH.outputs]||*.record[]'
+            record: "[FETCH.outputs]||*.record[]"
       observers:
         fetch:
           role: FETCH

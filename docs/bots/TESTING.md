@@ -9,6 +9,7 @@ This file contains Buttermilk-specific testing requirements.
 **MANDATORY FOR TASK COMPLETION**:
 
 All development tasks MUST include end-to-end tests that pass with:
+
 - ✅ Real APIs (Vertex AI, Zotero, TMDB, etc.)
 - ✅ Real storage (ChromaDB, BigQuery, file systems)
 - ✅ Real data from actual sources
@@ -22,6 +23,7 @@ All development tasks MUST include end-to-end tests that pass with:
 **Definition**: TRUE E2E = Real APIs + Real Storage + Real Data. NO MOCKS.
 
 **Pattern**:
+
 ```python
 @pytest.mark.anyio
 async def test_zotero_to_chromadb_pipeline(real_bm):
@@ -53,6 +55,7 @@ async def test_zotero_to_chromadb_pipeline(real_bm):
 ```
 
 **Key principles**:
+
 - Use `real_bm` fixture for configuration
 - Call REAL APIs (Vertex AI actually makes API calls)
 - Store in REAL databases (temp locations OK for isolation)
@@ -62,6 +65,7 @@ async def test_zotero_to_chromadb_pipeline(real_bm):
 ## The real_bm Fixture
 
 **Usage**:
+
 ```python
 async def test_with_real_config(real_bm):
     """Use real Buttermilk configuration."""
@@ -76,6 +80,7 @@ async def test_with_real_config(real_bm):
 ```
 
 **What real_bm provides**:
+
 - Fully initialized execution context
 - Live cloud infrastructure
 - Real LLM clients (Vertex AI)
@@ -85,18 +90,21 @@ async def test_with_real_config(real_bm):
 ## Test Categories
 
 **Unit Tests** (`tests/unit/`):
+
 - Individual functions/classes
 - Mock external APIs only (Vertex AI, Zotero API)
 - Never mock Buttermilk's own code
 - Fast, isolated
 
 **Integration Tests** (`tests/integration/`):
+
 - Multiple Buttermilk components together
 - Use `real_bm` fixture
 - May mock external APIs if needed
 - Test component integration
 
 **End-to-End Tests** (`tests/endtoend/`):
+
 - MANDATORY for task completion
 - Complete workflows (fetch → process → store)
 - REAL APIs, REAL storage, REAL data
@@ -106,10 +114,12 @@ async def test_with_real_config(real_bm):
 ## When to Mock (Rare)
 
 **Mock ONLY**:
+
 - External APIs you don't control (and can't use test credentials for)
 - Third-party services (document why)
 
 **NEVER Mock**:
+
 - ❌ Buttermilk's own modules (`buttermilk.*`)
 - ❌ `SemanticSplitter`, `EmbeddingGenerator`, etc.
 - ❌ `ChromaDBEmbeddings`, `BigQueryStorage`
@@ -117,6 +127,7 @@ async def test_with_real_config(real_bm):
 - ❌ Flow orchestration
 
 **Example - What NOT to mock**:
+
 ```python
 # ❌ WRONG - mocking our own code
 @patch("buttermilk.processors.embeddings.EmbeddingGenerator")
@@ -125,21 +136,24 @@ async def test_pipeline(mock_embeddings, mock_chromadb):
     # This is NOT E2E - it's all mocks!
     pass
 
+
 # ✅ CORRECT - use real components
 async def test_pipeline(real_bm):
     embedder = EmbeddingGenerator(...)  # Real
-    storage = ChromaDBEmbeddings(...)   # Real
+    storage = ChromaDBEmbeddings(...)  # Real
     # Real pipeline execution
 ```
 
 ## Test Dependencies
 
 **Install test dependencies**:
+
 ```bash
 uv sync --extra dev --extra research --extra azure --upgrade
 ```
 
 **Required for E2E tests**:
+
 - Vertex AI credentials (service account JSON)
 - Test API keys in `.env` (Zotero, TMDB)
 - ChromaDB dependencies
@@ -148,17 +162,20 @@ uv sync --extra dev --extra research --extra azure --upgrade
 ## Standalone Validation - FORBIDDEN
 
 **NEVER**:
+
 - Create `test_*.py` files outside `tests/`
 - Use `python -c "..."` for validation
 - Create demo/example scripts
 - Use inline Python commands for testing
 
 **Red Flag Phrases**:
+
 - "Let me create a test to verify..." → Use pytest in `tests/`
 - "I'll run python -c to check..." → Use pytest
 - "Let me validate with a quick script..." → Use pytest
 
 **Tester Subagent Available**:
+
 ```
 Task: tester - [describe testing need]
 ```
@@ -168,6 +185,7 @@ Use tester subagent for ALL testing scenarios.
 ## Test Isolation
 
 **Temporary resources**:
+
 ```python
 # Temp directory for ChromaDB
 with tempfile.TemporaryDirectory() as tmpdir:
@@ -180,6 +198,7 @@ collection = f"test_{uuid.uuid4()}"
 ## Success Criteria
 
 **E2E tests must**:
+
 1. ✅ Use `real_bm` fixture
 2. ✅ Call real APIs (document any mocked external systems)
 3. ✅ Store in real databases (temp locations OK)

@@ -9,7 +9,9 @@ from buttermilk._core.storage_config import BaseStorageConfig, StorageConfig
 from buttermilk._core.types import RunRequest
 
 # SKIP: DataSourceConfig class removed - tests need refactoring
-pytest.skip("DataSourceConfig class removed - tests need refactoring", allow_module_level=True)
+pytest.skip(
+    "DataSourceConfig class removed - tests need refactoring", allow_module_level=True
+)
 
 
 class TestOrchestrator(Orchestrator):
@@ -32,9 +34,13 @@ class TestOrchestratorStorageValidation:
         """Test current behavior with BaseStorageConfig type hint."""
         # Current type hint is Mapping[str, BaseStorageConfig]
         # So Hydra will try to create BaseStorageConfig objects
-        config = {"test_storage": BaseStorageConfig(type="file", path="/test/path.json")}
+        config = {
+            "test_storage": BaseStorageConfig(type="file", path="/test/path.json")
+        }
 
-        orchestrator = TestOrchestrator(orchestrator="test", name="test_orchestrator", storage=config)
+        orchestrator = TestOrchestrator(
+            orchestrator="test", name="test_orchestrator", storage=config
+        )
 
         assert "test_storage" in orchestrator.storage
         assert isinstance(orchestrator.storage["test_storage"], BaseStorageConfig)
@@ -99,11 +105,16 @@ class TestOrchestratorStorageValidation:
         }
 
         # This should work after the fix
-        orchestrator = TestOrchestrator(orchestrator="test", name="test_orchestrator", storage=config)
+        orchestrator = TestOrchestrator(
+            orchestrator="test", name="test_orchestrator", storage=config
+        )
 
         assert isinstance(orchestrator.storage["test_storage"], StorageConfig)
         assert orchestrator.storage["test_storage"].auto_create is True
-        assert orchestrator.storage["test_storage"].clustering_fields == ["record_id", "timestamp"]
+        assert orchestrator.storage["test_storage"].clustering_fields == [
+            "record_id",
+            "timestamp",
+        ]
 
     def test_omegaconf_to_storageconfig_conversion(self):
         """Test converting OmegaConf DictConfig to StorageConfig."""
@@ -132,7 +143,12 @@ class TestOrchestratorStorageValidation:
             name="test_orchestrator",
             storage={
                 "legacy": DataSourceConfig(type="file", path="/old.json"),
-                "modern": StorageConfig(type="bigquery", project_id="test-project", dataset_id="test_dataset", table_id="test_table"),
+                "modern": StorageConfig(
+                    type="bigquery",
+                    project_id="test-project",
+                    dataset_id="test_dataset",
+                    table_id="test_table",
+                ),
             },
         )
 
@@ -152,9 +168,16 @@ class TestOrchestratorStorageValidation:
                     "dataset_id": "test_dataset",
                     "table_id": "test_table",
                     "auto_create": True,  # StorageConfig-specific field
-                    "clustering_fields": ["record_id", "timestamp"],  # StorageConfig-specific field
+                    "clustering_fields": [
+                        "record_id",
+                        "timestamp",
+                    ],  # StorageConfig-specific field
                 },
-                "file_source": {"type": "file", "path": "/data/test.json", "glob": "*.json"},
+                "file_source": {
+                    "type": "file",
+                    "path": "/data/test.json",
+                    "glob": "*.json",
+                },
             },
         }
 
@@ -164,7 +187,10 @@ class TestOrchestratorStorageValidation:
         # BigQuery source should be converted to StorageConfig due to specific fields
         assert isinstance(orchestrator.storage["bigquery_source"], StorageConfig)
         assert orchestrator.storage["bigquery_source"].auto_create is True
-        assert orchestrator.storage["bigquery_source"].clustering_fields == ["record_id", "timestamp"]
+        assert orchestrator.storage["bigquery_source"].clustering_fields == [
+            "record_id",
+            "timestamp",
+        ]
 
         # File source should be converted to DataSourceConfig for backward compatibility
         assert isinstance(orchestrator.storage["file_source"], DataSourceConfig)

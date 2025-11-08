@@ -15,14 +15,16 @@ class TestBigQueryExplicitSchema:
 
     def test_bigquery_storage_requires_schema_path(self):
         """BigQuery storage should fail if no schema_path is provided."""
-        config = StorageFactory.create_config({
-            "type": "bigquery",
-            "project_id": "test-project",
-            "dataset_id": "test-dataset",
-            "table_id": "test-table",
-            "dataset_name": "test",
-            # Deliberately missing schema_path
-        })
+        config = StorageFactory.create_config(
+            {
+                "type": "bigquery",
+                "project_id": "test-project",
+                "dataset_id": "test-dataset",
+                "table_id": "test-table",
+                "dataset_name": "test",
+                # Deliberately missing schema_path
+            }
+        )
 
         with pytest.raises(StorageError) as exc_info:
             BigQueryStorage(config)
@@ -32,18 +34,22 @@ class TestBigQueryExplicitSchema:
     @patch("buttermilk.storage.bigquery.bigquery.Client")
     def test_bigquery_storage_fails_on_missing_schema_file(self, mock_client):
         """BigQuery storage should fail if schema file doesn't exist."""
-        config = StorageFactory.create_config({
-            "type": "bigquery",
-            "project_id": "test-project",
-            "dataset_id": "test-dataset",
-            "table_id": "test-table",
-            "dataset_name": "test",
-            "schema_path": "/non/existent/schema.json"
-        })
+        config = StorageFactory.create_config(
+            {
+                "type": "bigquery",
+                "project_id": "test-project",
+                "dataset_id": "test-dataset",
+                "table_id": "test-table",
+                "dataset_name": "test",
+                "schema_path": "/non/existent/schema.json",
+            }
+        )
 
         # Mock the get_schema to simulate file not found
         with patch.object(BigQueryStorage, "get_schema") as mock_get_schema:
-            mock_get_schema.side_effect = StorageError("Failed to load schema from /non/existent/schema.json")
+            mock_get_schema.side_effect = StorageError(
+                "Failed to load schema from /non/existent/schema.json"
+            )
 
             # Storage creation should succeed since validation is lazy
             storage = BigQueryStorage(config)
@@ -84,7 +90,9 @@ class TestBigQueryExplicitSchema:
             with pytest.raises(StorageError) as exc_info:
                 storage.create()
 
-            assert "Failed to load schema" in str(exc_info.value) or "schema file" in str(exc_info.value)
+            assert "Failed to load schema" in str(
+                exc_info.value
+            ) or "schema file" in str(exc_info.value)
 
     @patch("buttermilk.storage.bigquery.bigquery.Client")
     def test_create_does_not_modify_existing_tables(self, mock_client):

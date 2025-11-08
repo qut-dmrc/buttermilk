@@ -26,7 +26,9 @@ class StructuredTestAgentOutput(BaseModel):
         ...,
         description="List of reasoning steps. Each step should comprise one to five sentences of text presenting a clear logical analysis.",
     )
-    confidence: Literal["high", "medium", "low"] = Field(description="Your confidence in the overall conclusion.")
+    confidence: Literal["high", "medium", "low"] = Field(
+        description="Your confidence in the overall conclusion."
+    )
     thoughts: str
 
 
@@ -51,17 +53,30 @@ async def get_weather(location: str) -> WeatherResponse:
     """
     # Mock weather data based on location
     weather_data = {
-        "london": WeatherResponse(location="London", temperature=15.5, condition="cloudy", humidity=75),
-        "new york": WeatherResponse(location="New York", temperature=22.0, condition="sunny", humidity=60),
-        "tokyo": WeatherResponse(location="Tokyo", temperature=18.5, condition="rainy", humidity=85),
-        "paris": WeatherResponse(location="Paris", temperature=17.0, condition="partly cloudy", humidity=70),
+        "london": WeatherResponse(
+            location="London", temperature=15.5, condition="cloudy", humidity=75
+        ),
+        "new york": WeatherResponse(
+            location="New York", temperature=22.0, condition="sunny", humidity=60
+        ),
+        "tokyo": WeatherResponse(
+            location="Tokyo", temperature=18.5, condition="rainy", humidity=85
+        ),
+        "paris": WeatherResponse(
+            location="Paris", temperature=17.0, condition="partly cloudy", humidity=70
+        ),
     }
 
     # Normalize location for lookup
     location_key = location.lower().strip()
 
     # Return mock data or default
-    return weather_data.get(location_key, WeatherResponse(location=location, temperature=20.0, condition="clear", humidity=65))
+    return weather_data.get(
+        location_key,
+        WeatherResponse(
+            location=location, temperature=20.0, condition="clear", humidity=65
+        ),
+    )
 
 
 async def calculate_sum(a: float, b: float) -> float:
@@ -110,15 +125,27 @@ async def test_single_tool_call(real_llm_expensive):
         pytest.xfail(f"{model_name} doesn't support tool calling")
 
     # Create a simple weather tool
-    weather_tool = FunctionTool(get_weather, name="get_weather", description="Get the current weather for a location", strict=True)
+    weather_tool = FunctionTool(
+        get_weather,
+        name="get_weather",
+        description="Get the current weather for a location",
+        strict=True,
+    )
 
     messages = [
-        SystemMessage(content="You are a helpful weather assistant. Use the get_weather tool to answer questions about weather.", source="system"),
+        SystemMessage(
+            content="You are a helpful weather assistant. Use the get_weather tool to answer questions about weather.",
+            source="system",
+        ),
         UserMessage(content="What's the weather like in London?", source="user"),
     ]
 
     # Test with tool calling
-    response = await llm.call_chat(messages=messages, tools_list=[weather_tool], cancellation_token=CancellationToken())
+    response = await llm.call_chat(
+        messages=messages,
+        tools_list=[weather_tool],
+        cancellation_token=CancellationToken(),
+    )
 
     # Verify response mentions London and weather details
     assert response.content
@@ -130,7 +157,9 @@ async def test_single_tool_call(real_llm_expensive):
 
     # Should mention weather details (at least one of these)
     weather_terms = ["cloudy", "15.5", "75", "humidity", "temperature", "celsius", "°c"]
-    assert any(term in content_lower for term in weather_terms), f"Response should contain weather information, got: {response.content}"
+    assert any(term in content_lower for term in weather_terms), (
+        f"Response should contain weather information, got: {response.content}"
+    )
 
 
 @pytest.mark.anyio
@@ -142,9 +171,19 @@ async def test_multiple_tool_calls(real_llm):
         pytest.skip(f"{model_name} doesn't support tool calling")
 
     # Create multiple tools
-    weather_tool = FunctionTool(get_weather, name="get_weather", description="Get the current weather for a location", strict=True)
+    weather_tool = FunctionTool(
+        get_weather,
+        name="get_weather",
+        description="Get the current weather for a location",
+        strict=True,
+    )
 
-    calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers", strict=True)
+    calc_tool = FunctionTool(
+        calculate_sum,
+        name="calculate_sum",
+        description="Calculate the sum of two numbers",
+        strict=True,
+    )
 
     messages = [
         SystemMessage(
@@ -156,7 +195,11 @@ async def test_multiple_tool_calls(real_llm):
 
     try:
         # Test with multiple tools available
-        response = await real_llm.call_chat(messages=messages, tools_list=[weather_tool, calc_tool], cancellation_token=CancellationToken())
+        response = await real_llm.call_chat(
+            messages=messages,
+            tools_list=[weather_tool, calc_tool],
+            cancellation_token=CancellationToken(),
+        )
 
         # Verify response contains the correct sum
         assert response.content
@@ -166,11 +209,14 @@ async def test_multiple_tool_calls(real_llm):
         if model_name in MODELS_WITH_TOOL_QUIRKS:
             # Just check if they attempted to do math or mentioned the numbers
             assert any(
-                term in response.content.lower() for term in ["8", "eight", "5", "3", "calculate", "sum"]
+                term in response.content.lower()
+                for term in ["8", "eight", "5", "3", "calculate", "sum"]
             ), f"Response should relate to the calculation, got: {response.content}"
         else:
             # Check for both digit "8" and word "eight"
-            assert any(term in response.content.lower() for term in ["8", "eight"]), f"Response should contain the sum 8, got: {response.content}"
+            assert any(term in response.content.lower() for term in ["8", "eight"]), (
+                f"Response should contain the sum 8, got: {response.content}"
+            )
     except Exception as e:
         if "does not support function calling" in str(e):
             pytest.skip(f"Model doesn't support tool calling: {e}")
@@ -186,18 +232,35 @@ async def test_no_tool_needed(real_llm):
         pytest.skip(f"{model_name} doesn't support tool calling")
 
     # Create tools that shouldn't be used
-    weather_tool = FunctionTool(get_weather, name="get_weather", description="Get the current weather for a location", strict=True)
+    weather_tool = FunctionTool(
+        get_weather,
+        name="get_weather",
+        description="Get the current weather for a location",
+        strict=True,
+    )
 
-    calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers", strict=True)
+    calc_tool = FunctionTool(
+        calculate_sum,
+        name="calculate_sum",
+        description="Calculate the sum of two numbers",
+        strict=True,
+    )
 
     messages = [
-        SystemMessage(content="You are a helpful assistant. Answer questions directly when you can without using any tools.", source="system"),
+        SystemMessage(
+            content="You are a helpful assistant. Answer questions directly when you can without using any tools.",
+            source="system",
+        ),
         UserMessage(content="What is the capital of France?", source="user"),
     ]
 
     try:
         # Test with tools available but not needed
-        response = await real_llm.call_chat(messages=messages, tools_list=[weather_tool, calc_tool], cancellation_token=CancellationToken())
+        response = await real_llm.call_chat(
+            messages=messages,
+            tools_list=[weather_tool, calc_tool],
+            cancellation_token=CancellationToken(),
+        )
 
         # Verify response contains Paris without using tools
         assert response.content
@@ -209,10 +272,17 @@ async def test_no_tool_needed(real_llm):
             # Just verify they got a response at all
             assert len(response.content) > 0, "Should have some response"
             # Log for debugging but don't fail if they refuse
-            if not any(term in response.content.lower() for term in ["paris", "france", "capital"]):
-                print(f"Note: {model_name} refused to answer without relevant tools: {response.content}")
+            if not any(
+                term in response.content.lower()
+                for term in ["paris", "france", "capital"]
+            ):
+                print(
+                    f"Note: {model_name} refused to answer without relevant tools: {response.content}"
+                )
         else:
-            assert "paris" in response.content.lower(), f"Response should mention Paris, got: {response.content}"
+            assert "paris" in response.content.lower(), (
+                f"Response should mention Paris, got: {response.content}"
+            )
     except Exception as e:
         if "does not support function calling" in str(e):
             pytest.skip(f"Model doesn't support tool calling: {e}")
@@ -227,7 +297,12 @@ async def test_call_chat_intercept_tools_returns_function_calls(real_llm):
     if model_name and model_name in MODELS_WITHOUT_TOOL_SUPPORT:
         pytest.skip(f"{model_name} doesn't support tool calling")
 
-    calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers", strict=True)
+    calc_tool = FunctionTool(
+        calculate_sum,
+        name="calculate_sum",
+        description="Calculate the sum of two numbers",
+        strict=True,
+    )
 
     messages = [
         SystemMessage(
@@ -253,9 +328,15 @@ async def test_call_chat_intercept_tools_returns_function_calls(real_llm):
         raise
 
     assert result.content, "Expected tool call(s) in result content"
-    assert isinstance(result.content, list), f"Expected a list of FunctionCall, got: {type(result.content)}"
-    assert all(isinstance(c, FunctionCall) for c in result.content), "Expected FunctionCall objects"
-    assert any(c.name == "calculate_sum" for c in result.content), "Expected a calculate_sum tool call"
+    assert isinstance(result.content, list), (
+        f"Expected a list of FunctionCall, got: {type(result.content)}"
+    )
+    assert all(isinstance(c, FunctionCall) for c in result.content), (
+        "Expected FunctionCall objects"
+    )
+    assert any(c.name == "calculate_sum" for c in result.content), (
+        "Expected a calculate_sum tool call"
+    )
 
 
 @pytest.mark.anyio
@@ -269,7 +350,12 @@ async def test_structured_output_with_incorrect_tools(real_llm_expensive):
         confidence: float = Field(description="Confidence level from 0 to 1")
 
     # Create a simple tool
-    calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers", strict=True)
+    calc_tool = FunctionTool(
+        calculate_sum,
+        name="calculate_sum",
+        description="Calculate the sum of two numbers",
+        strict=True,
+    )
 
     messages = [
         SystemMessage(
@@ -308,7 +394,12 @@ async def test_call_chat_tool_exec_then_synthesis_with_schema(real_llm_expensive
     class Answer(BaseModel):
         result: list[int] = Field(description="The final answer")
 
-    calc_tool = FunctionTool(calculate_sum, name="calculate_sum", description="Calculate the sum of two numbers", strict=True)
+    calc_tool = FunctionTool(
+        calculate_sum,
+        name="calculate_sum",
+        description="Calculate the sum of two numbers",
+        strict=True,
+    )
 
     messages = [
         SystemMessage(
@@ -319,7 +410,9 @@ async def test_call_chat_tool_exec_then_synthesis_with_schema(real_llm_expensive
             source="system",
         ),
         UserMessage(
-            content=("Compute (5 + 3) and (10 + 4) using separate calls to the calculate_sum tool."),
+            content=(
+                "Compute (5 + 3) and (10 + 4) using separate calls to the calculate_sum tool."
+            ),
             source="user",
         ),
     ]
@@ -334,4 +427,6 @@ async def test_call_chat_tool_exec_then_synthesis_with_schema(real_llm_expensive
     # Validate the synthesized result
     assert response.content, "Expected non-empty synthesized response"
     assert isinstance(response.parsed_object, Answer)
-    assert set(response.parsed_object.result) == {8, 14}, f"Expected [8, 14] in result, got: {response.parsed_object.result}"
+    assert set(response.parsed_object.result) == {8, 14}, (
+        f"Expected [8, 14] in result, got: {response.parsed_object.result}"
+    )

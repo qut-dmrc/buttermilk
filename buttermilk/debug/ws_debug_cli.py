@@ -48,7 +48,9 @@ class NonInteractiveDebugClient:
         self.ws_url = f"ws://{host}:{port}/ws"
         self.client: FlowTestClient | None = None
         self.console = Console()
-        self.session_file = Path(tempfile.gettempdir()) / "buttermilk_debug_session.json"
+        self.session_file = (
+            Path(tempfile.gettempdir()) / "buttermilk_debug_session.json"
+        )
 
     def save_session(self, session_id: str):
         """Save session ID to file for reuse."""
@@ -105,7 +107,14 @@ class NonInteractiveDebugClient:
         if self.client:
             await self.client.disconnect()
 
-    async def start_flow(self, flow_name: str, query: str, wait_time: int = 60, record: str = "", criteria: str = "") -> dict:
+    async def start_flow(
+        self,
+        flow_name: str,
+        query: str,
+        wait_time: int = 60,
+        record: str = "",
+        criteria: str = "",
+    ) -> dict:
         """Start a flow and wait for initial responses."""
         if not await self.connect():
             return {"error": "Failed to connect to server"}
@@ -141,7 +150,10 @@ class NonInteractiveDebugClient:
                     print(f"{timestamp_str}  {msg.type}: {content}")
 
                     # Check for flow completion
-                    if msg.type in ["flow_complete", "system_update"] and "complet" in content.lower():
+                    if (
+                        msg.type in ["flow_complete", "system_update"]
+                        and "complet" in content.lower()
+                    ):
                         flow_completed = True
 
                 last_message_count = len(current_messages)
@@ -182,12 +194,20 @@ class NonInteractiveDebugClient:
         finally:
             await self.disconnect()
 
-    async def send_message(self, message_type: str, content: str, wait_time: int = 60, session_id: str | None = None) -> dict:
+    async def send_message(
+        self,
+        message_type: str,
+        content: str,
+        wait_time: int = 60,
+        session_id: str | None = None,
+    ) -> dict:
         """Send a message to an existing session."""
         # Use provided session_id or load from file
         session_id = session_id or self.load_session()
         if not session_id:
-            return {"error": "No session ID provided and no saved session found. Start a flow first."}
+            return {
+                "error": "No session ID provided and no saved session found. Start a flow first."
+            }
 
         if not await self.connect(session_id):
             return {"error": f"Failed to reconnect to session {session_id}"}
@@ -246,7 +266,9 @@ class NonInteractiveDebugClient:
         # Use provided session_id or load from file
         session_id = session_id or self.load_session()
         if not session_id:
-            return {"error": "No session ID provided and no saved session found. Start a flow first."}
+            return {
+                "error": "No session ID provided and no saved session found. Start a flow first."
+            }
 
         if not await self.connect(session_id):
             return {"error": f"Failed to reconnect to session {session_id}"}
@@ -265,7 +287,9 @@ class NonInteractiveDebugClient:
                 import re
 
                 pattern_re = re.compile(pattern, re.IGNORECASE)
-                messages = [msg for msg in messages if pattern_re.search(msg.content or "")]
+                messages = [
+                    msg for msg in messages if pattern_re.search(msg.content or "")
+                ]
 
             # Collect results
             result = {
@@ -295,7 +319,9 @@ class NonInteractiveDebugClient:
         finally:
             await self.disconnect()
 
-    async def get_logs(self, lines: int = 50, min_level: str = "INFO", log_file: str | None = None) -> dict:
+    async def get_logs(
+        self, lines: int = 50, min_level: str = "INFO", log_file: str | None = None
+    ) -> dict:
         """Get recent log lines, with an optional minimum level filter.
 
         Args:
@@ -315,7 +341,7 @@ class NonInteractiveDebugClient:
             if not log_files:
                 return {
                     "error": "No Buttermilk log files found in /tmp/",
-                    "hint": "Log files must start with 'bm_' and end with '.jsonl' (searched with pattern: /tmp/bm_*.jsonl)"
+                    "hint": "Log files must start with 'bm_' and end with '.jsonl' (searched with pattern: /tmp/bm_*.jsonl)",
                 }
 
             # Get the most recent log file
@@ -328,6 +354,7 @@ class NonInteractiveDebugClient:
             try:
                 # Try to parse as JSON first (new JSONL format)
                 import json
+
                 log_entry = json.loads(line.strip())
                 level = log_entry.get("level", "").upper()
                 return levels.get(level, -1)
@@ -344,7 +371,11 @@ class NonInteractiveDebugClient:
 
                 # Filter by level
                 if min_level_num > 0:
-                    filtered_lines = [line for line in all_lines if get_line_level(line) >= min_level_num]
+                    filtered_lines = [
+                        line
+                        for line in all_lines
+                        if get_line_level(line) >= min_level_num
+                    ]
                 else:
                     filtered_lines = all_lines
 
@@ -383,8 +414,16 @@ class NonInteractiveDebugClient:
 @click.group()
 @click.option("--host", default="localhost", help="WebSocket server host")
 @click.option("--port", default=8000, type=int, help="WebSocket server port")
-@click.option("--json-output", is_flag=True, help="Output results as JSON (default, optimized for LLMs)")
-@click.option("--pretty", is_flag=True, help="Pretty console output for humans (overrides --json-output)")
+@click.option(
+    "--json-output",
+    is_flag=True,
+    help="Output results as JSON (default, optimized for LLMs)",
+)
+@click.option(
+    "--pretty",
+    is_flag=True,
+    help="Pretty console output for humans (overrides --json-output)",
+)
 @click.pass_context
 def cli(ctx, host: str, port: int, json_output: bool, pretty: bool):
     """WebSocket debug client for Buttermilk flows.
@@ -396,7 +435,9 @@ def cli(ctx, host: str, port: int, json_output: bool, pretty: bool):
     ctx.obj["HOST"] = host
     ctx.obj["PORT"] = port
     # Pretty overrides json-output (pretty takes precedence)
-    ctx.obj["JSON_OUTPUT"] = not pretty if pretty else (json_output or True)  # Default to JSON
+    ctx.obj["JSON_OUTPUT"] = (
+        not pretty if pretty else (json_output or True)
+    )  # Default to JSON
 
 
 @cli.command()
@@ -429,7 +470,9 @@ def start(ctx, flow_name: str, query: str, record: str, criteria: str, wait: int
         if "error" in result:
             console.print(f"[red]Error: {result['error']}[/red]")
         else:
-            console.print(f"[green]Started flow '{flow_name}' - Session: {result['session_id']}[/green]")
+            console.print(
+                f"[green]Started flow '{flow_name}' - Session: {result['session_id']}[/green]"
+            )
             if query:
                 console.print(f"Query: {query}")
             if record:
@@ -438,7 +481,9 @@ def start(ctx, flow_name: str, query: str, record: str, criteria: str, wait: int
                 console.print(f"Criteria: {criteria}")
             console.print(f"\n[dim]Messages ({len(result['messages'])})[/dim]:")
             for msg in result["messages"]:
-                timestamp = datetime.fromisoformat(msg["timestamp"]).strftime("%H:%M:%S")
+                timestamp = datetime.fromisoformat(msg["timestamp"]).strftime(
+                    "%H:%M:%S"
+                )
                 msg_type = msg["type"]
                 content = msg["content"] or "(no content)"
                 # Truncate for console readability
@@ -450,7 +495,9 @@ def start(ctx, flow_name: str, query: str, record: str, criteria: str, wait: int
 
 @cli.command()
 @click.argument("content")
-@click.option("--type", "msg_type", default="response", help="Message type (default: response)")
+@click.option(
+    "--type", "msg_type", default="response", help="Message type (default: response)"
+)
 @click.option("--wait", default=5, help="Seconds to wait for responses")
 @click.option("--session", help="Session ID (uses saved session if not provided)")
 @click.pass_context
@@ -474,11 +521,15 @@ def send(ctx, content: str, msg_type: str, wait: int, session: str | None):
         if "error" in result:
             console.print(f"[red]Error: {result['error']}[/red]")
         else:
-            console.print(f"[green]Sent {msg_type} to session {result['session_id']}[/green]")
+            console.print(
+                f"[green]Sent {msg_type} to session {result['session_id']}[/green]"
+            )
             console.print(f"Content: {content}")
             console.print(f"\n[dim]New messages ({len(result['messages'])})[/dim]:")
             for msg in result["messages"]:
-                timestamp = datetime.fromisoformat(msg["timestamp"]).strftime("%H:%M:%S")
+                timestamp = datetime.fromisoformat(msg["timestamp"]).strftime(
+                    "%H:%M:%S"
+                )
                 msg_type = msg["type"]
                 content = msg["content"] or "(no content)"
                 if len(content) > 100:
@@ -493,7 +544,9 @@ def send(ctx, content: str, msg_type: str, wait: int, session: str | None):
 @click.option("--type", "msg_type", help="Filter by message type")
 @click.option("--session", help="Session ID (uses saved session if not provided)")
 @click.pass_context
-def wait(ctx, wait: int, pattern: str | None, msg_type: str | None, session: str | None):
+def wait(
+    ctx, wait: int, pattern: str | None, msg_type: str | None, session: str | None
+):
     """Wait for and collect messages from the current session.
 
     Examples:
@@ -516,17 +569,23 @@ def wait(ctx, wait: int, pattern: str | None, msg_type: str | None, session: str
         if "error" in result:
             console.print(f"[red]Error: {result['error']}[/red]")
         else:
-            console.print(f"[green]Messages from session {result['session_id']}[/green]")
+            console.print(
+                f"[green]Messages from session {result['session_id']}[/green]"
+            )
             if pattern or msg_type:
                 console.print(f"[dim]Filters: pattern={pattern}, type={msg_type}[/dim]")
             console.print(f"\n[dim]Messages ({len(result['messages'])})[/dim]:")
             for msg in result["messages"]:
-                timestamp = datetime.fromisoformat(msg["timestamp"]).strftime("%H:%M:%S")
+                timestamp = datetime.fromisoformat(msg["timestamp"]).strftime(
+                    "%H:%M:%S"
+                )
                 content = msg["content"] or "(no content)"
                 if len(content) > 100:
                     content = content[:100] + "..."
                 agent = msg["agent_role"] or "system"
-                console.print(f"[dim]{timestamp}[/dim] [{msg['type']}] {agent}: {content}")
+                console.print(
+                    f"[dim]{timestamp}[/dim] [{msg['type']}] {agent}: {content}"
+                )
 
 
 @cli.command()
@@ -586,7 +645,9 @@ def clear_session(ctx):
     "--level",
     "-l",
     default="INFO",
-    type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], case_sensitive=False),
+    type=click.Choice(
+        ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], case_sensitive=False
+    ),
     help="Minimum log level to display.",
 )
 @click.option("--file", "-f", default=None, help="Specific log file to read (optional)")
@@ -638,7 +699,9 @@ def list_logs(ctx, count: int):
             "log_files": [
                 {
                     "path": log,
-                    "modified": datetime.fromtimestamp(os.path.getmtime(log)).isoformat(),
+                    "modified": datetime.fromtimestamp(
+                        os.path.getmtime(log)
+                    ).isoformat(),
                     "size": os.path.getsize(log),
                 }
                 for log in recent_logs
@@ -647,12 +710,18 @@ def list_logs(ctx, count: int):
         print(json.dumps(result, indent=2))
     else:
         console = Console()
-        console.print(f"[green]Most recent {len(recent_logs)} Buttermilk log files:[/green]\n")
+        console.print(
+            f"[green]Most recent {len(recent_logs)} Buttermilk log files:[/green]\n"
+        )
         for log in recent_logs:
             mtime = datetime.fromtimestamp(os.path.getmtime(log))
             size = os.path.getsize(log)
-            console.print(f"[dim]{mtime.strftime('%Y-%m-%d %H:%M:%S')}[/dim]  {os.path.basename(log)}  [dim]({size:,} bytes)[/dim]")
-        console.print(f"\n[dim]Total Buttermilk log files in /tmp/: {len(log_files)}[/dim]")
+            console.print(
+                f"[dim]{mtime.strftime('%Y-%m-%d %H:%M:%S')}[/dim]  {os.path.basename(log)}  [dim]({size:,} bytes)[/dim]"
+            )
+        console.print(
+            f"\n[dim]Total Buttermilk log files in /tmp/: {len(log_files)}[/dim]"
+        )
 
 
 @cli.command()

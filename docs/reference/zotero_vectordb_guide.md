@@ -90,7 +90,7 @@ Deduplication happens **early** by configuring `ZotDownloader` with a `vector_st
 ```yaml
 input_docs:
   _target_: buttermilk.libs.zotero.ZotDownloader
-  vector_store: ${vectoriser}  # Explicit reference to ChromaDB
+  vector_store: ${vectoriser} # Explicit reference to ChromaDB
 ```
 
 **How It Works**:
@@ -131,7 +131,7 @@ This example shows the complete structure. See `projects/zotmcp/conf/vectorize.y
 # @package _global_
 
 defaults:
-  - base_config  # Your app's base config
+  - base_config # Your app's base config
   - _self_
 
 vectoriser:
@@ -142,14 +142,14 @@ vectoriser:
   dimensionality: 3072
   concurrency: 10
   sync_batch_size: 50
-  deduplication_strategy: record_id  # Fast deduplication for incremental sync
+  deduplication_strategy: record_id # Fast deduplication for incremental sync
   enable_record_cache: true
 
 pipeline:
   _target_: buttermilk.pipeline.PipelineOrchestrator
   pipeline_name: zotero_vectorization
   concurrency: 5
-  limit: null  # Process all (or use run.limit from CLI)
+  limit: null # Process all (or use run.limit from CLI)
 
   # Zotero source with deduplication
   source:
@@ -157,7 +157,7 @@ pipeline:
     library: ${oc.env:ZOTERO_LIBRARY_ID}
     save_dir: .cache/zotero/items
     download_concurrency: 8
-    vector_store: ${vectoriser}  # Enable early deduplication
+    vector_store: ${vectoriser} # Enable early deduplication
 
   processors:
     # 1. Chunk text

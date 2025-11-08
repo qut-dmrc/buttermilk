@@ -18,7 +18,9 @@ This directory contains integration tests for the ChromaDBSearchTool that demons
 ## Test Files
 
 ### `test_chromadb_search_tool_integration.py`
+
 Full pytest integration test suite that covers:
+
 - Basic search functionality ("what are transaction costs")
 - Filtered searches by metadata
 - No-duplicate search mode
@@ -27,7 +29,9 @@ Full pytest integration test suite that covers:
 - Tool function interface for agents
 
 ### `demo_chromadb_search.py`
+
 Standalone demo script that shows:
+
 - Multiple search queries
 - Result formatting and metadata
 - Filtered searches
@@ -36,6 +40,7 @@ Standalone demo script that shows:
 ## Running the Tests
 
 ### Run the pytest suite:
+
 ```bash
 # From the project root
 cd /src/buttermilk
@@ -46,6 +51,7 @@ uv run pytest tests/integration/test_chromadb_search_tool_integration.py::TestCh
 ```
 
 ### Run the demo script:
+
 ```bash
 # From the project root
 cd /src/buttermilk
@@ -79,6 +85,7 @@ Metadata: {'chunk_index': 5, 'content_type': 'abstract', 'embedding_model': 'gem
 ## Understanding the Results
 
 Each search result includes:
+
 - **Document Title**: The title of the source document
 - **Document ID**: The Zotero key of the document
 - **Chunk ID**: Unique identifier for this specific text chunk
@@ -95,6 +102,7 @@ Each search result includes:
 ## Troubleshooting
 
 If tests fail:
+
 1. Check GCP credentials are properly configured
 2. Verify you have access to the GCS bucket
 3. Ensure the ChromaDB collection exists and has been populated

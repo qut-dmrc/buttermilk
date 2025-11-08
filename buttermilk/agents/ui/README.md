@@ -40,10 +40,10 @@ Use the `interface/proxy` agent in your flow configuration:
 ```yaml
 defaults:
   - /agents@observers:
-    - spy
-    - owl
-    - host/sequencer
-    - interface/proxy  # Use the proxy that can switch UI implementations
+      - spy
+      - owl
+      - host/sequencer
+      - interface/proxy # Use the proxy that can switch UI implementations
 ```
 
 ### Command Line
@@ -66,11 +66,7 @@ When creating a `FlowRunner` instance, UI configuration is specified via the con
 from buttermilk.runner.flowrunner import FlowRunner
 
 # Create FlowRunner - UI is specified in the config
-flow_runner = FlowRunner(
-    bm=bm,
-    flows=flows,
-    ui="console"
-)
+flow_runner = FlowRunner(bm=bm, flows=flows, ui="console")
 ```
 
 ## Adding New UI Implementations
@@ -80,6 +76,7 @@ flow_runner = FlowRunner(
 ```python
 # my_custom_ui.py
 from buttermilk.agents.ui.generic import UIAgent
+
 
 class MyCustomUIAgent(UIAgent):
     """Custom UI implementation."""

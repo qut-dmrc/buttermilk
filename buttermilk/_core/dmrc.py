@@ -12,7 +12,9 @@ _bm_instance: BM = None  # Private storage  # noqa:
 def get_bm() -> BM:
     """Return the singleton BM instance."""
     if _bm_instance is None:
-        raise RuntimeError("BM singleton not initialized. Make sure CLI or nb.init() has been run.")
+        raise RuntimeError(
+            "BM singleton not initialized. Make sure CLI or nb.init() has been run."
+        )
     return _bm_instance
 
 

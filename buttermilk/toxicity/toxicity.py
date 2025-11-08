@@ -41,7 +41,10 @@ from transformers import (
 )
 
 from buttermilk import logger
-from buttermilk._core.contract import AgentInput, ExecutionTrace  # Import AgentInput and ExecutionTrace
+from buttermilk._core.contract import (
+    AgentInput,
+    ExecutionTrace,
+)  # Import AgentInput and ExecutionTrace
 from buttermilk.utils.utils import read_text, read_yaml, scrub_serializable
 
 from .types import EvalRecord, Score
@@ -102,7 +105,9 @@ class ToxicityModel(BaseModel):
         if self.client is None:
             raise NotImplementedError
 
-    def run(self, message: AgentInput) -> ExecutionTrace:  # Changed parameter name/type and return type
+    def run(
+        self, message: AgentInput
+    ) -> ExecutionTrace:  # Changed parameter name/type and return type
         # Assuming the AgentInput contains a record
         if not message.record:
             raise ValueError("AgentInput must contain a record for ToxicityModel.")
@@ -110,9 +115,13 @@ class ToxicityModel(BaseModel):
         # Process the record in the input message
         record = message.record
 
-        response = self.moderate(content=record.content, record_id=record.record_id)  # Access content and record_id from Record
+        response = self.moderate(
+            content=record.content, record_id=record.record_id
+        )  # Access content and record_id from Record
         if not isinstance(response, EvalRecord):
-            raise ValueError(f"Expected an EvalRecord from toxicity model, got: {type(response)} for: {message}")
+            raise ValueError(
+                f"Expected an EvalRecord from toxicity model, got: {type(response)} for: {message}"
+            )
 
         # add identifying info in (already done in add_output_info)
         # response.model = self.model
@@ -218,7 +227,9 @@ class ToxicityModel(BaseModel):
         try:
             output = self.interpret(response)
         except ValueError as e:
-            err_msg = f"Unable to interpret response from {self.model}. Error: {e} {e.args=}"
+            err_msg = (
+                f"Unable to interpret response from {self.model}. Error: {e} {e.args=}"
+            )
             output = EvalRecord(error=err_msg, response=response)
             logger.error(err_msg)
         output = self.add_output_info(output, record_id=record_id)
@@ -228,7 +239,9 @@ class ToxicityModel(BaseModel):
     def interpret(self, response: Any) -> EvalRecord:
         raise NotImplementedError
 
-    def add_output_info(self, record: EvalRecord, record_id=None, **kwargs) -> EvalRecord:
+    def add_output_info(
+        self, record: EvalRecord, record_id=None, **kwargs
+    ) -> EvalRecord:
         # add identifying info in
         record.model = self.model
         record.process = self.process_chain
@@ -259,7 +272,9 @@ class _HF(ToxicityModel):
             trust_remote_code=True,
         )
         if not self.tokenizer.pad_token_id:
-            self.tokenizer.pad_token_id = self.tokenizer.eos_token_id  # Set a padding token
+            self.tokenizer.pad_token_id = (
+                self.tokenizer.eos_token_id
+            )  # Set a padding token
 
         self.client = AutoModelForCausalLM.from_pretrained(
             self.model,
@@ -345,7 +360,10 @@ class Perspective(ToxicityModel):
     ) -> Any:
         if not (attributes := kwargs.get("attributes")):
             # get all
-            attributes = PerspectiveAttributes.__args__ + PerspectiveAttributesExperimental.__args__
+            attributes = (
+                PerspectiveAttributes.__args__
+                + PerspectiveAttributesExperimental.__args__
+            )
 
         analyze_request = {
             "comment": {"text": prompt},
@@ -479,7 +497,9 @@ class AzureContentSafety(ToxicityModel):
 
                 severity_score = severity
             except Exception:
-                raise ValueError(f"Unable to interpret Azure content safety score: {item}.")
+                raise ValueError(
+                    f"Unable to interpret Azure content safety score: {item}."
+                )
 
             if measure is not None:
                 outcome.scores.append(
@@ -574,7 +594,9 @@ class AzureModerator(ToxicityModel):
             "normalized_text",
             "auto_corrected_text",
         ]
-        outcome.metadata = {x: response[x] for x in response.keys() if x not in _result_keys}
+        outcome.metadata = {
+            x: response[x] for x in response.keys() if x not in _result_keys
+        }
 
         return outcome
 
@@ -671,7 +693,9 @@ class LFTW(ToxicityModel):
 
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
         if not self.tokenizer.pad_token_id:
-            self.tokenizer.pad_token_id = self.tokenizer.eos_token_id  # Set a padding token
+            self.tokenizer.pad_token_id = (
+                self.tokenizer.eos_token_id
+            )  # Set a padding token
         cfg = AutoConfig.from_pretrained(self.model)
         self.classes = cfg.id2label
         self.client = AutoModelForSequenceClassification.from_pretrained(self.model).to(
@@ -686,7 +710,9 @@ class LFTW(ToxicityModel):
         prompt: str,
         **kwargs,
     ) -> Any:
-        input_ids = self.tokenizer([prompt], return_tensors="pt").to(self.device)["input_ids"]
+        input_ids = self.tokenizer([prompt], return_tensors="pt").to(self.device)[
+            "input_ids"
+        ]
         with torch.no_grad():
             response = self.client(input_ids=input_ids, **self.options, **kwargs)
         logits = response.logits
@@ -773,7 +799,9 @@ class GPTJT(ToxicityModel):
             outcome.prediction = self.ResponseMap[response] >= 2
             outcome.labels = [response]
         except Exception as e:
-            raise ValueError(f"Unable to interpret response from GPT-JT model. {response=}, {e=}, {e.args=}")
+            raise ValueError(
+                f"Unable to interpret response from GPT-JT model. {response=}, {e=}, {e.args=}"
+            )
 
         return outcome
 
@@ -814,7 +842,9 @@ class OpenAIModerator(ToxicityModel):
 
         # Load the message info into the output
         outcome = EvalRecord()
-        outcome.scores = [Score(measure=k, score=v) for k, v in result["category_scores"].items()]
+        outcome.scores = [
+            Score(measure=k, score=v) for k, v in result["category_scores"].items()
+        ]
 
         outcome.prediction = result["flagged"]
         outcome.labels = [c for c, v in result["categories"].items() if v]

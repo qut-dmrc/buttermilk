@@ -29,16 +29,18 @@ async def flow_stream(
     # Removed legacy FlowRequest handling and local Job creation
 
     # Run the flow directly with RunRequest
-    async for result in flow.run_flows(run_request=run_request):  # Pass run_request directly
+    async for result in flow.run_flows(
+        run_request=run_request
+    ):  # Pass run_request directly
         if result:
             # Assuming result is ExecutionTrace or similar with outputs and agent_info
             agent_name = getattr(getattr(result, "agent_info", None), "name", "unknown")
             if not getattr(result, "outputs", None):
-                 logger.info(
+                logger.info(
                     "No data to return from flow step (completed successfully).",
                     agent_name=agent_name,
                 )
-                # raise StopAsyncIteration
+            # raise StopAsyncIteration
 
             if return_json:
                 # Assuming result has model_dump_json method (like ExecutionTrace)

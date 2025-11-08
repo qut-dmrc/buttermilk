@@ -7,7 +7,12 @@ import asyncio
 from collections.abc import AsyncGenerator
 
 import pydantic
-from autogen_core import CancellationToken, FunctionCall, MessageContext, message_handler
+from autogen_core import (
+    CancellationToken,
+    FunctionCall,
+    MessageContext,
+    message_handler,
+)
 from autogen_core.models import LLMMessage
 from autogen_core.tools import Tool
 
@@ -98,7 +103,10 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
             msg = f"StructuredLLMHost {self.agent_name} has no tools available after waiting {max_wait}s. This may indicate the participants have not advertised their capabilities."
             logger.error(msg)
             # Send as ErrorEvent for error broadcasting
-            error_event = ErrorEvent(source=self.agent_id, content="Unable to process request: no tools available.")
+            error_event = ErrorEvent(
+                source=self.agent_id,
+                content="Unable to process request: no tools available.",
+            )
             await self._publish(error_event)
             return  # Skip processing if no tools are available
 
@@ -155,7 +163,9 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
 
         tools_list = list({get_tool_name(tool): tool for tool in tools}.values())
 
-        logger.debug(f"StructuredLLMHost calling LLM with {len(tools_list)} tools: {[get_tool_name(tool) for tool in tools_list]}")
+        logger.debug(
+            f"StructuredLLMHost calling LLM with {len(tools_list)} tools: {[get_tool_name(tool) for tool in tools_list]}"
+        )
 
         # Use intercept_tools=True to get FunctionCall objects without execution
         return await model_client.call_chat(
@@ -178,7 +188,9 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
                 inputs=inputs,
             )
         except Exception as e:
-            logger.error(f"StructuredLLMHost '{self.agent_id}': Error during template processing: {e!s}")
+            logger.error(
+                f"StructuredLLMHost '{self.agent_id}': Error during template processing: {e!s}"
+            )
             raise ProcessingError(f"Error during template processing: {e!s}") from e
 
         # Call LLM with intercept flag
@@ -192,9 +204,13 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         )
 
         # Check if we got tool calls in the output
-        if isinstance(chat_result.content, list) and all(isinstance(c, FunctionCall) for c in chat_result.content):
+        if isinstance(chat_result.content, list) and all(
+            isinstance(c, FunctionCall) for c in chat_result.content
+        ):
             tool_calls: list[FunctionCall] = chat_result.content
-            logger.debug(f"StructuredLLMHost received {len(tool_calls)} tool calls from LLM")
+            logger.debug(
+                f"StructuredLLMHost received {len(tool_calls)} tool calls from LLM"
+            )
 
             # Use the base class helper to route tool calls
             await self._route_tool_calls_to_agents(tool_calls)
@@ -203,7 +219,11 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
             summary = self._create_tool_call_summary(tool_calls)
 
             # Return a descriptive acknowledgment
-            return AgentOutput(agent_id=self.agent_id, outputs=summary, metadata={"tool_calls": len(tool_calls)})
+            return AgentOutput(
+                agent_id=self.agent_id,
+                outputs=summary,
+                metadata={"tool_calls": len(tool_calls)},
+            )
 
         # If no tool calls, return the LLM response as usual
         return AgentOutput(
@@ -255,7 +275,9 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
 
         # Multiple tool calls - group by type if possible
         tool_names = [call.name for call in tool_calls]
-        unique_tools = list(dict.fromkeys(tool_names))  # Preserve order while removing duplicates
+        unique_tools = list(
+            dict.fromkeys(tool_names)
+        )  # Preserve order while removing duplicates
 
         if len(unique_tools) == 1:
             return f"Making {len(tool_calls)} {unique_tools[0]} calls"
@@ -274,7 +296,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
             bool: Always True, unless manually halted by user.
         """
         # Wait for pending tasks to complete but don't check error thresholds
-        last_step_successful = await self._wait_for_all_tasks_complete()
+        await self._wait_for_all_tasks_complete()
 
         # Clear error tracking for the next step (but don't evaluate thresholds)
         async with self._tasks_condition:

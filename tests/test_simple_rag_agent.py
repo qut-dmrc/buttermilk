@@ -1,7 +1,10 @@
 """Test the simplified RagAgent with structured outputs."""
 
-
-from buttermilk.agents.rag.rag_zotero import RagZotero, ZoteroReference, ZoteroResearchResult
+from buttermilk.agents.rag.rag_zotero import (
+    RagZotero,
+    ZoteroReference,
+    ZoteroResearchResult,
+)
 from buttermilk.agents.rag.simple_rag_agent import RagAgent, Reference, ResearchResult
 
 
@@ -13,7 +16,7 @@ class TestSimpleRagAgent:
         agent = RagAgent(
             agent_name="test_rag",
             role="RESEARCHER",
-            parameters={"model": "test-model", "template": "rag"}
+            parameters={"model": "test-model", "template": "rag"},
         )
 
         assert agent.output_model == ResearchResult
@@ -21,7 +24,11 @@ class TestSimpleRagAgent:
 
     def test_rag_agent_custom_template(self):
         """Test that RagAgent respects custom template parameter."""
-        agent = RagAgent(agent_name="test_rag", role="RESEARCHER", parameters={"template": "custom_template", "model": "test-model"})
+        agent = RagAgent(
+            agent_name="test_rag",
+            role="RESEARCHER",
+            parameters={"template": "custom_template", "model": "test-model"},
+        )
 
         assert agent.parameters.get("template") == "custom_template"
 
@@ -30,12 +37,11 @@ class TestSimpleRagAgent:
         result = ResearchResult(
             literature=[
                 Reference(
-                    summary="Test finding",
-                    citation="Test Document (ID: test123)"
+                    summary="Test finding", citation="Test Document (ID: test123)"
                 )
             ],
             response="Test synthesis",
-            summary="Brief summary"
+            summary="Brief summary",
         )
 
         assert len(result.literature) == 1
@@ -49,7 +55,11 @@ class TestRagZotero:
 
     def test_rag_zotero_forces_zotero_output(self):
         """Test that RagZotero uses ZoteroResearchResult."""
-        agent = RagZotero(agent_name="test_zotero", role="ZOTERO_RESEARCHER", parameters={"model": "test-model", "template": "rag"})
+        agent = RagZotero(
+            agent_name="test_zotero",
+            role="ZOTERO_RESEARCHER",
+            parameters={"model": "test-model", "template": "rag"},
+        )
 
         assert agent.output_model == ZoteroResearchResult
         assert agent.parameters.get("template") == "rag"
@@ -61,13 +71,16 @@ class TestRagZotero:
                 ZoteroReference(
                     summary="Social media impacts mental health",
                     citation="Smith, J., Brown, A., & Davis, C. (2023). The impact of social media. Journal of Psychology, 45(3), 234-251.",
-                    doi="10.1037/jap.2023.045"
+                    doi="10.1037/jap.2023.045",
                 )
             ],
             response="Research shows social media impacts...",
-            summary="Brief summary of research"
+            summary="Brief summary of research",
         )
 
         assert len(result.literature) == 1
-        assert result.literature[0].citation == "Smith, J., Brown, A., & Davis, C. (2023). The impact of social media. Journal of Psychology, 45(3), 234-251."
+        assert (
+            result.literature[0].citation
+            == "Smith, J., Brown, A., & Davis, C. (2023). The impact of social media. Journal of Psychology, 45(3), 234-251."
+        )
         assert result.literature[0].doi == "10.1037/jap.2023.045"

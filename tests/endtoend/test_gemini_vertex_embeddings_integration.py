@@ -19,7 +19,10 @@ if TYPE_CHECKING:
     from buttermilk._core.bm_init import BM
 
 BM_TEST_GEMINI_EMBED_MODELS = [
-    "text-embedding-004", "gemini-embedding-001", "text-embedding-005"]
+    "text-embedding-004",
+    "gemini-embedding-001",
+    "text-embedding-005",
+]
 
 
 @pytest.mark.parametrize("embedding_model", BM_TEST_GEMINI_EMBED_MODELS)
@@ -43,17 +46,19 @@ def test_gemini_embedding_function(real_bm: BM, embedding_model: str) -> None:
 
 @pytest.mark.parametrize("embedding_model", BM_TEST_GEMINI_EMBED_MODELS)
 def test_vertex_embedding_minimal_compare(real_bm: BM, embedding_model: str) -> None:
-    """Call Vertex AI TextEmbeddingModel using aiplatform and verify it returns vectors.
-    """
+    """Call Vertex AI TextEmbeddingModel using aiplatform and verify it returns vectors."""
     texts = [
         "A tiny test document.",
         "Another small input.",
     ]
     from vertexai.language_models import TextEmbeddingInput, TextEmbeddingModel
+
     model = TextEmbeddingModel.from_pretrained(embedding_model)
     dim = 128
     inputs: list[str | TextEmbeddingInput] = [TextEmbeddingInput(text=t) for t in texts]
-    results = model.get_embeddings(texts=inputs, auto_truncate=False, output_dimensionality=dim)
+    results = model.get_embeddings(
+        texts=inputs, auto_truncate=False, output_dimensionality=dim
+    )
 
     # Convert to plain lists where needed
     vectors = [list(r.values) for r in results]

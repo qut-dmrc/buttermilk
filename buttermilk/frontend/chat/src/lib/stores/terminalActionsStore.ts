@@ -1,7 +1,7 @@
-import { writable } from 'svelte/store';
+import { writable } from "svelte/store"
 
 // Type for the runFlow function signature (adjust if necessary)
-type RunFlowFunction = (() => void) | null;
+type RunFlowFunction = (() => void) | null
 
 // Writable store to hold the runFlow function
-export const runFlowAction = writable<RunFlowFunction>(null);
+export const runFlowAction = writable<RunFlowFunction>(null)

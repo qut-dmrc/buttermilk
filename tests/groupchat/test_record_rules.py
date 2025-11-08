@@ -35,7 +35,8 @@ def record_agent_cfg(
                     template="judge",
                     formatting="json_rules",
                     criteria="criteria_ordinary",
-                ), session_id="test_session",
+                ),
+                session_id="test_session",
             )
         case "Owl":
             return LLMAgent(
@@ -54,7 +55,9 @@ def record_agent_cfg(
 
 
 @pytest.mark.anyio
-@pytest.mark.skip(reason="Test uses outdated AgentInput API that no longer accepts 'records' parameter")
+@pytest.mark.skip(
+    reason="Test uses outdated AgentInput API that no longer accepts 'records' parameter"
+)
 async def test_run_record_agent(
     runtime,
     record_agent_cfg,

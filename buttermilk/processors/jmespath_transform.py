@@ -39,7 +39,7 @@ class JMESPathTransform(BaseModel):
     mappings: dict[str, str] = Field(
         ...,
         description="Mapping of field names to JMESPath expressions. "
-        "Each key becomes a new field on the record, with value computed by the expression."
+        "Each key becomes a new field on the record, with value computed by the expression.",
     )
 
     # Cache compiled JMESPath expressions for performance
@@ -56,16 +56,14 @@ class JMESPathTransform(BaseModel):
                     "Invalid JMESPath expression",
                     field_name=field_name,
                     expression=expression,
-                    error=str(e)
+                    error=str(e),
                 )
-                raise ValueError(f"Invalid JMESPath expression for field '{field_name}': {expression}") from e
+                raise ValueError(
+                    f"Invalid JMESPath expression for field '{field_name}': {expression}"
+                ) from e
 
     async def process(
-        self,
-        record: BaseRecord,
-        *,
-        processor_stage: str,
-        **kwargs
+        self, record: BaseRecord, *, processor_stage: str, **kwargs
     ) -> AsyncGenerator[BaseRecord, None]:
         """Process a record by applying JMESPath transformations.
 
@@ -84,7 +82,7 @@ class JMESPathTransform(BaseModel):
             "JMESPathTransform processing record",
             record_id=record.record_id,
             mappings_count=len(self.mappings),
-            processor_stage=processor_stage
+            processor_stage=processor_stage,
         )
 
         # Convert record to dict for JMESPath processing
@@ -104,13 +102,13 @@ class JMESPathTransform(BaseModel):
                         "Applied JMESPath mapping",
                         field_name=field_name,
                         result_type=type(result).__name__,
-                        processor_stage=processor_stage
+                        processor_stage=processor_stage,
                     )
                 else:
                     logger.debug(
                         "JMESPath expression returned None, field not added",
                         field_name=field_name,
-                        processor_stage=processor_stage
+                        processor_stage=processor_stage,
                     )
 
             except Exception as e:
@@ -118,9 +116,11 @@ class JMESPathTransform(BaseModel):
                     "Error applying JMESPath expression",
                     field_name=field_name,
                     error=str(e),
-                    processor_stage=processor_stage
+                    processor_stage=processor_stage,
                 )
-                raise ValueError(f"Error applying JMESPath for field '{field_name}': {str(e)}") from e
+                raise ValueError(
+                    f"Error applying JMESPath for field '{field_name}': {str(e)}"
+                ) from e
 
         # Create new record with additional fields
         # BaseRecord has extra="allow" and frozen=True, so we need to reconstruct it
@@ -139,7 +139,7 @@ class JMESPathTransform(BaseModel):
                 "JMESPath transformation complete",
                 record_id=record.record_id,
                 fields_added=list(transformed_fields.keys()),
-                processor_stage=processor_stage
+                processor_stage=processor_stage,
             )
 
             yield updated_record
@@ -147,6 +147,6 @@ class JMESPathTransform(BaseModel):
             logger.info(
                 "No fields transformed (all expressions returned None)",
                 record_id=record.record_id,
-                processor_stage=processor_stage
+                processor_stage=processor_stage,
             )
             yield record

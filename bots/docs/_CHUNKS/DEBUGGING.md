@@ -59,7 +59,7 @@ This is the only debugging guide you need - all commands have been validated and
 1. **Debug Live Flows**: Execute flows using puppet mode with full message capture (✅ 0 to 20+ messages)
 1. **Stop the Server**: Terminate the backend process (✅ `make kill_api`)
 
-______________________________________________________________________
+---
 
 ## 1. Start the Server
 
@@ -83,7 +83,7 @@ uv run python -m buttermilk.runner.cli "+flows=[trans,zot,osb]" run=api llms=deb
 
 **⚠️ WARNING**: This command does not time out. Only use if your agent can manage background processes. Other agents should use `make debug` instead.
 
-______________________________________________________________________
+---
 
 ## 2. Check Logs First
 
@@ -204,7 +204,7 @@ await debug_agent.puppet_start_flow(
     flow_name="trans",
     prompt="Analyze this article for trans representation",
     record="betoota_snape_trans",  # Must be a valid record ID
-    criteria="tja"  # Must be a valid criteria template
+    criteria="tja",  # Must be a valid criteria template
 )
 ```
 
@@ -246,7 +246,7 @@ result = await client.start_flow(
     query="Analyze this article",
     record="betoota_snape_trans",
     criteria="tja",
-    wait_time=60
+    wait_time=60,
 )
 
 # Result contains full message history
@@ -399,7 +399,7 @@ make kill_api
 
 This ensures no orphaned processes are left running.
 
-______________________________________________________________________
+---
 
 ## Troubleshooting Common Issues
 

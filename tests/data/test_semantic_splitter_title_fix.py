@@ -20,11 +20,14 @@ async def test_semantic_splitter_with_record_without_title():
     record = BaseRecord(
         record_id="test_record_1",
         dataset="test_dataset",
-        content="This is test content that should be chunked. " * 50,  # Make it long enough to chunk
+        content="This is test content that should be chunked. "
+        * 50,  # Make it long enough to chunk
     )
 
     # Create SemanticSplitter instance
-    splitter = SemanticSplitter(breakpoint_threshold_amount=0.5, max_chunk_size=100, min_chunk_size=10)
+    splitter = SemanticSplitter(
+        breakpoint_threshold_amount=0.5, max_chunk_size=100, min_chunk_size=10
+    )
 
     # Process the record - returns record with chunks attached
     processed_records = []
@@ -42,7 +45,9 @@ async def test_semantic_splitter_with_record_without_title():
     # Verify the chunks have document_title set to record_id (fallback)
     for chunk in processed.chunks:
         assert hasattr(chunk, "document_title")
-        assert chunk.document_title == "test_record_1"  # Should use record_id as fallback
+        assert (
+            chunk.document_title == "test_record_1"
+        )  # Should use record_id as fallback
 
 
 @pytest.mark.anyio
@@ -50,10 +55,15 @@ async def test_semantic_splitter_with_title_in_metadata():
     """Test SemanticSplitter uses title from metadata when available."""
     # Create a BaseRecord with title in metadata
     record = BaseRecord(
-        record_id="test_record_2", dataset="test_dataset", content="This is test content with a title. " * 50, metadata={"title": "My Document Title"}
+        record_id="test_record_2",
+        dataset="test_dataset",
+        content="This is test content with a title. " * 50,
+        metadata={"title": "My Document Title"},
     )
 
-    splitter = SemanticSplitter(breakpoint_threshold_amount=0.5, max_chunk_size=100, min_chunk_size=10)
+    splitter = SemanticSplitter(
+        breakpoint_threshold_amount=0.5, max_chunk_size=100, min_chunk_size=10
+    )
 
     # Process the record
     processed_records = []
@@ -74,12 +84,23 @@ async def test_semantic_splitter_mixed_records():
     """Test SemanticSplitter handles mix of records with and without titles."""
     records = [
         # Record with title in metadata
-        BaseRecord(record_id="with_title", dataset="test", content="Content with title. " * 30, metadata={"title": "Document with Title"}),
+        BaseRecord(
+            record_id="with_title",
+            dataset="test",
+            content="Content with title. " * 30,
+            metadata={"title": "Document with Title"},
+        ),
         # Record without title (will use record_id)
-        BaseRecord(record_id="without_title", dataset="test", content="Content without title. " * 30),
+        BaseRecord(
+            record_id="without_title",
+            dataset="test",
+            content="Content without title. " * 30,
+        ),
     ]
 
-    splitter = SemanticSplitter(breakpoint_threshold_amount=0.5, max_chunk_size=100, min_chunk_size=10)
+    splitter = SemanticSplitter(
+        breakpoint_threshold_amount=0.5, max_chunk_size=100, min_chunk_size=10
+    )
 
     all_processed = []
     for record in records:

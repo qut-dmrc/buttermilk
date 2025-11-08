@@ -1,6 +1,5 @@
 """Tests for weave trace formatters."""
 
-
 import pytest
 
 from buttermilk._core.tracing import EmptyTraceFilter, NoOpFormatter
@@ -43,19 +42,19 @@ class TestEmptyTraceFilter:
             {
                 "op_name": "AutogenAdapter.handle_record.message_handler",
                 "output": None,
-                "inputs": {"message": {"type": "Record", "content": "test"}}
+                "inputs": {"message": {"type": "Record", "content": "test"}},
             },
             # Message handler with empty dict output
             {
                 "op_name": "SomeAgent._heartbeat.message_handler",
                 "output": {},
-                "inputs": {"message": {"type": "HeartBeat"}}
+                "inputs": {"message": {"type": "HeartBeat"}},
             },
             # Message handler with empty string output
             {
                 "op_name": "Agent.handle_manager_message.message_handler",
                 "output": "",
-                "inputs": {"message": {"type": "UserResponseMessage"}}
+                "inputs": {"message": {"type": "UserResponseMessage"}},
             },
         ]
 
@@ -71,51 +70,47 @@ class TestEmptyTraceFilter:
             {
                 "op_name": "Agent.process.message_handler",
                 "output": {"result": "processed", "status": "success"},
-                "inputs": {"message": {"type": "AgentInput"}}
+                "inputs": {"message": {"type": "AgentInput"}},
             },
             # Non-message handler trace (even if empty)
-            {
-                "op_name": "Agent.process",
-                "output": None,
-                "inputs": {"data": "test"}
-            },
+            {"op_name": "Agent.process", "output": None, "inputs": {"data": "test"}},
             # Message handler with error
             {
                 "op_name": "Agent.handle.message_handler",
                 "output": None,
                 "error": "Something went wrong",
-                "inputs": {"message": {"type": "AgentInput"}}
+                "inputs": {"message": {"type": "AgentInput"}},
             },
             # Message handler with exception
             {
                 "op_name": "Agent.handle.message_handler",
                 "output": None,
                 "exception": {"type": "ValueError", "message": "Invalid input"},
-                "inputs": {"message": {"type": "AgentInput"}}
+                "inputs": {"message": {"type": "AgentInput"}},
             },
             # Message handler with non-empty string output
             {
                 "op_name": "Agent.handle.message_handler",
                 "output": "Success",
-                "inputs": {"message": {"type": "AgentInput"}}
+                "inputs": {"message": {"type": "AgentInput"}},
             },
             # Message handler with list output
             {
                 "op_name": "Agent.handle.message_handler",
                 "output": [],
-                "inputs": {"message": {"type": "AgentInput"}}
+                "inputs": {"message": {"type": "AgentInput"}},
             },
             # Message handler with numeric output
             {
                 "op_name": "Agent.handle.message_handler",
                 "output": 0,
-                "inputs": {"message": {"type": "AgentInput"}}
+                "inputs": {"message": {"type": "AgentInput"}},
             },
             # Message handler with boolean output
             {
                 "op_name": "Agent.handle.message_handler",
                 "output": False,
-                "inputs": {"message": {"type": "AgentInput"}}
+                "inputs": {"message": {"type": "AgentInput"}},
             },
         ]
 
@@ -133,27 +128,24 @@ class TestEmptyTraceFilter:
 
         # Op name variations - "message_handler" without dot prefix is NOT filtered
         # because we specifically look for ".message_handler" suffix
-        assert filter.format({
-            "op_name": "message_handler",  # Just "message_handler" without prefix
-            "output": None
-        }) == {
-            "op_name": "message_handler",
-            "output": None
-        }
+        assert filter.format(
+            {
+                "op_name": "message_handler",  # Just "message_handler" without prefix
+                "output": None,
+            }
+        ) == {"op_name": "message_handler", "output": None}
 
-        assert filter.format({
-            "op_name": "something.message_handler.extra",  # Extra suffix
-            "output": None
-        }) == {
-            "op_name": "something.message_handler.extra",
-            "output": None
-        }
+        assert filter.format(
+            {
+                "op_name": "something.message_handler.extra",  # Extra suffix
+                "output": None,
+            }
+        ) == {"op_name": "something.message_handler.extra", "output": None}
 
         # Case sensitivity
-        assert filter.format({
-            "op_name": "Agent.MESSAGE_HANDLER",  # Uppercase
-            "output": None
-        }) == {
-            "op_name": "Agent.MESSAGE_HANDLER",
-            "output": None
-        }
+        assert filter.format(
+            {
+                "op_name": "Agent.MESSAGE_HANDLER",  # Uppercase
+                "output": None,
+            }
+        ) == {"op_name": "Agent.MESSAGE_HANDLER", "output": None}

@@ -19,9 +19,15 @@ class CloudProviderConfig(BaseModel, ABC):
     """
 
     type: str = Field(description="Cloud provider type")
-    project_id: Optional[str] = Field(default=None, description="Primary project/account identifier")
-    region: Optional[str] = Field(default=None, description="Default region for resources")
-    credentials: Dict[str, Any] = Field(default_factory=dict, description="Provider-specific credential configuration")
+    project_id: Optional[str] = Field(
+        default=None, description="Primary project/account identifier"
+    )
+    region: Optional[str] = Field(
+        default=None, description="Default region for resources"
+    )
+    credentials: Dict[str, Any] = Field(
+        default_factory=dict, description="Provider-specific credential configuration"
+    )
 
     model_config = {
         "extra": "allow",  # Allow provider-specific fields
@@ -45,8 +51,13 @@ class CloudProviderConfig(BaseModel, ABC):
 class SecretsServiceConfig(BaseModel):
     """Configuration for secrets management service."""
 
-    models_secret: str = Field(default="dev__llm__connections", description="Secret name for LLM API keys")
-    credentials_secret: str = Field(default="dev__shared_credentials", description="Secret name for shared credentials")
+    models_secret: str = Field(
+        default="dev__llm__connections", description="Secret name for LLM API keys"
+    )
+    credentials_secret: str = Field(
+        default="dev__shared_credentials",
+        description="Secret name for shared credentials",
+    )
 
 
 class LoggingServiceConfig(BaseModel):
@@ -59,14 +70,24 @@ class PubSubServiceConfig(BaseModel):
     """Configuration for pub/sub messaging service."""
 
     # Base GCP fields needed by consumers
-    project_id: Optional[str] = Field(default=None, description="GCP Project ID for Pub/Sub resources")
-    location: Optional[str] = Field(default=None, description="GCP location/region for Pub/Sub resources")
+    project_id: Optional[str] = Field(
+        default=None, description="GCP Project ID for Pub/Sub resources"
+    )
+    location: Optional[str] = Field(
+        default=None, description="GCP location/region for Pub/Sub resources"
+    )
 
     # Service-specific fields
     jobs_topic: str = Field(default="jobs", description="Topic name for job messages")
-    jobs_subscription: str = Field(default="jobs-sub", description="Subscription name for job messages")
-    status_topic: str = Field(default="flow", description="Topic name for status messages")
-    status_subscription: str = Field(default="flow-sub", description="Subscription name for status messages")
+    jobs_subscription: str = Field(
+        default="jobs-sub", description="Subscription name for job messages"
+    )
+    status_topic: str = Field(
+        default="flow", description="Topic name for status messages"
+    )
+    status_subscription: str = Field(
+        default="flow-sub", description="Subscription name for status messages"
+    )
 
 
 class TracingServiceConfig(BaseModel):
@@ -85,21 +106,42 @@ class GCPConfig(CloudProviderConfig):
     """Google Cloud Platform configuration with integrated services."""
 
     type: Literal["gcp"] = "gcp"
-    project_id: Optional[str] = Field(default=None, description="GCP Project ID (auto-detected from GOOGLE_CLOUD_PROJECT)")
-    quota_project_id: Optional[str] = Field(default=None, description="Quota project for billing (defaults to project_id)")
+    project_id: Optional[str] = Field(
+        default=None,
+        description="GCP Project ID (auto-detected from GOOGLE_CLOUD_PROJECT)",
+    )
+    quota_project_id: Optional[str] = Field(
+        default=None, description="Quota project for billing (defaults to project_id)"
+    )
     region: str = Field(default="us-central1", description="Default GCP region")
-    location: Optional[str] = Field(default=None, description="Default location (defaults to region)")
+    location: Optional[str] = Field(
+        default=None, description="Default location (defaults to region)"
+    )
 
     # Core storage configurations
-    storage_bucket: Optional[str] = Field(default=None, description="Default GCS bucket for storage operations")
-    bigquery_dataset: str = Field(default="buttermilk", description="Default BigQuery dataset")
+    storage_bucket: Optional[str] = Field(
+        default=None, description="Default GCS bucket for storage operations"
+    )
+    bigquery_dataset: str = Field(
+        default="buttermilk", description="Default BigQuery dataset"
+    )
 
     # Integrated service configurations
-    secrets: Optional[SecretsServiceConfig] = Field(default=None, description="Secrets management configuration")
-    logging: Optional[LoggingServiceConfig] = Field(default=None, description="Cloud logging configuration")
-    pubsub: Optional[PubSubServiceConfig] = Field(default=None, description="Pub/Sub messaging configuration")
-    tracing: Optional[TracingServiceConfig] = Field(default=None, description="OpenTelemetry tracing configuration")
-    vertex: Optional[VertexServiceConfig] = Field(default=None, description="Vertex AI service configuration")
+    secrets: Optional[SecretsServiceConfig] = Field(
+        default=None, description="Secrets management configuration"
+    )
+    logging: Optional[LoggingServiceConfig] = Field(
+        default=None, description="Cloud logging configuration"
+    )
+    pubsub: Optional[PubSubServiceConfig] = Field(
+        default=None, description="Pub/Sub messaging configuration"
+    )
+    tracing: Optional[TracingServiceConfig] = Field(
+        default=None, description="OpenTelemetry tracing configuration"
+    )
+    vertex: Optional[VertexServiceConfig] = Field(
+        default=None, description="Vertex AI service configuration"
+    )
 
     @model_validator(mode="after")
     def set_defaults_from_env(self) -> "GCPConfig":
@@ -217,7 +259,9 @@ class AzureConfig(CloudProviderConfig):
         alias="project_id",  # Map to common field
         description="Azure Subscription ID",
     )
-    resource_group: Optional[str] = Field(default=None, description="Default resource group")
+    resource_group: Optional[str] = Field(
+        default=None, description="Default resource group"
+    )
     region: str = Field(default="eastus", description="Default Azure region")
 
     def get_client_config(self, service: str) -> Dict[str, Any]:
@@ -232,8 +276,12 @@ class AzureConfig(CloudProviderConfig):
 class LoggerConfig(BaseModel):
     """Configuration for cloud logging providers."""
 
-    type: Literal["gcp", "aws", "azure", "local"] = Field(description="Logging provider type")
-    project_id: Optional[str] = Field(default=None, description="Cloud project ID for logging")
+    type: Literal["gcp", "aws", "azure", "local"] = Field(
+        description="Logging provider type"
+    )
+    project_id: Optional[str] = Field(
+        default=None, description="Cloud project ID for logging"
+    )
     location: Optional[str] = Field(default=None, description="Logging location/region")
     verbose: bool = Field(default=False, description="Enable verbose logging")
     console: bool = Field(
@@ -252,16 +300,22 @@ class LoggerConfig(BaseModel):
 class RunInfoConfig(BaseModel):
     """Configuration for run execution information."""
 
-    platform: Literal["local", "cloud", "batch"] = Field(default="local", description="Execution platform")
+    platform: Literal["local", "cloud", "batch"] = Field(
+        default="local", description="Execution platform"
+    )
     flow_api: Optional[str] = Field(default=None, description="Base URL for flow API")
-    save_dir_base: Optional[str] = Field(default=None, description="Base directory/URI for saving results")
+    save_dir_base: Optional[str] = Field(
+        default=None, description="Base directory/URI for saving results"
+    )
 
 
 class TracingConfig(BaseModel):
     """Configuration for experiment tracing."""
 
     enabled: bool = Field(default=True, description="Enable tracing")
-    provider: Literal["weave", "wandb", "mlflow"] = Field(default="weave", description="Tracing provider")
+    provider: Literal["weave", "wandb", "mlflow"] = Field(
+        default="weave", description="Tracing provider"
+    )
 
 
 # Union type for all cloud providers

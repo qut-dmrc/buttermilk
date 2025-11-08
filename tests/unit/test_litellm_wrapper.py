@@ -23,14 +23,20 @@ class TestLiteLLMWrapper:
     def test_init_requires_litellm(self):
         """Test that LiteLLMWrapper requires LiteLLM to be installed."""
         if not LITELLM_AVAILABLE:
-            model_info = ModelInfo(vision=False, function_calling=True, json_output=False, family="gpt-4")
+            model_info = ModelInfo(
+                vision=False, function_calling=True, json_output=False, family="gpt-4"
+            )
 
             with pytest.raises(ImportError, match="LiteLLM is not installed"):
-                LiteLLMWrapper(model="gpt-4", model_info=model_info, litellm_model_name="gpt-4")
+                LiteLLMWrapper(
+                    model="gpt-4", model_info=model_info, litellm_model_name="gpt-4"
+                )
 
     def test_init_valid_params(self):
         """Test LiteLLMWrapper initialization with valid parameters."""
-        model_info = ModelInfo(vision=False, function_calling=True, json_output=False, family="gpt-4")
+        model_info = ModelInfo(
+            vision=False, function_calling=True, json_output=False, family="gpt-4"
+        )
 
         wrapper = LiteLLMWrapper(
             model="gpt-4",
@@ -112,11 +118,21 @@ class TestLiteLLMWrapperCreate:
 
     async def test_create_basic_completion(self):
         """Test basic completion call."""
-        model_info = ModelInfo(vision=False, function_calling=True, json_output=False, family="gpt-4")
+        model_info = ModelInfo(
+            vision=False, function_calling=True, json_output=False, family="gpt-4"
+        )
 
-        wrapper = LiteLLMWrapper(model="gpt-4", model_info=model_info, litellm_model_name="gpt-4", api_key="test-key")
+        wrapper = LiteLLMWrapper(
+            model="gpt-4",
+            model_info=model_info,
+            litellm_model_name="gpt-4",
+            api_key="test-key",
+        )
 
-        messages = [SystemMessage(content="You are a helpful assistant."), UserMessage(content="Say hello!", source="user")]
+        messages = [
+            SystemMessage(content="You are a helpful assistant."),
+            UserMessage(content="Say hello!", source="user"),
+        ]
 
         # Mock the acompletion call
         with patch("buttermilk._core.llms.acompletion") as mock_acompletion:
@@ -143,7 +159,9 @@ class TestLiteLLMWrapperCreate:
 
     async def test_create_with_retry_on_rate_limit(self):
         """Test retry logic on rate limit errors."""
-        model_info = ModelInfo(vision=False, function_calling=True, json_output=False, family="gpt-4")
+        model_info = ModelInfo(
+            vision=False, function_calling=True, json_output=False, family="gpt-4"
+        )
 
         wrapper = LiteLLMWrapper(
             model="gpt-4",
@@ -166,7 +184,10 @@ class TestLiteLLMWrapperCreate:
             mock_response.usage = MagicMock(prompt_tokens=10, completion_tokens=5)
             mock_response.cached = False
 
-            mock_acompletion.side_effect = [Exception("Rate limit exceeded"), mock_response]
+            mock_acompletion.side_effect = [
+                Exception("Rate limit exceeded"),
+                mock_response,
+            ]
 
             result = await wrapper.create(messages=messages)
 
@@ -175,7 +196,9 @@ class TestLiteLLMWrapperCreate:
 
     async def test_create_failure_after_max_retries(self):
         """Test that error is raised after max retries."""
-        model_info = ModelInfo(vision=False, function_calling=True, json_output=False, family="gpt-4")
+        model_info = ModelInfo(
+            vision=False, function_calling=True, json_output=False, family="gpt-4"
+        )
 
         wrapper = LiteLLMWrapper(
             model="gpt-4",
@@ -210,16 +233,29 @@ class TestLiteLLMWrapperStructuredOutput:
             summary: str
             sentiment: str
 
-        model_info = ModelInfo(vision=False, function_calling=True, json_output=True, structured_output=True, family="gpt-4")
+        model_info = ModelInfo(
+            vision=False,
+            function_calling=True,
+            json_output=True,
+            structured_output=True,
+            family="gpt-4",
+        )
 
-        wrapper = LiteLLMWrapper(model="gpt-4", model_info=model_info, litellm_model_name="gpt-4", api_key="test-key")
+        wrapper = LiteLLMWrapper(
+            model="gpt-4",
+            model_info=model_info,
+            litellm_model_name="gpt-4",
+            api_key="test-key",
+        )
 
         messages = [UserMessage(content="Analyze this text", source="user")]
 
         with patch("buttermilk._core.llms.acompletion") as mock_acompletion:
             mock_response = MagicMock()
             mock_response.choices = [MagicMock()]
-            mock_response.choices[0].message.content = '{"summary": "Test summary", "sentiment": "positive"}'
+            mock_response.choices[
+                0
+            ].message.content = '{"summary": "Test summary", "sentiment": "positive"}'
             mock_response.choices[0].finish_reason = "stop"
             mock_response.usage = MagicMock(prompt_tokens=10, completion_tokens=20)
             mock_response.cached = False
@@ -239,9 +275,16 @@ class TestLiteLLMWrapperPricing:
 
     def test_calculate_pricing_with_usage(self):
         """Test pricing calculation with valid usage data."""
-        model_info = ModelInfo(vision=False, function_calling=True, json_output=False, family="gpt-4")
+        model_info = ModelInfo(
+            vision=False, function_calling=True, json_output=False, family="gpt-4"
+        )
 
-        wrapper = LiteLLMWrapper(model="gpt-4", model_info=model_info, litellm_model_name="gpt-4", api_key="test-key")
+        wrapper = LiteLLMWrapper(
+            model="gpt-4",
+            model_info=model_info,
+            litellm_model_name="gpt-4",
+            api_key="test-key",
+        )
 
         mock_usage = MagicMock()
         mock_usage.prompt_tokens = 100
@@ -257,9 +300,16 @@ class TestLiteLLMWrapperPricing:
 
     def test_calculate_pricing_without_usage(self):
         """Test pricing calculation when usage data is missing."""
-        model_info = ModelInfo(vision=False, function_calling=True, json_output=False, family="gpt-4")
+        model_info = ModelInfo(
+            vision=False, function_calling=True, json_output=False, family="gpt-4"
+        )
 
-        wrapper = LiteLLMWrapper(model="gpt-4", model_info=model_info, litellm_model_name="gpt-4", api_key="test-key")
+        wrapper = LiteLLMWrapper(
+            model="gpt-4",
+            model_info=model_info,
+            litellm_model_name="gpt-4",
+            api_key="test-key",
+        )
 
         pricing = wrapper._calculate_pricing(None)
 

@@ -14,6 +14,7 @@ class ProcessingFinished(Exception):
     a graceful exit when there is no more work to be done. It's not necessarily
     an error condition but rather a control flow mechanism.
     """
+
     pass
 
 
@@ -24,6 +25,7 @@ class FatalError(Exception):
     encountered an unrecoverable situation, and the current operation or
     the entire process should terminate.
     """
+
     pass
 
 
@@ -35,6 +37,7 @@ class ProcessingError(Exception):
     It signifies that something went wrong, but the system might be able to
     recover, retry, or continue with other tasks.
     """
+
     pass
 
 
@@ -64,6 +67,7 @@ class RateLimit(Exception):
     within a certain time window. Handling this typically involves waiting
     for a period and then retrying the request.
     """
+
     pass
 
 
@@ -75,6 +79,7 @@ class NoMoreResults(Exception):
     the data source is exhausted or a predefined limit (e.g., time, number
     of results) has been reached.
     """
+
     pass
 
 
@@ -86,4 +91,5 @@ class Delay(Exception):
     The component catching this exception should pause for a specified duration
     before attempting to run the operation again.
     """
+
     pass

@@ -96,7 +96,9 @@ class TestCachedProperty:
         assert second_duration < 0.001  # Should be very fast (under 1ms)
 
 
-@pytest.mark.skip(reason="Lazy loading tests need refactoring for new BM structure - TODO")
+@pytest.mark.skip(
+    reason="Lazy loading tests need refactoring for new BM structure - TODO"
+)
 class TestCloudManagerLazyLoading:
     """Test CloudManager lazy loading patterns."""
 
@@ -118,7 +120,11 @@ class TestCloudManagerLazyLoading:
 
     def test_cloud_manager_clients_are_lazy(self):
         """Test that cloud clients are not created until accessed."""
-        with patch("google.auth.default"), patch("google.cloud.storage.Client") as mock_storage, patch("google.cloud.bigquery.Client") as mock_bq:
+        with (
+            patch("google.auth.default"),
+            patch("google.cloud.storage.Client") as mock_storage,
+            patch("google.cloud.bigquery.Client") as mock_bq,
+        ):
             from buttermilk._core.cloud import CloudManager
 
             CloudManager(clouds=[{"type": "gcp", "project": "test-project"}])
@@ -152,7 +158,9 @@ class TestCloudManagerLazyLoading:
             assert creds1 is creds2
 
 
-@pytest.mark.skip(reason="Lazy loading tests need refactoring for new BM structure - TODO")
+@pytest.mark.skip(
+    reason="Lazy loading tests need refactoring for new BM structure - TODO"
+)
 class TestLLMManagerLazyLoading:
     """Test LLM manager lazy loading optimizations."""
 
@@ -161,7 +169,10 @@ class TestLLMManagerLazyLoading:
         from buttermilk._core.llms import LLMs
 
         # Mock connections data
-        test_connections = {"gemini": {"api_key": "test_key", "model": "gemini-pro"}, "openai": {"api_key": "test_key2", "model": "gpt-4"}}
+        test_connections = {
+            "gemini": {"api_key": "test_key", "model": "gemini-pro"},
+            "openai": {"api_key": "test_key2", "model": "gpt-4"},
+        }
 
         llms = LLMs(connections=test_connections)
 
@@ -181,7 +192,9 @@ class TestLLMManagerLazyLoading:
             mock_configure.assert_not_called()
 
 
-@pytest.mark.skip(reason="Lazy loading tests need refactoring for new BM structure - TODO")
+@pytest.mark.skip(
+    reason="Lazy loading tests need refactoring for new BM structure - TODO"
+)
 class TestQueryRunnerLazyLoading:
     """Test QueryRunner lazy loading patterns."""
 
@@ -199,7 +212,9 @@ class TestQueryRunnerLazyLoading:
             assert qr.client is fake_client
 
 
-@pytest.mark.skip(reason="Lazy loading tests need refactoring for new BM structure - TODO")
+@pytest.mark.skip(
+    reason="Lazy loading tests need refactoring for new BM structure - TODO"
+)
 class TestAsyncBackgroundOperations:
     """Test async background operations don't block startup."""
 
@@ -207,7 +222,10 @@ class TestAsyncBackgroundOperations:
         """Test that config saving can happen in background."""
         from buttermilk import BM
 
-        with patch("buttermilk._core.cloud.CloudManager"), patch("buttermilk.utils.save.save") as mock_save:
+        with (
+            patch("buttermilk._core.cloud.CloudManager"),
+            patch("buttermilk.utils.save.save") as mock_save,
+        ):
             # Make save async to simulate real behavior
             async def async_save(*args, **kwargs):
                 return {"uri": "/tmp/test", "session_id": "test"}
@@ -228,7 +246,10 @@ class TestAsyncBackgroundOperations:
         """Test that IP address fetching happens in background."""
         from buttermilk import BM
 
-        with patch("buttermilk._core.cloud.CloudManager"), patch("buttermilk.utils.get_ip") as mock_get_ip:
+        with (
+            patch("buttermilk._core.cloud.CloudManager"),
+            patch("buttermilk.utils.get_ip") as mock_get_ip,
+        ):
             # Make IP fetching slow to test it doesn't block
             async def slow_ip_fetch():
                 await asyncio.sleep(0.1)
@@ -251,7 +272,9 @@ class TestAsyncBackgroundOperations:
             assert bm.session_info.project_name == "test"
 
 
-@pytest.mark.skip(reason="Lazy loading tests need refactoring for new BM structure - TODO")
+@pytest.mark.skip(
+    reason="Lazy loading tests need refactoring for new BM structure - TODO"
+)
 class TestMemoryEfficiency:
     """Test memory efficiency of lazy loading."""
 

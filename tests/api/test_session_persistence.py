@@ -26,7 +26,10 @@ class TestSessionStorageService:
         """Set up temporary directory for each test."""
         with tempfile.TemporaryDirectory() as tmpdir:
             self.temp_storage_dir = Path(tmpdir)
-            with patch("buttermilk.api.services.session_storage.SESSIONS_DIR", self.temp_storage_dir):
+            with patch(
+                "buttermilk.api.services.session_storage.SESSIONS_DIR",
+                self.temp_storage_dir,
+            ):
                 self.storage_service = SessionStorageService()
                 yield
 
@@ -209,7 +212,10 @@ class TestWebSocketMessagePersistence:
         )
 
         # Simulate WebSocket message handling with persistence
-        with patch("buttermilk.api.services.session_storage.SessionStorageService", return_value=mock_storage_service):
+        with patch(
+            "buttermilk.api.services.session_storage.SessionStorageService",
+            return_value=mock_storage_service,
+        ):
             # Format message for client
             formatted = MessageService.format_message_for_client(test_message)
 
@@ -218,7 +224,9 @@ class TestWebSocketMessagePersistence:
                 await mock_storage_service.save_message("test-session", formatted)
 
             # Verify save was called
-            mock_storage_service.save_message.assert_called_once_with("test-session", formatted)
+            mock_storage_service.save_message.assert_called_once_with(
+                "test-session", formatted
+            )
 
 
 @pytest.mark.anyio
@@ -274,7 +282,10 @@ class TestSessionStorageHelperMethods:
         """Set up temporary directory for each test."""
         with tempfile.TemporaryDirectory() as tmpdir:
             self.temp_storage_dir = Path(tmpdir)
-            with patch("buttermilk.api.services.session_storage.SESSIONS_DIR", self.temp_storage_dir):
+            with patch(
+                "buttermilk.api.services.session_storage.SESSIONS_DIR",
+                self.temp_storage_dir,
+            ):
                 self.storage_service = SessionStorageService()
                 yield
 
@@ -338,7 +349,10 @@ class TestSessionGCSArchival:
         """Set up temporary directory for each test."""
         with tempfile.TemporaryDirectory() as tmpdir:
             self.temp_storage_dir = Path(tmpdir)
-            with patch("buttermilk.api.services.session_storage.SESSIONS_DIR", self.temp_storage_dir):
+            with patch(
+                "buttermilk.api.services.session_storage.SESSIONS_DIR",
+                self.temp_storage_dir,
+            ):
                 self.storage_service = SessionStorageService()
                 yield
 
@@ -367,7 +381,9 @@ class TestSessionGCSArchival:
         # Mock the save method to simulate GCS save
         from unittest.mock import Mock
 
-        real_bm.save = Mock(return_value="gs://my-bucket/sessions/session_test-session_archived.json")
+        real_bm.save = Mock(
+            return_value="gs://my-bucket/sessions/session_test-session_archived.json"
+        )
 
         result = self.storage_service.archive_to_gcs(session_id)
         assert result is True
@@ -388,7 +404,9 @@ class TestSessionGCSArchival:
         real_bm.session_info.save_dir = "gs://my-bucket/sessions"
         from unittest.mock import Mock
 
-        real_bm.save = Mock(return_value="gs://my-bucket/sessions/session_test-session_archived.json")
+        real_bm.save = Mock(
+            return_value="gs://my-bucket/sessions/session_test-session_archived.json"
+        )
 
         self.storage_service.finalize_session(session_id, "completed")
 
@@ -411,7 +429,9 @@ class TestSessionGCSArchival:
         real_bm.session_info.save_dir = "gs://my-bucket/sessions"
         from unittest.mock import Mock
 
-        real_bm.save = Mock(return_value="gs://my-bucket/sessions/session_test-session_archived.json")
+        real_bm.save = Mock(
+            return_value="gs://my-bucket/sessions/session_test-session_archived.json"
+        )
 
         self.storage_service.finalize_session(session_id, "failed")
 
@@ -445,7 +465,10 @@ class TestConfigurableSessionsDirectory:
 
     def test_get_sessions_dir_fallback_when_no_sessions_dir_attr(self, real_bm):
         """Test get_sessions_dir falls back when sessions_dir attribute missing."""
-        from buttermilk.api.services.session_storage import SESSIONS_DIR, get_sessions_dir
+        from buttermilk.api.services.session_storage import (
+            SESSIONS_DIR,
+            get_sessions_dir,
+        )
 
         # Remove sessions_dir attribute from real_bm
         if hasattr(real_bm.session_info, "sessions_dir"):
@@ -459,7 +482,10 @@ class TestConfigurableSessionsDirectory:
         from buttermilk.api.services.session_storage import SessionStorageService
 
         # Mock get_sessions_dir to return our temp directory
-        with patch("buttermilk.api.services.session_storage.get_sessions_dir", return_value=temp_storage_dir):
+        with patch(
+            "buttermilk.api.services.session_storage.get_sessions_dir",
+            return_value=temp_storage_dir,
+        ):
             service = SessionStorageService()
             assert service.sessions_dir == temp_storage_dir
 

@@ -114,7 +114,11 @@ class TestGroundTruthHashing:
 
     def test_ground_truth_hash_complex_data(self):
         """Test hashing of complex nested data."""
-        complex_gt = {"answers": ["A", "B", "C"], "metadata": {"source": "test", "nested": {"deep": "value"}}, "scores": [1, 2, 3]}
+        complex_gt = {
+            "answers": ["A", "B", "C"],
+            "metadata": {"source": "test", "nested": {"deep": "value"}},
+            "scores": [1, 2, 3],
+        }
 
         hash_value = compute_ground_truth_hash(complex_gt)
         assert len(hash_value) == 64
@@ -196,7 +200,12 @@ class TestFlowHashing:
         flow_config = {
             "name": "test_flow",
             "agents": {
-                "fetch": {"name": "Fetch Agent", "role": "FETCHER", "template": "fetch_template", "runtime_param": "should_be_excluded"},
+                "fetch": {
+                    "name": "Fetch Agent",
+                    "role": "FETCHER",
+                    "template": "fetch_template",
+                    "runtime_param": "should_be_excluded",
+                },
                 "judge": {"name": "Judge Agent", "role": "JUDGE"},
             },
         }
@@ -268,7 +277,12 @@ class TestFlowHashing:
         """Test that runtime data doesn't affect flow hash."""
         base_config = {"name": "test_flow", "parameters": {"criteria": ["test"]}}
 
-        config_with_runtime = {**base_config, "session_id": "runtime-123", "timestamp": "2024-01-01T00:00:00Z", "user_id": "user-456"}
+        config_with_runtime = {
+            **base_config,
+            "session_id": "runtime-123",
+            "timestamp": "2024-01-01T00:00:00Z",
+            "user_id": "user-456",
+        }
 
         hash1 = compute_flow_hash(base_config)
         hash2 = compute_flow_hash(config_with_runtime)

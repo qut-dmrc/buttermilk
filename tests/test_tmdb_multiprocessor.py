@@ -1,14 +1,18 @@
 """Test TMDBTool as a processor yielding Observations."""
 
-
 import pytest
 
-from buttermilk.tools.catalog_test import THEMOVIEDB_AVAILABLE, Observation, Title, TMDBTool
+from buttermilk.tools.catalog_test import (
+    THEMOVIEDB_AVAILABLE,
+    Observation,
+    Title,
+    TMDBTool,
+)
 
 # Skip entire module if themoviedb is not installed
 pytestmark = pytest.mark.skipif(
     not THEMOVIEDB_AVAILABLE,
-    reason="themoviedb package not installed - install with: pip install themoviedb.py"
+    reason="themoviedb package not installed - install with: pip install themoviedb.py",
 )
 
 
@@ -22,11 +26,7 @@ class TestTMDBMultiProcessor:
         tool = TMDBTool(api_key="fake_key", region="US")
 
         # Create a test Title
-        title = Title(
-            record_id="tmdb_123",
-            title="Test Movie",
-            year=2024
-        )
+        title = Title(record_id="tmdb_123", title="Test Movie", year=2024)
 
         # Mock get_availability to return test observations
         mock_observations = [
@@ -39,7 +39,7 @@ class TestTMDBMultiProcessor:
                 provider_type="flatrate",
                 region="US",
                 available=True,
-                source="TMDB"
+                source="TMDB",
             ),
             Observation(
                 record_id="tmdb_123",
@@ -50,8 +50,8 @@ class TestTMDBMultiProcessor:
                 provider_type="flatrate",
                 region="US",
                 available=True,
-                source="TMDB"
-            )
+                source="TMDB",
+            ),
         ]
 
         # Create an async generator that yields the observations
@@ -79,11 +79,7 @@ class TestTMDBMultiProcessor:
         """Test that TMDBTool yields an error Observation on failure."""
         tool = TMDBTool(api_key="fake_key", region="US")
 
-        title = Title(
-            record_id="tmdb_456",
-            title="Error Movie",
-            year=2023
-        )
+        title = Title(record_id="tmdb_456", title="Error Movie", year=2023)
 
         # Mock get_availability to raise an error
         async def mock_get_availability_error(title):
@@ -119,7 +115,7 @@ class TestTMDBMultiProcessor:
             record_id="tmdb_789",
             title="Immutable Movie",
             year=2024,
-            metadata={"original": "data"}
+            metadata={"original": "data"},
         )
 
         # Mock get_availability
@@ -133,7 +129,7 @@ class TestTMDBMultiProcessor:
                 provider_type="flatrate",
                 region="US",
                 available=True,
-                source="TMDB"
+                source="TMDB",
             )
 
         tool.get_availability = mock_get_availability
