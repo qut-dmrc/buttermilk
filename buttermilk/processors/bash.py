@@ -51,19 +51,13 @@ class BashProcessor(BaseModel):
         ...,
         description="Bash command to execute. Use {input_file} and {output_file} placeholders",
     )
-    output_field: str = Field(
-        default="content", description="Record field to update with command output"
-    )
+    output_field: str = Field(default="content", description="Record field to update with command output")
     output_file: str | None = Field(
         default=None,
         description="Path for output file (replaces {output_file} placeholder)",
     )
-    read_output_file: bool = Field(
-        default=False, description="Read output from file instead of stdout"
-    )
-    update_file_path: bool = Field(
-        default=False, description="Update record.file_path to point to output_file"
-    )
+    read_output_file: bool = Field(default=False, description="Read output from file instead of stdout")
+    update_file_path: bool = Field(default=False, description="Update record.file_path to point to output_file")
     timeout_seconds: int = Field(default=300, description="Command timeout in seconds")
     shell: bool = Field(default=True, description="Execute command through shell")
 
@@ -123,42 +117,25 @@ class BashProcessor(BaseModel):
             if result.returncode != 0:
                 error_msg = stderr.decode() if stderr else "Unknown error"
                 raise ProcessingError(
-                    f"Bash command failed for {record.record_id}: {error_msg}\n"
-                    f"Command: {command}\n"
-                    f"Return code: {result.returncode}"
+                    f"Bash command failed for {record.record_id}: {error_msg}\n" f"Command: {command}\n" f"Return code: {result.returncode}"
                 )
 
         except asyncio.TimeoutError:
-            raise ProcessingError(
-                f"Bash command timed out after {self.timeout_seconds}s for {record.record_id}\n"
-                f"Command: {command}"
-            )
+            raise ProcessingError(f"Bash command timed out after {self.timeout_seconds}s for {record.record_id}\n" f"Command: {command}")
         except FileNotFoundError as e:
             # Command not found (e.g., pdftotext not installed)
-            raise ProcessingError(
-                f"Command not found: {str(e)}\n"
-                f"Command: {command}\n"
-                f"Make sure the required tool is installed."
-            )
+            raise ProcessingError(f"Command not found: {str(e)}\n" f"Command: {command}\n" f"Make sure the required tool is installed.")
         except Exception as e:
-            raise ProcessingError(
-                f"Error executing bash command for {record.record_id}: {e}\n"
-                f"Command: {command}"
-            )
+            raise ProcessingError(f"Error executing bash command for {record.record_id}: {e}\n" f"Command: {command}")
 
         # Get output
         if self.read_output_file:
             if not self.output_file:
-                raise ProcessingError(
-                    "read_output_file=True but no output_file specified"
-                )
+                raise ProcessingError("read_output_file=True but no output_file specified")
 
             output_path = Path(self.output_file)
             if not output_path.exists():
-                raise ProcessingError(
-                    f"Output file not created by command: {output_path}\n"
-                    f"Command: {command}"
-                )
+                raise ProcessingError(f"Output file not created by command: {output_path}\n" f"Command: {command}")
 
             output_content = output_path.read_text(encoding="utf-8", errors="replace")
         else:
@@ -207,8 +184,9 @@ class PDFToTextProcessor(BashProcessor):
             **kwargs: Additional arguments to pass to BashProcessor
         """
         # Set defaults for pdftotext
+        # Use full path to avoid PATH issues in subprocess environments
         defaults = {
-            "command": "pdftotext -layout -nopgbrk {input_file} -",
+            "command": "/usr/bin/pdftotext -layout -nopgbrk {input_file} -",
             "output_field": "content",
             "read_output_file": False,  # pdftotext outputs to stdout with '-'
             "timeout_seconds": 300,
@@ -245,13 +223,8 @@ class PDFToTextProcessor(BashProcessor):
         """
         # Skip if content exists and is NOT a PDF placeholder
         # PDF placeholders look like: "[PDF Document: filename.pdf, Size: 123 bytes, Path: /path]"
-        if record.content and not (
-            isinstance(record.content, str)
-            and record.content.startswith("[PDF Document:")
-        ):
-            logger.debug(
-                f"Skipping PDF extraction for {record.record_id} - fulltext already exists ({len(record.content)} chars)"
-            )
+        if record.content and not (isinstance(record.content, str) and record.content.startswith("[PDF Document:")):
+            logger.debug(f"Skipping PDF extraction for {record.record_id} - fulltext already exists ({len(record.content)} chars)")
             yield record
             return
 
