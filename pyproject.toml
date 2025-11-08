@@ -98,6 +98,7 @@ dependencies = [
   "jmespath>=1.0.1",
   "poppler-utils>=0.1.0",
   "aioconsole>=0.8.2",
+  "langdetect>=1.0.9",
 ]
 
 [project.optional-dependencies]

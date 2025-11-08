@@ -67,11 +67,17 @@ def detect_text_corruption(text: str) -> dict:
     # If average line length is very short (< 5 chars), likely corrupted
     lines = text.split("\n")
     non_empty_lines = [line for line in lines if line.strip()]
-    avg_line_length = sum(len(line) for line in non_empty_lines) / len(non_empty_lines) if non_empty_lines else 0
+    avg_line_length = (
+        sum(len(line) for line in non_empty_lines) / len(non_empty_lines)
+        if non_empty_lines
+        else 0
+    )
 
     # Character separation: many lines with < 3 chars indicates corruption
     short_lines = sum(1 for line in non_empty_lines if len(line.strip()) < 3)
-    short_line_ratio = (short_lines / len(non_empty_lines) * 100) if non_empty_lines else 0
+    short_line_ratio = (
+        (short_lines / len(non_empty_lines) * 100) if non_empty_lines else 0
+    )
 
     # SIGNAL 4: Language detection (for logging only - NOT used for corruption detection)
     # Language detection previously caused false positives with bibliographies/author names
@@ -106,7 +112,12 @@ def detect_text_corruption(text: str) -> dict:
     # Mark as corrupted if ANY strong signal triggers
     # CID threshold: >= 20 to ignore minor header artifacts
     # Language detection removed - was causing false positives with bibliographies/citations
-    is_corrupted = cid_count >= 20 or newline_ratio > 10.0 or short_line_ratio > 50.0 or (avg_line_length < 10 and avg_line_length > 0)
+    is_corrupted = (
+        cid_count >= 20
+        or newline_ratio > 10.0
+        or short_line_ratio > 50.0
+        or (avg_line_length < 10 and avg_line_length > 0)
+    )
 
     return {
         "is_corrupted": is_corrupted,
@@ -162,7 +173,9 @@ def is_document_corrupt(chunks: List[str], threshold: float = 66.0) -> dict:
             corrupted_chunks += 1
 
     # Calculate corruption rate as percentage
-    corruption_rate = (corrupted_chunks / total_chunks * 100) if total_chunks > 0 else 0.0
+    corruption_rate = (
+        (corrupted_chunks / total_chunks * 100) if total_chunks > 0 else 0.0
+    )
 
     # Document is corrupt if corruption rate meets or exceeds threshold
     is_corrupt = corruption_rate >= threshold
@@ -207,7 +220,9 @@ def analyze_document_quality(chunks: List[str]) -> dict:
         if result["is_corrupted"]:
             corrupted_chunks += 1
 
-    corruption_rate = (corrupted_chunks / total_chunks * 100) if total_chunks > 0 else 0.0
+    corruption_rate = (
+        (corrupted_chunks / total_chunks * 100) if total_chunks > 0 else 0.0
+    )
 
     return {
         "total_chunks": total_chunks,
