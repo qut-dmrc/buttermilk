@@ -20,6 +20,7 @@ from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.retry import RetryWrapper
 from buttermilk._core.types import BaseRecord, Record
 from buttermilk.storage.base import RecordFilter
+from buttermilk.utils.text_quality import detect_text_corruption
 
 
 def extract_citation_key(extra_field: str | None) -> str | None:
@@ -537,10 +538,26 @@ class ZoteroDownloadProcessor(BaseModel):
                     index_ratio = indexed_pages / total_pages
                     if index_ratio >= 0.5:  # At least 50% of pages indexed
                         content = fulltext["content"]
-                        have_fulltext = True
-                        logger.debug(
-                            f"Full text retrieved: {indexed_pages}/{total_pages} pages ({index_ratio:.1%} indexed)"
-                        )
+
+                        # QUALITY GATE: Check for text corruption
+                        corruption_result = detect_text_corruption(content)
+                        if corruption_result["is_corrupted"]:
+                            logger.warning(
+                                f"Zotero fulltext for {key} is corrupt: "
+                                f"{corruption_result['corruption_percentage']:.1f}% corruption, "
+                                f"CID count: {corruption_result['cid_count']}, "
+                                f"newline ratio: {corruption_result['newline_ratio']:.1f}%, "
+                                f"avg line length: {corruption_result['avg_line_length']:.1f}. "
+                                f"Will download and extract from PDF instead."
+                            )
+                            have_fulltext = False  # Trigger PDF fallback
+                            content = None  # Clear corrupt content
+                        else:
+                            have_fulltext = True
+                            logger.debug(
+                                f"Full text retrieved and validated: {indexed_pages}/{total_pages} pages ({index_ratio:.1%} indexed), "
+                                f"corruption: {corruption_result['corruption_percentage']:.1f}%"
+                            )
                     else:
                         logger.debug(
                             f"Full text incomplete: {indexed_pages}/{total_pages} pages ({index_ratio:.1%} indexed) - will download PDF"
