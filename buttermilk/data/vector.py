@@ -834,7 +834,8 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         """Create a new collection with proper configuration."""
         try:
             # Create collection with metadata and embedding function
-            self._client.create_collection(
+            await asyncio.to_thread(
+                self._client.create_collection,
                 name=self.collection_name,
                 embedding_function=self._embedding_function,
                 metadata={
@@ -851,7 +852,8 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         except Exception as e:
             # If creation fails, try get_or_create as fallback
             logger.warning(f"Direct creation failed, using get_or_create fallback: {e}")
-            fallback_collection = self._client.get_or_create_collection(
+            fallback_collection = await asyncio.to_thread(
+                self._client.get_or_create_collection,
                 name=self.collection_name,
             )
             # Ensure embedding function is set on fallback collection
