@@ -1318,13 +1318,16 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             dict: Validation results with safety assessment
 
         """
+        # Get existing count asynchronously to avoid blocking
+        existing_count = await asyncio.to_thread(self.collection.count)
+
         validation_results: dict[str, Any] = {
             "safe_to_add": True,
             "warnings": [],
             "conflicts": [],
             "stats": {
                 "new_records": len(new_records),
-                "existing_count": self.collection.count(),
+                "existing_count": existing_count,
                 "would_skip": 0,
                 "would_process": 0,
             },
