@@ -451,7 +451,8 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
             # Step 2: Initialize ChromaDB client
             if not hasattr(self, "_client") or not self._client:
-                self._client = chromadb.PersistentClient(
+                self._client = await asyncio.to_thread(
+                    chromadb.PersistentClient,
                     path=self.persist_directory,
                     settings=chromadb.Settings(anonymized_telemetry=False),
                 )
