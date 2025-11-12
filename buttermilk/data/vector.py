@@ -717,8 +717,11 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                     # Log processing summary using existing BM logger
                     logger.info("📊 Processing session complete:")
                     logger.info(f"   📦 Records processed: {self._processed_records_count}")
-                    total_embeddings = await asyncio.to_thread(self.collection.count)
-                    logger.info(f"   🔢 Total embeddings: {total_embeddings}")
+                    if self.read_only:
+                        logger.info("   🔢 Total embeddings: (count skipped in read-only mode)")
+                    else:
+                        total_embeddings = await asyncio.to_thread(self.collection.count)
+                        logger.info(f"   🔢 Total embeddings: {total_embeddings}")
                     logger.info(f"   📑 Unique records: {self.count_unique_records()}")
                     logger.info(f"   🔍 Deduplication strategy: {self.deduplication_strategy}")
                     logger.info(f"   📦 Cache size: {len(self._processed_combinations_cache)} combinations")
