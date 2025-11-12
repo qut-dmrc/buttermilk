@@ -54,7 +54,9 @@ class ChromaDBConfig(BaseModel):
     embedding_model: str
 
     # Required deduplication strategy
-    deduplication_strategy: Literal["record_id", "content_hash", "both"] = "both"
+    deduplication_strategy: Literal["record_id", "content_hash", "both", "none"] = (
+        "both"
+    )
 
     # Optional fields with reasonable defaults
     dimensionality: int = 3072
@@ -315,8 +317,8 @@ class ChromaDBEmbeddings(VectorStorageConfig):
     )
 
     # New deduplication configuration (Breaking Change)
-    deduplication_strategy: Literal["record_id", "content_hash", "both"] = Field(
-        default="both"
+    deduplication_strategy: Literal["record_id", "content_hash", "both", "none"] = (
+        Field(default="both")
     )
 
     # Read-only mode (for deduplication checking only, no writes/sync)
@@ -1179,8 +1181,10 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                     f"✅ [VECTORIZER-{record.record_id}] Chunks already have embeddings, skipping generation"
                 )
             else:
-                # Try to load embeddings from cache first
-                cache_loaded = await self._load_embeddings_from_cache(record)
+                # Try to load embeddings from cache first (unless deduplication disabled)
+                cache_loaded = False
+                if self.deduplication_strategy != "none":
+                    cache_loaded = await self._load_embeddings_from_cache(record)
 
                 if cache_loaded:
                     # Embeddings loaded from cache, skip API call
@@ -2038,6 +2042,10 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         """
         if force_reprocess:
             return False, "force reprocess requested"
+
+        # Handle "none" deduplication strategy - always reprocess
+        if self.deduplication_strategy == "none":
+            return False, "deduplication disabled (strategy: none)"
 
         embedding_model = embedding_model or getattr(
             self, "_embedding_model", self.embedding_model
