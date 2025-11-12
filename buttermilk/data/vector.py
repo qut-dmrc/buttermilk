@@ -819,9 +819,12 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             if hasattr(self, "_embedding_function") and self._embedding_function is not None:
                 existing_collection._embedding_function = self._embedding_function
 
-            # Get some basic stats
-            count = await asyncio.to_thread(existing_collection.count)
-            logger.info(f"✅ Collection '{self.collection_name}' ready ({count} embeddings)")
+            # Get some basic stats (skip count in read-only mode)
+            if self.read_only:
+                logger.info(f"✅ Collection '{self.collection_name}' ready (count skipped in read-only mode)")
+            else:
+                count = await asyncio.to_thread(existing_collection.count)
+                logger.info(f"✅ Collection '{self.collection_name}' ready ({count} embeddings)")
 
             # TODO: Could add more sophisticated validation here:
             # - Check embedding dimensionality by sampling
