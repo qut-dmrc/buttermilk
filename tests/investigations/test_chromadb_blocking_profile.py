@@ -72,7 +72,8 @@ class TestChromaDBBlockingProfile:
             # Add chunks in batches to ChromaDB
             # Note: We're using add() instead of upsert() to avoid embedding requirements
             # For this test, we'll create a separate collection without embeddings
-            test_collection = embeddings._client.create_collection(
+            test_collection = await asyncio.to_thread(
+                embeddings._client.create_collection,
                 name="blocking_profile_data",
                 metadata={"description": "Test data for blocking profile"},
             )
@@ -300,6 +301,7 @@ class TestChromaDBBlockingProfile:
 
                 heartbeat_task = asyncio.create_task(heartbeat())
                 await asyncio.sleep(0.05)  # Let heartbeat start
+                last_heartbeat_time = time.perf_counter()  # Reset after sleep
                 start_time = time.perf_counter()
 
                 # Run the operation
