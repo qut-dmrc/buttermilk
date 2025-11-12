@@ -182,13 +182,17 @@ class ChromaDBUploader(BaseModel):
 
         # Initialize ChromaDB client
         if not self._client:
-            self._client = chromadb.PersistentClient(path=persist_dir, settings=chromadb.Settings(anonymized_telemetry=False))
+            self._client = await asyncio.to_thread(
+                chromadb.PersistentClient,
+                path=persist_dir,
+                settings=chromadb.Settings(anonymized_telemetry=False),
+            )
             logger.info("ChromaDB client initialized", persist_directory=persist_dir)
 
         # Get or create collection
         if not self._collection:
             try:
-                self._collection = self._client.get_collection(name=self.collection_name)
+                self._collection = await asyncio.to_thread(self._client.get_collection, name=self.collection_name)
                 collection_count = await asyncio.to_thread(self._collection.count)
                 logger.info(
                     "Using existing collection",
@@ -196,7 +200,7 @@ class ChromaDBUploader(BaseModel):
                     count=collection_count,
                 )
             except Exception:
-                self._collection = self._client.create_collection(name=self.collection_name)
+                self._collection = await asyncio.to_thread(self._client.create_collection, name=self.collection_name)
                 logger.info("Created new collection", collection_name=self.collection_name)
 
         self._cache_initialized = True
