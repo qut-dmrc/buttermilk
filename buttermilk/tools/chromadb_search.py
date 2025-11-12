@@ -4,6 +4,7 @@ This module provides a modular, reusable tool for searching ChromaDB vector stor
 It can be configured with any ChromaDB instance and used by any agent.
 """
 
+import asyncio
 from typing import Any, Optional
 
 from autogen_core.tools import FunctionTool
@@ -20,12 +21,8 @@ class SearchResult(BaseModel):
     id: str = Field(..., description="Unique ID of the retrieved chunk")
     content: str = Field(..., description="The actual text content")
     document_id: str = Field(..., description="ID of the parent document")
-    document_title: Optional[str] = Field(
-        None, description="Title of the parent document"
-    )
-    metadata: dict[str, Any] = Field(
-        default_factory=dict, description="Additional metadata"
-    )
+    document_title: Optional[str] = Field(None, description="Title of the parent document")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
     score: Optional[float] = Field(None, description="Similarity score")
 
 
@@ -55,9 +52,7 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
             await self.ensure_cache_initialized()
             self._initialized = True
 
-            logger.info(
-                "ChromaDBSearchTool initialized", collection_name=self.collection_name
-            )
+            logger.info("ChromaDBSearchTool initialized", collection_name=self.collection_name)
 
         except Exception as e:
             logger.error("Failed to initialize ChromaDBSearchTool", error=e)
@@ -79,7 +74,8 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
         num_results = n_results if n_results > 0 else self.n_results
 
         # Query ChromaDB
-        results = self.collection.query(
+        results = await asyncio.to_thread(
+            self.collection.query,
             query_texts=[query],
             n_results=num_results,
             include=["documents", "metadatas", "distances"],
@@ -134,13 +130,9 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
         # Format results for display
         formatted_parts = []
         for i, result in enumerate(results):
-            formatted_parts.append(
-                f"**Result {i + 1}** (Doc: {result.document_title or result.document_id})\n{result.content}"
-            )
+            formatted_parts.append(f"**Result {i + 1}** (Doc: {result.document_title or result.document_id})\n{result.content}")
 
-        return (
-            "\n---\n".join(formatted_parts) if formatted_parts else "No results found."
-        )
+        return "\n---\n".join(formatted_parts) if formatted_parts else "No results found."
 
     def get_tool(self) -> FunctionTool:
         """Get this as an autogen FunctionTool.
