@@ -1,5 +1,7 @@
 # Buttermilk Initialization Profiling Results
 
+> **⚠️ HISTORICAL DOCUMENT**: This profiling was done on 2025-11-03. The primary issue (weave/wandb imports) has been **RESOLVED** as of 2025-11-17 by removing weave/wandb integration in favor of Google Cloud Trace. This document is kept for historical reference.
+
 **Date:** 2025-11-03 **Total Cold Start Time:** ~14.7 seconds **Import Time:** ~14.5 seconds (98.6%) **Actual Init Time:** ~0.2 seconds (1.4%)
 
 ## 🔴 Critical Finding

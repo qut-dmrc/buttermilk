@@ -19,7 +19,7 @@ Key functionalities:
 -   Execution of SQL queries (`bm.query_runner`).
 -   Setup and management of logging, including optional cloud logging.
 -   Handling of session information (`bm.session_info`) and standardized saving of artifacts.
--   Integration with Weave for tracing (`bm.get_weave_client()`).
+-   Integration with OpenTelemetry for distributed tracing.
 """
 
 from __future__ import annotations  # Enable postponed annotations for type hinting

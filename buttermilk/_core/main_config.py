@@ -17,7 +17,10 @@ from buttermilk._core.storage_config import BaseStorageConfig
 
 
 class TracingProviderConfig(BaseModel):
-    """Configuration for a single tracing provider (Weave, Traceloop, OTEL)."""
+    """Configuration for a single tracing provider (Traceloop, OTEL).
+
+    Note: Weave/W&B support has been removed in favor of Google Cloud Trace.
+    """
 
     enabled: bool = Field(
         default=False, description="Whether this tracing provider is enabled"
@@ -41,14 +44,10 @@ class TracingProviderConfig(BaseModel):
 class TracingConfig(BaseModel):
     """Configuration for all tracing providers.
 
-    Supports multiple tracing providers (Weave, Traceloop, OTEL) that can be
-    enabled simultaneously.
+    Supports multiple tracing providers (Traceloop, OTEL) that can be
+    enabled simultaneously. Weave/W&B support has been removed.
     """
 
-    weave: TracingProviderConfig = Field(
-        default_factory=lambda: TracingProviderConfig(enabled=False),
-        description="Weights & Biases Weave tracing configuration",
-    )
     traceloop: TracingProviderConfig = Field(
         default_factory=lambda: TracingProviderConfig(enabled=False),
         description="Traceloop tracing configuration",

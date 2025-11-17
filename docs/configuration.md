@@ -34,7 +34,7 @@ ButtermilkConfig (root)
 ├── infrastructure: InfrastructureConfig
 │   ├── clouds: list[CloudProvider]  # GCP, AWS, Azure configurations
 │   ├── llms: dict                   # LLM model configurations
-│   ├── tracing: TracingConfig       # Weave, Traceloop, OTEL
+│   ├── tracing: TracingConfig       # Traceloop, OTEL (Google Cloud Trace)
 │   └── logging: LoggerConfig        # Logging configuration
 ├── flows: dict                      # Flow definitions
 └── storage: dict[str, StorageConfig] # Named storage configurations

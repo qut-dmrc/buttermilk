@@ -1,20 +1,14 @@
 """Configures OpenTelemetry (OTEL) tracing for the Buttermilk framework.
 
 This module sets up global OpenTelemetry tracing, configured to export trace data to:
-1. Weights & Biases (W&B) using the OTLP (OpenTelemetry Protocol) gRPC exporter
-2. Google Cloud Platform (GCP) using the Cloud Trace exporter
+1. Google Cloud Platform (GCP) using the Cloud Trace exporter
+2. Optional Traceloop integration
 
 The setup is performed automatically when this module is imported.
 
 It relies on credentials being available via the global Buttermilk instance:
-- For W&B: WANDB_API_KEY, WANDB_PROJECT in `bm.credentials`
 - For GCP: Uses Application Default Credentials or environment variables
-
-Key Constants:
-    WANDB_BASE_URL (str): Base URL for Weights & Biases tracing.
-    OTEL_EXPORTER_OTLP_ENDPOINT (str): The OTLP endpoint URL for W&B traces.
-    OTEL_EXPORTER_OTLP_HEADERS (dict): Headers for OTLP exporter, including
-        authentication and W&B project ID.
+- For Traceloop: TRACELOOP_API_KEY, TRACELOOP_BASE_URL in `bm.credentials`
 
 Note:
     This module primarily executes configuration logic upon import and does not
@@ -24,7 +18,6 @@ Note:
 
 """
 
-import base64
 import logging
 import os
 from contextlib import contextmanager
@@ -56,9 +49,6 @@ from opentelemetry.trace import (
 
 from buttermilk import bm, logger
 from buttermilk._core.config import FatalError, Tracing
-
-"""Base URL for Weights & Biases tracing services."""
-WANDB_BASE_URL = "https://trace.wandb.ai"
 
 # Suppress noisy OpenTelemetry instrumentation debug logs for non-OpenAI models
 logging.getLogger("opentelemetry.instrumentation.openai.shared").setLevel(
@@ -407,46 +397,3 @@ def setup_traceloop_otel() -> OTLPHttpSpanExporter | None:
         return None
 
 
-# --- OpenTelemetry Tracing Setup for Weights & Biases ---
-def setup_wandb_otel_tracing() -> OTLPSpanExporter | None:
-    # set the full OTLP endpoint URL where trace data will be sent for W&B.
-    wandb_endpoint = f"{WANDB_BASE_URL}/otel/v1/traces"
-
-    # Configure W&B exporter
-    try:
-        # Retrieve necessary credentials from the global Buttermilk instance.
-        # These are expected to be populated during Buttermilk initialization (e.g., from secrets).
-        creds = bm.credentials
-
-        wandb_api_key = os.getenv("WANDB_API_KEY") or creds["WANDB_API_KEY"]
-        wandb_project = os.getenv("WANDB_PROJECT") or creds["WANDB_PROJECT"]
-        wandb_entity = os.getenv("WANDB_ENTITY") or creds["WANDB_ENTITY"]
-        if not (wandb_api_key and wandb_project and wandb_entity):
-            raise FatalError(
-                "W&B tracing is enabled but missing required credentials: WANDB_API_KEY, WANDB_PROJECT, or WANDB_ENTITY.",
-            )
-
-        # Prepare authentication header for W&B OTLP exporter.
-        # The AUTH string is typically "api:<YOUR_WANDB_API_KEY>".
-        auth_string = f"api:{wandb_api_key}"
-        auth_header_value = base64.b64encode(auth_string.encode("utf-8")).decode(
-            "utf-8"
-        )
-
-        # Headers required for the OTLP exporter, including authorization for W&B
-        # and the W&B project ID.
-        wandb_headers = {
-            "Authorization": f"Basic {auth_header_value}",  # Basic authentication header
-            "project_id": f"{wandb_entity}/{wandb_project}",  # W&B Project ID for trace grouping
-        }
-
-        # Use the HTTP OTLP exporter for the HTTPS endpoint
-        wandb_exporter = OTLPHttpSpanExporter(
-            endpoint=wandb_endpoint,
-            headers=wandb_headers,
-        )
-
-        return wandb_exporter
-    except Exception as e_wandb:
-        logger.warning("Error configuring W&B exporter", error=e_wandb)
-        return None
