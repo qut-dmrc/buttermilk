@@ -80,6 +80,8 @@ class BigQueryStorage(Storage, StorageClient):
 
         Called lazily on first use to avoid requiring BM instance during init.
         """
+        if self.read_only:
+            return
         if not self._schema_validated:
             schema = self.get_schema()
             if not schema:
