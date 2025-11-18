@@ -118,3 +118,39 @@ class TestBigQueryStorageReadOnly:
         ):
             storage = BigQueryStorage(config)
             storage._validate_schema()
+
+    def test_save_fails_in_readonly(self):
+        """Test that save() raises StorageError with clear message in read-only mode.
+
+        ARRANGE: Create BigQueryStorage with read_only=True and a simple Record
+        ACT: Attempt to call storage.save([record])
+        ASSERT: Raises StorageError mentioning "read-only mode" and "cannot save"
+        """
+        # Arrange
+        config = BigQueryStorageConfig(
+            type="bigquery",
+            dataset_name="test_dataset",
+            project_id="test-project",
+            dataset_id="test_dataset_id",
+            table_id="test_table",
+            schema_path=None,
+            read_only=True,
+        )
+        storage = BigQueryStorage(config)
+
+        # Create a simple test record
+        from buttermilk._core.types import BaseRecord
+
+        test_record = BaseRecord(
+            record_id="test_001",
+            dataset_name="test_dataset",
+            content="Test content for read-only validation",
+            metadata={"test_key": "test_value"},
+        )
+
+        # Act & Assert
+        with pytest.raises(
+            StorageError,
+            match=r".*read-only mode.*cannot save.*",
+        ):
+            storage.save([test_record])

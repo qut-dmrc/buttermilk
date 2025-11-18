@@ -147,6 +147,13 @@ class BigQueryStorage(Storage, StorageClient):
             StorageError: If save operation fails
 
         """
+        # Fail fast if in read-only mode
+        if self.read_only:
+            raise StorageError(
+                "Storage is in read-only mode and cannot save records. "
+                "To enable writes, remove read_only from your storage configuration."
+            )
+
         # Validate schema on first use
         self._validate_schema()
 
