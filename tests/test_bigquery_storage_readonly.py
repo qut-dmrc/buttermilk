@@ -180,3 +180,124 @@ class TestBigQueryStorageReadOnly:
             match=r".*read-only mode.*cannot create.*",
         ):
             storage.create()
+
+
+class TestBigQueryStorageReadOnlyOperations:
+    """Test BigQueryStorage read operations work correctly in read-only mode."""
+
+    def test_iteration_works_in_readonly(self, mocker):
+        """Test that __iter__() works in read-only mode without schema_path.
+
+        ARRANGE: Create BigQueryStorage with read_only=True and no schema_path
+        ACT: Mock BigQuery client to return empty results and iterate over storage
+        ASSERT: Iteration completes successfully without errors
+        """
+        # Arrange
+        config = BigQueryStorageConfig(
+            type="bigquery",
+            dataset_name="test_dataset",
+            project_id="test-project",
+            dataset_id="test_dataset_id",
+            table_id="test_table",
+            schema_path=None,
+            read_only=True,
+        )
+        storage = BigQueryStorage(config)
+
+        # Mock BigQuery client to avoid real API calls
+        mock_client = mocker.MagicMock()
+        mock_query_job = mocker.MagicMock()
+        # Empty result set - nothing to iterate over
+        mock_query_job.__iter__ = mocker.MagicMock(return_value=iter([]))
+        mock_client.query.return_value = mock_query_job
+
+        # Set the internal _client directly to avoid BM singleton requirement
+        storage._client = mock_client
+
+        # Act - iterate over storage (should complete without errors)
+        records = list(storage)
+
+        # Assert
+        assert records == []
+        assert mock_client.query.called
+
+    def test_count_works_in_readonly(self, mocker):
+        """Test that count() works in read-only mode without schema_path.
+
+        ARRANGE: Create BigQueryStorage with read_only=True and no schema_path
+        ACT: Mock BigQuery client to return count result
+        ASSERT: Count returns expected value without errors
+        """
+        # Arrange
+        config = BigQueryStorageConfig(
+            type="bigquery",
+            dataset_name="test_dataset",
+            project_id="test-project",
+            dataset_id="test_dataset_id",
+            table_id="test_table",
+            schema_path=None,
+            read_only=True,
+        )
+        storage = BigQueryStorage(config)
+
+        # Mock BigQuery client and table
+        mock_client = mocker.MagicMock()
+        mock_table = mocker.MagicMock()
+        mock_table.schema = []  # Empty schema to avoid column checks
+
+        # Mock count query result
+        mock_row = mocker.MagicMock()
+        mock_row.total = 42
+        mock_query_job = mocker.MagicMock()
+        mock_query_job.__iter__ = mocker.MagicMock(return_value=iter([mock_row]))
+        mock_client.query.return_value = mock_query_job
+
+        # Set internal _client and _table directly to avoid BM singleton requirement
+        storage._client = mock_client
+        storage._table = mock_table
+
+        # Act
+        count = storage.count()
+
+        # Assert
+        assert count == 42
+        assert mock_client.query.called
+
+    def test_backward_compatibility_default_read_only_false(self):
+        """Test that when read_only is not specified in config, it defaults to False.
+
+        ARRANGE: Create config without specifying read_only
+        ACT: Check the default value
+        ASSERT: read_only defaults to False (existing write-mode behavior)
+        """
+        # Arrange - create config without read_only parameter
+        # This should require schema_path since read_only defaults to False
+        config = BigQueryStorageConfig(
+            type="bigquery",
+            dataset_name="test_dataset",
+            project_id="test-project",
+            dataset_id="test_dataset_id",
+            table_id="test_table",
+            schema_path="/path/to/schema.json",  # Required for write mode
+        )
+
+        # Assert - verify read_only defaults to False
+        assert config.read_only is False
+
+        # Arrange - verify that without schema_path, write mode fails
+        config_no_schema = BigQueryStorageConfig(
+            type="bigquery",
+            dataset_name="test_dataset",
+            project_id="test-project",
+            dataset_id="test_dataset_id",
+            table_id="test_table",
+            schema_path=None,
+            # read_only not specified - defaults to False
+        )
+
+        # Assert - creating storage in write mode without schema_path should fail
+        with pytest.raises(
+            StorageError,
+            match=r".*(schema_path|read_only).*",
+        ):
+            BigQueryStorage(config_no_schema)
