@@ -154,3 +154,29 @@ class TestBigQueryStorageReadOnly:
             match=r".*read-only mode.*cannot save.*",
         ):
             storage.save([test_record])
+
+    def test_create_fails_in_readonly(self):
+        """Test that create() raises StorageError with clear message in read-only mode.
+
+        ARRANGE: Create BigQueryStorage with read_only=True and no schema_path
+        ACT: Attempt to call storage.create()
+        ASSERT: Raises StorageError mentioning "read-only mode" and "cannot create"
+        """
+        # Arrange
+        config = BigQueryStorageConfig(
+            type="bigquery",
+            dataset_name="test_dataset",
+            project_id="test-project",
+            dataset_id="test_dataset_id",
+            table_id="test_table",
+            schema_path=None,
+            read_only=True,
+        )
+        storage = BigQueryStorage(config)
+
+        # Act & Assert
+        with pytest.raises(
+            StorageError,
+            match=r".*read-only mode.*cannot create.*",
+        ):
+            storage.create()

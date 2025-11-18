@@ -357,6 +357,13 @@ class BigQueryStorage(Storage, StorageClient):
             StorageError: If table creation fails or schema is missing
 
         """
+        # Fail fast if in read-only mode
+        if self.read_only:
+            raise StorageError(
+                "Storage is in read-only mode and cannot create tables. "
+                "To enable table creation, remove read_only from your storage configuration."
+            )
+
         # Validate schema on first use
         self._validate_schema()
 
