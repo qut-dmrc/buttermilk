@@ -27,7 +27,7 @@ The `minimal.yaml` configuration provides a way to use Buttermilk without requir
 - Secret Manager
 - Vertex AI
 - LLM integrations (no API keys)
-- Tracing (Weave, Traceloop, OpenTelemetry)
+- Tracing (Traceloop, OpenTelemetry)
 
 ## Usage
 
@@ -91,7 +91,6 @@ infrastructure:
   llms: {} # No LLM configuration
 
   tracing:
-    weave: { enabled: false }
     traceloop: { enabled: false }
     otel: { enabled: false }
 

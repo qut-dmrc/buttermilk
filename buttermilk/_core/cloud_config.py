@@ -310,11 +310,15 @@ class RunInfoConfig(BaseModel):
 
 
 class TracingConfig(BaseModel):
-    """Configuration for experiment tracing."""
+    """Configuration for experiment tracing.
 
-    enabled: bool = Field(default=True, description="Enable tracing")
-    provider: Literal["weave", "wandb", "mlflow"] = Field(
-        default="weave", description="Tracing provider"
+    Note: This config is deprecated. Tracing is now configured via
+    infrastructure.tracing in the main config using OpenTelemetry.
+    """
+
+    enabled: bool = Field(default=True, description="Enable tracing (deprecated)")
+    provider: Literal["otel"] = Field(
+        default="otel", description="Tracing provider (otel only)"
     )
 
 

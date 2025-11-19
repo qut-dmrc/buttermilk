@@ -23,10 +23,8 @@ session:
 infrastructure:
   # No cloud configuration - purely local
   clouds: []
-  # Tracing disabled for minimal setup
+  # Tracing disabled for minimal setup (weave/wandb removed)
   tracing:
-    weave:
-      enabled: false
     traceloop:
       enabled: false
     otel:

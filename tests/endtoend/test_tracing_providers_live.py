@@ -1,14 +1,13 @@
 """Live tracing integration tests that send actual traces to providers.
 
 Simple integration tests that use the live BM instance to send real traces
-to weave, traceloop, and otel/gcp endpoints.
+to traceloop and otel/gcp endpoints. Weave/W&B support has been removed.
 """
 
 import asyncio
 import time
 
 import pytest
-import weave
 from opentelemetry import trace
 
 from buttermilk._core.bm_init import BM
@@ -17,35 +16,10 @@ from buttermilk._core.bm_init import BM
 class TestTracingProvidersLive:
     """Live integration tests for tracing providers."""
 
+    @pytest.mark.skip(reason="Weave/W&B support removed - using Google Cloud Trace")
     @pytest.mark.anyio
     async def test_weave_live_submission(self, real_bm: BM) -> None:
-        """Send a live trace to Weave."""
-        try:
-            client = await real_bm.get_weave_client()
-            if client is None:
-                pytest.skip("Weave not configured")
-
-            def test_operation(x: int) -> int:
-                return x + 1
-
-            op = weave.op(test_operation, call_display_name="live-test")
-            call = client.create_call(
-                op,
-                inputs={"x": 42},
-                display_name="weave-live-test",
-                attributes={"test": "live-integration", "timestamp": time.time()},
-            )
-
-            result = test_operation(42)
-            client.finish_call(call, output={"result": result}, op=op)
-
-            print(f"✅ Weave trace sent: {call.id}")
-
-        except Exception as e:
-            if "not configured" in str(e).lower():
-                pytest.skip(f"Weave not configured: {e}")
-            else:
-                raise
+        """Send a live trace to Weave (DEPRECATED - weave removed)."""
 
     @pytest.mark.anyio
     async def test_traceloop_live_submission(self) -> None:
