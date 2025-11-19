@@ -28,7 +28,6 @@ class TestBigQueryStorageReadOnly:
             project_id="test-project",
             dataset_id="test_dataset_id",
             table_id="test_table",
-            schema_path=None,
             read_only=True,
         )
 
@@ -79,7 +78,6 @@ class TestBigQueryStorageReadOnly:
             project_id="test-project",
             dataset_id="test_dataset_id",
             table_id="test_table",
-            schema_path=None,
             read_only=True,
         )
         storage = BigQueryStorage(config)
@@ -133,7 +131,6 @@ class TestBigQueryStorageReadOnly:
             project_id="test-project",
             dataset_id="test_dataset_id",
             table_id="test_table",
-            schema_path=None,
             read_only=True,
         )
         storage = BigQueryStorage(config)
@@ -169,7 +166,6 @@ class TestBigQueryStorageReadOnly:
             project_id="test-project",
             dataset_id="test_dataset_id",
             table_id="test_table",
-            schema_path=None,
             read_only=True,
         )
         storage = BigQueryStorage(config)
@@ -199,7 +195,6 @@ class TestBigQueryStorageReadOnlyOperations:
             project_id="test-project",
             dataset_id="test_dataset_id",
             table_id="test_table",
-            schema_path=None,
             read_only=True,
         )
         storage = BigQueryStorage(config)
@@ -235,7 +230,6 @@ class TestBigQueryStorageReadOnlyOperations:
             project_id="test-project",
             dataset_id="test_dataset_id",
             table_id="test_table",
-            schema_path=None,
             read_only=True,
         )
         storage = BigQueryStorage(config)

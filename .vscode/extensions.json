@@ -1,8 +1,6 @@
 {
   "recommendations": [
     "github.copilot-chat",
-    "visualstudioexptteam.intellicode-api-usage-examples",
-    "visualstudioexptteam.vscodeintellicode",
     "redhat.vscode-yaml",
     "charliermarsh.ruff",
     "ms-python.debugpy",

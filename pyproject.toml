@@ -99,6 +99,7 @@ dependencies = [
   "poppler-utils>=0.1.0",
   "aioconsole>=0.8.2",
   "langdetect>=1.0.9",
+  "replicate>=0.34.2",
 ]
 
 [project.optional-dependencies]
