@@ -20,7 +20,6 @@ class TestTracingProvidersLive:
     @pytest.mark.anyio
     async def test_weave_live_submission(self, real_bm: BM) -> None:
         """Send a live trace to Weave (DEPRECATED - weave removed)."""
-        pytest.skip("Weave/W&B support has been removed")
 
     @pytest.mark.anyio
     async def test_traceloop_live_submission(self) -> None:
