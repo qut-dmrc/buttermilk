@@ -435,9 +435,17 @@ class LLMCore:
                     )
 
                 # Collect metadata (preserve existing template metadata)
+                # Model name comes from LLM wrapper (actual from API or config as fallback)
+                model_name = self.model  # Default to config name
+                if isinstance(llm_result, ModelOutput) and hasattr(
+                    llm_result, "metadata"
+                ):
+                    # Use model from wrapper (already contains actual API model or fallback)
+                    model_name = llm_result.metadata.get("model", self.model)
+
                 result.metadata = {
                     **result.metadata,  # Keep template metadata added earlier
-                    "model": self.model,
+                    "model": model_name,  # Actual model from API or config name as fallback
                     "finish_reason": llm_result.finish_reason,
                     "usage": llm_result.usage,
                 }

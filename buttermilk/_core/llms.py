@@ -197,30 +197,22 @@ class LLMConfig(BaseModel):
 # ```
 """A predefined list of chat model identifiers available within the Buttermilk setup."""
 CHAT_MODELS = [
-    "gemini25flash",
-    "gemini25pro",
+    "gemini-pro",
+    "gemini-flash",
+    "gemini-flash-lite",
     "gpt5mini",
     "gpt5nano",
     "llama4maverick",
-    "claude41opus",
     "claude45sonnet",
 ]
 
 """A predefined list of identifiers for cost-effective chat models."""
 CHEAP_CHAT_MODELS = [
-    "gemini25flash",
+    "gemini-flash",
+    "gemini-flash-lite",
     "gpt5nano",
     "claude45haiku",
 ]
-
-MULTIMODAL_MODELS = [
-    "gemini25pro",
-    "llama4maverick",
-    "gemini25flash",
-    "gpt41",
-    "llama32_90b",
-]
-"""A predefined list of identifiers for multimodal models (supporting text, images, etc.)."""
 
 
 class LLMClient(BaseModel):
@@ -454,6 +446,10 @@ class AutoGenWrapper(BaseModel):
         usage = getattr(create_result, "usage", None)
         pricing_metadata = self._calculate_pricing(usage)
 
+        # Extract actual model name from response if available (some providers return this)
+        # Prefer actual model from API, fallback to our litellm_model_name
+        actual_model_name = getattr(create_result, "model", self.litellm_model_name)
+
         # Now that we've made the LLM call and received a response, from
         # this point on, any errors we encounter will return a CreateResult or ModelOutput object
         # so that we can still finish tracing properly and log the received output.
@@ -474,6 +470,10 @@ class AutoGenWrapper(BaseModel):
                 ):
                     if tools and not used_fake_schema_tool:
                         # If we have tools and didn't use a fake schema tool, return the tool calls with pricing
+                        metadata = {
+                            "pricing": pricing_metadata,
+                            "model": actual_model_name,
+                        }
                         return ModelOutput(
                             content=create_result.content,
                             finish_reason=create_result.finish_reason,
@@ -481,7 +481,7 @@ class AutoGenWrapper(BaseModel):
                             thought=getattr(create_result, "thought", None),
                             cached=create_result.cached,
                             tool_calls=create_result.content,
-                            metadata={"pricing": pricing_metadata},
+                            metadata=metadata,
                         )
                     elif used_fake_schema_tool:
                         # If we used a fake schema tool, parse the tool call
@@ -530,6 +530,10 @@ class AutoGenWrapper(BaseModel):
                 schema_parsed_object = await self._parse_structured_output(
                     create_result.content, schema
                 )
+                metadata = {
+                    "pricing": pricing_metadata,
+                    "model": actual_model_name,
+                }
                 return ModelOutput(
                     content=create_result.content,
                     finish_reason=create_result.finish_reason,
@@ -537,9 +541,13 @@ class AutoGenWrapper(BaseModel):
                     thought=getattr(create_result, "thought", None),
                     parsed_object=schema_parsed_object,
                     cached=create_result.cached,
-                    metadata={"pricing": pricing_metadata},
+                    metadata=metadata,
                 )
 
+            metadata = {
+                "pricing": pricing_metadata,
+                "model": actual_model_name,
+            }
             result = ModelOutput(
                 content=create_result.content,
                 finish_reason=create_result.finish_reason,
@@ -548,9 +556,13 @@ class AutoGenWrapper(BaseModel):
                 cached=create_result.cached,
                 parsed_object=parsed_object,
                 tool_calls=tool_calls,
-                metadata={"pricing": pricing_metadata},
+                metadata=metadata,
             )
         except Exception as e:
+            metadata = {
+                "pricing": pricing_metadata,
+                "model": actual_model_name,
+            }
             result = ModelOutput(
                 content=create_result.content,
                 finish_reason=create_result.finish_reason,
@@ -559,7 +571,7 @@ class AutoGenWrapper(BaseModel):
                 cached=create_result.cached,
                 parsed_object=None,  # Always None on error to prevent malformed BaseModel objects
                 tool_calls=tool_calls,
-                metadata={"pricing": pricing_metadata},
+                metadata=metadata,
             )
             result.error_message = f"LLM call failed: {e!s}"
             result.error_code = getattr(e, "code", None)  # Use code if available
@@ -934,7 +946,7 @@ def litellm_to_autogen_result(
     Args:
         response: LiteLLM response object or dict
         usage: Usage information from LiteLLM
-        model: Model name used
+        model: Model name used (our shorthand)
         schema: Optional Pydantic schema for structured output
 
     Returns:
@@ -988,14 +1000,24 @@ def litellm_to_autogen_result(
     # Check if content is cached (some providers support this)
     cached = getattr(response, "cached", False)
 
+    # Extract actual model name from response
+    # Prefer actual model from API (e.g., "gemini-2.0-flash-exp")
+    # Fall back to our shorthand if API doesn't provide it (e.g., "gemini25flash")
+    model_name = getattr(response, "model", model)
+
     # Always return ModelOutput to preserve pricing metadata
-    return ModelOutput(
+    result = ModelOutput(
         content=content,
         finish_reason=finish_reason,
         usage=request_usage,
         cached=cached,
         parsed_object=None,  # Will be parsed by caller if needed
     )
+
+    # Store model name directly (actual from API or fallback to config name)
+    result.metadata["model"] = model_name
+
+    return result
 
 
 # =============================================================================
@@ -1202,7 +1224,8 @@ class LiteLLMWrapper(BaseModel):
         )
 
         # Add pricing metadata (result is always ModelOutput now)
-        result.metadata = {"pricing": pricing_metadata}
+        # Preserve actual_model that was set in litellm_to_autogen_result()
+        result.metadata["pricing"] = pricing_metadata
 
         # Parse structured output if schema was provided
         if schema:

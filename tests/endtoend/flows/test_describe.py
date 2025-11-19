@@ -1,6 +1,6 @@
 import pytest
 
-from buttermilk._core.llms import MULTIMODAL_MODELS
+from buttermilk._core.llms import CHAT_MODELS
 from buttermilk._core.types import (
     Record,
     RunRequest,  # Import RunRequest
@@ -9,7 +9,7 @@ from buttermilk.agents.describer import Describer
 from buttermilk.utils.media import download_and_convert
 
 
-@pytest.fixture(params=MULTIMODAL_MODELS)
+@pytest.fixture(params=CHAT_MODELS)
 def flow_describer(request):
     return Describer(
         agent_id="testdescriber",

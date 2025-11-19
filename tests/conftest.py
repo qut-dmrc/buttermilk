@@ -13,7 +13,6 @@ from buttermilk import BM, init
 from buttermilk._core.llms import (
     CHAT_MODELS,
     CHEAP_CHAT_MODELS,
-    MULTIMODAL_MODELS,
     LLMs,
 )
 from buttermilk._core.types import Record
@@ -66,9 +65,9 @@ def real_model_name(request) -> str:
     return request.param
 
 
-@pytest.fixture(params=MULTIMODAL_MODELS)
+@pytest.fixture(params=CHAT_MODELS)
 def real_llm_multimodal(request, real_bm: BM):
-    """Real multimodal LLM instance for testing."""
+    """Real LLM instance for testing (all chat models)."""
     return real_bm.llms[request.param]
 
 

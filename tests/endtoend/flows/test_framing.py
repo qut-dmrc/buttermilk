@@ -2,7 +2,7 @@ import pytest
 
 from buttermilk import BM, logger
 from buttermilk._core.config import AgentVariants
-from buttermilk._core.llms import CHEAP_CHAT_MODELS, MULTIMODAL_MODELS
+from buttermilk._core.llms import CHAT_MODELS, CHEAP_CHAT_MODELS
 from buttermilk._core.log import logger  # noqa
 from buttermilk._core.orchestrator import OrchestratorProtocol
 from buttermilk._core.types import Record, RunRequest
@@ -14,7 +14,7 @@ def param_model(request):
     return {"model": request.param}
 
 
-@pytest.fixture(params=MULTIMODAL_MODELS)
+@pytest.fixture(params=CHAT_MODELS)
 def param_model_multimodal(request):
     return {"model": request.param}
 
@@ -100,7 +100,7 @@ async def test_frames_article(framer, news_record, real_bm: BM, model):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("model", MULTIMODAL_MODELS)
+@pytest.mark.parametrize("model", CHAT_MODELS)
 async def test_framing_video(framer, model, real_bm, link_to_video_gcp):
     framer.parameters["model"] = model
     agent_variants = AgentVariants(
