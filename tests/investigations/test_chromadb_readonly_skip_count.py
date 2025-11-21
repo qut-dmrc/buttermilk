@@ -14,7 +14,7 @@ import pytest
 from buttermilk.data.vector import ChromaDBEmbeddings
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_readonly_skips_count_operation() -> None:
     """Test that read-only mode skips collection.count() during initialization.
 
@@ -115,7 +115,7 @@ async def test_readonly_skips_count_operation() -> None:
         shutil.rmtree(temp_path_write, ignore_errors=True)
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_readonly_logs_skip_message() -> None:
     """Test that read-only mode logs appropriate message about skipped count.
 
@@ -152,7 +152,7 @@ async def test_readonly_logs_skip_message() -> None:
 class TestChromaDBReadOnlySkipCount:
     """Test suite for ChromaDB read-only mode optimizations."""
 
-    @pytest.mark.asyncio
+    @pytest.mark.anyio
     async def test_readonly_mode_skips_count_during_finalize(
         self, tmp_path: Path
     ) -> None:

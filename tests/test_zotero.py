@@ -15,6 +15,8 @@ Following CODE.md principles:
 
 import pytest
 
+pytest.importorskip("pyzotero", reason="pyzotero is optional (install with: uv sync --extra research)")
+
 from buttermilk._core.types import BaseRecord, Record
 from buttermilk.libs.zotero import ZoteroDownloadProcessor, ZoteroSource
 
