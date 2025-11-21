@@ -141,7 +141,7 @@ async def test_llm_agent_template_metadata(model_name: str, request_paris: Agent
         role="tester",
         name="Template Test Agent",
         description="Test template metadata tracking",
-        parameters={"model": model_name, "template": "best"},
+        parameters={"model": model_name, "template": "simple"},
     )
 
     # Call the agent to get the output
@@ -156,7 +156,7 @@ async def test_llm_agent_template_metadata(model_name: str, request_paris: Agent
     assert "template_hash" in result.metadata, "Template hash should be in metadata"
 
     # Verify the template metadata values
-    assert result.metadata["template_name"] == "best", "Template name should match"
+    assert result.metadata["template_name"] == "simple", "Template name should match"
     assert isinstance(result.metadata["template_hash"], str), (
         "Template hash should be string"
     )
@@ -186,7 +186,7 @@ async def test_llm_agent_template_metadata(model_name: str, request_paris: Agent
     assert "template_hash" in trace.metadata, (
         "Template hash should be in ExecutionTrace metadata"
     )
-    assert trace.metadata["template_name"] == "best", (
+    assert trace.metadata["template_name"] == "simple", (
         "Template name should match in trace"
     )
     assert trace.metadata["template_hash"] == result.metadata["template_hash"], (
