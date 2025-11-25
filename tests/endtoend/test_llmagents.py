@@ -57,7 +57,7 @@ async def test_llm_agent_direct_call(
 @pytest.mark.anyio
 @pytest.mark.parametrize("model_name", CHAT_MODELS)
 async def test_judge_agent_process(
-    model_name: str, request_chief: AgentInput, fight_no_more_forever: Record
+    real_bm, model_name: str, request_chief: AgentInput, fight_no_more_forever: Record
 ):
     """Test direct invocation of Judge agent's _process method with a record."""
     # Templates
