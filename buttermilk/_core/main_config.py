@@ -214,6 +214,27 @@ class ButtermilkConfig(BaseModel):
             return SessionInfo(**v)
         raise ValueError(f"Invalid session configuration type: {type(v)}")
 
+    @property
+    def pipeline(self) -> Any:
+        """Backward compatibility property for accessing run.pipeline.
+
+        Returns:
+            The pipeline configuration from run.pipeline
+
+        Raises:
+            AttributeError: If run doesn't exist or run.pipeline is None
+        """
+        if not hasattr(self, 'run'):
+            raise AttributeError("ButtermilkConfig has no 'run' attribute")
+        if not hasattr(self.run, 'pipeline'):
+            raise AttributeError("RunConfig has no 'pipeline' attribute")
+        if self.run.pipeline is None:
+            raise AttributeError(
+                "run.pipeline is None. Did you mean to access pipelines.{pipeline_name}? "
+                "run.pipeline is only set when mode=pipeline"
+            )
+        return self.run.pipeline
+
     def get_storage_config(self, name: str) -> BaseStorageConfig | None:
         """Get a named storage configuration.
 
