@@ -11,6 +11,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+pytest.importorskip("pyzotero")
+
 
 @pytest.mark.anyio
 async def test_zotero_sets_pdf_metadata_as_content_when_no_fulltext():
@@ -175,7 +177,7 @@ async def test_pdftotext_processor_replaces_metadata_content():
         # Mock pdftotext command to return extracted text
         processor = PDFToTextProcessor()
 
-        with patch("asyncio.create_subprocess_shell") as mock_subprocess:
+        with patch("asyncio.create_subprocess_shell", new_callable=AsyncMock) as mock_subprocess:
             # Create an async mock process
             mock_process = AsyncMock()
             mock_process.communicate = AsyncMock(
@@ -183,11 +185,8 @@ async def test_pdftotext_processor_replaces_metadata_content():
             )
             mock_process.returncode = 0
 
-            # Make create_subprocess_shell return an awaitable that yields the mock process
-            async def async_return_process():
-                return mock_process
-
-            mock_subprocess.return_value = async_return_process()
+            # AsyncMock will properly await and return the mock_process
+            mock_subprocess.return_value = mock_process
 
             # Process with PDFToTextProcessor
             results = []
