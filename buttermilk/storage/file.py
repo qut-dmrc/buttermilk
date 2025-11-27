@@ -1,5 +1,6 @@
 """File storage implementation for unified storage operations."""
 
+import csv
 import json
 from typing import TYPE_CHECKING, Any, Iterator
 
@@ -19,7 +20,8 @@ if TYPE_CHECKING:
 class FileStorage(Storage):
     """Unified file storage supporting both read and write operations.
 
-    Supports local files and cloud storage paths (GCS, S3) for JSON/JSONL formats.
+    Supports local files and cloud storage paths (GCS, S3) for JSON/JSONL/CSV formats.
+    Format is determined by the 'format' config parameter or inferred from file extension.
     """
 
     def __init__(self, config: "StorageConfig"):
@@ -36,6 +38,26 @@ class FileStorage(Storage):
 
         self.path = AnyPath(config.path)
 
+    def _get_format(self) -> str:
+        """Determine file format from config or file extension.
+
+        Returns:
+            Format string: 'json', 'jsonl', or 'csv'
+        """
+        # Use explicit format from config if provided
+        if hasattr(self.config, "format") and self.config.format:
+            return self.config.format.lower()
+
+        # Infer from file extension
+        suffix = self.path.suffix.lower()
+        if suffix == ".csv":
+            return "csv"
+        elif suffix in {".jsonl", ".ndjson"}:
+            return "jsonl"
+        else:
+            # Default to json
+            return "json"
+
     def __iter__(self) -> Iterator[BaseRecord]:
         """Iterate over records from file.
 
@@ -47,6 +69,8 @@ class FileStorage(Storage):
                 logger.warning(f"File does not exist: {self.path}")
                 return
 
+            file_format = self._get_format()
+
             # Handle both local and cloud paths (GCS, S3, etc.)
             if str(self.path).startswith(("gs://", "s3://", "azure://")):
                 # Use cloudpathlib for cloud storage paths
@@ -56,11 +80,17 @@ class FileStorage(Storage):
                 file_obj = open(self.path, "r", encoding="utf-8")
 
             try:
-                # Check if the file is a JSON array or JSONL
-                first_char = file_obj.read(1)
-                file_obj.seek(0)  # Reset to beginning
-
-                if first_char == "[":
+                if file_format == "csv":
+                    # Handle CSV format
+                    reader = csv.DictReader(file_obj)
+                    for row_num, row in enumerate(reader, 1):
+                        try:
+                            record = self._dict_to_record(dict(row), row_num)
+                            yield record
+                        except Exception as e:
+                            logger.warning(f"Error processing CSV row {row_num}: {e}")
+                            continue
+                elif file_format == "json":
                     # Handle JSON array format
                     data_array = json.load(file_obj)
                     for line_num, data in enumerate(data_array, 1):
@@ -132,9 +162,18 @@ class FileStorage(Storage):
                         )
                         continue
 
+            file_format = self._get_format()
+
             if getattr(self.config, "append", False) and self.exists():
                 # Append mode
-                if self.path.suffix == ".jsonl":
+                if file_format == "csv":
+                    # CSV format - append new rows
+                    with self.path.open("a", encoding="utf-8", newline="") as f:
+                        if data:
+                            writer = csv.DictWriter(f, fieldnames=data[0].keys())
+                            for record_dict in data:
+                                writer.writerow(record_dict)
+                elif file_format == "jsonl":
                     # JSONL format - append new records directly
                     with self.path.open("a", encoding="utf-8") as f:
                         for record_dict in data:
@@ -156,8 +195,15 @@ class FileStorage(Storage):
                         json.dump(combined_data, f, indent=2, ensure_ascii=False)
             else:
                 # Default overwrite mode
-                with self.path.open("w", encoding="utf-8") as f:
-                    if self.path.suffix == ".jsonl":
+                with self.path.open("w", encoding="utf-8", newline="" if file_format == "csv" else None) as f:
+                    if file_format == "csv":
+                        # CSV format - write with headers
+                        if data:
+                            writer = csv.DictWriter(f, fieldnames=data[0].keys())
+                            writer.writeheader()
+                            for record_dict in data:
+                                writer.writerow(record_dict)
+                    elif file_format == "jsonl":
                         # JSONL format - one JSON object per line
                         for record_dict in data:
                             json.dump(record_dict, f, ensure_ascii=False)
@@ -205,9 +251,14 @@ class FileStorage(Storage):
             # Ensure parent directory exists
             self.path.parent.mkdir(parents=True, exist_ok=True)
 
+            file_format = self._get_format()
+
             # Create empty file with appropriate format
-            with self.path.open("w", encoding="utf-8") as f:
-                if self.path.suffix == ".jsonl":
+            with self.path.open("w", encoding="utf-8", newline="" if file_format == "csv" else None) as f:
+                if file_format == "csv":
+                    # Empty CSV file (no headers without data)
+                    pass
+                elif file_format == "jsonl":
                     # Empty JSONL file
                     pass
                 else:
