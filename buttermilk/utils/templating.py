@@ -747,5 +747,20 @@ def make_messages(  # noqa: PLR0912
                 f"Unrecognized role '{msg_dict.get('role')}' in Prompty template message."
             )
 
+    # Fail-fast: Empty messages list indicates template format issue
+    # This catches missing role markers (system:, user:, etc.) early
+    # rather than causing cryptic "list index out of range" errors downstream
+    if not output_messages:
+        raise ProcessingError(
+            "Template produced no messages. Ensure your template includes role markers "
+            "(e.g., 'system:', 'user:', 'assistant:') at the start of message sections. "
+            "Example format:\n"
+            "  system:\n"
+            "  You are a helpful assistant.\n"
+            "  \n"
+            "  user:\n"
+            "  {{ user_input }}"
+        )
+
     # Deduplicate messages before returning
     return _deduplicate_messages(output_messages), processed_placeholders

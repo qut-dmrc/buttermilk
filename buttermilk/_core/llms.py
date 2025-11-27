@@ -635,15 +635,16 @@ class AutoGenWrapper(BaseModel):
             raise ProcessingError(f"Failed to query LLM: {e!s}") from e
 
         # Extract pricing from initial call
+        # Use `or 0` pattern to handle both missing keys AND explicit None values
         initial_pricing = (
             create_result.metadata.get("pricing", {})
             if hasattr(create_result, "metadata")
             else {}
         )
         aggregated_pricing = {
-            "prompt_tokens": initial_pricing.get("prompt_tokens", 0),
-            "completion_tokens": initial_pricing.get("completion_tokens", 0),
-            "total_cost": initial_pricing.get("total_cost", 0.0),
+            "prompt_tokens": initial_pricing.get("prompt_tokens") or 0,
+            "completion_tokens": initial_pricing.get("completion_tokens") or 0,
+            "total_cost": initial_pricing.get("total_cost") or 0.0,
         }
 
         # Step 2: Handle tool calls if present
@@ -692,14 +693,14 @@ class AutoGenWrapper(BaseModel):
                     and "pricing" in synthesis_result.metadata
                 ):
                     synthesis_pricing = synthesis_result.metadata["pricing"]
-                    aggregated_pricing["prompt_tokens"] += synthesis_pricing.get(
-                        "prompt_tokens", 0
+                    aggregated_pricing["prompt_tokens"] += (
+                        synthesis_pricing.get("prompt_tokens") or 0
                     )
-                    aggregated_pricing["completion_tokens"] += synthesis_pricing.get(
-                        "completion_tokens", 0
+                    aggregated_pricing["completion_tokens"] += (
+                        synthesis_pricing.get("completion_tokens") or 0
                     )
-                    aggregated_pricing["total_cost"] += synthesis_pricing.get(
-                        "total_cost", 0.0
+                    aggregated_pricing["total_cost"] += (
+                        synthesis_pricing.get("total_cost") or 0.0
                     )
                     synthesis_result.metadata["pricing"] = aggregated_pricing
 
@@ -1283,15 +1284,16 @@ class LiteLLMWrapper(BaseModel):
             raise ProcessingError(f"Failed to query LLM: {e}") from e
 
         # Extract pricing from initial call
+        # Use `or 0` pattern to handle both missing keys AND explicit None values
         initial_pricing = (
             create_result.metadata.get("pricing", {})
             if hasattr(create_result, "metadata")
             else {}
         )
         aggregated_pricing = {
-            "prompt_tokens": initial_pricing.get("prompt_tokens", 0),
-            "completion_tokens": initial_pricing.get("completion_tokens", 0),
-            "total_cost": initial_pricing.get("total_cost", 0.0),
+            "prompt_tokens": initial_pricing.get("prompt_tokens") or 0,
+            "completion_tokens": initial_pricing.get("completion_tokens") or 0,
+            "total_cost": initial_pricing.get("total_cost") or 0.0,
         }
 
         # Step 2: Handle tool calls if present
@@ -1339,14 +1341,14 @@ class LiteLLMWrapper(BaseModel):
                     and "pricing" in synthesis_result.metadata
                 ):
                     synthesis_pricing = synthesis_result.metadata["pricing"]
-                    aggregated_pricing["prompt_tokens"] += synthesis_pricing.get(
-                        "prompt_tokens", 0
+                    aggregated_pricing["prompt_tokens"] += (
+                        synthesis_pricing.get("prompt_tokens") or 0
                     )
-                    aggregated_pricing["completion_tokens"] += synthesis_pricing.get(
-                        "completion_tokens", 0
+                    aggregated_pricing["completion_tokens"] += (
+                        synthesis_pricing.get("completion_tokens") or 0
                     )
-                    aggregated_pricing["total_cost"] += synthesis_pricing.get(
-                        "total_cost", 0.0
+                    aggregated_pricing["total_cost"] += (
+                        synthesis_pricing.get("total_cost") or 0.0
                     )
                     synthesis_result.metadata["pricing"] = aggregated_pricing
 
