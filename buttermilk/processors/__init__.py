@@ -8,9 +8,11 @@ containing 'record' and other fields, yielding transformed dict outputs.
 from .chromadb_uploader import ChromaDBUploader
 from .embeddings import EmbeddingGenerator
 from .jmespath_transform import JMESPathTransform
+from .variants import VariantProcessor
 
 __all__ = [
     "EmbeddingGenerator",
     "ChromaDBUploader",
     "JMESPathTransform",
+    "VariantProcessor",
 ]
