@@ -19,9 +19,7 @@ from enum import Enum
 from typing import Any, Callable, TypeVar
 
 # Core LLM library imports - these are required dependencies
-from anthropic import (
-    AsyncAnthropicVertex,
-)
+from anthropic import AsyncAnthropicVertex
 
 # LiteLLM imports
 try:
@@ -43,31 +41,24 @@ from autogen_core.models import (
     LLMMessage,
     ModelInfo,
 )
-from autogen_core.tools import BaseTool, Tool, ToolSchema  # Autogen tool handling
-from autogen_ext.models.anthropic import (
-    AnthropicChatCompletionClient,
-)  # Autogen Anthropic client
+from autogen_core.tools import Tool  # Autogen tool handling
+from autogen_core.tools import BaseTool, ToolSchema
+from autogen_ext.models.anthropic import AnthropicChatCompletionClient  # Autogen Anthropic client
 from autogen_ext.models.openai import (  # Autogen OpenAI clients
     AzureOpenAIChatCompletionClient,
     OpenAIChatCompletionClient,
 )
-
 # from google import genai  # Google Generative AI library (unused in current implementation)
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    field_validator,
-)  # Pydantic models for configuration
+from pydantic import BaseModel  # Pydantic models for configuration
+from pydantic import ConfigDict, Field, field_validator
 
 from buttermilk import bm, logger
-
 # ToolOutput import removed - using autogen's FunctionExecutionResult directly
-from buttermilk._core.constants import (
+from buttermilk._core.constants import (  # Models cache constants
     CONFIG_CACHE_FILENAME,
     cache,
     get_base_cache_dir,
-)  # Models cache constants
+)
 from buttermilk._core.exceptions import ProcessingError  # Custom Buttermilk exceptions
 from buttermilk.utils.pricing import calculate_token_cost  # Token cost calculation
 
@@ -100,6 +91,8 @@ class ClientType(Enum):
     GEMINI = "gemini"
     GEMINI_VERTEX = "gemini_vertex"
     VERTEX_OPENAI = "vertex_openai"  # OpenAI-compatible endpoint on Vertex
+    HUGGINGFACE = "huggingface"  # HuggingFace Inference API (serverless or dedicated)
+    ZENTROPI = "zentropi"  # Zentropi LLM platform
 
 
 class LLMConfig(BaseModel):
@@ -202,8 +195,12 @@ CHAT_MODELS = [
     "gemini-flash-lite",
     "gpt5mini",
     "gpt5nano",
+    "gpt-4o",
     "llama4maverick",
     "claude45sonnet",
+    "cope-a-9b",
+    "gpt-oss-safeguard-20b",
+    "gpt-oss-safeguard-120b",
 ]
 
 """A predefined list of identifiers for cost-effective chat models."""
@@ -1526,6 +1523,7 @@ class LLMs(BaseModel):
             "vertex_openai": "vertex_ai",  # Vertex OpenAI-compatible
             "anthropic_vertex": "vertex_ai",  # Anthropic-on-Vertex
             "anthropic": "anthropic",
+            "zentropi": "zentropi",
         }
         return prefix_map.get(client_type, client_type)  # fallback / extension
 
