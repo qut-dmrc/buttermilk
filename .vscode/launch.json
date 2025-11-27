@@ -71,6 +71,21 @@
       "args": []
     },
     {
+      "name": "Python Debugger: reliability",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "/home/nic/src/reliability/.venv/bin/bm",
+      "envFile": "${userHome}/.env",
+      "cwd": "/home/nic/src/reliability",
+      "justMyCode": false,
+      "console": "integratedTerminal",
+      "args": [
+        "--config-dir=/home/nic/src/reliability/config",
+        "--config-name=reliability",
+        "+run=pipeline_test"
+      ]
+    },
+    {
       "name": "Python: Streamlit",
       "type": "debugpy", // or "python" for older versions
       "request": "launch",

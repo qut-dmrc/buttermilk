@@ -608,22 +608,17 @@ class LLMCore:
 
                 # Record token usage in span if available
                 if hasattr(result, "usage") and result.usage:
-                    if hasattr(result.usage, "prompt_tokens"):
-                        span.set_attribute(
-                            "llm.usage.prompt_tokens", result.usage.prompt_tokens
-                        )
-                    if hasattr(result.usage, "completion_tokens"):
-                        span.set_attribute(
-                            "llm.usage.completion_tokens",
-                            result.usage.completion_tokens,
-                        )
+                    prompt_tokens = getattr(result.usage, "prompt_tokens", None)
+                    completion_tokens = getattr(result.usage, "completion_tokens", None)
+
+                    if prompt_tokens is not None:
+                        span.set_attribute("llm.usage.prompt_tokens", prompt_tokens)
+                    if completion_tokens is not None:
+                        span.set_attribute("llm.usage.completion_tokens", completion_tokens)
+
                     # Calculate total tokens from prompt + completion
-                    if hasattr(result.usage, "prompt_tokens") and hasattr(
-                        result.usage, "completion_tokens"
-                    ):
-                        total = (
-                            result.usage.prompt_tokens + result.usage.completion_tokens
-                        )
+                    if prompt_tokens is not None and completion_tokens is not None:
+                        total = prompt_tokens + completion_tokens
                         span.set_attribute("llm.usage.total_tokens", total)
 
                 span.set_status(trace.Status(trace.StatusCode.OK))

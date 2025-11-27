@@ -429,6 +429,14 @@ class AutoGenWrapper(BaseModel):
                 create_call_kwargs["tools"] = [fake_schema_tool]
                 used_fake_schema_tool = True
 
+        # Defensive check: autogen_ext has a bug where it crashes on empty messages
+        # See: autogen_ext/models/anthropic/_anthropic_client.py:546
+        # messages[-1] access without checking if list is empty
+        if not messages or len(messages) == 0:
+            raise ProcessingError(
+                "Cannot call LLM with empty messages list (autogen_ext bug workaround)"
+            )
+
         try:
             # Get retry wrapper with fresh client and current credentials/tokens
             retry_wrapper = self._get_retry_wrapper()
@@ -439,8 +447,10 @@ class AutoGenWrapper(BaseModel):
             )
 
         except Exception as e:  # Wrap other exceptions
-            error_msg = f"Error during LLM call: {e!s}"
-            raise ProcessingError(error_msg) from e
+            import traceback
+            error_msg = f"Error during LLM call: {e!s}\nTraceback: {traceback.format_exc()}"
+            logger.error(error_msg)
+            raise ProcessingError(f"Error during LLM call: {e!s}") from e
 
         # Calculate pricing from usage data (defensive check for None)
         usage = getattr(create_result, "usage", None)
@@ -956,7 +966,7 @@ def litellm_to_autogen_result(
 
     # Extract content from response
     content: str | list[FunctionCall]
-    if hasattr(response, "choices") and response.choices:
+    if hasattr(response, "choices") and response.choices and len(response.choices) > 0:
         choice = response.choices[0]
         message = choice.message if hasattr(choice, "message") else choice
 

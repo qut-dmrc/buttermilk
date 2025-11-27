@@ -406,10 +406,6 @@ class FileStorage(Storage):
             if "split_type" not in data:
                 data["split_type"] = self.config.split_type
 
-            # Map common alternative field names
-            if "content" not in data and "text" in data:
-                data["content"] = data["text"]
-
             # Move unmapped fields to metadata before creating record
             # This ensures all non-standard fields go into metadata dict
             # instead of being stored as direct attributes
