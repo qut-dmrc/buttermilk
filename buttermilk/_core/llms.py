@@ -19,9 +19,7 @@ from enum import Enum
 from typing import Any, Callable, TypeVar
 
 # Core LLM library imports - these are required dependencies
-from anthropic import (
-    AsyncAnthropicVertex,
-)
+from anthropic import AsyncAnthropicVertex
 
 # LiteLLM imports
 try:
@@ -43,31 +41,24 @@ from autogen_core.models import (
     LLMMessage,
     ModelInfo,
 )
-from autogen_core.tools import BaseTool, Tool, ToolSchema  # Autogen tool handling
-from autogen_ext.models.anthropic import (
-    AnthropicChatCompletionClient,
-)  # Autogen Anthropic client
+from autogen_core.tools import Tool  # Autogen tool handling
+from autogen_core.tools import BaseTool, ToolSchema
+from autogen_ext.models.anthropic import AnthropicChatCompletionClient  # Autogen Anthropic client
 from autogen_ext.models.openai import (  # Autogen OpenAI clients
     AzureOpenAIChatCompletionClient,
     OpenAIChatCompletionClient,
 )
-
 # from google import genai  # Google Generative AI library (unused in current implementation)
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    field_validator,
-)  # Pydantic models for configuration
+from pydantic import BaseModel  # Pydantic models for configuration
+from pydantic import ConfigDict, Field, field_validator
 
 from buttermilk import bm, logger
-
 # ToolOutput import removed - using autogen's FunctionExecutionResult directly
-from buttermilk._core.constants import (
+from buttermilk._core.constants import (  # Models cache constants
     CONFIG_CACHE_FILENAME,
     cache,
     get_base_cache_dir,
-)  # Models cache constants
+)
 from buttermilk._core.exceptions import ProcessingError  # Custom Buttermilk exceptions
 from buttermilk.utils.pricing import calculate_token_cost  # Token cost calculation
 
@@ -100,6 +91,110 @@ class ClientType(Enum):
     GEMINI = "gemini"
     GEMINI_VERTEX = "gemini_vertex"
     VERTEX_OPENAI = "vertex_openai"  # OpenAI-compatible endpoint on Vertex
+    HUGGINGFACE = "huggingface"  # HuggingFace Inference API (serverless or dedicated)
+
+
+class ModelParameters(BaseModel):
+    """Inference parameters for LLM API calls.
+
+    Provides a standardized interface for common inference parameters across
+    different LLM providers. Allows provider-specific parameters via extra fields.
+
+    All parameters are optional (None by default) to allow selective overrides
+    when merging configurations.
+
+    Attributes:
+        temperature: Sampling temperature (0.0-2.0). Higher values make output
+            more random, lower values more deterministic.
+        max_tokens: Maximum number of tokens to generate. Must be positive.
+        top_p: Nucleus sampling threshold (0.0-1.0). Alternative to temperature.
+        top_k: Top-k sampling limit. Only the k most likely tokens are considered.
+        frequency_penalty: Penalty for token frequency (-2.0 to 2.0). Positive
+            values discourage repetition.
+        presence_penalty: Penalty for token presence (-2.0 to 2.0). Positive
+            values encourage topic diversity.
+        stop_sequences: List of strings that will stop generation when encountered.
+        seed: Random seed for deterministic sampling (if supported by provider).
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    temperature: float | None = Field(None, ge=0.0, le=2.0)
+    max_tokens: int | None = Field(None, gt=0)
+    top_p: float | None = Field(None, ge=0.0, le=1.0)
+    top_k: int | None = Field(None, gt=0)
+    frequency_penalty: float | None = Field(None, ge=-2.0, le=2.0)
+    presence_penalty: float | None = Field(None, ge=-2.0, le=2.0)
+    stop_sequences: list[str] | None = None
+    seed: int | None = None
+
+    def merge_with(self, other: "ModelParameters | dict | None") -> "ModelParameters":
+        """Merge with another ModelParameters instance or dict.
+
+        Non-None values from 'other' take precedence over self's values.
+        This allows layering configurations where more specific configs
+        override more general ones.
+
+        Args:
+            other: ModelParameters instance, dict, or None to merge with.
+                If None, returns a copy of self.
+
+        Returns:
+            New ModelParameters instance with merged values.
+
+        Example:
+            base = ModelParameters(temperature=0.7, max_tokens=1000)
+            override = ModelParameters(temperature=0.9)
+            merged = base.merge_with(override)
+            # Result: temperature=0.9, max_tokens=1000
+        """
+        if other is None:
+            return self.model_copy(deep=True)
+
+        # Convert dict to ModelParameters if needed
+        if isinstance(other, dict):
+            other = ModelParameters(**other)
+
+        # Start with self's values
+        merged_data = self.model_dump()
+
+        # Override with other's non-None values
+        other_data = other.model_dump()
+        for key, value in other_data.items():
+            if value is not None:
+                merged_data[key] = value
+
+        return ModelParameters(**merged_data)
+
+    def to_api_params(self) -> dict[str, Any]:
+        """Convert to API parameter dictionary.
+
+        Returns dictionary containing only non-None values, suitable for
+        passing to LLM API calls. Maps stop_sequences to 'stop' key for
+        API compatibility.
+
+        Returns:
+            Dictionary with non-None parameter values, ready for API calls.
+
+        Example:
+            params = ModelParameters(temperature=0.7, max_tokens=1000)
+            api_params = params.to_api_params()
+            # Result: {'temperature': 0.7, 'max_tokens': 1000}
+        """
+        result: dict[str, Any] = {}
+
+        # Get all fields including extras
+        all_data = self.model_dump()
+
+        for key, value in all_data.items():
+            if value is not None:
+                # Map stop_sequences to 'stop' for API compatibility
+                if key == "stop_sequences":
+                    result["stop"] = value
+                else:
+                    result[key] = value
+
+        return result
 
 
 class LLMConfig(BaseModel):
@@ -129,6 +224,10 @@ class LLMConfig(BaseModel):
         use_litellm (bool): If True, use LiteLLMWrapper instead of AutoGenWrapper.
             Defaults to False for backward compatibility. Enable this to use LiteLLM's
             unified interface for provider-agnostic LLM calls.
+        parameters (ModelParameters): Default inference parameters (temperature,
+            max_tokens, etc.) for this model. Defaults to empty ModelParameters
+            instance. Can be specified as a dict which will be converted to
+            ModelParameters during validation.
 
     """
 
@@ -153,6 +252,10 @@ class LLMConfig(BaseModel):
     use_litellm: bool = Field(
         default=False,
         description="Use LiteLLMWrapper instead of AutoGenWrapper (default: False for backward compatibility)",
+    )
+    parameters: ModelParameters = Field(
+        default_factory=ModelParameters,
+        description="Default inference parameters (temperature, max_tokens, etc.)",
     )
 
     @field_validator("client_type", mode="before")
@@ -190,6 +293,29 @@ class LLMConfig(BaseModel):
             f"client_type must be a string or ClientType enum, got {type(v)}"
         )
 
+    @field_validator("parameters", mode="before")
+    @classmethod
+    def validate_parameters(cls, v: Any) -> ModelParameters:
+        """Validate and convert parameters field to ModelParameters.
+
+        Args:
+            v: The input value to validate (dict, ModelParameters, or None)
+
+        Returns:
+            ModelParameters: The validated parameters instance
+
+        Raises:
+            ValueError: If parameters is not a dict or ModelParameters instance
+
+        """
+        if v is None:
+            return ModelParameters()
+        if isinstance(v, ModelParameters):
+            return v
+        if isinstance(v, dict):
+            return ModelParameters(**v)
+        raise ValueError(f"parameters must be a dict or ModelParameters, got {type(v)}")
+
 
 # Generate with:
 # ```sh
@@ -197,30 +323,25 @@ class LLMConfig(BaseModel):
 # ```
 """A predefined list of chat model identifiers available within the Buttermilk setup."""
 CHAT_MODELS = [
-    "gemini25flash",
-    "gemini25pro",
+    "gemini-pro",
+    "gemini-flash",
+    "gemini-flash-lite",
     "gpt5mini",
     "gpt5nano",
+    "gpt-4o",
     "llama4maverick",
-    "claude41opus",
     "claude45sonnet",
+    "gpt-oss-safeguard-20b",
+    "gpt-oss-safeguard-120b",
 ]
 
 """A predefined list of identifiers for cost-effective chat models."""
 CHEAP_CHAT_MODELS = [
-    "gemini25flash",
+    "gemini-flash",
+    "gemini-flash-lite",
     "gpt5nano",
     "claude45haiku",
 ]
-
-MULTIMODAL_MODELS = [
-    "gemini25pro",
-    "llama4maverick",
-    "gemini25flash",
-    "gpt41",
-    "llama32_90b",
-]
-"""A predefined list of identifiers for multimodal models (supporting text, images, etc.)."""
 
 
 class LLMClient(BaseModel):
@@ -321,6 +442,10 @@ class AutoGenWrapper(BaseModel):
     litellm_model_name: str = Field(
         default=None, description="Resolved litellm model name for pricing"
     )
+    default_parameters: ModelParameters = Field(
+        default_factory=ModelParameters,
+        description="Default inference parameters (temperature, max_tokens, etc.)",
+    )
 
     # Retry configuration (copied from RetryWrapper)
     cooldown_seconds: float = 0.5
@@ -394,11 +519,15 @@ class AutoGenWrapper(BaseModel):
             is not BaseModel  # Ensure it's a specific subclass, not BaseModel itself
         )
 
+        # Merge default parameters with runtime kwargs (runtime takes precedence)
+        merged_params = self.default_parameters.to_api_params()
+        merged_params.update(kwargs)
+
         # Build call kwargs, omitting json_output when tools are provided
         create_call_kwargs: dict[str, Any] = {
             "tools": tools,
             "cancellation_token": cancellation_token,
-            "extra_create_args": kwargs,
+            "extra_create_args": merged_params,
         }
 
         # If caller requested a schema and didn't provide tools, choose best path per model capability
@@ -437,6 +566,14 @@ class AutoGenWrapper(BaseModel):
                 create_call_kwargs["tools"] = [fake_schema_tool]
                 used_fake_schema_tool = True
 
+        # Defensive check: autogen_ext has a bug where it crashes on empty messages
+        # See: autogen_ext/models/anthropic/_anthropic_client.py:546
+        # messages[-1] access without checking if list is empty
+        if not messages or len(messages) == 0:
+            raise ProcessingError(
+                "Cannot call LLM with empty messages list (autogen_ext bug workaround)"
+            )
+
         try:
             # Get retry wrapper with fresh client and current credentials/tokens
             retry_wrapper = self._get_retry_wrapper()
@@ -447,12 +584,18 @@ class AutoGenWrapper(BaseModel):
             )
 
         except Exception as e:  # Wrap other exceptions
-            error_msg = f"Error during LLM call: {e!s}"
-            raise ProcessingError(error_msg) from e
+            import traceback
+            error_msg = f"Error during LLM call: {e!s}\nTraceback: {traceback.format_exc()}"
+            logger.error(error_msg)
+            raise ProcessingError(f"Error during LLM call: {e!s}") from e
 
         # Calculate pricing from usage data (defensive check for None)
         usage = getattr(create_result, "usage", None)
         pricing_metadata = self._calculate_pricing(usage)
+
+        # Extract actual model name from response if available (some providers return this)
+        # Prefer actual model from API, fallback to our litellm_model_name
+        actual_model_name = getattr(create_result, "model", self.litellm_model_name)
 
         # Now that we've made the LLM call and received a response, from
         # this point on, any errors we encounter will return a CreateResult or ModelOutput object
@@ -474,6 +617,10 @@ class AutoGenWrapper(BaseModel):
                 ):
                     if tools and not used_fake_schema_tool:
                         # If we have tools and didn't use a fake schema tool, return the tool calls with pricing
+                        metadata = {
+                            "pricing": pricing_metadata,
+                            "model": actual_model_name,
+                        }
                         return ModelOutput(
                             content=create_result.content,
                             finish_reason=create_result.finish_reason,
@@ -481,7 +628,7 @@ class AutoGenWrapper(BaseModel):
                             thought=getattr(create_result, "thought", None),
                             cached=create_result.cached,
                             tool_calls=create_result.content,
-                            metadata={"pricing": pricing_metadata},
+                            metadata=metadata,
                         )
                     elif used_fake_schema_tool:
                         # If we used a fake schema tool, parse the tool call
@@ -530,6 +677,10 @@ class AutoGenWrapper(BaseModel):
                 schema_parsed_object = await self._parse_structured_output(
                     create_result.content, schema
                 )
+                metadata = {
+                    "pricing": pricing_metadata,
+                    "model": actual_model_name,
+                }
                 return ModelOutput(
                     content=create_result.content,
                     finish_reason=create_result.finish_reason,
@@ -537,9 +688,13 @@ class AutoGenWrapper(BaseModel):
                     thought=getattr(create_result, "thought", None),
                     parsed_object=schema_parsed_object,
                     cached=create_result.cached,
-                    metadata={"pricing": pricing_metadata},
+                    metadata=metadata,
                 )
 
+            metadata = {
+                "pricing": pricing_metadata,
+                "model": actual_model_name,
+            }
             result = ModelOutput(
                 content=create_result.content,
                 finish_reason=create_result.finish_reason,
@@ -548,9 +703,13 @@ class AutoGenWrapper(BaseModel):
                 cached=create_result.cached,
                 parsed_object=parsed_object,
                 tool_calls=tool_calls,
-                metadata={"pricing": pricing_metadata},
+                metadata=metadata,
             )
         except Exception as e:
+            metadata = {
+                "pricing": pricing_metadata,
+                "model": actual_model_name,
+            }
             result = ModelOutput(
                 content=create_result.content,
                 finish_reason=create_result.finish_reason,
@@ -559,7 +718,7 @@ class AutoGenWrapper(BaseModel):
                 cached=create_result.cached,
                 parsed_object=None,  # Always None on error to prevent malformed BaseModel objects
                 tool_calls=tool_calls,
-                metadata={"pricing": pricing_metadata},
+                metadata=metadata,
             )
             result.error_message = f"LLM call failed: {e!s}"
             result.error_code = getattr(e, "code", None)  # Use code if available
@@ -613,15 +772,16 @@ class AutoGenWrapper(BaseModel):
             raise ProcessingError(f"Failed to query LLM: {e!s}") from e
 
         # Extract pricing from initial call
+        # Use `or 0` pattern to handle both missing keys AND explicit None values
         initial_pricing = (
             create_result.metadata.get("pricing", {})
             if hasattr(create_result, "metadata")
             else {}
         )
         aggregated_pricing = {
-            "prompt_tokens": initial_pricing.get("prompt_tokens", 0),
-            "completion_tokens": initial_pricing.get("completion_tokens", 0),
-            "total_cost": initial_pricing.get("total_cost", 0.0),
+            "prompt_tokens": initial_pricing.get("prompt_tokens") or 0,
+            "completion_tokens": initial_pricing.get("completion_tokens") or 0,
+            "total_cost": initial_pricing.get("total_cost") or 0.0,
         }
 
         # Step 2: Handle tool calls if present
@@ -670,14 +830,14 @@ class AutoGenWrapper(BaseModel):
                     and "pricing" in synthesis_result.metadata
                 ):
                     synthesis_pricing = synthesis_result.metadata["pricing"]
-                    aggregated_pricing["prompt_tokens"] += synthesis_pricing.get(
-                        "prompt_tokens", 0
+                    aggregated_pricing["prompt_tokens"] += (
+                        synthesis_pricing.get("prompt_tokens") or 0
                     )
-                    aggregated_pricing["completion_tokens"] += synthesis_pricing.get(
-                        "completion_tokens", 0
+                    aggregated_pricing["completion_tokens"] += (
+                        synthesis_pricing.get("completion_tokens") or 0
                     )
-                    aggregated_pricing["total_cost"] += synthesis_pricing.get(
-                        "total_cost", 0.0
+                    aggregated_pricing["total_cost"] += (
+                        synthesis_pricing.get("total_cost") or 0.0
                     )
                     synthesis_result.metadata["pricing"] = aggregated_pricing
 
@@ -934,7 +1094,7 @@ def litellm_to_autogen_result(
     Args:
         response: LiteLLM response object or dict
         usage: Usage information from LiteLLM
-        model: Model name used
+        model: Model name used (our shorthand)
         schema: Optional Pydantic schema for structured output
 
     Returns:
@@ -944,7 +1104,7 @@ def litellm_to_autogen_result(
 
     # Extract content from response
     content: str | list[FunctionCall]
-    if hasattr(response, "choices") and response.choices:
+    if hasattr(response, "choices") and response.choices and len(response.choices) > 0:
         choice = response.choices[0]
         message = choice.message if hasattr(choice, "message") else choice
 
@@ -988,14 +1148,24 @@ def litellm_to_autogen_result(
     # Check if content is cached (some providers support this)
     cached = getattr(response, "cached", False)
 
+    # Extract actual model name from response
+    # Prefer actual model from API (e.g., "gemini-2.0-flash-exp")
+    # Fall back to our shorthand if API doesn't provide it (e.g., "gemini25flash")
+    model_name = getattr(response, "model", model)
+
     # Always return ModelOutput to preserve pricing metadata
-    return ModelOutput(
+    result = ModelOutput(
         content=content,
         finish_reason=finish_reason,
         usage=request_usage,
         cached=cached,
         parsed_object=None,  # Will be parsed by caller if needed
     )
+
+    # Store model name directly (actual from API or fallback to config name)
+    result.metadata["model"] = model_name
+
+    return result
 
 
 # =============================================================================
@@ -1021,7 +1191,7 @@ class LiteLLMWrapper(BaseModel):
         litellm_model_name: Resolved model name for LiteLLM
         api_key: API key for the provider (if needed)
         base_url: Custom base URL (if needed)
-        extra_params: Additional parameters to pass to LiteLLM
+        default_parameters: Default inference parameters (temperature, max_tokens, etc.)
     """
 
     model: str = Field(..., description="Model name in LiteLLM format")
@@ -1029,8 +1199,9 @@ class LiteLLMWrapper(BaseModel):
     litellm_model_name: str = Field(..., description="Resolved model name for LiteLLM")
     api_key: str | None = Field(default=None, description="API key for the provider")
     base_url: str | None = Field(default=None, description="Custom base URL")
-    extra_params: dict[str, Any] = Field(
-        default_factory=dict, description="Additional LiteLLM parameters"
+    default_parameters: ModelParameters = Field(
+        default_factory=ModelParameters,
+        description="Default inference parameters (temperature, max_tokens, etc.)",
     )
 
     # Retry configuration (matching AutoGenWrapper)
@@ -1125,12 +1296,15 @@ class LiteLLMWrapper(BaseModel):
         # Convert messages to LiteLLM format
         litellm_messages = autogen_to_litellm_messages(messages)
 
+        # Merge default parameters with runtime kwargs (runtime takes precedence)
+        merged_params = self.default_parameters.to_api_params()
+        merged_params.update(kwargs)
+
         # Build LiteLLM parameters
         litellm_params = {
             "model": self.litellm_model_name,
             "messages": litellm_messages,
-            **self.extra_params,
-            **kwargs,
+            **merged_params,
         }
 
         # Add API key if provided
@@ -1202,7 +1376,8 @@ class LiteLLMWrapper(BaseModel):
         )
 
         # Add pricing metadata (result is always ModelOutput now)
-        result.metadata = {"pricing": pricing_metadata}
+        # Preserve actual_model that was set in litellm_to_autogen_result()
+        result.metadata["pricing"] = pricing_metadata
 
         # Parse structured output if schema was provided
         if schema:
@@ -1250,15 +1425,16 @@ class LiteLLMWrapper(BaseModel):
             raise ProcessingError(f"Failed to query LLM: {e}") from e
 
         # Extract pricing from initial call
+        # Use `or 0` pattern to handle both missing keys AND explicit None values
         initial_pricing = (
             create_result.metadata.get("pricing", {})
             if hasattr(create_result, "metadata")
             else {}
         )
         aggregated_pricing = {
-            "prompt_tokens": initial_pricing.get("prompt_tokens", 0),
-            "completion_tokens": initial_pricing.get("completion_tokens", 0),
-            "total_cost": initial_pricing.get("total_cost", 0.0),
+            "prompt_tokens": initial_pricing.get("prompt_tokens") or 0,
+            "completion_tokens": initial_pricing.get("completion_tokens") or 0,
+            "total_cost": initial_pricing.get("total_cost") or 0.0,
         }
 
         # Step 2: Handle tool calls if present
@@ -1306,14 +1482,14 @@ class LiteLLMWrapper(BaseModel):
                     and "pricing" in synthesis_result.metadata
                 ):
                     synthesis_pricing = synthesis_result.metadata["pricing"]
-                    aggregated_pricing["prompt_tokens"] += synthesis_pricing.get(
-                        "prompt_tokens", 0
+                    aggregated_pricing["prompt_tokens"] += (
+                        synthesis_pricing.get("prompt_tokens") or 0
                     )
-                    aggregated_pricing["completion_tokens"] += synthesis_pricing.get(
-                        "completion_tokens", 0
+                    aggregated_pricing["completion_tokens"] += (
+                        synthesis_pricing.get("completion_tokens") or 0
                     )
-                    aggregated_pricing["total_cost"] += synthesis_pricing.get(
-                        "total_cost", 0.0
+                    aggregated_pricing["total_cost"] += (
+                        synthesis_pricing.get("total_cost") or 0.0
                     )
                     synthesis_result.metadata["pricing"] = aggregated_pricing
 
@@ -1421,6 +1597,10 @@ class LLMs(BaseModel):
         default="autogen",
         description="Default LLM wrapper type (autogen or litellm). Used when config.use_litellm is None.",
     )
+    model_parameters: dict[str, ModelParameters | dict] = Field(
+        default_factory=dict,
+        description="Per-model parameter overrides from YAML config (model_name -> parameters)",
+    )
     autogen_models: dict[str, AutoGenWrapper] = Field(
         default_factory=dict,  # For caching instantiated clients
         description="Cache for instantiated AutoGenWrapper clients. Populated on demand.",
@@ -1477,6 +1657,36 @@ class LLMs(BaseModel):
             logger.warning(f"Failed parsing model registry {models_json_path}: {e}")
             self.model_registry_cache = {}
         return self.model_registry_cache
+
+    def get_merged_parameters(self, name: str) -> ModelParameters:
+        """Get merged parameters for a model.
+
+        Merges parameters from multiple sources in order of precedence:
+        1. LLMConfig.parameters (from models.json) - lowest priority
+        2. LLMs.model_parameters (from YAML config) - highest priority
+
+        Args:
+            name: Model connection name
+
+        Returns:
+            ModelParameters: Merged parameters for the model
+        """
+        if name not in self.connections:
+            return ModelParameters()
+
+        config = self.connections[name]
+
+        # Start with parameters from LLMConfig (models.json)
+        base_params = config.parameters
+
+        # Override with YAML model_parameters if present
+        yaml_params = self.model_parameters.get(name)
+        if yaml_params:
+            if isinstance(yaml_params, dict):
+                yaml_params = ModelParameters(**yaml_params)
+            return base_params.merge_with(yaml_params)
+
+        return base_params
 
     @staticmethod
     def _provider_prefix_for_client_type(client_type: str) -> str:
@@ -1764,18 +1974,14 @@ class LLMs(BaseModel):
             else (self.default_wrapper == "litellm")
         )
 
+        # Get merged parameters for this model
+        merged_params = self.get_merged_parameters(name)
+
         if use_litellm:
             # Use LiteLLMWrapper for unified provider support
             logger.debug(
                 f"Using LiteLLMWrapper for model '{name}' with provider '{config.client_type.value}'"
             )
-
-            # Build extra parameters for LiteLLM
-            extra_params = {}
-            if "temperature" in config.configs:
-                extra_params["temperature"] = config.configs["temperature"]
-            if "max_tokens" in config.configs:
-                extra_params["max_tokens"] = config.configs["max_tokens"]
 
             wrapped_client = LiteLLMWrapper(
                 model=model_name,
@@ -1783,7 +1989,7 @@ class LLMs(BaseModel):
                 litellm_model_name=resolved_litellm,
                 api_key=config.api_key,
                 base_url=config.base_url,
-                extra_params=extra_params,
+                default_parameters=merged_params,
             )
         else:
             # Use AutoGenWrapper (existing behavior)
@@ -1795,6 +2001,7 @@ class LLMs(BaseModel):
                 client_factory=client_factory,
                 model_info=config.model_info,
                 litellm_model_name=resolved_litellm,
+                default_parameters=merged_params,
             )
 
         self.autogen_models[name] = wrapped_client

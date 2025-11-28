@@ -33,7 +33,7 @@ Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that 
 **Approved methods**:
 - Run existing tests: `uv run pytest tests/[relevant_module]`
 - Extend existing tests in `tests/` directory
-- Use debugging tools from `docs/bots/debugging.md`
+- Use debugging tools from `debugging.md`
 - Use the `tester` agent via `Task: tester - [describe need]`
 
 **Forbidden**:

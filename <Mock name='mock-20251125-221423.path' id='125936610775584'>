@@ -1,0 +1,492 @@
+[
+  {
+    "timestamp": "2025-11-25T12:13:28.015376+00:00",
+    "call_id": "KQyApvxUSjJF58eH656kYA",
+    "session_id": "session-20251125T1212Z-oD4o-nicwin-nic",
+    "session_info": {
+      "session_id": "session-20251125T1212Z-oD4o-nicwin-nic",
+      "platform": "local",
+      "project_name": "buttermilk",
+      "job": "testing",
+      "node_name": "nicwin",
+      "save_dir": "gs://my-bucket/sessions",
+      "cache_dir": "/home/nic/.cache/buttermilk",
+      "status": "initializing",
+      "records_processed": 0,
+      "outputs_generated": 0,
+      "llm_wrapper": "autogen",
+      "sessions_dir": "/tmp/tmp68aj9349"
+    },
+    "agent_info": {
+      "component_name": "FETCH FETCH-EFOPZA",
+      "execution_type": "agent",
+      "agent_id": "FETCH-EFOPZA",
+      "role": "FETCH",
+      "config": {
+        "agent_id": "FETCH-EFOPZA",
+        "role": "FETCH",
+        "description": "Data fetcher that retrieves records from configured data sources",
+        "parameters": {
+          "criteria": [
+            "tja",
+            "glaad",
+            "trans_simplified",
+            "apc"
+          ],
+          "batch_size": 100,
+          "storage": {
+            "tja": {
+              "type": "bigquery",
+              "randomize": false,
+              "dataset_name": "tja",
+              "split_type": "train",
+              "full_table_id": "prosocial-443205.bmdev.tja_records",
+              "schema_path": "record.schema.json",
+              "record_class": "buttermilk._core.types.Record"
+            },
+            "traces": {
+              "type": "bigquery",
+              "project_id": "prosocial-443205",
+              "dataset_id": "testing",
+              "table_id": "traces",
+              "dataset_name": "traces",
+              "schema_path": "traces.schema.json"
+            }
+          }
+        },
+        "inputs": {
+          "prompt": "prompt||content"
+        },
+        "name_components": [
+          "role",
+          "agent_id"
+        ],
+        "agent_name": "FETCH FETCH-EFOPZA",
+        "session_id": "session-20251125T1212Z-oD4o-nicwin-nic",
+        "bm": {
+          "session_info": {
+            "session_id": "session-20251125T1212Z-oD4o-nicwin-nic",
+            "platform": "local",
+            "project_name": "buttermilk",
+            "job": "testing",
+            "node_name": "nicwin",
+            "save_dir": "gs://my-bucket/sessions",
+            "cache_dir": "/home/nic/.cache/buttermilk",
+            "status": "initializing",
+            "records_processed": 0,
+            "outputs_generated": 0,
+            "llm_wrapper": "autogen",
+            "sessions_dir": "/tmp/tmp68aj9349"
+          },
+          "datasets": {
+            "observations": {
+              "full_table_id": "prosocial-443205.testing.observations"
+            },
+            "titles": {
+              "full_table_id": "prosocial-443205.bmdev_testing.titles_tmdb",
+              "batch_size": 2
+            },
+            "traces": {
+              "type": "bigquery",
+              "project_id": "prosocial-443205",
+              "dataset_id": "testing",
+              "table_id": "traces",
+              "dataset_name": "traces",
+              "schema_path": "traces.schema.json"
+            },
+            "zotero_vectors": {
+              "type": "chromadb",
+              "collection_name": "prosocial_zot",
+              "read_only": true,
+              "persist_directory": "/chromadb",
+              "embedding_model": "gemini-embedding-001",
+              "dimensionality": 3072
+            }
+          },
+          "save_dir_base": "/tmp/tmpf79uh76j"
+        }
+      }
+    },
+    "parameters": {
+      "criteria": [
+        "tja",
+        "glaad",
+        "trans_simplified",
+        "apc"
+      ],
+      "batch_size": 100,
+      "storage": {
+        "tja": {
+          "type": "bigquery",
+          "randomize": false,
+          "dataset_name": "tja",
+          "split_type": "train",
+          "full_table_id": "prosocial-443205.bmdev.tja_records",
+          "schema_path": "record.schema.json",
+          "record_class": "buttermilk._core.types.Record"
+        },
+        "traces": {
+          "type": "bigquery",
+          "project_id": "prosocial-443205",
+          "dataset_id": "testing",
+          "table_id": "traces",
+          "dataset_name": "traces",
+          "schema_path": "traces.schema.json"
+        }
+      }
+    },
+    "error": {
+      "event": "ERROR: Invoke error: No result found in _process",
+      "details": {
+        "errors": [
+          "ERROR: Invoke error: No result found in _process"
+        ]
+      }
+    },
+    "is_error": true,
+    "object_type": "null"
+  },
+  {
+    "timestamp": "2025-11-25T12:13:28.211783+00:00",
+    "call_id": "QphVT9Y9sTDBmgfx3AjyPs",
+    "session_id": "session-20251125T1212Z-oD4o-nicwin-nic",
+    "session_info": {
+      "session_id": "session-20251125T1212Z-oD4o-nicwin-nic",
+      "platform": "local",
+      "project_name": "buttermilk",
+      "job": "testing",
+      "node_name": "nicwin",
+      "save_dir": "gs://my-bucket/sessions",
+      "cache_dir": "/home/nic/.cache/buttermilk",
+      "status": "initializing",
+      "records_processed": 0,
+      "outputs_generated": 0,
+      "llm_wrapper": "autogen",
+      "sessions_dir": "/tmp/tmp68aj9349"
+    },
+    "agent_info": {
+      "component_name": "FETCH FETCH-SMWXQP",
+      "execution_type": "agent",
+      "agent_id": "FETCH-SMWXQP",
+      "role": "FETCH",
+      "config": {
+        "agent_id": "FETCH-SMWXQP",
+        "role": "FETCH",
+        "description": "Data fetcher that retrieves records from configured data sources",
+        "parameters": {
+          "criteria": [
+            "tja",
+            "glaad",
+            "trans_simplified",
+            "apc"
+          ],
+          "batch_size": 100,
+          "storage": {
+            "tja": {
+              "type": "bigquery",
+              "randomize": false,
+              "dataset_name": "tja",
+              "split_type": "train",
+              "full_table_id": "prosocial-443205.bmdev.tja_records",
+              "schema_path": "record.schema.json",
+              "record_class": "buttermilk._core.types.Record"
+            },
+            "traces": {
+              "type": "bigquery",
+              "project_id": "prosocial-443205",
+              "dataset_id": "testing",
+              "table_id": "traces",
+              "dataset_name": "traces",
+              "schema_path": "traces.schema.json"
+            }
+          }
+        },
+        "inputs": {
+          "prompt": "prompt||content"
+        },
+        "name_components": [
+          "role",
+          "agent_id"
+        ],
+        "agent_name": "FETCH FETCH-SMWXQP",
+        "session_id": "session-20251125T1212Z-oD4o-nicwin-nic",
+        "bm": {
+          "session_info": {
+            "session_id": "session-20251125T1212Z-oD4o-nicwin-nic",
+            "platform": "local",
+            "project_name": "buttermilk",
+            "job": "testing",
+            "node_name": "nicwin",
+            "save_dir": "gs://my-bucket/sessions",
+            "cache_dir": "/home/nic/.cache/buttermilk",
+            "status": "initializing",
+            "records_processed": 0,
+            "outputs_generated": 0,
+            "llm_wrapper": "autogen",
+            "sessions_dir": "/tmp/tmp68aj9349"
+          },
+          "datasets": {
+            "observations": {
+              "full_table_id": "prosocial-443205.testing.observations"
+            },
+            "titles": {
+              "full_table_id": "prosocial-443205.bmdev_testing.titles_tmdb",
+              "batch_size": 2
+            },
+            "traces": {
+              "type": "bigquery",
+              "project_id": "prosocial-443205",
+              "dataset_id": "testing",
+              "table_id": "traces",
+              "dataset_name": "traces",
+              "schema_path": "traces.schema.json"
+            },
+            "zotero_vectors": {
+              "type": "chromadb",
+              "collection_name": "prosocial_zot",
+              "read_only": true,
+              "persist_directory": "/chromadb",
+              "embedding_model": "gemini-embedding-001",
+              "dimensionality": 3072
+            }
+          },
+          "save_dir_base": "/tmp/tmpf79uh76j"
+        }
+      }
+    },
+    "parameters": {
+      "criteria": [
+        "tja",
+        "glaad",
+        "trans_simplified",
+        "apc"
+      ],
+      "batch_size": 100,
+      "storage": {
+        "tja": {
+          "type": "bigquery",
+          "randomize": false,
+          "dataset_name": "tja",
+          "split_type": "train",
+          "full_table_id": "prosocial-443205.bmdev.tja_records",
+          "schema_path": "record.schema.json",
+          "record_class": "buttermilk._core.types.Record"
+        },
+        "traces": {
+          "type": "bigquery",
+          "project_id": "prosocial-443205",
+          "dataset_id": "testing",
+          "table_id": "traces",
+          "dataset_name": "traces",
+          "schema_path": "traces.schema.json"
+        }
+      }
+    },
+    "error": {
+      "event": "ERROR: Invoke error: No result found in _process",
+      "details": {
+        "errors": [
+          "ERROR: Invoke error: No result found in _process"
+        ]
+      }
+    },
+    "is_error": true,
+    "object_type": "null"
+  },
+  {
+    "timestamp": "2025-11-25T12:13:28.410970+00:00",
+    "call_id": "Vrp8FJbGs7LMZZ2GPRoFHw",
+    "session_id": "session-20251125T1212Z-oD4o-nicwin-nic",
+    "session_info": {
+      "session_id": "session-20251125T1212Z-oD4o-nicwin-nic",
+      "platform": "local",
+      "project_name": "buttermilk",
+      "job": "testing",
+      "node_name": "nicwin",
+      "save_dir": "gs://my-bucket/sessions",
+      "cache_dir": "/home/nic/.cache/buttermilk",
+      "status": "initializing",
+      "records_processed": 0,
+      "outputs_generated": 0,
+      "llm_wrapper": "autogen",
+      "sessions_dir": "/tmp/tmp68aj9349"
+    },
+    "agent_info": {
+      "component_name": "FETCH FETCH-XR2Y9U",
+      "execution_type": "agent",
+      "agent_id": "FETCH-XR2Y9U",
+      "role": "FETCH",
+      "config": {
+        "agent_id": "FETCH-XR2Y9U",
+        "role": "FETCH",
+        "description": "Data fetcher that retrieves records from configured data sources",
+        "parameters": {
+          "criteria": [
+            "tja",
+            "glaad",
+            "trans_simplified",
+            "apc"
+          ],
+          "batch_size": 100,
+          "storage": {
+            "tja": {
+              "type": "bigquery",
+              "randomize": false,
+              "dataset_name": "tja",
+              "split_type": "train",
+              "full_table_id": "prosocial-443205.bmdev.tja_records",
+              "schema_path": "record.schema.json",
+              "record_class": "buttermilk._core.types.Record"
+            },
+            "traces": {
+              "type": "bigquery",
+              "project_id": "prosocial-443205",
+              "dataset_id": "testing",
+              "table_id": "traces",
+              "dataset_name": "traces",
+              "schema_path": "traces.schema.json"
+            }
+          }
+        },
+        "inputs": {
+          "prompt": "prompt||content"
+        },
+        "name_components": [
+          "role",
+          "agent_id"
+        ],
+        "agent_name": "FETCH FETCH-XR2Y9U",
+        "session_id": "session-20251125T1212Z-oD4o-nicwin-nic",
+        "bm": {
+          "session_info": {
+            "session_id": "session-20251125T1212Z-oD4o-nicwin-nic",
+            "platform": "local",
+            "project_name": "buttermilk",
+            "job": "testing",
+            "node_name": "nicwin",
+            "save_dir": "gs://my-bucket/sessions",
+            "cache_dir": "/home/nic/.cache/buttermilk",
+            "status": "initializing",
+            "records_processed": 0,
+            "outputs_generated": 0,
+            "llm_wrapper": "autogen",
+            "sessions_dir": "/tmp/tmp68aj9349"
+          },
+          "datasets": {
+            "observations": {
+              "full_table_id": "prosocial-443205.testing.observations"
+            },
+            "titles": {
+              "full_table_id": "prosocial-443205.bmdev_testing.titles_tmdb",
+              "batch_size": 2
+            },
+            "traces": {
+              "type": "bigquery",
+              "project_id": "prosocial-443205",
+              "dataset_id": "testing",
+              "table_id": "traces",
+              "dataset_name": "traces",
+              "schema_path": "traces.schema.json"
+            },
+            "zotero_vectors": {
+              "type": "chromadb",
+              "collection_name": "prosocial_zot",
+              "read_only": true,
+              "persist_directory": "/chromadb",
+              "embedding_model": "gemini-embedding-001",
+              "dimensionality": 3072
+            }
+          },
+          "save_dir_base": "/tmp/tmpf79uh76j"
+        }
+      }
+    },
+    "parameters": {
+      "criteria": [
+        "tja",
+        "glaad",
+        "trans_simplified",
+        "apc"
+      ],
+      "batch_size": 100,
+      "storage": {
+        "tja": {
+          "type": "bigquery",
+          "randomize": false,
+          "dataset_name": "tja",
+          "split_type": "train",
+          "full_table_id": "prosocial-443205.bmdev.tja_records",
+          "schema_path": "record.schema.json",
+          "record_class": "buttermilk._core.types.Record"
+        },
+        "traces": {
+          "type": "bigquery",
+          "project_id": "prosocial-443205",
+          "dataset_id": "testing",
+          "table_id": "traces",
+          "dataset_name": "traces",
+          "schema_path": "traces.schema.json"
+        }
+      }
+    },
+    "error": {
+      "event": "ERROR: Invoke error: No result found in _process",
+      "details": {
+        "errors": [
+          "ERROR: Invoke error: No result found in _process"
+        ]
+      }
+    },
+    "is_error": true,
+    "object_type": "null"
+  },
+  {
+    "timestamp": "2025-11-25T12:13:30.341891+00:00",
+    "call_id": "kwphSyxDbmrg5z2o8SPsMy",
+    "session_id": "session-20251125T1212Z-oD4o-nicwin-nic",
+    "session_info": {
+      "session_id": "session-20251125T1212Z-oD4o-nicwin-nic",
+      "platform": "local",
+      "project_name": "buttermilk",
+      "job": "testing",
+      "node_name": "nicwin",
+      "save_dir": "gs://my-bucket/sessions",
+      "cache_dir": "/home/nic/.cache/buttermilk",
+      "status": "initializing",
+      "records_processed": 0,
+      "outputs_generated": 0,
+      "llm_wrapper": "autogen",
+      "sessions_dir": "/tmp/tmp68aj9349"
+    },
+    "agent_info": {
+      "component_name": "LLMCore",
+      "execution_type": "llm_processing",
+      "config": {
+        "model": "gemini25flash",
+        "template": "simple_test"
+      }
+    },
+    "inputs": {
+      "record_id": "test_001",
+      "metadata": {
+        "record_hash": "781cbc5178b23645ad33ac9769fe8a8d583eac7556dd6fe4d497ef05e8c96fff"
+      },
+      "data": {
+        "test_input": "Hello, world!"
+      },
+      "record_hash": "c0ca16d30a4c502b509ff0dba1278b41fdb1d1586ece1183f8920074a3fa2daa",
+      "record_class": "buttermilk._core.types.BaseRecord"
+    },
+    "error": {
+      "event": "LLMCore processing failed: Template 'simple_test' (file: 'simple_test.jinja2') could not be loaded.",
+      "details": {
+        "error_type": "ProcessingError"
+      }
+    },
+    "metadata": {
+      "duration_ms": 19.3483829498291
+    },
+    "is_error": true,
+    "object_type": "null"
+  }
+]

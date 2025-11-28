@@ -48,7 +48,7 @@ from opentelemetry.trace import (
 )
 
 from buttermilk import bm, logger
-from buttermilk._core.config import FatalError, Tracing
+from buttermilk._core.config import Tracing
 
 # Suppress noisy OpenTelemetry instrumentation debug logs for non-OpenAI models
 logging.getLogger("opentelemetry.instrumentation.openai.shared").setLevel(
@@ -395,5 +395,3 @@ def setup_traceloop_otel() -> OTLPHttpSpanExporter | None:
     except Exception as e_traceloop:
         logger.warning("Error configuring traceloop exporter", error=e_traceloop)
         return None
-
-

@@ -22,7 +22,6 @@ def pytest_addoption(parser):
     )
 
 
-@pytest.mark.anyio
 @pytest.fixture(scope="session")
 async def local_bm():
     """Minimal BM instance created from minimal.yaml configuration.
@@ -45,7 +44,6 @@ async def local_bm():
     return bm
 
 
-@pytest.mark.anyio
 @pytest.fixture(scope="session")
 async def local_conf(local_bm):
     """Minimal configuration dictionary from minimal.yaml."""

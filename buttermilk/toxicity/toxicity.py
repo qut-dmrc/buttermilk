@@ -88,6 +88,7 @@ class ToxicityModel(BaseModel):
     standard: str
     client: Any = None
     info_url: str | None = None
+    credentials: dict[str, str] = Field(default_factory=dict)
     options: ClassVar[dict] = {}
     call_options: ClassVar[dict] = {}
 
@@ -104,6 +105,31 @@ class ToxicityModel(BaseModel):
     def init_client(self) -> None:
         if self.client is None:
             raise NotImplementedError
+
+    def _get_credential(self, key: str, required: bool = True) -> str | None:
+        """Get credential from credentials dict, falling back to os.environ.
+
+        Args:
+            key: The credential key to retrieve
+            required: If True, raise KeyError when key is missing from both sources
+
+        Returns:
+            The credential value, or None if not required and not found
+
+        Raises:
+            KeyError: If required=True and key not in credentials or environment
+        """
+        # Check credentials dict first
+        if key in self.credentials:
+            return self.credentials[key]
+
+        # Fallback to environment variable
+        if key in os.environ:
+            return os.environ[key]
+
+        if required:
+            raise KeyError(f"{key} required in credentials dict or environment")
+        return None
 
     def run(
         self, message: AgentInput
@@ -265,7 +291,9 @@ class _HF(ToxicityModel):
     tokenizer: Any = None
 
     def init_client(self) -> None:
-        login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
+        token = self._get_credential("HUGGINGFACEHUB_API_TOKEN")
+
+        login(token=token, new_session=False)
 
         self.tokenizer = AutoTokenizer.from_pretrained(
             self.model,
@@ -383,9 +411,9 @@ class Comprehend(ToxicityModel):
     client: Any = None
 
     def init_client(self) -> None:
-        access_key = os.getenv("AWS_ACCESS_KEY_ID")
-        secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
-        region = os.getenv("AWS_REGION")
+        access_key = self._get_credential("AWS_ACCESS_KEY_ID")
+        secret_key = self._get_credential("AWS_SECRET_ACCESS_KEY")
+        region = self._get_credential("AWS_REGION")
 
         self.client = boto3.client(
             service_name="comprehend",
@@ -450,11 +478,10 @@ class AzureContentSafety(ToxicityModel):
     """
 
     def init_client(self) -> None:
-        API_KEY = os.environ["AZURE_CONTENT_SAFETY_KEY"]
-        ENDPOINT = os.environ.get(
-            "AZURE_CONTENT_SAFETY_ENDPOINT",
-            "https://westus.api.cognitive.microsoft.com",
-        )
+        API_KEY = self._get_credential("AZURE_CONTENT_SAFETY_KEY")
+        ENDPOINT = self._get_credential("AZURE_CONTENT_SAFETY_ENDPOINT", required=False)
+        if not ENDPOINT:
+            ENDPOINT = "https://westus.api.cognitive.microsoft.com"
 
         credential = AzureKeyCredential(API_KEY)
         content_safety_client = ContentSafetyClient(ENDPOINT, credential)
@@ -535,11 +562,11 @@ class AzureModerator(ToxicityModel):
     """
 
     def init_client(self) -> None:
-        SUBSCRIPTION_KEY = os.environ["AZURE_CONTENT_MODERATOR_KEY"]
-        ENDPOINT = os.environ.get(
-            "AZURE_CONTENT_MODERATOR_ENDPOINT",
-            "https://westus.api.cognitive.microsoft.com",
-        )
+        SUBSCRIPTION_KEY = self._get_credential("AZURE_CONTENT_MODERATOR_KEY")
+        ENDPOINT = self._get_credential("AZURE_CONTENT_MODERATOR_ENDPOINT", required=False)
+        if not ENDPOINT:
+            ENDPOINT = "https://westus.api.cognitive.microsoft.com"
+
         self.client = ContentModeratorClient(
             endpoint=ENDPOINT,
             credentials=CognitiveServicesCredentials(subscription_key=SUBSCRIPTION_KEY),
@@ -689,7 +716,9 @@ class LFTW(ToxicityModel):
     classes: dict = {}
 
     def init_client(self) -> None:
-        login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
+        token = self._get_credential("HUGGINGFACEHUB_API_TOKEN")
+
+        login(token=token, new_session=False)
 
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
         if not self.tokenizer.pad_token_id:
@@ -758,7 +787,9 @@ class GPTJT(ToxicityModel):
     }
 
     def init_client(self) -> None:
-        login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
+        token = self._get_credential("HUGGINGFACEHUB_API_TOKEN")
+
+        login(token=token, new_session=False)
         self.client = hf_pipeline(
             hf_model_path="togethercomputer/GPT-JT-Moderation-6B",
             device=self.device,
@@ -868,7 +899,9 @@ class ShieldGemma(ToxicityModel):
     )
 
     def init_client(self) -> None:
-        login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
+        token = self._get_credential("HUGGINGFACEHUB_API_TOKEN")
+
+        login(token=token, new_session=False)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
         self.client = AutoModelForCausalLM.from_pretrained(
             self.model,
@@ -943,3 +976,86 @@ class ToxicChat(ToxicityModel):
 
     def interpret(self, response, **kwargs) -> EvalRecord:
         return EvalRecord(**response)
+
+
+class Zentropi(ToxicityModel):
+    """Zentropi toxicity detection API wrapper.
+
+    Zentropi provides a classification API for content moderation.
+    This class adapts the Zentropi API response format to the ToxicityModel interface.
+
+    Expected Zentropi response format:
+    {
+        "toxic": true/false,
+        "scores": {
+            "toxicity": 0.85,
+            "severity": 0.72,
+            "confidence": 0.91
+        },
+        "labels": ["profanity", "hate_speech"]
+    }
+    """
+
+    model: str
+    process_chain: str = "api"
+    standard: str = "zentropi"
+    client: Any = None
+
+    def init_client(self) -> None:
+        """Initialize client with credentials from credentials dict or environment variables.
+
+        Requires:
+            ZENTROPI_API_KEY: API key for Zentropi service (from credentials or env var)
+            ZENTROPI_BASE_URL: (optional) API endpoint, defaults to https://api.zentropi.ai/v1/label
+        """
+        api_key = self._get_credential("ZENTROPI_API_KEY")
+        base_url = self._get_credential("ZENTROPI_BASE_URL", required=False)
+        if not base_url:
+            base_url = "https://api.zentropi.ai/v1/label"
+
+        self.client = {
+            "api_key": api_key,
+            "base_url": base_url,
+        }
+
+    def make_prompt(self, content: str) -> str:
+        """Pass content through unchanged."""
+        return content
+
+    def interpret(self, response: dict[str, Any]) -> EvalRecord:
+        """Convert Zentropi API response to EvalRecord.
+
+        Args:
+            response: Zentropi API response containing:
+                - toxic (bool): Whether content is toxic
+                - scores (dict): Score values by measure name
+                - labels (list): List of detected labels
+
+        Returns:
+            EvalRecord with prediction, scores, and labels
+
+        Raises:
+            ValueError: If required 'toxic' field is missing from response
+        """
+        if "toxic" not in response:
+            raise ValueError(
+                f"Zentropi response missing required 'toxic' field. Got: {response.keys()}"
+            )
+
+        # Extract prediction
+        prediction = response["toxic"]
+
+        # Convert scores dict to Score objects
+        scores = []
+        if "scores" in response:
+            for measure, score_value in response["scores"].items():
+                scores.append(Score(measure=measure, score=score_value))
+
+        # Extract labels
+        labels = response.get("labels", [])
+
+        return EvalRecord(
+            prediction=prediction,
+            scores=scores,
+            labels=labels,
+        )

@@ -74,7 +74,7 @@ def test_chromadb_first_access_benchmark(benchmark, tmp_path):
     assert result._cache_initialized
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_chromadb_lazy_init_timing():
     """Verify ChromaDB lazy initialization is fast with manual timing.
 
@@ -103,7 +103,7 @@ async def test_chromadb_lazy_init_timing():
         print(f"\n✅ ChromaDB lazy init: {init_time:.3f}s")
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_background_warmup_timing():
     """Verify background warmup starts after configured delay and completes.
 
@@ -139,7 +139,7 @@ async def test_background_warmup_timing():
         print(f"\n✅ Background warmup completed in {elapsed:.2f}s")
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 @pytest.mark.slow
 async def test_full_init_async_startup_performance(real_bm):
     """Verify full init_async startup meets performance requirements.
@@ -162,7 +162,7 @@ async def test_full_init_async_startup_performance(real_bm):
     print("   (Timing captured by fixture creation)")
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_minimal_init_async_performance():
     """Benchmark minimal init_async startup (without full real_bm overhead).
 

@@ -11,6 +11,8 @@ import os
 
 import pytest
 
+pytest.importorskip("pyzotero", reason="pyzotero is optional (install with: uv sync --extra research)")
+
 from buttermilk.libs.zotero import ZoteroDownloadProcessor, ZoteroSource
 
 # Mark all tests in this file as endtoend and anyio

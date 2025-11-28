@@ -125,6 +125,16 @@ class BaseStorageConfig(BaseModel):
         ),
     )
 
+    # File format configuration
+    format: str | None = Field(
+        default=None,
+        description=(
+            "File format for reading/writing. "
+            "Supported formats: 'json', 'jsonl', 'csv'. "
+            "If not specified, format is inferred from file extension."
+        ),
+    )
+
     model_config = {
         "extra": "forbid",
         "arbitrary_types_allowed": False,

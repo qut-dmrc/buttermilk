@@ -10,9 +10,18 @@ from typing import Any
 
 import shortuuid
 from pydantic import BaseModel, ConfigDict, Field
-from starlette.websockets import WebSocketDisconnect
 
 from buttermilk import ExecutionTrace, logger
+
+# Starlette is optional - only needed for WebSocket API mode
+try:
+    from starlette.websockets import WebSocketDisconnect
+except ImportError:
+    # Create a placeholder exception that will never match if starlette isn't installed
+    class WebSocketDisconnect(Exception):  # type: ignore[no-redef]
+        """Placeholder for starlette.websockets.WebSocketDisconnect when starlette is not installed."""
+
+        pass
 from buttermilk._core.context import set_logging_context
 from buttermilk._core.contract import (
     ErrorEvent,

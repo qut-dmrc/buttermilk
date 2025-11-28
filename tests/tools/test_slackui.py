@@ -2,6 +2,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+pytest.importorskip("slack_bolt", reason="slack-bolt is optional (install with: uv sync --extra research)")
+
 from buttermilk._core.contract import AgentInput, ExecutionTrace, SystemPromptMessage
 from buttermilk.agents.ui.slackthreadchat import (
     SlackUIAgent,

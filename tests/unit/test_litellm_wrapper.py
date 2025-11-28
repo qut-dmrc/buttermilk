@@ -11,6 +11,7 @@ from buttermilk._core.llms import (
     LITELLM_AVAILABLE,
     LiteLLMWrapper,
     ModelInfo,
+    ModelParameters,
     autogen_to_litellm_messages,
     litellm_to_autogen_result,
 )
@@ -44,14 +45,14 @@ class TestLiteLLMWrapper:
             litellm_model_name="gpt-4",
             api_key="test-key",
             base_url="https://api.openai.com",
-            extra_params={"temperature": 0.7},
+            default_parameters=ModelParameters(temperature=0.7),
         )
 
         assert wrapper.model == "gpt-4"
         assert wrapper.litellm_model_name == "gpt-4"
         assert wrapper.api_key == "test-key"
         assert wrapper.base_url == "https://api.openai.com"
-        assert wrapper.extra_params["temperature"] == 0.7
+        assert wrapper.default_parameters.temperature == 0.7
 
 
 class TestMessageFormatConversion:

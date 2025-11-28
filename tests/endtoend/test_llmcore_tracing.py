@@ -31,6 +31,37 @@ def sample_record() -> BaseRecord:
     )
 
 
+def _validate_actual_model_name(logged_model: str, alias: str) -> None:
+    """Verify that logged model name is the actual API model, not our alias.
+
+    Args:
+        logged_model: The model name logged in metadata
+        alias: Our shorthand model name (e.g., "gemini-flash")
+
+    Raises:
+        AssertionError: If validation fails
+    """
+    # Extract key components from alias (e.g., "gemini-flash" -> ["gemini", "flash"])
+    alias_components = []
+    if "gemini" in alias.lower():
+        alias_components.append("gemini")
+    if "flash" in alias.lower():
+        alias_components.append("flash")
+    if "pro" in alias.lower():
+        alias_components.append("pro")
+
+    # Verify logged model contains these components
+    for component in alias_components:
+        assert component in logged_model.lower(), (
+            f"Model name '{logged_model}' should contain '{component}' from alias '{alias}'"
+        )
+
+    # Verify it's NOT exactly our alias (proving we got actual API model name)
+    assert logged_model != alias, (
+        f"Model should be actual API name (e.g., 'gemini-2.0-flash-exp'), not alias '{alias}'"
+    )
+
+
 @pytest.mark.anyio
 async def test_llmcore_with_bigquery_trace(
     real_bm, sample_record: BaseRecord, real_model_name: str
@@ -162,7 +193,10 @@ async def test_llmcore_with_bigquery_trace(
         metadata = json.loads(metadata)
 
     assert "model" in metadata, "Metadata should contain model"
-    assert metadata["model"] == real_model_name, "Should have correct model"
+
+    # Verify model name is actual API model, not our alias
+    _validate_actual_model_name(metadata["model"], real_model_name)
+
     assert "duration_ms" in metadata, "Metadata should contain duration_ms"
     assert metadata["duration_ms"] > 0, "Duration should be positive"
 
