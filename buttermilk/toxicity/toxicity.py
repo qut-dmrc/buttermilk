@@ -285,7 +285,11 @@ class _HF(ToxicityModel):
     tokenizer: Any = None
 
     def init_client(self) -> None:
-        login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
+        token = self._get_credential("HUGGINGFACEHUB_API_TOKEN", required=False) or os.environ.get("HUGGINGFACEHUB_API_TOKEN")
+        if not token:
+            raise KeyError("HUGGINGFACEHUB_API_TOKEN required in credentials or environment")
+
+        login(token=token, new_session=False)
 
         self.tokenizer = AutoTokenizer.from_pretrained(
             self.model,
@@ -403,9 +407,17 @@ class Comprehend(ToxicityModel):
     client: Any = None
 
     def init_client(self) -> None:
-        access_key = os.getenv("AWS_ACCESS_KEY_ID")
-        secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
-        region = os.getenv("AWS_REGION")
+        access_key = self._get_credential("AWS_ACCESS_KEY_ID", required=False) or os.environ.get("AWS_ACCESS_KEY_ID")
+        if not access_key:
+            raise KeyError("AWS_ACCESS_KEY_ID required in credentials or environment")
+
+        secret_key = self._get_credential("AWS_SECRET_ACCESS_KEY", required=False) or os.environ.get("AWS_SECRET_ACCESS_KEY")
+        if not secret_key:
+            raise KeyError("AWS_SECRET_ACCESS_KEY required in credentials or environment")
+
+        region = self._get_credential("AWS_REGION", required=False) or os.environ.get("AWS_REGION")
+        if not region:
+            raise KeyError("AWS_REGION required in credentials or environment")
 
         self.client = boto3.client(
             service_name="comprehend",
@@ -470,8 +482,11 @@ class AzureContentSafety(ToxicityModel):
     """
 
     def init_client(self) -> None:
-        API_KEY = os.environ["AZURE_CONTENT_SAFETY_KEY"]
-        ENDPOINT = os.environ.get(
+        API_KEY = self._get_credential("AZURE_CONTENT_SAFETY_KEY", required=False) or os.environ.get("AZURE_CONTENT_SAFETY_KEY")
+        if not API_KEY:
+            raise KeyError("AZURE_CONTENT_SAFETY_KEY required in credentials or environment")
+
+        ENDPOINT = self._get_credential("AZURE_CONTENT_SAFETY_ENDPOINT", required=False) or os.environ.get(
             "AZURE_CONTENT_SAFETY_ENDPOINT",
             "https://westus.api.cognitive.microsoft.com",
         )
@@ -555,8 +570,11 @@ class AzureModerator(ToxicityModel):
     """
 
     def init_client(self) -> None:
-        SUBSCRIPTION_KEY = os.environ["AZURE_CONTENT_MODERATOR_KEY"]
-        ENDPOINT = os.environ.get(
+        SUBSCRIPTION_KEY = self._get_credential("AZURE_CONTENT_MODERATOR_KEY", required=False) or os.environ.get("AZURE_CONTENT_MODERATOR_KEY")
+        if not SUBSCRIPTION_KEY:
+            raise KeyError("AZURE_CONTENT_MODERATOR_KEY required in credentials or environment")
+
+        ENDPOINT = self._get_credential("AZURE_CONTENT_MODERATOR_ENDPOINT", required=False) or os.environ.get(
             "AZURE_CONTENT_MODERATOR_ENDPOINT",
             "https://westus.api.cognitive.microsoft.com",
         )
@@ -709,7 +727,11 @@ class LFTW(ToxicityModel):
     classes: dict = {}
 
     def init_client(self) -> None:
-        login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
+        token = self._get_credential("HUGGINGFACEHUB_API_TOKEN", required=False) or os.environ.get("HUGGINGFACEHUB_API_TOKEN")
+        if not token:
+            raise KeyError("HUGGINGFACEHUB_API_TOKEN required in credentials or environment")
+
+        login(token=token, new_session=False)
 
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
         if not self.tokenizer.pad_token_id:
@@ -778,7 +800,11 @@ class GPTJT(ToxicityModel):
     }
 
     def init_client(self) -> None:
-        login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
+        token = self._get_credential("HUGGINGFACEHUB_API_TOKEN", required=False) or os.environ.get("HUGGINGFACEHUB_API_TOKEN")
+        if not token:
+            raise KeyError("HUGGINGFACEHUB_API_TOKEN required in credentials or environment")
+
+        login(token=token, new_session=False)
         self.client = hf_pipeline(
             hf_model_path="togethercomputer/GPT-JT-Moderation-6B",
             device=self.device,
@@ -888,7 +914,11 @@ class ShieldGemma(ToxicityModel):
     )
 
     def init_client(self) -> None:
-        login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
+        token = self._get_credential("HUGGINGFACEHUB_API_TOKEN", required=False) or os.environ.get("HUGGINGFACEHUB_API_TOKEN")
+        if not token:
+            raise KeyError("HUGGINGFACEHUB_API_TOKEN required in credentials or environment")
+
+        login(token=token, new_session=False)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
         self.client = AutoModelForCausalLM.from_pretrained(
             self.model,

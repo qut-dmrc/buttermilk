@@ -338,7 +338,11 @@ class LlamaGuard3LocalInt8(LlamaGuard3Local):
 
     def init_client(self) -> None:
         quantization_config = BitsAndBytesConfig(load_in_8bit=True)
-        login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
+        token = self._get_credential("HUGGINGFACEHUB_API_TOKEN", required=False) or os.environ.get("HUGGINGFACEHUB_API_TOKEN")
+        if not token:
+            raise KeyError("HUGGINGFACEHUB_API_TOKEN required in credentials or environment")
+
+        login(token=token, new_session=False)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
         if not self.tokenizer.pad_token_id:
             self.tokenizer.pad_token_id = 0
@@ -368,7 +372,11 @@ class MDJudgeLocal(LlamaGuardTox):
     template: str
 
     def init_client(self) -> None:
-        login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
+        token = self._get_credential("HUGGINGFACEHUB_API_TOKEN", required=False) or os.environ.get("HUGGINGFACEHUB_API_TOKEN")
+        if not token:
+            raise KeyError("HUGGINGFACEHUB_API_TOKEN required in credentials or environment")
+
+        login(token=token, new_session=False)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
         self.client = AutoModelForCausalLM.from_pretrained(
             self.model,
@@ -412,7 +420,11 @@ class MDJudge2(MDJudgeLocal):
     categories: EnumMeta = MDJudge2Categories
 
     def init_client(self) -> None:
-        login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
+        token = self._get_credential("HUGGINGFACEHUB_API_TOKEN", required=False) or os.environ.get("HUGGINGFACEHUB_API_TOKEN")
+        if not token:
+            raise KeyError("HUGGINGFACEHUB_API_TOKEN required in credentials or environment")
+
+        login(token=token, new_session=False)
         self.tokenizer = AutoTokenizer.from_pretrained(
             self.model,
             trust_remote_code=True,
