@@ -162,7 +162,7 @@ See `docs/bots/DEVELOPMENT.md` for details.
 We continuously refine our workflow. Maintain `docs/bots/` with essential information for developers.
 
 - Use INDEX.md to index and link documentation
-- Update documents when key changes occur (not minor issues)
+- Update documents when key changes occur (e.g., changes to APIs, workflows, dependencies, or major features). Minor issues (e.g., typo fixes, formatting, small refactors) do not require documentation updates.
 - Include important general information, remove task-specific details
 - Be concise to save tokens
 - If conflicting information found, ask for clarification and update docs
