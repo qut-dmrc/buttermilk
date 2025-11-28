@@ -98,5 +98,14 @@ def get_tox_flow(flow: str, **kwargs) -> ToxicityModel:
     return globals()[flow]
 
 
-def load_tox_flow(flow: str, **kwargs) -> ToxicityModel:
+def load_tox_flow(flow: str, credentials: dict[str, str] | None = None, **kwargs) -> ToxicityModel:
+    """Load a toxicity model with optional credential injection.
+
+    Args:
+        flow: Model class name to instantiate
+        credentials: Optional credentials dict (e.g., from bm.credentials)
+        **kwargs: Additional model initialization parameters
+    """
+    if credentials is not None:
+        kwargs["credentials"] = credentials
     return globals()[flow](**kwargs)
