@@ -35,7 +35,6 @@ from .toxicity import (
     AzureContentSafety,
     AzureModerator,
     Comprehend,
-    Cope,
     OpenAIModerator,
     Perspective,
     ShieldGemma,
@@ -48,7 +47,6 @@ from .wildguard import Wildguard
 
 TOXCLIENTS = [
     Comprehend,
-    Cope,
     Perspective,
     AzureContentSafety,
     AzureModerator,
