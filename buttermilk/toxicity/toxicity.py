@@ -88,6 +88,7 @@ class ToxicityModel(BaseModel):
     standard: str
     client: Any = None
     info_url: str | None = None
+    credentials: dict[str, str] = Field(default_factory=dict)
     options: ClassVar[dict] = {}
     call_options: ClassVar[dict] = {}
 
@@ -104,6 +105,25 @@ class ToxicityModel(BaseModel):
     def init_client(self) -> None:
         if self.client is None:
             raise NotImplementedError
+
+    def _get_credential(self, key: str, required: bool = True) -> str | None:
+        """Get a credential from the credentials dict.
+
+        Args:
+            key: The credential key to retrieve
+            required: If True, raise KeyError when key is missing
+
+        Returns:
+            The credential value, or None if not required and not found
+
+        Raises:
+            KeyError: If required=True and key not in credentials
+        """
+        if key not in self.credentials:
+            if required:
+                raise KeyError(key)
+            return None
+        return self.credentials[key]
 
     def run(
         self, message: AgentInput
@@ -966,24 +986,23 @@ class Zentropi(ToxicityModel):
     model: str
     process_chain: str = "api"
     standard: str = "zentropi"
-    api_key: str = Field(..., description="Zentropi API key")
-    base_url: str = Field(
-        default="https://api.zentropi.ai/v1/label",
-        description="Zentropi API endpoint",
-    )
     client: Any = None
 
     def init_client(self) -> None:
-        """Initialize client with basic configuration.
+        """Initialize client with credentials from environment variables.
 
-        Sets up a minimal client object. For actual API calls, this would
-        need to be extended with proper HTTP client initialization.
+        Requires:
+            ZENTROPI_API_KEY: API key for Zentropi service
+            ZENTROPI_BASE_URL: (optional) API endpoint, defaults to https://api.zentropi.ai/v1/label
         """
-        # Set client to a dict with api_key and base_url for validation
-        # This allows the model to be instantiated without actual API calls
+        api_key = os.environ["ZENTROPI_API_KEY"]
+        base_url = os.getenv(
+            "ZENTROPI_BASE_URL",
+            "https://api.zentropi.ai/v1/label",
+        )
         self.client = {
-            "api_key": self.api_key,
-            "base_url": self.base_url,
+            "api_key": api_key,
+            "base_url": base_url,
         }
 
     def make_prompt(self, content: str) -> str:
