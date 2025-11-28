@@ -259,8 +259,8 @@ testpaths = [
 
 norecursedirs = ["docs", "*.egg-info", "*.egg", "bin", "demo", ".git", "appdir", ".tox", "mediamarkets", "scrapers"]
 timeout = 600
-asyncio_default_fixture_loop_scope = "package"
-asyncio_debug = true
+# Note: Using pytest-anyio, not pytest-asyncio.
+# Session-scoped event loop is achieved via session_runner fixture in conftest.py.
 addopts = [
   "--capture=fd",
   "--continue-on-collection-errors",

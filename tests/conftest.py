@@ -25,7 +25,7 @@ from buttermilk.utils.utils import read_file
 # while sync tests run normally without any interference.
 def pytest_collection_modifyitems(items):
     for item in items:
-        # Check if the test function is async
+        # Check if the test function is async - mark with anyio
         if inspect.iscoroutinefunction(item.function):
             item.add_marker(pytest.mark.anyio)
         p = Path(str(item.path))
@@ -35,9 +35,29 @@ def pytest_collection_modifyitems(items):
             item.add_marker(pytest.mark.integration)
 
 
+# Session-scoped anyio_backend fixture ensures:
+# 1. Only asyncio backend is used (not trio)
+# 2. Single event loop scope for session (see session_runner below)
 @pytest.fixture(scope="session")
 def anyio_backend():
     return "asyncio"
+
+
+# CRITICAL: This session-scoped async fixture forces pytest-anyio to use
+# a single test runner for the entire session. Without this, each test
+# gets its own event loop, causing "Event loop is closed" errors when
+# session-scoped fixtures (real_bm, real_llms) hold httpx clients.
+# See: https://anyio.readthedocs.io/en/stable/testing.html
+@pytest.fixture(scope="session")
+async def session_runner():
+    """Session-scoped async fixture to force single event loop for all tests.
+
+    pytest-anyio creates one test runner per highest-scoped async fixture.
+    By having all async tests depend on this session-scoped async fixture,
+    they all share the same event loop, preventing 'Event loop is closed'
+    errors from httpx clients in session-scoped LLM fixtures.
+    """
+    yield
 
 
 @pytest.fixture(scope="session")
@@ -66,20 +86,29 @@ def real_model_name(request) -> str:
 
 
 @pytest.fixture(params=CHAT_MODELS)
-def real_llm_multimodal(request, real_bm: BM):
-    """Real LLM instance for testing (all chat models)."""
+async def real_llm_multimodal(request, real_bm: BM, session_runner):
+    """Real LLM instance for testing (all chat models).
+
+    Depends on session_runner to ensure single event loop for session.
+    """
     return real_bm.llms[request.param]
 
 
 @pytest.fixture(params=CHEAP_CHAT_MODELS)
-def real_llm(request, real_bm: BM):
-    """Real LLM instance for testing."""
+async def real_llm(request, real_bm: BM, session_runner):
+    """Real LLM instance for testing.
+
+    Depends on session_runner to ensure single event loop for session.
+    """
     return real_bm.llms[request.param]
 
 
 @pytest.fixture(params=CHAT_MODELS)
-def real_llm_expensive(request, real_bm: BM):
-    """Real expensive LLM instance for testing."""
+async def real_llm_expensive(request, real_bm: BM, session_runner):
+    """Real expensive LLM instance for testing.
+
+    Depends on session_runner to ensure single event loop for session.
+    """
     return real_bm.llms[request.param]
 
 
