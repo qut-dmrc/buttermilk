@@ -11,3 +11,10 @@ judgers:
 
 synthesisers:
   - gemini25flash
+
+# Model-specific parameter overrides for debug config
+# Use lower max_tokens for faster iteration during development
+model_parameters:
+  gemini25flash:
+    temperature: 0.5
+    max_tokens: 2048

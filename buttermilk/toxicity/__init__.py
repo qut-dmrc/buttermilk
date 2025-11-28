@@ -41,6 +41,7 @@ from .toxicity import (
     ShieldGemma2b,
     ShieldGemma9b,
     ToxicityModel,
+    Zentropi,
 )
 from .wildguard import Wildguard
 

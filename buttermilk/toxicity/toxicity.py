@@ -943,3 +943,87 @@ class ToxicChat(ToxicityModel):
 
     def interpret(self, response, **kwargs) -> EvalRecord:
         return EvalRecord(**response)
+
+
+class Zentropi(ToxicityModel):
+    """Zentropi toxicity detection API wrapper.
+
+    Zentropi provides a classification API for content moderation.
+    This class adapts the Zentropi API response format to the ToxicityModel interface.
+
+    Expected Zentropi response format:
+    {
+        "toxic": true/false,
+        "scores": {
+            "toxicity": 0.85,
+            "severity": 0.72,
+            "confidence": 0.91
+        },
+        "labels": ["profanity", "hate_speech"]
+    }
+    """
+
+    model: str
+    process_chain: str = "api"
+    standard: str = "zentropi"
+    api_key: str = Field(..., description="Zentropi API key")
+    base_url: str = Field(
+        default="https://api.zentropi.ai/v1/label",
+        description="Zentropi API endpoint",
+    )
+    client: Any = None
+
+    def init_client(self) -> None:
+        """Initialize client with basic configuration.
+
+        Sets up a minimal client object. For actual API calls, this would
+        need to be extended with proper HTTP client initialization.
+        """
+        # Set client to a dict with api_key and base_url for validation
+        # This allows the model to be instantiated without actual API calls
+        self.client = {
+            "api_key": self.api_key,
+            "base_url": self.base_url,
+        }
+
+    def make_prompt(self, content: str) -> str:
+        """Pass content through unchanged."""
+        return content
+
+    def interpret(self, response: dict[str, Any]) -> EvalRecord:
+        """Convert Zentropi API response to EvalRecord.
+
+        Args:
+            response: Zentropi API response containing:
+                - toxic (bool): Whether content is toxic
+                - scores (dict): Score values by measure name
+                - labels (list): List of detected labels
+
+        Returns:
+            EvalRecord with prediction, scores, and labels
+
+        Raises:
+            ValueError: If required 'toxic' field is missing from response
+        """
+        if "toxic" not in response:
+            raise ValueError(
+                f"Zentropi response missing required 'toxic' field. Got: {response.keys()}"
+            )
+
+        # Extract prediction
+        prediction = response["toxic"]
+
+        # Convert scores dict to Score objects
+        scores = []
+        if "scores" in response:
+            for measure, score_value in response["scores"].items():
+                scores.append(Score(measure=measure, score=score_value))
+
+        # Extract labels
+        labels = response.get("labels", [])
+
+        return EvalRecord(
+            prediction=prediction,
+            scores=scores,
+            labels=labels,
+        )

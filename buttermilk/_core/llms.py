@@ -92,7 +92,109 @@ class ClientType(Enum):
     GEMINI_VERTEX = "gemini_vertex"
     VERTEX_OPENAI = "vertex_openai"  # OpenAI-compatible endpoint on Vertex
     HUGGINGFACE = "huggingface"  # HuggingFace Inference API (serverless or dedicated)
-    ZENTROPI = "zentropi"  # Zentropi LLM platform
+
+
+class ModelParameters(BaseModel):
+    """Inference parameters for LLM API calls.
+
+    Provides a standardized interface for common inference parameters across
+    different LLM providers. Allows provider-specific parameters via extra fields.
+
+    All parameters are optional (None by default) to allow selective overrides
+    when merging configurations.
+
+    Attributes:
+        temperature: Sampling temperature (0.0-2.0). Higher values make output
+            more random, lower values more deterministic.
+        max_tokens: Maximum number of tokens to generate. Must be positive.
+        top_p: Nucleus sampling threshold (0.0-1.0). Alternative to temperature.
+        top_k: Top-k sampling limit. Only the k most likely tokens are considered.
+        frequency_penalty: Penalty for token frequency (-2.0 to 2.0). Positive
+            values discourage repetition.
+        presence_penalty: Penalty for token presence (-2.0 to 2.0). Positive
+            values encourage topic diversity.
+        stop_sequences: List of strings that will stop generation when encountered.
+        seed: Random seed for deterministic sampling (if supported by provider).
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    temperature: float | None = Field(None, ge=0.0, le=2.0)
+    max_tokens: int | None = Field(None, gt=0)
+    top_p: float | None = Field(None, ge=0.0, le=1.0)
+    top_k: int | None = Field(None, gt=0)
+    frequency_penalty: float | None = Field(None, ge=-2.0, le=2.0)
+    presence_penalty: float | None = Field(None, ge=-2.0, le=2.0)
+    stop_sequences: list[str] | None = None
+    seed: int | None = None
+
+    def merge_with(self, other: "ModelParameters | dict | None") -> "ModelParameters":
+        """Merge with another ModelParameters instance or dict.
+
+        Non-None values from 'other' take precedence over self's values.
+        This allows layering configurations where more specific configs
+        override more general ones.
+
+        Args:
+            other: ModelParameters instance, dict, or None to merge with.
+                If None, returns a copy of self.
+
+        Returns:
+            New ModelParameters instance with merged values.
+
+        Example:
+            base = ModelParameters(temperature=0.7, max_tokens=1000)
+            override = ModelParameters(temperature=0.9)
+            merged = base.merge_with(override)
+            # Result: temperature=0.9, max_tokens=1000
+        """
+        if other is None:
+            return self.model_copy(deep=True)
+
+        # Convert dict to ModelParameters if needed
+        if isinstance(other, dict):
+            other = ModelParameters(**other)
+
+        # Start with self's values
+        merged_data = self.model_dump()
+
+        # Override with other's non-None values
+        other_data = other.model_dump()
+        for key, value in other_data.items():
+            if value is not None:
+                merged_data[key] = value
+
+        return ModelParameters(**merged_data)
+
+    def to_api_params(self) -> dict[str, Any]:
+        """Convert to API parameter dictionary.
+
+        Returns dictionary containing only non-None values, suitable for
+        passing to LLM API calls. Maps stop_sequences to 'stop' key for
+        API compatibility.
+
+        Returns:
+            Dictionary with non-None parameter values, ready for API calls.
+
+        Example:
+            params = ModelParameters(temperature=0.7, max_tokens=1000)
+            api_params = params.to_api_params()
+            # Result: {'temperature': 0.7, 'max_tokens': 1000}
+        """
+        result: dict[str, Any] = {}
+
+        # Get all fields including extras
+        all_data = self.model_dump()
+
+        for key, value in all_data.items():
+            if value is not None:
+                # Map stop_sequences to 'stop' for API compatibility
+                if key == "stop_sequences":
+                    result["stop"] = value
+                else:
+                    result[key] = value
+
+        return result
 
 
 class LLMConfig(BaseModel):
@@ -122,6 +224,10 @@ class LLMConfig(BaseModel):
         use_litellm (bool): If True, use LiteLLMWrapper instead of AutoGenWrapper.
             Defaults to False for backward compatibility. Enable this to use LiteLLM's
             unified interface for provider-agnostic LLM calls.
+        parameters (ModelParameters): Default inference parameters (temperature,
+            max_tokens, etc.) for this model. Defaults to empty ModelParameters
+            instance. Can be specified as a dict which will be converted to
+            ModelParameters during validation.
 
     """
 
@@ -146,6 +252,10 @@ class LLMConfig(BaseModel):
     use_litellm: bool = Field(
         default=False,
         description="Use LiteLLMWrapper instead of AutoGenWrapper (default: False for backward compatibility)",
+    )
+    parameters: ModelParameters = Field(
+        default_factory=ModelParameters,
+        description="Default inference parameters (temperature, max_tokens, etc.)",
     )
 
     @field_validator("client_type", mode="before")
@@ -183,6 +293,29 @@ class LLMConfig(BaseModel):
             f"client_type must be a string or ClientType enum, got {type(v)}"
         )
 
+    @field_validator("parameters", mode="before")
+    @classmethod
+    def validate_parameters(cls, v: Any) -> ModelParameters:
+        """Validate and convert parameters field to ModelParameters.
+
+        Args:
+            v: The input value to validate (dict, ModelParameters, or None)
+
+        Returns:
+            ModelParameters: The validated parameters instance
+
+        Raises:
+            ValueError: If parameters is not a dict or ModelParameters instance
+
+        """
+        if v is None:
+            return ModelParameters()
+        if isinstance(v, ModelParameters):
+            return v
+        if isinstance(v, dict):
+            return ModelParameters(**v)
+        raise ValueError(f"parameters must be a dict or ModelParameters, got {type(v)}")
+
 
 # Generate with:
 # ```sh
@@ -198,7 +331,6 @@ CHAT_MODELS = [
     "gpt-4o",
     "llama4maverick",
     "claude45sonnet",
-    "cope-a-9b",
     "gpt-oss-safeguard-20b",
     "gpt-oss-safeguard-120b",
 ]
@@ -310,6 +442,10 @@ class AutoGenWrapper(BaseModel):
     litellm_model_name: str = Field(
         default=None, description="Resolved litellm model name for pricing"
     )
+    default_parameters: ModelParameters = Field(
+        default_factory=ModelParameters,
+        description="Default inference parameters (temperature, max_tokens, etc.)",
+    )
 
     # Retry configuration (copied from RetryWrapper)
     cooldown_seconds: float = 0.5
@@ -383,11 +519,15 @@ class AutoGenWrapper(BaseModel):
             is not BaseModel  # Ensure it's a specific subclass, not BaseModel itself
         )
 
+        # Merge default parameters with runtime kwargs (runtime takes precedence)
+        merged_params = self.default_parameters.to_api_params()
+        merged_params.update(kwargs)
+
         # Build call kwargs, omitting json_output when tools are provided
         create_call_kwargs: dict[str, Any] = {
             "tools": tools,
             "cancellation_token": cancellation_token,
-            "extra_create_args": kwargs,
+            "extra_create_args": merged_params,
         }
 
         # If caller requested a schema and didn't provide tools, choose best path per model capability
@@ -1051,7 +1191,7 @@ class LiteLLMWrapper(BaseModel):
         litellm_model_name: Resolved model name for LiteLLM
         api_key: API key for the provider (if needed)
         base_url: Custom base URL (if needed)
-        extra_params: Additional parameters to pass to LiteLLM
+        default_parameters: Default inference parameters (temperature, max_tokens, etc.)
     """
 
     model: str = Field(..., description="Model name in LiteLLM format")
@@ -1059,8 +1199,9 @@ class LiteLLMWrapper(BaseModel):
     litellm_model_name: str = Field(..., description="Resolved model name for LiteLLM")
     api_key: str | None = Field(default=None, description="API key for the provider")
     base_url: str | None = Field(default=None, description="Custom base URL")
-    extra_params: dict[str, Any] = Field(
-        default_factory=dict, description="Additional LiteLLM parameters"
+    default_parameters: ModelParameters = Field(
+        default_factory=ModelParameters,
+        description="Default inference parameters (temperature, max_tokens, etc.)",
     )
 
     # Retry configuration (matching AutoGenWrapper)
@@ -1155,12 +1296,15 @@ class LiteLLMWrapper(BaseModel):
         # Convert messages to LiteLLM format
         litellm_messages = autogen_to_litellm_messages(messages)
 
+        # Merge default parameters with runtime kwargs (runtime takes precedence)
+        merged_params = self.default_parameters.to_api_params()
+        merged_params.update(kwargs)
+
         # Build LiteLLM parameters
         litellm_params = {
             "model": self.litellm_model_name,
             "messages": litellm_messages,
-            **self.extra_params,
-            **kwargs,
+            **merged_params,
         }
 
         # Add API key if provided
@@ -1453,6 +1597,10 @@ class LLMs(BaseModel):
         default="autogen",
         description="Default LLM wrapper type (autogen or litellm). Used when config.use_litellm is None.",
     )
+    model_parameters: dict[str, ModelParameters | dict] = Field(
+        default_factory=dict,
+        description="Per-model parameter overrides from YAML config (model_name -> parameters)",
+    )
     autogen_models: dict[str, AutoGenWrapper] = Field(
         default_factory=dict,  # For caching instantiated clients
         description="Cache for instantiated AutoGenWrapper clients. Populated on demand.",
@@ -1510,6 +1658,36 @@ class LLMs(BaseModel):
             self.model_registry_cache = {}
         return self.model_registry_cache
 
+    def get_merged_parameters(self, name: str) -> ModelParameters:
+        """Get merged parameters for a model.
+
+        Merges parameters from multiple sources in order of precedence:
+        1. LLMConfig.parameters (from models.json) - lowest priority
+        2. LLMs.model_parameters (from YAML config) - highest priority
+
+        Args:
+            name: Model connection name
+
+        Returns:
+            ModelParameters: Merged parameters for the model
+        """
+        if name not in self.connections:
+            return ModelParameters()
+
+        config = self.connections[name]
+
+        # Start with parameters from LLMConfig (models.json)
+        base_params = config.parameters
+
+        # Override with YAML model_parameters if present
+        yaml_params = self.model_parameters.get(name)
+        if yaml_params:
+            if isinstance(yaml_params, dict):
+                yaml_params = ModelParameters(**yaml_params)
+            return base_params.merge_with(yaml_params)
+
+        return base_params
+
     @staticmethod
     def _provider_prefix_for_client_type(client_type: str) -> str:
         """Normalize internal client_type to a litellm provider prefix."""
@@ -1523,7 +1701,6 @@ class LLMs(BaseModel):
             "vertex_openai": "vertex_ai",  # Vertex OpenAI-compatible
             "anthropic_vertex": "vertex_ai",  # Anthropic-on-Vertex
             "anthropic": "anthropic",
-            "zentropi": "zentropi",
         }
         return prefix_map.get(client_type, client_type)  # fallback / extension
 
@@ -1797,18 +1974,14 @@ class LLMs(BaseModel):
             else (self.default_wrapper == "litellm")
         )
 
+        # Get merged parameters for this model
+        merged_params = self.get_merged_parameters(name)
+
         if use_litellm:
             # Use LiteLLMWrapper for unified provider support
             logger.debug(
                 f"Using LiteLLMWrapper for model '{name}' with provider '{config.client_type.value}'"
             )
-
-            # Build extra parameters for LiteLLM
-            extra_params = {}
-            if "temperature" in config.configs:
-                extra_params["temperature"] = config.configs["temperature"]
-            if "max_tokens" in config.configs:
-                extra_params["max_tokens"] = config.configs["max_tokens"]
 
             wrapped_client = LiteLLMWrapper(
                 model=model_name,
@@ -1816,7 +1989,7 @@ class LLMs(BaseModel):
                 litellm_model_name=resolved_litellm,
                 api_key=config.api_key,
                 base_url=config.base_url,
-                extra_params=extra_params,
+                default_parameters=merged_params,
             )
         else:
             # Use AutoGenWrapper (existing behavior)
@@ -1828,6 +2001,7 @@ class LLMs(BaseModel):
                 client_factory=client_factory,
                 model_info=config.model_info,
                 litellm_model_name=resolved_litellm,
+                default_parameters=merged_params,
             )
 
         self.autogen_models[name] = wrapped_client
