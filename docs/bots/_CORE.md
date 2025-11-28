@@ -48,7 +48,7 @@ Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that 
 - Network calls, filesystem, time, environment variables
 - NEVER mock `buttermilk.*` code or business logic
 
-See `../TESTING.md` for complete guide.
+See `docs/TESTING.md` for complete guide.
 
 ## Observability Requirements
 
@@ -79,7 +79,7 @@ See `../TESTING.md` for complete guide.
 3. Consider targeted solutions instead of global changes
 4. Test with full suite to verify no regressions
 
-See `impact-analysis.md` for complete protocol.
+See `docs/bots/impact-analysis.md` for complete protocol.
 
 ## Development Workflow
 
@@ -95,7 +95,7 @@ See `impact-analysis.md` for complete protocol.
 8. **Commit**: Commit logical chunks, update GitHub issues
 9. **Reflect**: Review and update docs/bots if needed
 
-See `DEVELOPMENT.md` for details.
+See `docs/bots/DEVELOPMENT.md` for details.
 
 ## Technical Stack
 
@@ -109,16 +109,16 @@ See `DEVELOPMENT.md` for details.
 
 - **Verify success**: Always check command results (exit codes AND output text)
 - **Use specified tools**: If asked to use Tool X, use Tool X - no substitutions
-- **Debugging first**: Check `debugging.md` before reading source code
+- **Debugging first**: Check `docs/bots/debugging.md` before reading source code
 - **Flow completion**: Task complete means end-to-end flow execution with visible output
 - **No implicit defaults**: All configuration must be explicit - fail fast if missing
-- **Data contracts**: Schema changes require updating ALL components (see data-architecture.md)
+- **Data contracts**: Schema changes require updating ALL components (see docs/bots/data-architecture.md)
 - **No single-use scripts**: Always use proper tests following pytest conventions
 
 ## Debugging Workflow
 
 **Before debugging**:
-1. Read `debugging.md` for approved tools
+1. Read `docs/bots/debugging.md` for approved tools
 2. Use golden path tools (e.g., `ws_debug_cli.py`, Playwright MCP)
 3. Test tool connectivity before complex operations
 4. Follow troubleshooting guidance if tools fail
@@ -162,17 +162,17 @@ See `DEVELOPMENT.md` for details.
 We continuously refine our workflow. Maintain `docs/bots/` with essential information for developers.
 
 - Use INDEX.md to index and link documentation
-- Update documents when key changes occur (not minor issues)
+- Update documents when key changes occur (e.g., changes to APIs, workflows, dependencies, or major features). Minor issues (e.g., typo fixes, formatting, small refactors) do not require documentation updates.
 - Include important general information, remove task-specific details
 - Be concise to save tokens
 - If conflicting information found, ask for clarification and update docs
 
 ## File References
 
-- Exploration before implementation: `exploration-before-implementation.md`
-- Impact analysis for shared components: `impact-analysis.md`
-- Debugging guide and tools: `debugging.md`
-- Development workflow: `DEVELOPMENT.md`
-- Testing guide: `../TESTING.md`
-- Data architecture: `data-architecture.md`
-- Configuration guide: `../configuration.md`
+- Exploration before implementation: `docs/bots/exploration-before-implementation.md`
+- Impact analysis for shared components: `docs/bots/impact-analysis.md`
+- Debugging guide and tools: `docs/bots/debugging.md`
+- Development workflow: `docs/bots/DEVELOPMENT.md`
+- Testing guide: `docs/TESTING.md`
+- Data architecture: `docs/bots/data-architecture.md`
+- Configuration guide: `docs/configuration.md`
