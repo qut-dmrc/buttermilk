@@ -107,23 +107,29 @@ class ToxicityModel(BaseModel):
             raise NotImplementedError
 
     def _get_credential(self, key: str, required: bool = True) -> str | None:
-        """Get a credential from the credentials dict.
+        """Get credential from credentials dict, falling back to os.environ.
 
         Args:
             key: The credential key to retrieve
-            required: If True, raise KeyError when key is missing
+            required: If True, raise KeyError when key is missing from both sources
 
         Returns:
             The credential value, or None if not required and not found
 
         Raises:
-            KeyError: If required=True and key not in credentials
+            KeyError: If required=True and key not in credentials or environment
         """
-        if key not in self.credentials:
-            if required:
-                raise KeyError(key)
-            return None
-        return self.credentials[key]
+        # Check credentials dict first
+        if key in self.credentials:
+            return self.credentials[key]
+
+        # Fallback to environment variable
+        if key in os.environ:
+            return os.environ[key]
+
+        if required:
+            raise KeyError(f"{key} required in credentials dict or environment")
+        return None
 
     def run(
         self, message: AgentInput
@@ -285,9 +291,7 @@ class _HF(ToxicityModel):
     tokenizer: Any = None
 
     def init_client(self) -> None:
-        token = self._get_credential("HUGGINGFACEHUB_API_TOKEN", required=False) or os.environ.get("HUGGINGFACEHUB_API_TOKEN")
-        if not token:
-            raise KeyError("HUGGINGFACEHUB_API_TOKEN required in credentials or environment")
+        token = self._get_credential("HUGGINGFACEHUB_API_TOKEN")
 
         login(token=token, new_session=False)
 
@@ -407,17 +411,9 @@ class Comprehend(ToxicityModel):
     client: Any = None
 
     def init_client(self) -> None:
-        access_key = self._get_credential("AWS_ACCESS_KEY_ID", required=False) or os.environ.get("AWS_ACCESS_KEY_ID")
-        if not access_key:
-            raise KeyError("AWS_ACCESS_KEY_ID required in credentials or environment")
-
-        secret_key = self._get_credential("AWS_SECRET_ACCESS_KEY", required=False) or os.environ.get("AWS_SECRET_ACCESS_KEY")
-        if not secret_key:
-            raise KeyError("AWS_SECRET_ACCESS_KEY required in credentials or environment")
-
-        region = self._get_credential("AWS_REGION", required=False) or os.environ.get("AWS_REGION")
-        if not region:
-            raise KeyError("AWS_REGION required in credentials or environment")
+        access_key = self._get_credential("AWS_ACCESS_KEY_ID")
+        secret_key = self._get_credential("AWS_SECRET_ACCESS_KEY")
+        region = self._get_credential("AWS_REGION")
 
         self.client = boto3.client(
             service_name="comprehend",
@@ -482,14 +478,10 @@ class AzureContentSafety(ToxicityModel):
     """
 
     def init_client(self) -> None:
-        API_KEY = self._get_credential("AZURE_CONTENT_SAFETY_KEY", required=False) or os.environ.get("AZURE_CONTENT_SAFETY_KEY")
-        if not API_KEY:
-            raise KeyError("AZURE_CONTENT_SAFETY_KEY required in credentials or environment")
-
-        ENDPOINT = self._get_credential("AZURE_CONTENT_SAFETY_ENDPOINT", required=False) or os.environ.get(
-            "AZURE_CONTENT_SAFETY_ENDPOINT",
-            "https://westus.api.cognitive.microsoft.com",
-        )
+        API_KEY = self._get_credential("AZURE_CONTENT_SAFETY_KEY")
+        ENDPOINT = self._get_credential("AZURE_CONTENT_SAFETY_ENDPOINT", required=False)
+        if not ENDPOINT:
+            ENDPOINT = "https://westus.api.cognitive.microsoft.com"
 
         credential = AzureKeyCredential(API_KEY)
         content_safety_client = ContentSafetyClient(ENDPOINT, credential)
@@ -570,14 +562,11 @@ class AzureModerator(ToxicityModel):
     """
 
     def init_client(self) -> None:
-        SUBSCRIPTION_KEY = self._get_credential("AZURE_CONTENT_MODERATOR_KEY", required=False) or os.environ.get("AZURE_CONTENT_MODERATOR_KEY")
-        if not SUBSCRIPTION_KEY:
-            raise KeyError("AZURE_CONTENT_MODERATOR_KEY required in credentials or environment")
+        SUBSCRIPTION_KEY = self._get_credential("AZURE_CONTENT_MODERATOR_KEY")
+        ENDPOINT = self._get_credential("AZURE_CONTENT_MODERATOR_ENDPOINT", required=False)
+        if not ENDPOINT:
+            ENDPOINT = "https://westus.api.cognitive.microsoft.com"
 
-        ENDPOINT = self._get_credential("AZURE_CONTENT_MODERATOR_ENDPOINT", required=False) or os.environ.get(
-            "AZURE_CONTENT_MODERATOR_ENDPOINT",
-            "https://westus.api.cognitive.microsoft.com",
-        )
         self.client = ContentModeratorClient(
             endpoint=ENDPOINT,
             credentials=CognitiveServicesCredentials(subscription_key=SUBSCRIPTION_KEY),
@@ -727,9 +716,7 @@ class LFTW(ToxicityModel):
     classes: dict = {}
 
     def init_client(self) -> None:
-        token = self._get_credential("HUGGINGFACEHUB_API_TOKEN", required=False) or os.environ.get("HUGGINGFACEHUB_API_TOKEN")
-        if not token:
-            raise KeyError("HUGGINGFACEHUB_API_TOKEN required in credentials or environment")
+        token = self._get_credential("HUGGINGFACEHUB_API_TOKEN")
 
         login(token=token, new_session=False)
 
@@ -800,9 +787,7 @@ class GPTJT(ToxicityModel):
     }
 
     def init_client(self) -> None:
-        token = self._get_credential("HUGGINGFACEHUB_API_TOKEN", required=False) or os.environ.get("HUGGINGFACEHUB_API_TOKEN")
-        if not token:
-            raise KeyError("HUGGINGFACEHUB_API_TOKEN required in credentials or environment")
+        token = self._get_credential("HUGGINGFACEHUB_API_TOKEN")
 
         login(token=token, new_session=False)
         self.client = hf_pipeline(
@@ -914,9 +899,7 @@ class ShieldGemma(ToxicityModel):
     )
 
     def init_client(self) -> None:
-        token = self._get_credential("HUGGINGFACEHUB_API_TOKEN", required=False) or os.environ.get("HUGGINGFACEHUB_API_TOKEN")
-        if not token:
-            raise KeyError("HUGGINGFACEHUB_API_TOKEN required in credentials or environment")
+        token = self._get_credential("HUGGINGFACEHUB_API_TOKEN")
 
         login(token=token, new_session=False)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
@@ -1025,15 +1008,10 @@ class Zentropi(ToxicityModel):
             ZENTROPI_API_KEY: API key for Zentropi service (from credentials or env var)
             ZENTROPI_BASE_URL: (optional) API endpoint, defaults to https://api.zentropi.ai/v1/label
         """
-        # Try credentials dict first, fall back to env var
-        api_key = self._get_credential("ZENTROPI_API_KEY", required=False) or os.environ.get("ZENTROPI_API_KEY")
-        if not api_key:
-            raise KeyError("ZENTROPI_API_KEY required in credentials or environment")
-
-        base_url = self._get_credential("ZENTROPI_BASE_URL", required=False) or os.getenv(
-            "ZENTROPI_BASE_URL",
-            "https://api.zentropi.ai/v1/label",
-        )
+        api_key = self._get_credential("ZENTROPI_API_KEY")
+        base_url = self._get_credential("ZENTROPI_BASE_URL", required=False)
+        if not base_url:
+            base_url = "https://api.zentropi.ai/v1/label"
 
         self.client = {
             "api_key": api_key,

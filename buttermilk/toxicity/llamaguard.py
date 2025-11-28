@@ -338,9 +338,7 @@ class LlamaGuard3LocalInt8(LlamaGuard3Local):
 
     def init_client(self) -> None:
         quantization_config = BitsAndBytesConfig(load_in_8bit=True)
-        token = self._get_credential("HUGGINGFACEHUB_API_TOKEN", required=False) or os.environ.get("HUGGINGFACEHUB_API_TOKEN")
-        if not token:
-            raise KeyError("HUGGINGFACEHUB_API_TOKEN required in credentials or environment")
+        token = self._get_credential("HUGGINGFACEHUB_API_TOKEN")
 
         login(token=token, new_session=False)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
@@ -372,9 +370,7 @@ class MDJudgeLocal(LlamaGuardTox):
     template: str
 
     def init_client(self) -> None:
-        token = self._get_credential("HUGGINGFACEHUB_API_TOKEN", required=False) or os.environ.get("HUGGINGFACEHUB_API_TOKEN")
-        if not token:
-            raise KeyError("HUGGINGFACEHUB_API_TOKEN required in credentials or environment")
+        token = self._get_credential("HUGGINGFACEHUB_API_TOKEN")
 
         login(token=token, new_session=False)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
@@ -420,9 +416,7 @@ class MDJudge2(MDJudgeLocal):
     categories: EnumMeta = MDJudge2Categories
 
     def init_client(self) -> None:
-        token = self._get_credential("HUGGINGFACEHUB_API_TOKEN", required=False) or os.environ.get("HUGGINGFACEHUB_API_TOKEN")
-        if not token:
-            raise KeyError("HUGGINGFACEHUB_API_TOKEN required in credentials or environment")
+        token = self._get_credential("HUGGINGFACEHUB_API_TOKEN")
 
         login(token=token, new_session=False)
         self.tokenizer = AutoTokenizer.from_pretrained(
