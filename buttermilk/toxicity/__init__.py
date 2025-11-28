@@ -35,6 +35,7 @@ from .toxicity import (
     AzureContentSafety,
     AzureModerator,
     Comprehend,
+    Cope,
     OpenAIModerator,
     Perspective,
     ShieldGemma,
