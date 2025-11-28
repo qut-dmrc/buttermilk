@@ -989,17 +989,22 @@ class Zentropi(ToxicityModel):
     client: Any = None
 
     def init_client(self) -> None:
-        """Initialize client with credentials from environment variables.
+        """Initialize client with credentials from credentials dict or environment variables.
 
         Requires:
-            ZENTROPI_API_KEY: API key for Zentropi service
+            ZENTROPI_API_KEY: API key for Zentropi service (from credentials or env var)
             ZENTROPI_BASE_URL: (optional) API endpoint, defaults to https://api.zentropi.ai/v1/label
         """
-        api_key = os.environ["ZENTROPI_API_KEY"]
-        base_url = os.getenv(
+        # Try credentials dict first, fall back to env var
+        api_key = self._get_credential("ZENTROPI_API_KEY", required=False) or os.environ.get("ZENTROPI_API_KEY")
+        if not api_key:
+            raise KeyError("ZENTROPI_API_KEY required in credentials or environment")
+
+        base_url = self._get_credential("ZENTROPI_BASE_URL", required=False) or os.getenv(
             "ZENTROPI_BASE_URL",
             "https://api.zentropi.ai/v1/label",
         )
+
         self.client = {
             "api_key": api_key,
             "base_url": base_url,

@@ -15,7 +15,7 @@ class TestZentropi:
     """Test Zentropi toxicity model."""
 
     def test_zentropi_init_with_credentials(self):
-        """Test that Zentropi can be instantiated with api_key and base_url."""
+        """Test that Zentropi can be instantiated with credentials dict."""
         from buttermilk.toxicity.toxicity import Zentropi
 
         # Should be able to create instance with required credentials
@@ -23,12 +23,14 @@ class TestZentropi:
             model="zentropi",
             process_chain="api",
             standard="zentropi",
-            api_key="test_api_key",
-            base_url="https://api.zentropi.com/v1",
+            credentials={
+                "ZENTROPI_API_KEY": "test_api_key",
+                "ZENTROPI_BASE_URL": "https://api.zentropi.com/v1",
+            },
         )
 
-        assert model.api_key == "test_api_key"
-        assert model.base_url == "https://api.zentropi.com/v1"
+        assert model.credentials["ZENTROPI_API_KEY"] == "test_api_key"
+        assert model.credentials["ZENTROPI_BASE_URL"] == "https://api.zentropi.com/v1"
         assert model.model == "zentropi"
         assert model.process_chain == "api"
         assert model.standard == "zentropi"
@@ -53,8 +55,10 @@ class TestZentropi:
             model="zentropi",
             process_chain="api",
             standard="zentropi",
-            api_key="test_key",
-            base_url="https://api.zentropi.com/v1",
+            credentials={
+                "ZENTROPI_API_KEY": "test_key",
+                "ZENTROPI_BASE_URL": "https://api.zentropi.com/v1",
+            },
         )
 
         # Mock Zentropi API response
@@ -97,8 +101,10 @@ class TestZentropi:
             model="zentropi",
             process_chain="api",
             standard="zentropi",
-            api_key="test_key",
-            base_url="https://api.zentropi.com/v1",
+            credentials={
+                "ZENTROPI_API_KEY": "test_key",
+                "ZENTROPI_BASE_URL": "https://api.zentropi.com/v1",
+            },
         )
 
         # Non-toxic response
@@ -127,8 +133,10 @@ class TestZentropi:
             model="zentropi",
             process_chain="api",
             standard="zentropi",
-            api_key="test_key",
-            base_url="https://api.zentropi.com/v1",
+            credentials={
+                "ZENTROPI_API_KEY": "test_key",
+                "ZENTROPI_BASE_URL": "https://api.zentropi.com/v1",
+            },
         )
 
         # Invalid response missing 'toxic' field
