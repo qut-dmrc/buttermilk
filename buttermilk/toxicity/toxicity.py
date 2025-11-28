@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import abc
+import asyncio
 import os
 from io import StringIO
 from pathlib import Path
 from typing import (
     Any,
+    AsyncGenerator,
     ClassVar,
     Literal,
 )
@@ -45,6 +47,7 @@ from buttermilk._core.contract import (
     AgentInput,
     ExecutionTrace,
 )  # Import AgentInput and ExecutionTrace
+from buttermilk._core.types import BaseRecord
 from buttermilk.utils.utils import read_text, read_yaml, scrub_serializable
 
 from .types import EvalRecord, Score
@@ -276,6 +279,56 @@ class ToxicityModel(BaseModel):
             record.record_id = record_id
 
         return record
+
+    async def process(
+        self,
+        record: BaseRecord,
+        *,
+        processor_stage: str,
+        **kwargs: Any,
+    ) -> AsyncGenerator[BaseRecord, None]:
+        """Processor protocol implementation for pipeline use.
+
+        Wraps the synchronous moderate() method for use in async pipelines.
+        Stores EvalRecord results in record.metadata[processor_stage].
+
+        Args:
+            record: Input record to analyze for toxicity
+            processor_stage: Pipeline stage name for metadata namespacing
+
+        Yields:
+            Record with toxicity results in metadata[processor_stage]
+
+        Raises:
+            ValueError: If record has no content
+        """
+        content = record.content
+        if not content:
+            raise ValueError(
+                f"Record {record.record_id} has no content for toxicity analysis"
+            )
+
+        # Wrap sync moderate() for async pipeline
+        eval_record = await asyncio.to_thread(
+            self.moderate,
+            content=content,
+            record_id=record.record_id,
+        )
+
+        # Store results in metadata
+        updated_metadata = record.metadata.copy() if record.metadata else {}
+        updated_metadata[processor_stage] = {
+            "prediction": eval_record.prediction,
+            "scores": [s.model_dump() for s in eval_record.scores],
+            "labels": eval_record.labels,
+            "model": eval_record.model,
+            "standard": eval_record.standard,
+            "process": eval_record.process,
+            "eval_id": eval_record.eval_id,
+            "error": eval_record.error,
+        }
+
+        yield record.model_copy(update={"metadata": updated_metadata})
 
 
 class _HF(ToxicityModel):
