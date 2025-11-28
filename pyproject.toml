@@ -266,13 +266,11 @@ timeout = 600
 # Note: Using pytest-anyio, not pytest-asyncio.
 # Session-scoped event loop is achieved via session_runner fixture in conftest.py.
 addopts = [
-  "--capture=fd",
   "--continue-on-collection-errors",
   "--durations=10",
   "-n 20",
-  "-v", # show name of tests
-  "-rfEX", # show extra summary info, including for failed, eXpected failures, and Errors
-  "-s",
+  "-q", # quiet - reduces output noise for TUI compatibility
+  "-rfEX", # show extra summary info for failed/errors only
   "--tb=short",
   "-m",
   "not endtoend",
