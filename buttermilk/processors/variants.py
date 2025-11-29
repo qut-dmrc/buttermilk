@@ -165,9 +165,8 @@ class VariantProcessor(BaseModel):
                 if self.fail_on_error:
                     raise
                 logger.warning(
-                    "Variant failed, continuing with others",
+                    "Variant failed in parallel execution, continuing with others",
                     processor_stage=processor_stage,
                     variant_idx=variant_idx if "variant_idx" in dir() else "unknown",
                     error=str(e),
-                    exc_info=True,
                 )

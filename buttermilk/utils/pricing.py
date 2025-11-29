@@ -25,11 +25,40 @@ _MODEL_MAPPINGS = {
 
 
 def _simple_model_resolution(model_name: str) -> str:
-    """Simple model name resolution for backward compatibility.
+    """Normalize model names to litellm-compatible format for pricing lookups.
 
-    This is a fallback when the full LLMs resolution is not available.
+    Handles various model name formats:
+    - Direct mappings from _MODEL_MAPPINGS
+    - Double-prefixed names like "openai/google/gemini-2.5-flash" → "gemini/gemini-2.5-flash"
+    - Names with incorrect provider prefixes
     """
-    return _MODEL_MAPPINGS.get(model_name, model_name)
+    # Check direct mappings first
+    if model_name in _MODEL_MAPPINGS:
+        return _MODEL_MAPPINGS[model_name]
+
+    # Handle double-prefixed model names (e.g., "openai/google/gemini-2.5-flash-lite")
+    # This occurs when vertex_openai models are incorrectly prefixed for pricing
+    if model_name.count("/") >= 2:
+        parts = model_name.split("/")
+        # Check for pattern: provider/google/gemini-*
+        if len(parts) >= 3 and parts[1] == "google" and parts[2].startswith("gemini"):
+            # Extract base model name (e.g., "gemini-2.5-flash-lite")
+            base_model = "/".join(parts[2:])
+            # Return with gemini/ prefix for litellm pricing
+            return f"gemini/{base_model}"
+        # Check for pattern: openai/meta/llama-* (VertexAI MaaS models via OpenAI API)
+        if len(parts) >= 3 and parts[0] == "openai" and parts[1] == "meta":
+            # Return without the openai/ prefix: meta/llama-*
+            return "/".join(parts[1:])
+
+    # Handle single wrong prefix (e.g., "openai/gemini-2.5-flash")
+    if "/" in model_name:
+        prefix, base = model_name.split("/", 1)
+        # If it's a gemini model with wrong prefix, fix it
+        if base.startswith("gemini") and prefix not in {"gemini", "vertex_ai"}:
+            return f"gemini/{base}"
+
+    return model_name
 
 
 def calculate_token_cost(

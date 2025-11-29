@@ -463,7 +463,7 @@ class LLMCore:
                 span.set_status(trace.Status(trace.StatusCode.OK))
 
             except ProcessingError as e:
-                logger.error(f"LLMCore processing error: {e}")
+                # Don't log here - let the final handler log once
                 result.error = str(e)
                 span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                 span.record_exception(e)
@@ -625,7 +625,7 @@ class LLMCore:
                 return result
 
             except Exception as e:
-                logger.error(f"LLM call failed: {e}")
+                # Don't log here - let the final handler log once
                 span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                 span.record_exception(e)
                 raise ProcessingError(f"LLM call to '{self.model}' failed: {e}") from e

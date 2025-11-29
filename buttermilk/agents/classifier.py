@@ -11,7 +11,7 @@ classification results may not vary significantly by template (API limitation).
 """
 
 from abc import abstractmethod
-from typing import Any
+from typing import Any, AsyncGenerator
 
 import pydantic
 from autogen_core import CancellationToken
@@ -20,6 +20,7 @@ from buttermilk import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import AgentInput, AgentOutput
 from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.types import BaseRecord
 from buttermilk.utils.templating import load_template
 
 
@@ -106,6 +107,58 @@ class ClassifierAgent(Agent):
             )
 
         self.output_model: type[pydantic.BaseModel] = output_model
+
+    async def process(
+        self,
+        record: BaseRecord,
+        *,
+        processor_stage: str,
+        parent_trace_id: str | None = None,
+        **kwargs: Any,
+    ) -> AsyncGenerator[BaseRecord, None]:
+        """Processor interface for use in pipelines (e.g., VariantProcessor).
+
+        Wraps the agent workflow with the standard Processor interface, allowing
+        ClassifierAgent subclasses to be used in VariantProcessor configurations.
+
+        Args:
+            record: Input BaseRecord to classify
+            processor_stage: Unique stage identifier for tracing
+            parent_trace_id: Optional trace ID for distributed tracing
+            **kwargs: Additional arguments passed to template rendering
+
+        Yields:
+            BaseRecord: Enriched record with classification output and metadata
+        """
+        # Convert BaseRecord to AgentInput format
+        inputs = record.model_dump() if hasattr(record, "model_dump") else dict(record)
+        inputs.update(kwargs)
+
+        agent_input = AgentInput(inputs=inputs, record=record)
+
+        # Call the agent's _process method directly
+        agent_output = await self._process(
+            message=agent_input,
+            cancellation_token=None,
+        )
+
+        # Extract structured output
+        output_content = agent_output.outputs
+        if hasattr(output_content, "model_dump"):
+            output_content = output_content.model_dump()
+
+        # Enrich record with classification results
+        enriched_record = record.model_copy(
+            update={
+                "output": output_content,
+                "metadata": {
+                    **record.metadata,
+                    processor_stage: agent_output.metadata,
+                },
+            }
+        )
+
+        yield enriched_record
 
     async def _process(
         self,
