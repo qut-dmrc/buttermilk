@@ -331,6 +331,33 @@ print(f"Total messages: {len(result['messages'])}")
 
   **Expected Evidence**: Real-time JSONL log entries with proper timestamps
 
+- **Analyze a Specific Log File (for post-hoc debugging):**
+
+  ```bash
+  # Read from any buttermilk log file (any project)
+  uv run python -m buttermilk.debug.ws_debug_cli logs -n 50 \
+    --file /tmp/bm_llm_reliability_study_exec-20251129T0615Z-YMqi-nicwin-nic.jsonl
+
+  # Filter to errors only
+  uv run python -m buttermilk.debug.ws_debug_cli logs -n 100 -l ERROR \
+    --file /path/to/logfile.jsonl
+  ```
+
+  **Note**: Log files are named `bm_{project_name}_{execution_context_id}.jsonl`. Projects using buttermilk as a library will have their own project name (e.g., `llm_reliability_study`), not `buttermilk`.
+
+- **Direct jq analysis for complex queries:**
+
+  ```bash
+  # Count by log level
+  cat /tmp/your_log.jsonl | jq -r '.level' | sort | uniq -c
+
+  # List error messages with context
+  cat /tmp/your_log.jsonl | jq 'select(.level=="error") | {ts: .timestamp, event: .event, module: .module}'
+
+  # Find exceptions
+  cat /tmp/your_log.jsonl | jq -r 'select(.exc_info != null) | .exc_info' | head -20
+  ```
+
 **Flow Control Commands** (Restored after Issue #274):
 
 - **Start Flow (VALIDATED):**

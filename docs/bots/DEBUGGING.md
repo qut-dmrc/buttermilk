@@ -145,6 +145,9 @@ Check your data sources for valid record IDs. **Flows WILL NOT run with arbitrar
 
 **Log file naming**: `bm_{project_name}_{execution_context_id}.jsonl`
 
+- `project_name`: The project using buttermilk (e.g., `buttermilk`, `llm_reliability_study`)
+- `execution_context_id`: Unique identifier like `exec-20251129T0615Z-YMqi-nicwin-nic`
+
 **Direct monitoring**:
 
 ```bash
@@ -163,6 +166,81 @@ grep '"logger":"buttermilk.flows"' /tmp/bm_*.jsonl | jq .
 # Show timestamp and message
 cat /tmp/bm_*.jsonl | jq -r '[.timestamp, .level, .event] | @tsv'
 ```
+
+## Post-Hoc Log Analysis
+
+**For diagnosing errors from completed runs** (not live debugging).
+
+### Using ws_debug_cli with specific files
+
+```bash
+# View logs from any buttermilk JSONL file
+uv run python -m buttermilk.debug.ws_debug_cli logs -n 50 \
+  --file /tmp/bm_llm_reliability_study_exec-20251129T0615Z-YMqi-nicwin-nic.jsonl
+
+# Filter to errors only
+uv run python -m buttermilk.debug.ws_debug_cli logs -n 100 -l ERROR \
+  --file /path/to/your/logfile.jsonl
+```
+
+### Direct JSONL analysis with jq
+
+**Quick error summary**:
+
+```bash
+# Count entries by level
+cat /tmp/your_log.jsonl | jq -r '.level' | sort | uniq -c
+
+# List all error messages
+cat /tmp/your_log.jsonl | jq -r 'select(.level=="error") | [.timestamp, .event] | @tsv'
+
+# Show errors with context (module, function)
+cat /tmp/your_log.jsonl | jq 'select(.level=="error") | {ts: .timestamp, event: .event, module: .module, func: .func_name}'
+```
+
+**Find exceptions and tracebacks**:
+
+```bash
+# Entries containing exception info
+grep -i "exception\|traceback\|error" /tmp/your_log.jsonl | jq .
+
+# Extract exception types
+cat /tmp/your_log.jsonl | jq -r 'select(.exc_info != null) | .exc_info' | head -20
+```
+
+**Timeline analysis**:
+
+```bash
+# First and last timestamps
+head -1 /tmp/your_log.jsonl | jq -r '.timestamp'
+tail -1 /tmp/your_log.jsonl | jq -r '.timestamp'
+
+# Events around a specific time (within 10 seconds of 06:15:30)
+cat /tmp/your_log.jsonl | jq 'select(.timestamp | startswith("2025-11-29T06:15:3"))'
+```
+
+**Module-specific analysis**:
+
+```bash
+# List all modules that logged
+cat /tmp/your_log.jsonl | jq -r '.module' | sort | uniq -c | sort -rn
+
+# Show entries from a specific module
+cat /tmp/your_log.jsonl | jq 'select(.module=="llms")'
+```
+
+### Key log fields
+
+| Field | Description |
+|-------|-------------|
+| `timestamp` | ISO 8601 timestamp |
+| `level` | Log level: debug, info, warning, error |
+| `event` | Human-readable message |
+| `module` | Python module name |
+| `func_name` | Function that logged |
+| `exc_info` | Exception traceback (if error) |
+| `execution_context_id` | Links entries to same run |
+| `project_name` | Project using buttermilk |
 
 ## DebugAgent Puppet Mode (Advanced)
 
