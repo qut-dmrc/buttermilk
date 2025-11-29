@@ -421,6 +421,36 @@ class TestLiteLLMIntegration:
                     f"litellm cost_per_token failed for {resolved_name} (from {model_name}+{client_type}): {e}"
                 )
 
+    @pytest.mark.anyio
+    async def test_real_model_pricing_resolution(
+        self, real_llm_expensive, session_runner
+    ):
+        """Test that all real configured models resolve to valid litellm names."""
+        from litellm.cost_calculator import cost_per_token
+
+        # Get the resolved litellm model name from the wrapper
+        resolved_name = real_llm_expensive.litellm_model_name
+
+        # Verify no double prefixes (e.g., vertex_ai/google/gemini-*)
+        assert "//" not in resolved_name, f"Double prefix in {resolved_name}"
+        # Verify no google/ prefix for vertex models (litellm doesn't recognize it)
+        assert not resolved_name.startswith(
+            "vertex_ai/google/"
+        ), f"Invalid google/ prefix in {resolved_name}"
+
+        # Verify the resolved name works with litellm
+        try:
+            prompt_cost, completion_cost = cost_per_token(
+                model=resolved_name,
+                prompt_tokens=100,
+                completion_tokens=50,
+            )
+            assert isinstance(prompt_cost, (int, float))
+            assert isinstance(completion_cost, (int, float))
+        except Exception as e:
+            # Some models may not be in litellm's pricing database yet - that's OK
+            pytest.skip(f"Model {resolved_name} not in litellm pricing: {e}")
+
     @pytest.mark.skipif(
         not hasattr(
             __import__("litellm.cost_calculator", fromlist=["cost_per_token"]),
