@@ -1835,7 +1835,7 @@ class LLMs(BaseModel):
             "gemini": "gemini",  # litellm uses 'gemini' for Gemini API
             "gemini_vertex": "gemini",  # vertex-hosted Gemini still routes differently upstream
             "huggingface": "huggingface",
-            "vertex_openai": "openai",  # Vertex OpenAI-compatible uses OpenAI API format
+            "vertex_openai": "vertex_ai",  # For litellm pricing, Vertex models need vertex_ai prefix
             "anthropic_vertex": "vertex_ai",  # Anthropic-on-Vertex
             "anthropic": "anthropic",
             "zentropi": "zentropi",  # Zentropi custom API
@@ -1916,10 +1916,13 @@ class LLMs(BaseModel):
         """
         # Handle known model name patterns and client type combinations
 
-        # For vertex_openai (custom OpenAI-compatible endpoint), preserve the full model name
-        # as-is because the endpoint expects <publisher>/<model> format (e.g., "google/gemini-3-pro-preview")
+        # For vertex_openai, strip google/ prefix from Gemini models for litellm pricing
+        # e.g., "google/gemini-2.5-flash" -> "gemini-2.5-flash" (litellm expects vertex_ai/gemini-2.5-flash)
+        # But preserve meta/ prefix for Llama models (litellm expects vertex_ai/meta/llama-*)
         if client_type == "vertex_openai":
-            return model_name
+            if model_name.startswith("google/"):
+                return model_name[len("google/") :]  # Strip google/ prefix
+            return model_name  # Keep other prefixes (e.g., meta/llama-*)
 
         # For anthropic_vertex clients with provider-specific models, preserve format
         if client_type == "anthropic_vertex" and "/" in model_name:
