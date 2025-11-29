@@ -164,9 +164,27 @@ class VariantProcessor(BaseModel):
             except Exception as e:
                 if self.fail_on_error:
                     raise
+                # Yield error record so pipeline can track the failure
+                failed_idx = variant_idx if "variant_idx" in dir() else -1
+                error_record = record.model_copy(
+                    update={
+                        "error": str(e),
+                        "metadata": {
+                            **record.metadata,
+                            "variant": {
+                                "index": failed_idx,
+                                "total": len(self._processors),
+                                "processor_class": self.processor_obj.split(".")[-1],
+                                "stage": processor_stage,
+                                "failed": True,
+                            },
+                        },
+                    }
+                )
                 logger.warning(
                     "Variant failed in parallel execution, continuing with others",
                     processor_stage=processor_stage,
-                    variant_idx=variant_idx if "variant_idx" in dir() else "unknown",
+                    variant_idx=failed_idx,
                     error=str(e),
                 )
+                yield error_record
