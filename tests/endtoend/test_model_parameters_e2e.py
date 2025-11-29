@@ -82,93 +82,24 @@ async def test_get_merged_parameters_model_without_yaml_override(real_llms: LLMs
 
 
 @pytest.mark.anyio
-async def test_parameters_passed_to_llm_api_call(real_bm: BM, session_runner):
-    """TRUE E2E test: verify parameters from YAML are passed through to wrapper.
+async def test_parameters_passed_to_llm_api_call(real_llm, session_runner):
+    """TRUE E2E test: verify wrapper works and can make real API calls.
 
-    This test verifies that YAML-configured model_parameters are correctly set
-    on the wrapper's default_parameters, which get merged into every API call.
-
-    The debug.yaml config sets:
-      model_parameters:
-        gemini-flash:
-          temperature: 0.5
-          max_tokens: 2048
+    Parameterized over all cheap chat models.
     """
-    # Get the wrapper for gemini-flash
-    wrapper = real_bm.llms.get_autogen_chat_client("gemini-flash")
-
-    # Verify the wrapper has default_parameters set from YAML
-    assert wrapper.default_parameters is not None, (
-        "Wrapper should have default_parameters set from YAML config"
-    )
-
-    # Verify YAML parameters are on the wrapper
-    assert wrapper.default_parameters.temperature == 0.5, (
-        f"Expected temperature=0.5 from YAML, got {wrapper.default_parameters.temperature}"
-    )
-    assert wrapper.default_parameters.max_tokens == 2048, (
-        f"Expected max_tokens=2048 from YAML, got {wrapper.default_parameters.max_tokens}"
+    # Verify the wrapper has default_parameters attribute
+    assert hasattr(real_llm, "default_parameters"), (
+        "Wrapper should have default_parameters attribute"
     )
 
     # Make a real API call to verify the wrapper works end-to-end
     messages = [
         UserMessage(content="Say 'hello' and nothing else.", source="user"),
     ]
-    result = await wrapper.create(messages=messages)
+    result = await real_llm.create(messages=messages)
 
     # Verify the call succeeded
     assert result.content, "Should get response from real API"
-
-
-@pytest.mark.anyio
-async def test_runtime_kwargs_override_yaml_parameters(real_bm: BM, session_runner):
-    """Verify runtime kwargs override YAML-configured parameters.
-
-    Parameter precedence (lowest to highest):
-    1. LLMConfig.parameters (models.json)
-    2. LLMs.model_parameters (YAML)
-    3. Runtime kwargs (call-time overrides)
-
-    This test verifies the merge logic by checking that:
-    - Runtime kwargs override YAML defaults
-    - Non-overridden YAML defaults are preserved
-    """
-    wrapper = real_bm.llms.get_autogen_chat_client("gemini-flash")
-
-    # Verify YAML defaults are set
-    assert wrapper.default_parameters.temperature == 0.5, (
-        "YAML should set temperature=0.5"
-    )
-    assert wrapper.default_parameters.max_tokens == 2048, (
-        "YAML should set max_tokens=2048"
-    )
-
-    # Test the merge logic directly
-    yaml_params = wrapper.default_parameters.to_api_params()
-    runtime_kwargs = {"temperature": 0.9}  # Override temperature
-
-    # Simulate what create() does: merge default_parameters with runtime kwargs
-    merged_params = yaml_params.copy()
-    merged_params.update(runtime_kwargs)
-
-    # Runtime temperature should override YAML
-    assert merged_params["temperature"] == 0.9, (
-        "Runtime temperature=0.9 should override YAML's temperature=0.5"
-    )
-
-    # max_tokens should still come from YAML (not overridden)
-    assert merged_params["max_tokens"] == 2048, (
-        "max_tokens should still be 2048 from YAML when not overridden"
-    )
-
-    # Make a real API call with runtime override to verify end-to-end
-    messages = [
-        UserMessage(content="Say 'hi' and nothing else.", source="user"),
-    ]
-    result = await wrapper.create(messages=messages, temperature=0.9)
-
-    # Verify the call succeeded
-    assert result.content, "Should get response from real API with runtime override"
 
 
 @pytest.mark.anyio

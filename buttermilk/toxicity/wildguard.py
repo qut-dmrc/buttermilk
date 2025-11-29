@@ -4,12 +4,11 @@ from typing import (
 )
 
 import regex as re
-import torch
 from pydantic import Field
 
 from buttermilk.utils import read_text
 
-from .toxicity import TEMPLATE_DIR, EvalRecord, Score, ToxicityModel
+from .toxicity import TEMPLATE_DIR, EvalRecord, Score, ToxicityModel, _get_torch_device
 
 
 class Wildguard(ToxicityModel):
@@ -17,8 +16,8 @@ class Wildguard(ToxicityModel):
     process_chain: str = "hf_transformers"
     standard: str = "wildguard"
     client: Any = None
-    device: str | torch.device = Field(
-        default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu",
+    device: str | Any = Field(
+        default_factory=_get_torch_device,
         description="Device type (CPU or CUDA)",
     )
     options: ClassVar[dict] = dict(max_new_tokens=128, temperature=1.0)
@@ -28,6 +27,8 @@ class Wildguard(ToxicityModel):
     )
 
     def init_client(self) -> None:
+        from transformers import pipeline
+
         self.client = pipeline(
             "text-generation",
             model=self.model,

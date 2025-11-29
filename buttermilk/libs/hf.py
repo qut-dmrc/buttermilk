@@ -1,8 +1,6 @@
 import os
 from typing import Any
 
-from huggingface_hub import InferenceClient, login
-
 from buttermilk import logger
 from buttermilk._core.log import logger  # noqa
 
@@ -31,6 +29,8 @@ class HFInferenceClient:
         return self.hf_client
 
     def get_client(self) -> Any:
+        from huggingface_hub import InferenceClient, login
+
         # access token with permission to access the model and PRO subscription
         login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"])
         return InferenceClient(self.hf_model_path)
@@ -48,6 +48,9 @@ class HFInferenceClient:
 
 
 def hf_pipeline(hf_model_path, **model_kwargs):
+    from huggingface_hub import login
+    from transformers import pipeline
+
     # access token with permission to access the model
     login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
     try:
@@ -55,8 +58,8 @@ def hf_pipeline(hf_model_path, **model_kwargs):
 
         if not (device := model_kwargs.pop("device", None)):
             device = "auto" if torch.cuda.is_available() else "cpu"
-    except:
-        device = "cpu"
+    except ImportError:
+        device = model_kwargs.pop("device", "cpu")
     max_new_tokens = model_kwargs.pop("max_new_tokens", 1000)
     client = pipeline(
         "text-generation",

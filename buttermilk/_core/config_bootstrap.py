@@ -542,6 +542,7 @@ async def bootstrap_session_with_config_async(
     execution_context = await from_config_async(
         typed_config.infrastructure,
         project_name=typed_config.session.project_name,
+        default_llm_wrapper=typed_config.session.llm_wrapper,
         llms_config=llms_config,
     )
 

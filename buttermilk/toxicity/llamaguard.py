@@ -8,14 +8,11 @@ from typing import (
 )
 
 import regex as re
-import torch
-from huggingface_hub import login
 from pydantic import (
     Field,
 )
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
-from buttermilk.toxicity.toxicity import _HF, ToxicityModel
+from buttermilk.toxicity.toxicity import _HF, ToxicityModel, _get_torch_device
 from buttermilk.utils.utils import read_yaml
 
 from .types import EvalRecord, Score
@@ -337,6 +334,10 @@ class LlamaGuard3LocalInt8(LlamaGuard3Local):
     device: str = "cuda"
 
     def init_client(self) -> None:
+        import torch
+        from huggingface_hub import login
+        from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+
         quantization_config = BitsAndBytesConfig(load_in_8bit=True)
         token = self._get_credential("HUGGINGFACEHUB_API_TOKEN")
 
@@ -370,6 +371,10 @@ class MDJudgeLocal(LlamaGuardTox):
     template: str
 
     def init_client(self) -> None:
+        import torch
+        from huggingface_hub import login
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+
         token = self._get_credential("HUGGINGFACEHUB_API_TOKEN")
 
         login(token=token, new_session=False)
@@ -416,6 +421,9 @@ class MDJudge2(MDJudgeLocal):
     categories: EnumMeta = MDJudge2Categories
 
     def init_client(self) -> None:
+        from huggingface_hub import login
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+
         token = self._get_credential("HUGGINGFACEHUB_API_TOKEN")
 
         login(token=token, new_session=False)

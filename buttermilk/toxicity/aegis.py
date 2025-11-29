@@ -4,15 +4,12 @@ from typing import (
     ClassVar,
 )
 
-import torch
-from peft.config import PeftConfig
-from peft.peft_model import PeftModel
 from pydantic import (
     Field,
 )
-from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from buttermilk.toxicity.llamaguard import LlamaGuardTox
+from buttermilk.toxicity.toxicity import _get_torch_device
 from buttermilk.utils import read_text
 
 from .toxicity import TEMPLATE_DIR
@@ -43,12 +40,16 @@ class Aegis(LlamaGuardTox):
     categories: EnumMeta = AegisCategories
     tokenizer: Any = None
     device: str | Any = Field(
-        default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu",
+        default_factory=_get_torch_device,
         description="Device type (CPU or CUDA)",
     )
     options: ClassVar[dict] = {}
 
     def init_client(self):
+        from peft.config import PeftConfig
+        from peft.peft_model import PeftModel
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+
         PeftConfig.from_pretrained(
             "nvidia/Aegis-AI-Content-Safety-LlamaGuard-Defensive-1.0"
         )
