@@ -48,8 +48,8 @@ def _simple_model_resolution(model_name: str) -> str:
             return f"gemini/{base_model}"
         # Check for pattern: openai/meta/llama-* (VertexAI MaaS models via OpenAI API)
         if len(parts) >= 3 and parts[0] == "openai" and parts[1] == "meta":
-            # Return without the openai/ prefix: meta/llama-*
-            return "/".join(parts[1:])
+            # Return with vertex_ai/ prefix for litellm pricing: vertex_ai/meta/llama-*
+            return "vertex_ai/" + "/".join(parts[1:])
 
     # Handle single wrong prefix (e.g., "openai/gemini-2.5-flash")
     if "/" in model_name:

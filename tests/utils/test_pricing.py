@@ -110,6 +110,11 @@ class TestCalculateTokenCost:
             ("gemini25flash", "gemini/gemini-2.5-flash-preview-05-20"),
             ("sonnet", "vertex_ai/claude-sonnet-4@20250514"),
             ("unknown-model", "unknown-model"),  # Should pass through unmapped
+            # VertexAI MaaS models via OpenAI API - must resolve to vertex_ai/ prefix
+            (
+                "openai/meta/llama-4-maverick-17b-128e-instruct-maas",
+                "vertex_ai/meta/llama-4-maverick-17b-128e-instruct-maas",
+            ),
         ]
 
         for buttermilk_model, expected_litellm_model in test_cases:
