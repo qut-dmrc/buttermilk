@@ -331,7 +331,20 @@ print(f"Total messages: {len(result['messages'])}")
 
   **Expected Evidence**: Real-time JSONL log entries with proper timestamps
 
-- **Analyze a Specific Log File (for post-hoc debugging):**
+- **Analyze a Log File - FIRST STEP for debugging (VALIDATED):**
+
+  ```bash
+  # Get error summary - always start here
+  uv run python -m buttermilk.debug.ws_debug_cli analyze \
+    --file /tmp/bm_llm_reliability_study_exec-20251129T0615Z-YMqi-nicwin-nic.jsonl
+
+  # Or analyze most recent log file
+  uv run python -m buttermilk.debug.ws_debug_cli analyze
+  ```
+
+  **Returns**: Entry counts by level, errors by module, timeline, sample error messages.
+
+- **Drill into specific logs (after analyze):**
 
   ```bash
   # Read from any buttermilk log file (any project)

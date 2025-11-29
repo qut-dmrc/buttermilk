@@ -171,7 +171,24 @@ cat /tmp/bm_*.jsonl | jq -r '[.timestamp, .level, .event] | @tsv'
 
 **For diagnosing errors from completed runs** (not live debugging).
 
-### Using ws_debug_cli with specific files
+### Step 1: Analyze (always start here)
+
+```bash
+# Get error summary - FIRST STEP for any debugging session
+uv run python -m buttermilk.debug.ws_debug_cli analyze \
+  --file /tmp/bm_llm_reliability_study_exec-20251129T0615Z-YMqi-nicwin-nic.jsonl
+
+# Or analyze most recent log file
+uv run python -m buttermilk.debug.ws_debug_cli analyze
+```
+
+Returns:
+- Entry counts by severity level (debug, info, warning, error)
+- Error counts by module
+- Timeline (first/last timestamps)
+- Sample error messages
+
+### Step 2: Drill into specific logs
 
 ```bash
 # View logs from any buttermilk JSONL file

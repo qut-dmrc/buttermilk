@@ -4,6 +4,7 @@
 Provides both CLI commands and programmatic API for debugging Buttermilk flows:
 
 CLI Commands (optimized for LLM usage):
+- analyze: Analyze log file - FIRST STEP for any debugging (error counts by level/module)
 - start: Start a flow and capture all messages (JSON by default)
 - send: Send messages to an active session
 - wait: Wait for and collect messages with optional filtering
@@ -722,6 +723,135 @@ def list_logs(ctx, count: int):
         console.print(
             f"\n[dim]Total Buttermilk log files in /tmp/: {len(log_files)}[/dim]"
         )
+
+
+@cli.command()
+@click.option("--file", "-f", default=None, help="Specific log file to analyze (optional)")
+@click.pass_context
+def analyze(ctx, file: str | None):
+    """Analyze a log file and show error summary.
+
+    First step in any debugging session. Shows:
+    - Entry counts by severity level
+    - Error counts by type/category
+    - Timeline (first/last timestamps)
+    - Top error messages
+
+    Use this before diving into detailed log inspection.
+    """
+    # Find the log file
+    if file:
+        if not os.path.exists(file):
+            result = {"error": f"Log file not found: {file}"}
+            if ctx.obj["JSON_OUTPUT"]:
+                print(json.dumps(result, indent=2))
+            else:
+                Console().print(f"[red]Error: {result['error']}[/red]")
+            return
+        log_file = file
+    else:
+        log_files = glob.glob("/tmp/bm_*.jsonl")
+        if not log_files:
+            result = {
+                "error": "No Buttermilk log files found in /tmp/",
+                "hint": "Specify a file with --file or ensure bm_*.jsonl files exist",
+            }
+            if ctx.obj["JSON_OUTPUT"]:
+                print(json.dumps(result, indent=2))
+            else:
+                Console().print(f"[red]Error: {result['error']}[/red]")
+            return
+        log_file = max(log_files, key=os.path.getmtime)
+
+    # Parse and analyze
+    level_counts: dict[str, int] = {}
+    error_types: dict[str, int] = {}
+    error_messages: list[dict] = []
+    first_ts: str | None = None
+    last_ts: str | None = None
+    total_entries = 0
+
+    try:
+        with open(log_file) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                total_entries += 1
+
+                try:
+                    entry = json.loads(line)
+                    level = entry.get("level", "unknown").lower()
+                    level_counts[level] = level_counts.get(level, 0) + 1
+
+                    ts = entry.get("timestamp", "")
+                    if ts:
+                        if first_ts is None:
+                            first_ts = ts
+                        last_ts = ts
+
+                    # Collect error details
+                    if level == "error":
+                        event = entry.get("event", "")
+                        module = entry.get("module", "unknown")
+
+                        # Categorize by module
+                        error_types[module] = error_types.get(module, 0) + 1
+
+                        # Collect sample error messages (limit to first 10)
+                        if len(error_messages) < 10:
+                            error_messages.append({
+                                "timestamp": ts,
+                                "module": module,
+                                "event": event[:200] if event else "",  # Truncate long messages
+                            })
+
+                except json.JSONDecodeError:
+                    level_counts["parse_error"] = level_counts.get("parse_error", 0) + 1
+
+    except Exception as e:
+        result = {"error": f"Error reading log file: {e}"}
+        if ctx.obj["JSON_OUTPUT"]:
+            print(json.dumps(result, indent=2))
+        else:
+            Console().print(f"[red]Error: {result['error']}[/red]")
+        return
+
+    # Build result
+    result = {
+        "log_file": log_file,
+        "total_entries": total_entries,
+        "timeline": {
+            "first": first_ts,
+            "last": last_ts,
+        },
+        "by_level": dict(sorted(level_counts.items(), key=lambda x: -x[1])),
+        "errors_by_module": dict(sorted(error_types.items(), key=lambda x: -x[1])) if error_types else {},
+        "sample_errors": error_messages,
+    }
+
+    if ctx.obj["JSON_OUTPUT"]:
+        print(json.dumps(result, indent=2))
+    else:
+        console = Console()
+        console.print(f"\n[bold]Log Analysis: {os.path.basename(log_file)}[/bold]\n")
+        console.print(f"Total entries: {total_entries}")
+        console.print(f"Timeline: {first_ts} → {last_ts}\n")
+
+        console.print("[bold]By Level:[/bold]")
+        for level, count in sorted(level_counts.items(), key=lambda x: -x[1]):
+            color = {"error": "red", "warning": "yellow", "info": "green", "debug": "dim"}.get(level, "white")
+            console.print(f"  [{color}]{level}: {count}[/{color}]")
+
+        if error_types:
+            console.print("\n[bold]Errors by Module:[/bold]")
+            for module, count in sorted(error_types.items(), key=lambda x: -x[1])[:10]:
+                console.print(f"  [red]{module}: {count}[/red]")
+
+        if error_messages:
+            console.print("\n[bold]Sample Errors:[/bold]")
+            for err in error_messages[:5]:
+                console.print(f"  [dim]{err['timestamp']}[/dim] [{err['module']}] {err['event'][:80]}")
 
 
 @cli.command()
