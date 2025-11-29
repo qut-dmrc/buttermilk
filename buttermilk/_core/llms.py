@@ -48,6 +48,9 @@ from autogen_ext.models.openai import (  # Autogen OpenAI clients
     AzureOpenAIChatCompletionClient,
     OpenAIChatCompletionClient,
 )
+
+# OpenAI SDK for exception handling
+import openai
 # from google import genai  # Google Generative AI library (unused in current implementation)
 from pydantic import BaseModel  # Pydantic models for configuration
 from pydantic import ConfigDict, Field, field_validator
@@ -59,7 +62,7 @@ from buttermilk._core.constants import (  # Models cache constants
     cache,
     get_base_cache_dir,
 )
-from buttermilk._core.exceptions import ProcessingError  # Custom Buttermilk exceptions
+from buttermilk._core.exceptions import ContentBlockedError, ProcessingError  # Custom Buttermilk exceptions
 from buttermilk.utils.pricing import calculate_token_cost  # Token cost calculation
 
 from .retry import RetryWrapper  # Retry logic wrapper
@@ -585,6 +588,32 @@ class AutoGenWrapper(BaseModel):
 
         except Exception as e:  # Wrap other exceptions
             import traceback
+
+            # Check for Azure OpenAI content filter errors
+            if isinstance(e, (openai.BadRequestError, openai.APIStatusError)):
+                # Check if it's a 400 status code
+                is_bad_request = (
+                    isinstance(e, openai.BadRequestError) or
+                    (isinstance(e, openai.APIStatusError) and getattr(e, 'status_code', None) == 400)
+                )
+
+                if is_bad_request and hasattr(e, 'body') and isinstance(e.body, dict):
+                    error_code = e.body.get('code')
+                    innererror = e.body.get('innererror', {})
+                    innererror_code = innererror.get('code') if isinstance(innererror, dict) else None
+
+                    # Check for content filter indicators
+                    if error_code == 'content_filter' or innererror_code == 'ResponsibleAIPolicyViolation':
+                        # Extract filter result details
+                        filter_result = innererror.get('content_filter_result', {}) if isinstance(innererror, dict) else {}
+                        error_msg = f"Content blocked by Azure OpenAI safety filter: {e!s}"
+                        logger.error(error_msg)
+                        raise ContentBlockedError(
+                            message=error_msg,
+                            filter_result=filter_result
+                        ) from e
+
+            # Generic error handling for non-content-filter errors
             error_msg = f"Error during LLM call: {e!s}\nTraceback: {traceback.format_exc()}"
             logger.error(error_msg)
             raise ProcessingError(f"Error during LLM call: {e!s}") from e

@@ -6,6 +6,8 @@ These exceptions provide more semantic meaning than generic Python exceptions
 and can be caught and handled specifically by different parts of the framework.
 """
 
+from typing import Any
+
 
 class ProcessingFinished(Exception):
     """Signal exception indicating that all processing jobs are complete.
@@ -39,6 +41,30 @@ class ProcessingError(Exception):
     """
 
     pass
+
+
+class ContentBlockedError(ProcessingError):
+    """Indicates content was blocked by provider safety filters.
+
+    This exception is raised when an LLM provider (e.g., Azure OpenAI) blocks
+    content due to safety policies, content filters, or responsible AI guidelines.
+    The filter_result attribute contains detailed information about what triggered
+    the filter (e.g., hate speech, violence, self-harm categories and severity).
+
+    Attributes:
+        filter_result: Optional dict containing the detailed filter results
+                      from the provider, including categories and severity levels.
+    """
+
+    def __init__(self, message: str = "Content blocked by provider safety filter", filter_result: dict[str, Any] | None = None):
+        """Initialize ContentBlockedError.
+
+        Args:
+            message: Error message describing the block
+            filter_result: Optional dict with detailed filter information
+        """
+        super().__init__(message)
+        self.filter_result = filter_result or {}
 
 
 class StorageError(Exception):
