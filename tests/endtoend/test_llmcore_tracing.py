@@ -12,12 +12,23 @@ import asyncio
 import datetime
 
 import pytest
+from pydantic import BaseModel, Field
 
 from buttermilk import logger
 from buttermilk._core.contract import ExecutionTrace
 from buttermilk._core.llm_core import LLMCore
 from buttermilk._core.types import BaseRecord
 from buttermilk.utils.trace_writer import get_trace_writer
+
+
+class CapitalCityResponse(BaseModel):
+    """Structured output for capital city question."""
+
+    model_config = {"extra": "forbid"}  # Required for Azure OpenAI structured outputs
+
+    city: str = Field(description="The capital city")
+    country: str = Field(description="The country")
+    explanation: str = Field(description="Brief explanation")
 
 
 @pytest.fixture
@@ -62,10 +73,19 @@ def _validate_actual_model_name(logged_model: str, alias: str) -> None:
     )
 
 
+# Models that don't reliably support structured JSON output
+# Note: Models with function_calling=true can use the fake tool fallback for structured output
+# gpt-oss-safeguard models on HuggingFace don't support structured output or function calling
+# claude45haiku has function_calling=false so can't use either approach
+MODELS_WITHOUT_STRUCTURED_OUTPUT = {
+    "claude45haiku",  # No structured output AND no function calling
+    "gpt-oss-safeguard-20b",
+    "gpt-oss-safeguard-120b",
+}
+
+
 @pytest.mark.anyio
-async def test_llmcore_with_bigquery_trace(
-    real_bm, sample_record: BaseRecord, real_model_name: str
-):
+async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, real_model_name_expensive: str):
     """Test LLMCore processes request and uploads ExecutionTrace to BigQuery.
 
     This test:
@@ -76,27 +96,34 @@ async def test_llmcore_with_bigquery_trace(
     5. Queries BigQuery to verify trace was uploaded
     6. Validates trace structure and metadata
     """
-    # Step 1: Create LLMCore with cheap model and simple template
+    # Skip structured output test for models that don't support it
+    if real_model_name_expensive in MODELS_WITHOUT_STRUCTURED_OUTPUT:
+        pytest.skip(f"{real_model_name_expensive} doesn't reliably support structured JSON output")
+
+    # Step 1: Create LLMCore with cheap model, simple template, and structured output
     llm_core = LLMCore(
-        model=real_model_name,  # Use a real model from the fixture
+        model=real_model_name_expensive,  # Use a real model from the fixture
         template="ra",  # Simple research assistant template
+        output_model=CapitalCityResponse,  # Structured output for maximum E2E coverage
         fail_on_unfilled_parameters=False,
     )
 
     # Step 2: Process the request
+    # Use model-specific processor_stage to isolate parallel test runs in BigQuery queries
+    processor_stage = f"test_stage_{real_model_name_expensive}"
     test_start_time = datetime.datetime.now(datetime.timezone.utc)
 
     logger.info("Processing LLMCore request...")
     results = []
     async for result in llm_core.process(
         record=sample_record,
-        processor_stage="test_stage",
+        processor_stage=processor_stage,
         component_name="test_llmcore",
         prompt="What is the capital of France?",
     ):
         results.append(result)
 
-    # Step 3: Validate LLM response
+    # Step 3: Validate LLM response - should be structured CapitalCityResponse
     assert len(results) == 1, "Expected exactly one result from process()"
     result = results[0]
 
@@ -104,11 +131,17 @@ async def test_llmcore_with_bigquery_trace(
     assert hasattr(result, "output"), "Result should have output field"
     assert result.output is not None, "Output should not be None"
 
-    # Check if the output contains a reasonable answer (case-insensitive)
-    output_str = str(result.output).lower()
-    assert "paris" in output_str, f"Expected 'Paris' in output, got: {result.output}"
+    # Validate structured output - should be CapitalCityResponse instance
+    assert isinstance(result.output, CapitalCityResponse), (
+        f"Output should be CapitalCityResponse, got {type(result.output).__name__}: {result.output}"
+    )
 
-    logger.info(f"✅ LLM Response valid: {result.output[:100]}...")
+    # Validate the structured fields
+    assert result.output.city.lower() == "paris", f"Expected city='Paris', got '{result.output.city}'"
+    assert result.output.country.lower() == "france", f"Expected country='France', got '{result.output.country}'"
+    assert len(result.output.explanation) > 0, "Explanation should not be empty"
+
+    logger.info(f"✅ LLM Structured Response valid: city={result.output.city}, country={result.output.country}")
 
     # Step 4: Get the trace writer and force flush
     trace_writer = get_trace_writer()
@@ -125,6 +158,7 @@ async def test_llmcore_with_bigquery_trace(
     await asyncio.sleep(2)
 
     # Query for traces created in the last few minutes with our test metadata
+    # Use model-specific processor_stage to isolate parallel test runs
     query = f"""
         SELECT
             call_id,
@@ -137,7 +171,7 @@ async def test_llmcore_with_bigquery_trace(
         FROM `{real_bm.bq.project}.testing.traces`
         WHERE timestamp >= TIMESTAMP('{test_start_time.isoformat()}')
             AND JSON_VALUE(agent_info, '$.component_name') = 'test_llmcore'
-            AND JSON_VALUE(agent_info, '$.processor_stage') = 'test_stage'
+            AND JSON_VALUE(agent_info, '$.processor_stage') = '{processor_stage}'
         ORDER BY timestamp DESC
         LIMIT 5
     """
@@ -181,9 +215,7 @@ async def test_llmcore_with_bigquery_trace(
     assert agent_info.get("execution_type") == "llm_processing", (
         "Should be llm_processing type"
     )
-    assert agent_info.get("processor_stage") == "test_stage", (
-        "Should have correct processor_stage"
-    )
+    assert agent_info.get("processor_stage") == processor_stage, "Should have correct processor_stage"
 
     # Validate metadata contains LLM info
     metadata = trace.metadata
@@ -195,7 +227,7 @@ async def test_llmcore_with_bigquery_trace(
     assert "model" in metadata, "Metadata should contain model"
 
     # Verify model name is actual API model, not our alias
-    _validate_actual_model_name(metadata["model"], real_model_name)
+    _validate_actual_model_name(metadata["model"], real_model_name_expensive)
 
     assert "duration_ms" in metadata, "Metadata should contain duration_ms"
     assert metadata["duration_ms"] > 0, "Duration should be positive"
@@ -248,7 +280,7 @@ async def test_llmcore_with_bigquery_trace(
         f"split_type={record_in_inputs['split_type']}"
     )
 
-    # Validate outputs contain Paris
+    # Validate outputs contain structured response with Paris
     outputs = trace.outputs
     if isinstance(outputs, str):
         # Could be JSON string, try to parse
@@ -259,8 +291,14 @@ async def test_llmcore_with_bigquery_trace(
         except (json.JSONDecodeError, TypeError):
             pass  # outputs is just a string
 
-    output_str = str(outputs).lower()
-    assert "paris" in output_str, f"Outputs should contain Paris, got: {outputs}"
+    # Outputs should be structured CapitalCityResponse data
+    if isinstance(outputs, dict):
+        assert "city" in outputs, f"Structured output should have 'city' field, got: {outputs}"
+        assert outputs["city"].lower() == "paris", f"Structured output city should be 'Paris', got: {outputs['city']}"
+    else:
+        # Fallback to string check if not dict
+        output_str = str(outputs).lower()
+        assert "paris" in output_str, f"Outputs should contain Paris, got: {outputs}"
 
     # Validate messages field contains the exact API input/output
     # Query for messages field from BigQuery

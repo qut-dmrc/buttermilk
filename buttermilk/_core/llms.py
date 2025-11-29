@@ -1025,6 +1025,13 @@ class AutoGenWrapper(BaseModel):
                 try:
                     parser = ChatParser()
                     parsed_object = parser.parse(text)
+                    # ChatParser returns error dict on failure instead of raising
+                    if isinstance(parsed_object, dict) and "error" in parsed_object and "response" in parsed_object:
+                        raise ProcessingError(
+                            f"AutoGenWrapper failed to parse LLM response as JSON: {parsed_object['error']}. Raw response: {parsed_object['response'][:200]}..."
+                        )
+                except ProcessingError:
+                    raise
                 except Exception as parse_error:
                     raise ProcessingError(
                         f"AutoGenWrapper failed to parse LLM response into required schema {schema.__name__}: {parse_error}",
@@ -1157,9 +1164,16 @@ def litellm_to_autogen_result(
             # Regular text content
             content = message.content if hasattr(message, "content") else str(message)
 
-        finish_reason = (
+        raw_finish_reason = (
             choice.finish_reason if hasattr(choice, "finish_reason") else "stop"
         )
+        # Map LiteLLM finish_reason to Autogen values
+        # LiteLLM uses "tool_calls", Autogen uses "function_calls"
+        finish_reason_map = {
+            "tool_calls": "function_calls",
+            "tool_use": "function_calls",  # Some providers use this
+        }
+        finish_reason = finish_reason_map.get(raw_finish_reason, raw_finish_reason)
     else:
         # Fallback for unexpected response format
         content = str(response)
@@ -1363,17 +1377,28 @@ class LiteLLMWrapper(BaseModel):
         if self.vertex_location:
             litellm_params["vertex_location"] = self.vertex_location
 
-        # Handle structured output via response_format
-        # LiteLLM uses different formats for different providers:
-        # - OpenAI/Azure: uses json_schema with nested schema object
-        # - Some providers only support json_object (no schema)
-        if schema and self.model_info.get("structured_output", False):
+        # Handle structured output via response_format or tool calling fallback
+        # LiteLLM uses json_schema format for providers that support structured output
+        # For providers without native structured output (e.g., Anthropic on Vertex),
+        # we fall back to using a fake tool to get structured output
+        # See: https://docs.litellm.ai/docs/completion/json_mode
+        structured_output_enabled = self.model_info.get("structured_output", False)
+        function_calling_enabled = self.model_info.get("function_calling", False)
+        used_fake_schema_tool = False
+        fake_tool_name = None
+
+        logger.debug(
+            f"LiteLLMWrapper: schema={schema}, structured_output_enabled={structured_output_enabled}, "
+            f"function_calling_enabled={function_calling_enabled}, model_info={self.model_info}"
+        )
+
+        if schema and structured_output_enabled:
+            # Native structured output supported - use response_format
             schema_dict = (
                 schema.model_json_schema()
                 if hasattr(schema, "model_json_schema")
                 else schema.schema()
             )
-            # Use json_schema format which LiteLLM converts appropriately per provider
             litellm_params["response_format"] = {
                 "type": "json_schema",
                 "json_schema": {
@@ -1382,6 +1407,34 @@ class LiteLLMWrapper(BaseModel):
                     "schema": schema_dict,
                 },
             }
+            logger.debug(f"LiteLLMWrapper: Using native response_format with json_schema for {schema.__name__}")
+
+        elif schema and function_calling_enabled and not tools:
+            # No native structured output, but function calling available and no tools provided
+            # Use a fake tool to get structured output (same approach as AutoGenWrapper)
+            schema_dict = (
+                schema.model_json_schema()
+                if hasattr(schema, "model_json_schema")
+                else schema.schema()
+            )
+            fake_tool_name = f"create_{schema.__name__.lower()}"
+            litellm_params["tools"] = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": fake_tool_name,
+                        "description": f"Create a {schema.__name__} object with the specified fields",
+                        "parameters": schema_dict,
+                    },
+                }
+            ]
+            # Force the model to use this tool
+            litellm_params["tool_choice"] = {"type": "function", "function": {"name": fake_tool_name}}
+            used_fake_schema_tool = True
+            logger.debug(f"LiteLLMWrapper: Using fake tool '{fake_tool_name}' for structured output (no native support)")
+
+        # Log the final litellm_params for debugging
+        logger.debug(f"LiteLLMWrapper: Final params (keys): {list(litellm_params.keys())}, response_format={litellm_params.get('response_format')}")
 
         # Handle tools
         if tools:
@@ -1428,6 +1481,31 @@ class LiteLLMWrapper(BaseModel):
         # Calculate pricing from usage
         usage = response.usage if hasattr(response, "usage") else None
         pricing_metadata = self._calculate_pricing(usage)
+
+        # Handle fake tool response - extract arguments as the structured content
+        if used_fake_schema_tool and fake_tool_name:
+            # Check if the response contains a tool call
+            choices = getattr(response, "choices", [])
+            if choices:
+                choice = choices[0]
+                message = choice.message
+                tool_calls = getattr(message, "tool_calls", None)
+                if tool_calls and len(tool_calls) > 0:
+                    tool_call = tool_calls[0]
+                    if tool_call.function.name == fake_tool_name:
+                        # Extract the arguments as the structured content
+                        arguments_json = tool_call.function.arguments
+                        logger.debug(f"LiteLLMWrapper: Extracted fake tool arguments: {arguments_json[:200]}...")
+                        # Replace the message content with the tool arguments
+                        # and clear tool_calls so litellm_to_autogen_result treats it as text
+                        message.content = arguments_json
+                        message.tool_calls = None  # Clear tool calls
+                        choice.finish_reason = "stop"  # Set finish_reason to stop
+                    else:
+                        logger.warning(
+                            f"LiteLLMWrapper: Expected fake tool '{fake_tool_name}', "
+                            f"got '{tool_call.function.name}'"
+                        )
 
         # Convert response to Autogen format (always returns ModelOutput now)
         result = litellm_to_autogen_result(
@@ -1623,6 +1701,134 @@ class LiteLLMWrapper(BaseModel):
             "completion_tokens": completion_tokens,
             "total_cost": total_cost,
         }
+
+
+class ZentropiWrapper(BaseModel):
+    """Wraps Zentropi API to provide the same interface as LiteLLMWrapper.
+
+    This allows Zentropi's cope-a-9b model to be used with LLMCore and
+    template variants, just like other LLM providers.
+
+    The wrapper extracts text content from messages and sends it to the
+    Zentropi classification API, returning results in ModelOutput format.
+    """
+
+    model: str = Field(default="zentropi", description="Model name identifier")
+    model_info: dict[str, Any] = Field(
+        default_factory=lambda: {"model_name": "zentropi/cope-a-9b"},
+        description="Model metadata",
+    )
+    api_key: str | None = Field(default=None, description="Zentropi API key")
+    base_url: str = Field(
+        default="https://api.zentropi.ai/v1/label",
+        description="Zentropi API endpoint",
+    )
+    default_parameters: "ModelParameters" = Field(
+        default_factory=lambda: ModelParameters(),
+        description="Default parameters (mostly ignored for Zentropi)",
+    )
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    def __init__(self, **data: Any):
+        """Initialize ZentropiWrapper with credentials."""
+        super().__init__(**data)
+
+        # Get API key from environment if not provided
+        if not self.api_key:
+            import os
+
+            self.api_key = os.environ.get("ZENTROPI_API_KEY")
+            if not self.api_key:
+                raise ValueError(
+                    "ZENTROPI_API_KEY required in environment or api_key parameter"
+                )
+
+    async def create(
+        self,
+        messages: Sequence[LLMMessage],
+        tools: Sequence[Tool | ToolSchema] = [],
+        schema: type[BaseModel] | None = None,
+        cancellation_token: CancellationToken | None = None,
+        **kwargs: Any,
+    ) -> CreateResult | ModelOutput:
+        """Create a classification using Zentropi API.
+
+        Extracts text content from messages and sends to Zentropi.
+        Returns structured output matching the provided schema if given.
+
+        Args:
+            messages: Sequence of LLMMessage objects (text extracted and concatenated)
+            tools: Ignored - Zentropi doesn't support tools
+            schema: Optional Pydantic schema for structured output
+            cancellation_token: Ignored
+            **kwargs: Additional arguments (mostly ignored)
+
+        Returns:
+            ModelOutput with classification result
+        """
+        import httpx
+
+        # Extract text content from all messages
+        text_parts = []
+        for msg in messages:
+            if hasattr(msg, "content"):
+                if isinstance(msg.content, str):
+                    text_parts.append(msg.content)
+                elif isinstance(msg.content, list):
+                    # Handle multimodal content - extract text parts
+                    for part in msg.content:
+                        if isinstance(part, str):
+                            text_parts.append(part)
+                        elif hasattr(part, "text"):
+                            text_parts.append(part.text)
+
+        full_text = "\n".join(text_parts)
+
+        # Call Zentropi API
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                self.base_url,
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                json={"text": full_text},
+                timeout=60.0,
+            )
+            response.raise_for_status()
+            result = response.json()
+
+        # Convert Zentropi response to structured output if schema provided
+        if schema:
+            # Zentropi returns {"toxic": bool, "scores": {...}, "labels": [...]}
+            # Map to schema - assume schema has a "label" field for binary classification
+            try:
+                # For HateSpeechClassification: label = 1 if toxic, 0 if not
+                label = 1 if result.get("toxic", False) else 0
+                parsed = schema(label=label)
+                content = parsed.model_dump_json()
+            except Exception as e:
+                logger.warning(f"Failed to parse Zentropi response to schema: {e}")
+                content = json.dumps(result)
+                parsed = None
+        else:
+            content = json.dumps(result)
+            parsed = None
+
+        # Build ModelOutput
+        from autogen_core.models import RequestUsage
+
+        return ModelOutput(
+            finish_reason="stop",
+            content=content,
+            usage=RequestUsage(prompt_tokens=0, completion_tokens=0),
+            parsed_object=parsed,
+            metadata={
+                "model": "zentropi/cope-a-9b",
+                "raw_response": result,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_cost": 0.0,  # Zentropi pricing handled separately
+            },
+        )
 
 
 class LLMs(BaseModel):
@@ -2026,6 +2232,17 @@ class LLMs(BaseModel):
             if factory is None:
                 raise ProcessingError(f"Unsupported client_type: {config.client_type}")
             return factory
+
+        # Handle Zentropi specially - it has its own wrapper
+        if config.client_type == ClientType.ZENTROPI:
+            logger.debug(f"Using ZentropiWrapper for model '{name}'")
+            wrapped_client = ZentropiWrapper(
+                model=model_name,
+                api_key=config.api_key,
+                base_url=config.base_url or "https://api.zentropi.ai/v1/label",
+            )
+            self.autogen_models[name] = wrapped_client
+            return wrapped_client
 
         # Choose wrapper type based on configuration
         # Per-model use_litellm takes precedence over global default_wrapper
