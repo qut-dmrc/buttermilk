@@ -95,6 +95,7 @@ class ClientType(Enum):
     GEMINI_VERTEX = "gemini_vertex"
     VERTEX_OPENAI = "vertex_openai"  # OpenAI-compatible endpoint on Vertex
     HUGGINGFACE = "huggingface"  # HuggingFace Inference API (serverless or dedicated)
+    ZENTROPI = "zentropi"  # Zentropi toxicity/content moderation API
 
 
 class ModelParameters(BaseModel):
@@ -252,9 +253,9 @@ class LLMConfig(BaseModel):
     litellm_model: str | None = Field(
         default=None, description="Explicit litellm model identifier override"
     )
-    use_litellm: bool = Field(
-        default=False,
-        description="Use LiteLLMWrapper instead of AutoGenWrapper (default: False for backward compatibility)",
+    use_litellm: bool | None = Field(
+        default=None,
+        description="Use LiteLLMWrapper instead of AutoGenWrapper. None means inherit from global default_wrapper setting.",
     )
     parameters: ModelParameters = Field(
         default_factory=ModelParameters,
@@ -335,7 +336,6 @@ CHAT_MODELS = [
     "llama4maverick",
     "claude45sonnet",
     "gpt-oss-safeguard-20b",
-    "gpt-oss-safeguard-120b",
 ]
 
 """A predefined list of identifiers for cost-effective chat models."""
@@ -1228,6 +1228,15 @@ class LiteLLMWrapper(BaseModel):
     litellm_model_name: str = Field(..., description="Resolved model name for LiteLLM")
     api_key: str | None = Field(default=None, description="API key for the provider")
     base_url: str | None = Field(default=None, description="Custom base URL")
+    extra_headers: dict[str, str] | None = Field(
+        default=None, description="Extra headers for the API request (e.g., Authorization)"
+    )
+    vertex_project: str | None = Field(
+        default=None, description="GCP project ID for Vertex AI providers"
+    )
+    vertex_location: str | None = Field(
+        default=None, description="GCP region for Vertex AI providers"
+    )
     default_parameters: ModelParameters = Field(
         default_factory=ModelParameters,
         description="Default inference parameters (temperature, max_tokens, etc.)",
@@ -1344,13 +1353,34 @@ class LiteLLMWrapper(BaseModel):
         if self.base_url:
             litellm_params["base_url"] = self.base_url
 
+        # Add extra headers if provided (e.g., Authorization for GCP)
+        if self.extra_headers:
+            litellm_params["extra_headers"] = self.extra_headers
+
+        # Add Vertex AI configuration if provided (for anthropic_vertex, gemini_vertex)
+        if self.vertex_project:
+            litellm_params["vertex_project"] = self.vertex_project
+        if self.vertex_location:
+            litellm_params["vertex_location"] = self.vertex_location
+
         # Handle structured output via response_format
+        # LiteLLM uses different formats for different providers:
+        # - OpenAI/Azure: uses json_schema with nested schema object
+        # - Some providers only support json_object (no schema)
         if schema and self.model_info.get("structured_output", False):
-            litellm_params["response_format"] = {
-                "type": "json_object",
-                "schema": schema.model_json_schema()
+            schema_dict = (
+                schema.model_json_schema()
                 if hasattr(schema, "model_json_schema")
-                else schema.schema(),
+                else schema.schema()
+            )
+            # Use json_schema format which LiteLLM converts appropriately per provider
+            litellm_params["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": schema.__name__ if hasattr(schema, "__name__") else "response_schema",
+                    "strict": True,
+                    "schema": schema_dict,
+                },
             }
 
         # Handle tools
@@ -1727,9 +1757,10 @@ class LLMs(BaseModel):
             "gemini": "gemini",  # litellm uses 'gemini' for Gemini API
             "gemini_vertex": "gemini",  # vertex-hosted Gemini still routes differently upstream
             "huggingface": "huggingface",
-            "vertex_openai": "vertex_ai",  # Vertex OpenAI-compatible
+            "vertex_openai": "openai",  # Vertex OpenAI-compatible uses OpenAI API format
             "anthropic_vertex": "vertex_ai",  # Anthropic-on-Vertex
             "anthropic": "anthropic",
+            "zentropi": "zentropi",  # Zentropi custom API
         }
         return prefix_map.get(client_type, client_type)  # fallback / extension
 
@@ -1807,9 +1838,10 @@ class LLMs(BaseModel):
         """
         # Handle known model name patterns and client type combinations
 
-        # For vertex_openai client with google/ models, strip the google/ prefix for litellm compatibility
-        if client_type == "vertex_openai" and model_name.startswith("google/"):
-            return model_name[7:]  # Strip "google/" prefix
+        # For vertex_openai (custom OpenAI-compatible endpoint), preserve the full model name
+        # as-is because the endpoint expects <publisher>/<model> format (e.g., "google/gemini-3-pro-preview")
+        if client_type == "vertex_openai":
+            return model_name
 
         # For anthropic_vertex clients with provider-specific models, preserve format
         if client_type == "anthropic_vertex" and "/" in model_name:
@@ -2012,12 +2044,44 @@ class LLMs(BaseModel):
                 f"Using LiteLLMWrapper for model '{name}' with provider '{config.client_type.value}'"
             )
 
+            # Prepare provider-specific configuration
+            extra_headers: dict[str, str] | None = None
+            api_key = config.api_key
+            vertex_project: str | None = None
+            vertex_location: str | None = None
+
+            if config.client_type == ClientType.VERTEX_OPENAI:
+                # Vertex OpenAI-compatible endpoints require GCP auth
+                if not bm.gcp_credentials:
+                    raise ValueError("GCP credentials not available for Vertex AI.")
+                gcp_token = bm.get_gcp_access_token()
+                extra_headers = {"Authorization": f"Bearer {gcp_token}"}
+                # LiteLLM requires an api_key, use placeholder for Vertex
+                api_key = api_key or "vertex-gcp-auth"
+
+            elif config.client_type == ClientType.ANTHROPIC_VERTEX:
+                # Anthropic on Vertex requires project/location
+                vertex_project = config.configs.get("project_id")
+                vertex_location = config.configs.get("region")
+                if not vertex_project or not vertex_location:
+                    raise ValueError(
+                        "project_id and region are required for Anthropic Vertex AI."
+                    )
+
+            elif config.client_type == ClientType.GEMINI_VERTEX:
+                # Gemini on Vertex - uses standard Vertex AI auth
+                vertex_project = config.configs.get("project_id")
+                vertex_location = config.configs.get("region")
+
             wrapped_client = LiteLLMWrapper(
                 model=model_name,
                 model_info=config.model_info,
                 litellm_model_name=resolved_litellm,
-                api_key=config.api_key,
+                api_key=api_key,
                 base_url=config.base_url,
+                extra_headers=extra_headers,
+                vertex_project=vertex_project,
+                vertex_location=vertex_location,
                 default_parameters=merged_params,
             )
         else:
