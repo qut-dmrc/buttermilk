@@ -3,6 +3,7 @@ from __future__ import annotations
 import abc
 import asyncio
 import os
+import time
 from io import StringIO
 from pathlib import Path
 from typing import (
@@ -302,6 +303,8 @@ class ToxicityModel(BaseModel):
         Raises:
             ValueError: If record has no content
         """
+        start_time = time.time()
+
         content = record.content
         if not content:
             raise ValueError(
@@ -314,6 +317,42 @@ class ToxicityModel(BaseModel):
             content=content,
             record_id=record.record_id,
         )
+
+        # Calculate duration
+        duration_ms = (time.time() - start_time) * 1000
+
+        # Emit execution trace
+        try:
+            from buttermilk.utils.trace_writer import get_trace_writer
+
+            trace = ExecutionTrace(
+                agent_info={
+                    "component_name": self.__class__.__name__,
+                    "execution_type": "toxicity_api",
+                    "processor_stage": processor_stage,
+                },
+                inputs={
+                    "content": content[:500],  # Truncate for safety
+                    "record_id": record.record_id,
+                },
+                outputs={
+                    "prediction": eval_record.prediction,
+                    "scores": [s.model_dump() for s in eval_record.scores],
+                    "labels": eval_record.labels,
+                },
+                parameters={"model": self.model, "standard": self.standard},
+                record={"record_id": record.record_id},
+                metadata={
+                    "duration_ms": duration_ms,
+                    "eval_id": eval_record.eval_id,
+                },
+                parent_call_id=kwargs.get("parent_trace_id"),
+            )
+
+            trace_writer = get_trace_writer()
+            await trace_writer.add(trace)
+        except Exception as e:
+            logger.warning(f"Failed to emit trace: {e}")
 
         # Store results in metadata
         updated_metadata = record.metadata.copy() if record.metadata else {}
