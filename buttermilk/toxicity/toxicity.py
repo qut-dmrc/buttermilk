@@ -13,34 +13,12 @@ from typing import (
     Literal,
 )
 
-import boto3
-import evaluate
-import google.auth
-import openai
 import pandas as pd
-import torch
-import transformers
-from azure.ai.contentsafety import ContentSafetyClient
-from azure.ai.contentsafety.models import (
-    AnalyzeTextOptions,
-    AnalyzeTextOutputType,
-)
-from azure.cognitiveservices.vision.contentmoderator import ContentModeratorClient
-from azure.core.credentials import AzureKeyCredential
-from googleapiclient import discovery
-from huggingface_hub import login
-from msrest.authentication import CognitiveServicesCredentials
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
     model_validator,
-)
-from transformers import (
-    AutoConfig,
-    AutoModelForCausalLM,
-    AutoModelForSequenceClassification,
-    AutoTokenizer,
 )
 
 from buttermilk import logger
@@ -54,6 +32,20 @@ from buttermilk.utils.utils import read_text, read_yaml, scrub_serializable
 from .types import EvalRecord, Score
 
 TEMPLATE_DIR = Path(__file__).parent / "templates"
+
+
+def _get_torch_device() -> str:
+    """Get the best available device for torch models.
+
+    Returns 'cuda' if torch and CUDA are available, otherwise 'cpu'.
+    Returns 'cpu' if torch is not installed.
+    """
+    try:
+        import torch
+
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    except ImportError:
+        return "cpu"
 
 
 PerspectiveAttributes = Literal[
@@ -354,7 +346,14 @@ class ToxicityModel(BaseModel):
         except Exception as e:
             logger.warning(f"Failed to emit trace: {e}")
 
-        # Store results in metadata
+        # Build output dict with prediction and optional labels
+        output = {"prediction": eval_record.prediction}
+        if eval_record.labels:
+            output["labels"] = eval_record.labels
+        if eval_record.scores:
+            output["scores"] = [s.model_dump() for s in eval_record.scores]
+
+        # Store full results in metadata
         updated_metadata = record.metadata.copy() if record.metadata else {}
         updated_metadata[processor_stage] = {
             "prediction": eval_record.prediction,
@@ -367,14 +366,14 @@ class ToxicityModel(BaseModel):
             "error": eval_record.error,
         }
 
-        yield record.model_copy(update={"metadata": updated_metadata})
+        yield record.model_copy(update={"output": output, "metadata": updated_metadata})
 
 
 class _HF(ToxicityModel):
     process_chain: str = "local transformers"
     model: str
-    device: str | torch.device = Field(
-        default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu",
+    device: str | Any = Field(
+        default_factory=_get_torch_device,
         description="Device type (CPU or CUDA or auto)",
     )
     options: ClassVar[dict] = dict(temperature=1.0)
@@ -383,6 +382,9 @@ class _HF(ToxicityModel):
     tokenizer: Any = None
 
     def init_client(self) -> None:
+        from huggingface_hub import login
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+
         token = self._get_credential("HUGGINGFACEHUB_API_TOKEN")
 
         login(token=token, new_session=False)
@@ -444,6 +446,9 @@ class Perspective(ToxicityModel):
     client: Any = None
 
     def init_client(self) -> None:
+        import google.auth
+        from googleapiclient import discovery
+
         credentials, _ = google.auth.default()
         self.client = discovery.build(
             "commentanalyzer",
@@ -503,6 +508,8 @@ class Comprehend(ToxicityModel):
     client: Any = None
 
     def init_client(self) -> None:
+        import boto3
+
         access_key = self._get_credential("AWS_ACCESS_KEY_ID")
         secret_key = self._get_credential("AWS_SECRET_ACCESS_KEY")
         region = self._get_credential("AWS_REGION")
@@ -553,7 +560,7 @@ class AzureContentSafety(ToxicityModel):
     model: str = "AzureContentSafety"
     process_chain: str = "api"
     standard: str = "AzureContentSafety 2023-10-01"
-    client: ContentSafetyClient = None
+    client: Any = None
 
     """ Azure Content Safety API: https://aka.ms/acs-doc
         https://contentsafety.cognitive.azure.com/
@@ -570,6 +577,9 @@ class AzureContentSafety(ToxicityModel):
     """
 
     def init_client(self) -> None:
+        from azure.ai.contentsafety import ContentSafetyClient
+        from azure.core.credentials import AzureKeyCredential
+
         API_KEY = self._get_credential("AZURE_CONTENT_SAFETY_KEY")
         ENDPOINT = self._get_credential("AZURE_CONTENT_SAFETY_ENDPOINT", required=False)
         if not ENDPOINT:
@@ -588,6 +598,11 @@ class AzureContentSafety(ToxicityModel):
         prompt: str,
         **kwargs,
     ) -> Any:
+        from azure.ai.contentsafety.models import (
+            AnalyzeTextOptions,
+            AnalyzeTextOutputType,
+        )
+
         request = AnalyzeTextOptions(
             text=prompt,
             output_type=AnalyzeTextOutputType.EIGHT_SEVERITY_LEVELS,
@@ -636,7 +651,7 @@ class AzureModerator(ToxicityModel):
     model: str = "azure content-moderator"
     process_chain: str = "text-moderation-api"
     standard: str = "Azure Content Moderator"
-    client: ContentModeratorClient = None
+    client: Any = None
 
     """ Azure Content Moderator screen text
         https://learn.microsoft.com/en-us/azure/ai-services/content-moderator/overview
@@ -654,6 +669,11 @@ class AzureModerator(ToxicityModel):
     """
 
     def init_client(self) -> None:
+        from azure.cognitiveservices.vision.contentmoderator import (
+            ContentModeratorClient,
+        )
+        from msrest.authentication import CognitiveServicesCredentials
+
         SUBSCRIPTION_KEY = self._get_credential("AZURE_CONTENT_MODERATOR_KEY")
         ENDPOINT = self._get_credential("AZURE_CONTENT_MODERATOR_ENDPOINT", required=False)
         if not ENDPOINT:
@@ -727,7 +747,10 @@ class REGARD(ToxicityModel):
     client: Any = None
 
     def init_client(self) -> None:
-        if torch.cuda.is_available():
+        import evaluate
+
+        device = _get_torch_device()
+        if device == "cuda":
             self.client = evaluate.load(
                 "regard",
                 module_type="measurement",
@@ -772,6 +795,8 @@ class HONEST(ToxicityModel):
     client: Any = None
 
     def init_client(self) -> None:
+        import evaluate
+
         self.client = evaluate.load("honest", "en")
 
     def make_prompt(self, content: str) -> list[str]:
@@ -799,8 +824,8 @@ class LFTW(ToxicityModel):
     model: str = "facebook/roberta-hate-speech-dynabench-r4-target"
     process_chain: str = "hf_transformers"
     standard: str = "lftw_r4_target"
-    device: str | torch.device = Field(
-        default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu",
+    device: str | Any = Field(
+        default_factory=_get_torch_device,
         description="Device type (CPU or CUDA or auto)",
     )
     options: ClassVar[dict] = dict()
@@ -808,6 +833,13 @@ class LFTW(ToxicityModel):
     classes: dict = {}
 
     def init_client(self) -> None:
+        from huggingface_hub import login
+        from transformers import (
+            AutoConfig,
+            AutoModelForSequenceClassification,
+            AutoTokenizer,
+        )
+
         token = self._get_credential("HUGGINGFACEHUB_API_TOKEN")
 
         login(token=token, new_session=False)
@@ -831,6 +863,8 @@ class LFTW(ToxicityModel):
         prompt: str,
         **kwargs,
     ) -> Any:
+        import torch
+
         input_ids = self.tokenizer([prompt], return_tensors="pt").to(self.device)[
             "input_ids"
         ]
@@ -862,8 +896,8 @@ class GPTJT(ToxicityModel):
     template: str = Field(
         default_factory=lambda: read_text(TEMPLATE_DIR / "gpt-jt-mod-v1.txt"),
     )
-    device: str | torch.device = Field(
-        default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu",
+    device: str | Any = Field(
+        default_factory=_get_torch_device,
         description="Device type (CPU or CUDA)",
     )
 
@@ -879,6 +913,10 @@ class GPTJT(ToxicityModel):
     }
 
     def init_client(self) -> None:
+        from huggingface_hub import login
+
+        from buttermilk.libs.hf import hf_pipeline
+
         token = self._get_credential("HUGGINGFACEHUB_API_TOKEN")
 
         login(token=token, new_session=False)
@@ -945,6 +983,8 @@ class OpenAIModerator(ToxicityModel):
     client: Any = None
 
     def init_client(self) -> None:
+        import openai
+
         openai.api_type = "openai"
         self.client = openai.moderations
 
@@ -979,18 +1019,22 @@ class ShieldGemma(ToxicityModel):
     model: str = "google/shieldgemma-27b"
     process_chain: str = "local transformers"
     standard: str = "shieldgemma"
-    client: transformers.Pipeline = None
+    client: Any = None
     tokenizer: Any = None
     classes: Any = None
     _tpl: str = ""
     _criteria: str = ""
     criteria: str
-    device: str | torch.device = Field(
-        default_factory=lambda: "cuda" if torch.cuda.is_available() else "cpu",
+    device: str | Any = Field(
+        default_factory=_get_torch_device,
         description="Device type (CPU or CUDA or auto)",
     )
 
     def init_client(self) -> None:
+        import torch
+        from huggingface_hub import login
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+
         token = self._get_credential("HUGGINGFACEHUB_API_TOKEN")
 
         login(token=token, new_session=False)
@@ -1016,6 +1060,8 @@ class ShieldGemma(ToxicityModel):
         prompt: str,
         **kwargs,
     ) -> Any:
+        import torch
+
         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
 
         with torch.no_grad():
@@ -1176,84 +1222,3 @@ class Zentropi(ToxicityModel):
         return response.json()
 
 
-class Cope(ToxicityModel):
-    """Cope toxicity detection API wrapper.
-
-    Cope provides a classification API for content moderation.
-    This class adapts the Cope API response format to the ToxicityModel interface.
-    """
-
-    model: str = "cope"
-    process_chain: str = "api"
-    standard: str = "cope"
-    client: Any = None
-
-    def init_client(self) -> None:
-        """Initialize client with credentials from credentials dict or environment variables.
-
-        Requires:
-            COPE_API_KEY: API key for Cope service (from credentials or env var)
-            COPE_BASE_URL: API endpoint (required)
-        """
-        api_key = self._get_credential("COPE_API_KEY")
-        base_url = self._get_credential("COPE_BASE_URL", required=False)
-
-        self.client = {
-            "api_key": api_key,
-            "base_url": base_url,
-        }
-
-    def make_prompt(self, content: str) -> str:
-        """Pass content through unchanged."""
-        return content
-
-    def interpret(self, response: dict[str, Any]) -> EvalRecord:
-        """Convert Cope API response to EvalRecord.
-
-        Args:
-            response: Cope API response
-
-        Returns:
-            EvalRecord with prediction, scores, and labels
-        """
-        prediction = response.get("toxic", False)
-
-        scores = []
-        if "scores" in response:
-            for measure, score_value in response["scores"].items():
-                scores.append(Score(measure=measure, score=score_value))
-
-        labels = response.get("labels", [])
-
-        return EvalRecord(
-            prediction=prediction,
-            scores=scores,
-            labels=labels,
-        )
-
-    def call_client(self, prompt: str, **kwargs) -> dict[str, Any]:
-        """Call Cope API with prompt.
-
-        Args:
-            prompt: Text content to classify
-
-        Returns:
-            Cope API response dict
-
-        Raises:
-            requests.exceptions.RequestException: If API call fails
-            ValueError: If COPE_BASE_URL not configured
-        """
-        import requests
-
-        if not self.client["base_url"]:
-            raise ValueError("COPE_BASE_URL must be configured")
-
-        response = requests.post(
-            self.client["base_url"],
-            headers={"Authorization": f"Bearer {self.client['api_key']}"},
-            json={"text": prompt},
-            timeout=30,
-        )
-        response.raise_for_status()
-        return response.json()
