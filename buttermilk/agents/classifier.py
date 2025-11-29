@@ -71,25 +71,32 @@ class ClassifierAgent(Agent):
     """
 
     def __init__(
-        self, *, output_model: type[pydantic.BaseModel] | None = None, **kwargs: Any
+        self,
+        *,
+        template: str | None = None,
+        output_model: type[pydantic.BaseModel] | None = None,
+        **kwargs: Any,
     ) -> None:
         """Initialize a ClassifierAgent with the provided configuration.
 
         Args:
+            template: Name of the prompt template to use.
             output_model: Pydantic model class for structured output mapping.
                 If not provided, raises ValueError (fail-fast).
             **kwargs: Configuration parameters passed to AgentConfig.
-                Must include 'template' in parameters.
 
         Raises:
             ValueError: If 'template' or 'output_model' is not specified.
         """
         super().__init__(**kwargs)
 
+        # Template can come from direct arg or parameters dict
+        self.template = template or self.parameters.get("template")
+
         # Fail-fast: require template
-        if "template" not in self.parameters:
+        if not self.template:
             raise ValueError(
-                f"Agent {self.agent_name}: 'template' is required in agent parameters."
+                f"Agent {self.agent_name}: 'template' is required."
             )
 
         # Fail-fast: require output_model
@@ -133,20 +140,19 @@ class ClassifierAgent(Agent):
 
         # Step 1: Render template with inputs
         try:
-            template_name = self.parameters["template"]
             rendered_text, unfilled_vars, template_hash = load_template(
-                template=template_name,
+                template=self.template,
                 parameters=self.parameters,
                 untrusted_inputs=message.inputs or {},
             )
             logger.debug(
-                f"Agent '{self.agent_name}' rendered template '{template_name}', "
+                f"Agent '{self.agent_name}' rendered template '{self.template}', "
                 f"unfilled vars: {unfilled_vars}, hash: {template_hash}"
             )
         except Exception as e:
             logger.error(f"Agent '{self.agent_name}': Template rendering failed: {e}")
             raise ProcessingError(
-                f"Failed to render template '{self.parameters.get('template')}': {e}"
+                f"Failed to render template '{self.template}': {e}"
             ) from e
 
         # Step 2: Call classification API with rendered text
@@ -177,7 +183,7 @@ class ClassifierAgent(Agent):
         output_metadata = {
             "agent_name": self.agent_name,
             "agent_id": self.agent_id,
-            "template": template_name,
+            "template": self.template,
             "template_hash": template_hash,
             "unfilled_vars": list(unfilled_vars),
             "api_response": api_response,  # Include raw response for debugging
@@ -266,39 +272,42 @@ class HuggingFaceClassifier(ClassifierAgent):
         HuggingFace API key must be configured for the model
     """
 
-    def __init__(self, **kwargs: Any) -> None:
+    def __init__(self, *, model: str | None = None, **kwargs: Any) -> None:
         """Initialize HuggingFaceClassifier with model configuration.
 
         Args:
+            model: Name of the HuggingFace model to use.
             **kwargs: Configuration parameters including:
-                - parameters: Must include 'model' key with model name
                 - output_model: Pydantic model for classification output
 
         Raises:
-            ValueError: If 'model' is not specified in parameters
+            ValueError: If 'model' is not specified
             ValueError: If model is not found in LLM connections
         """
         super().__init__(**kwargs)
 
-        # Fail-fast: require model in parameters
-        if "model" not in self.parameters:
+        # Model can come from direct arg or parameters dict
+        model_name = model or self.parameters.get("model")
+
+        # Fail-fast: require model
+        if not model_name:
             raise ValueError(
-                f"Agent {self.agent_name}: 'model' is required in agent parameters."
+                f"Agent {self.agent_name}: 'model' is required."
             )
 
-        model_name = self.parameters["model"]
+        self.model = model_name
 
         # Get LLM wrapper from buttermilk connections
         from buttermilk import bm
 
         try:
-            self._llm_wrapper = bm.llms.get_autogen_chat_client(model_name)
+            self._llm_wrapper = bm.llms.get_autogen_chat_client(self.model)
             logger.debug(
-                f"Agent '{self.agent_name}' initialized HuggingFace classifier with model: {model_name}"
+                f"Agent '{self.agent_name}' initialized HuggingFace classifier with model: {self.model}"
             )
         except AttributeError as e:
             raise ValueError(
-                f"Agent {self.agent_name}: Model '{model_name}' not found in LLM connections. "
+                f"Agent {self.agent_name}: Model '{self.model}' not found in LLM connections. "
                 f"Available models: {list(bm.llms.connections.keys())}"
             ) from e
 
