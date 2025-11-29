@@ -537,8 +537,12 @@ async def bootstrap_session_with_config_async(
     typed_config.session.template_paths = resolved_template_paths
 
     # Phase 2: Create or get ExecutionContext (singleton)
+    # Pass root-level llms config if present (for model_parameters)
+    llms_config = typed_config.llms if hasattr(typed_config, 'llms') else None
     execution_context = await from_config_async(
-        typed_config.infrastructure, project_name=typed_config.session.project_name
+        typed_config.infrastructure,
+        project_name=typed_config.session.project_name,
+        llms_config=llms_config,
     )
 
     # Phase 3: Create session BM instance

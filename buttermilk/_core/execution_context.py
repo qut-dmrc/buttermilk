@@ -118,6 +118,10 @@ class ExecutionContext(BaseModel):
         default="autogen",
         description="Default LLM wrapper type (autogen or litellm). Passed to LLMs instance.",
     )
+    llm_model_parameters: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Per-model parameter overrides from YAML config. Passed to LLMs instance.",
+    )
 
     # Private attributes for lazy-loaded infrastructure
     _cloud_manager: CloudManager | None = PrivateAttr(default=None)
@@ -406,7 +410,9 @@ class ExecutionContext(BaseModel):
                         connections_data = {}
 
             self._llms_instance = LLMs(
-                connections=connections_data, default_wrapper=self.default_llm_wrapper
+                connections=connections_data,
+                default_wrapper=self.default_llm_wrapper,
+                model_parameters=self.llm_model_parameters,
             )
         return self._llms_instance
 
@@ -702,6 +708,7 @@ async def from_config_async(
     infrastructure,
     project_name: str | None = None,
     default_llm_wrapper: str = "autogen",
+    llms_config: dict[str, Any] | None = None,
 ):
     """Create ExecutionContext from typed infrastructure config.
 
@@ -712,6 +719,7 @@ async def from_config_async(
         infrastructure: Typed InfrastructureConfig from ButtermilkConfig
         project_name: Optional project name
         default_llm_wrapper: Default LLM wrapper type (autogen or litellm). Defaults to "autogen" for backward compatibility.
+        llms_config: Optional root-level llms config dict (for extracting model_parameters when llms is at config root instead of infrastructure.llms)
 
     Returns:
         Initialized ExecutionContext ready for creating sessions
@@ -724,7 +732,8 @@ async def from_config_async(
         >>> ctx = await from_config_async(
         ...     typed_cfg.infrastructure,
         ...     project_name="my_project",
-        ...     default_llm_wrapper=typed_cfg.session.llm_wrapper
+        ...     default_llm_wrapper=typed_cfg.session.llm_wrapper,
+        ...     llms_config=typed_cfg.llms if hasattr(typed_cfg, 'llms') else None
         ... )
     """
     # Convert TracingConfig to dict format if needed
@@ -739,6 +748,20 @@ async def from_config_async(
         # It's a Pydantic model, convert to dict
         logging_config = logging_config.model_dump()
 
+    # Extract model_parameters from llms config (if present)
+    llm_model_parameters = {}
+    llms_dict = None
+
+    # Priority 1: Use llms_config parameter if provided (root-level llms from config)
+    if llms_config is not None and isinstance(llms_config, dict):
+        llms_dict = llms_config
+    # Priority 2: Check infrastructure.llms (new structure)
+    elif hasattr(infrastructure, 'llms') and isinstance(infrastructure.llms, dict) and infrastructure.llms:
+        llms_dict = infrastructure.llms
+
+    if llms_dict:
+        llm_model_parameters = llms_dict.get('model_parameters', {})
+
     # Extract components from typed config
     context = await get_or_create_execution_context_async(
         project_name=project_name,
@@ -747,6 +770,7 @@ async def from_config_async(
         tracing=tracing_dict,
         datasets=infrastructure.datasets,
         default_llm_wrapper=default_llm_wrapper,
+        llm_model_parameters=llm_model_parameters,
     )
 
     await context.ensure_initialized()

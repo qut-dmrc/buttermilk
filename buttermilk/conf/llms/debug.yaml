@@ -1,20 +1,20 @@
-host: gemini25flash
+host: gemini-flash
 
 cheap:
-  - gemini25flash
+  - gemini-flash
 
 general:
-  - gemini25flash
+  - gemini-flash
 
 judgers:
-  - gemini25flash
+  - gemini-flash
 
 synthesisers:
-  - gemini25flash
+  - gemini-flash
 
 # Model-specific parameter overrides for debug config
 # Use lower max_tokens for faster iteration during development
 model_parameters:
-  gemini25flash:
+  gemini-flash:
     temperature: 0.5
     max_tokens: 2048
