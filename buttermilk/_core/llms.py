@@ -1703,134 +1703,6 @@ class LiteLLMWrapper(BaseModel):
         }
 
 
-class ZentropiWrapper(BaseModel):
-    """Wraps Zentropi API to provide the same interface as LiteLLMWrapper.
-
-    This allows Zentropi's cope-a-9b model to be used with LLMCore and
-    template variants, just like other LLM providers.
-
-    The wrapper extracts text content from messages and sends it to the
-    Zentropi classification API, returning results in ModelOutput format.
-    """
-
-    model: str = Field(default="zentropi", description="Model name identifier")
-    model_info: dict[str, Any] = Field(
-        default_factory=lambda: {"model_name": "zentropi/cope-a-9b"},
-        description="Model metadata",
-    )
-    api_key: str | None = Field(default=None, description="Zentropi API key")
-    base_url: str = Field(
-        default="https://api.zentropi.ai/v1/label",
-        description="Zentropi API endpoint",
-    )
-    default_parameters: "ModelParameters" = Field(
-        default_factory=lambda: ModelParameters(),
-        description="Default parameters (mostly ignored for Zentropi)",
-    )
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    def __init__(self, **data: Any):
-        """Initialize ZentropiWrapper with credentials."""
-        super().__init__(**data)
-
-        # Get API key from environment if not provided
-        if not self.api_key:
-            import os
-
-            self.api_key = os.environ.get("ZENTROPI_API_KEY")
-            if not self.api_key:
-                raise ValueError(
-                    "ZENTROPI_API_KEY required in environment or api_key parameter"
-                )
-
-    async def create(
-        self,
-        messages: Sequence[LLMMessage],
-        tools: Sequence[Tool | ToolSchema] = [],
-        schema: type[BaseModel] | None = None,
-        cancellation_token: CancellationToken | None = None,
-        **kwargs: Any,
-    ) -> CreateResult | ModelOutput:
-        """Create a classification using Zentropi API.
-
-        Extracts text content from messages and sends to Zentropi.
-        Returns structured output matching the provided schema if given.
-
-        Args:
-            messages: Sequence of LLMMessage objects (text extracted and concatenated)
-            tools: Ignored - Zentropi doesn't support tools
-            schema: Optional Pydantic schema for structured output
-            cancellation_token: Ignored
-            **kwargs: Additional arguments (mostly ignored)
-
-        Returns:
-            ModelOutput with classification result
-        """
-        import httpx
-
-        # Extract text content from all messages
-        text_parts = []
-        for msg in messages:
-            if hasattr(msg, "content"):
-                if isinstance(msg.content, str):
-                    text_parts.append(msg.content)
-                elif isinstance(msg.content, list):
-                    # Handle multimodal content - extract text parts
-                    for part in msg.content:
-                        if isinstance(part, str):
-                            text_parts.append(part)
-                        elif hasattr(part, "text"):
-                            text_parts.append(part.text)
-
-        full_text = "\n".join(text_parts)
-
-        # Call Zentropi API
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                self.base_url,
-                headers={"Authorization": f"Bearer {self.api_key}"},
-                json={"text": full_text},
-                timeout=60.0,
-            )
-            response.raise_for_status()
-            result = response.json()
-
-        # Convert Zentropi response to structured output if schema provided
-        if schema:
-            # Zentropi returns {"toxic": bool, "scores": {...}, "labels": [...]}
-            # Map to schema - assume schema has a "label" field for binary classification
-            try:
-                # For HateSpeechClassification: label = 1 if toxic, 0 if not
-                label = 1 if result.get("toxic", False) else 0
-                parsed = schema(label=label)
-                content = parsed.model_dump_json()
-            except Exception as e:
-                logger.warning(f"Failed to parse Zentropi response to schema: {e}")
-                content = json.dumps(result)
-                parsed = None
-        else:
-            content = json.dumps(result)
-            parsed = None
-
-        # Build ModelOutput
-        from autogen_core.models import RequestUsage
-
-        return ModelOutput(
-            finish_reason="stop",
-            content=content,
-            usage=RequestUsage(prompt_tokens=0, completion_tokens=0),
-            parsed_object=parsed,
-            metadata={
-                "model": "zentropi/cope-a-9b",
-                "raw_response": result,
-                "prompt_tokens": 0,
-                "completion_tokens": 0,
-                "total_cost": 0.0,  # Zentropi pricing handled separately
-            },
-        )
-
-
 class LLMs(BaseModel):
     """Manages a collection of LLM configurations and their instantiated clients.
 
@@ -2233,16 +2105,12 @@ class LLMs(BaseModel):
                 raise ProcessingError(f"Unsupported client_type: {config.client_type}")
             return factory
 
-        # Handle Zentropi specially - it has its own wrapper
+        # Zentropi is a classification API, not an LLM - use ZentropiClassifier agent instead
         if config.client_type == ClientType.ZENTROPI:
-            logger.debug(f"Using ZentropiWrapper for model '{name}'")
-            wrapped_client = ZentropiWrapper(
-                model=model_name,
-                api_key=config.api_key,
-                base_url=config.base_url or "https://api.zentropi.ai/v1/label",
+            raise ProcessingError(
+                f"Zentropi models cannot be used as LLM clients. "
+                f"Use buttermilk.agents.ZentropiClassifier for classification tasks instead."
             )
-            self.autogen_models[name] = wrapped_client
-            return wrapped_client
 
         # Choose wrapper type based on configuration
         # Per-model use_litellm takes precedence over global default_wrapper
