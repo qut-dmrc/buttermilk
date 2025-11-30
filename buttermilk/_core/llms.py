@@ -23,8 +23,10 @@ from anthropic import AsyncAnthropicVertex
 
 # LiteLLM imports
 try:
+    import litellm
     from litellm import acompletion
 
+    litellm._turn_on_debug()
     LITELLM_AVAILABLE = True
 except ImportError:
     LITELLM_AVAILABLE = False
