@@ -1,4 +1,5 @@
 import asyncio
+import socket
 from collections.abc import Callable
 from logging import DEBUG
 from typing import Any
@@ -14,6 +15,7 @@ from anthropic._exceptions import (
     ServiceUnavailableError as AnthropicServiceUnavailableError,
 )
 from google.api_core.exceptions import ResourceExhausted, TooManyRequests
+from google.auth.exceptions import TransportError as GoogleAuthTransportError
 from openai import (
     APIConnectionError as OpenAIAPIConnectionError,
     RateLimitError as OpenAIRateLimitError,
@@ -73,6 +75,8 @@ class RetryWrapper(BaseModel):
             requests.exceptions.Timeout,
             urllib3.exceptions.ProtocolError,
             urllib3.exceptions.TimeoutError,
+            urllib3.exceptions.NameResolutionError,
+            urllib3.exceptions.NewConnectionError,
             OpenAIAPIConnectionError,
             OpenAIRateLimitError,
             AnthropicAPIConnectionError,
@@ -82,9 +86,11 @@ class RetryWrapper(BaseModel):
             AnthropicServiceUnavailableError,
             TooManyRequests,
             ResourceExhausted,
+            GoogleAuthTransportError,
             ConnectionResetError,
             ConnectionError,
             ConnectionAbortedError,
+            socket.gaierror,
             aiohttp.ClientError,
         ]
 

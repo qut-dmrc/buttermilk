@@ -76,24 +76,37 @@ class ParallelProcessor(BaseModel):
             Exception: If fail_on_error=True and any processor fails
         """
 
-        async def collect_processor_outputs(
-            processor: Any, proc_idx: int
-        ) -> tuple[int, list[BaseRecord]]:
-            """Collect all outputs from one processor."""
+        async def stream_processor_outputs(
+            processor: Any, proc_idx: int, output_queue: asyncio.Queue
+        ) -> None:
+            """Stream outputs from one processor to the queue as they're produced."""
             proc_stage = f"{processor_stage}_p{proc_idx}"
-            outputs: list[BaseRecord] = []
-            async for output in processor.process(
-                record,
-                processor_stage=proc_stage,
-                parent_trace_id=parent_trace_id,
-                **kwargs,
-            ):
-                outputs.append(output)
-            return proc_idx, outputs
+            try:
+                async for output in processor.process(
+                    record,
+                    processor_stage=proc_stage,
+                    parent_trace_id=parent_trace_id,
+                    **kwargs,
+                ):
+                    # Add parallel metadata immediately and put in queue
+                    metadata = output.metadata.copy() if output.metadata else {}
+                    metadata["parallel"] = {
+                        "processor_index": proc_idx,
+                        "total_processors": len(self.processors),
+                        "processor_class": type(processor).__name__,
+                        "stage": processor_stage,
+                    }
+                    await output_queue.put((proc_idx, output.model_copy(update={"metadata": metadata}), None))
+            except Exception as e:
+                # Put error in queue
+                await output_queue.put((proc_idx, None, e))
+
+        # Create queue for streaming results
+        output_queue: asyncio.Queue = asyncio.Queue()
 
         # Create tasks for all processors
         tasks = [
-            asyncio.create_task(collect_processor_outputs(proc, idx))
+            asyncio.create_task(stream_processor_outputs(proc, idx, output_queue))
             for idx, proc in enumerate(self.processors)
         ]
 
@@ -103,48 +116,57 @@ class ParallelProcessor(BaseModel):
             processor_count=len(tasks),
         )
 
-        # Yield results as each processor completes
-        for coro in asyncio.as_completed(tasks):
-            proc_idx = -1
+        # Yield results as they arrive in the queue
+        completed_count = 0
+        while completed_count < len(tasks):
+            # Check if any tasks completed (successfully or with error)
+            for task in tasks:
+                if task.done() and not task.cancelled():
+                    completed_count += 1
+                    # Remove from tasks list to avoid recounting
+                    tasks.remove(task)
+                    # Task exceptions are already in the queue, so we don't need to handle them here
+                    break
+
+            # Try to get items from queue (with timeout to check task completion)
             try:
-                proc_idx, outputs = await coro
-                processor_class = type(self.processors[proc_idx]).__name__
+                proc_idx, output, error = await asyncio.wait_for(output_queue.get(), timeout=0.1)
 
-                for output in outputs:
-                    # Add parallel metadata
-                    metadata = output.metadata.copy() if output.metadata else {}
-                    metadata["parallel"] = {
-                        "processor_index": proc_idx,
-                        "total_processors": len(self.processors),
-                        "processor_class": processor_class,
-                        "stage": processor_stage,
-                    }
-                    yield output.model_copy(update={"metadata": metadata})
+                if error is not None:
+                    # Handle error
+                    if self.fail_on_error:
+                        # Cancel remaining tasks
+                        for task in tasks:
+                            task.cancel()
+                        raise error
 
-            except Exception as e:
-                if self.fail_on_error:
-                    raise
-                # Yield error record so pipeline can track the failure
-                failed_idx = proc_idx if proc_idx >= 0 else -1
-                error_record = record.model_copy(
-                    update={
-                        "error": record.error + [str(e)] if record.error else [str(e)],
-                        "metadata": {
-                            **record.metadata,
-                            "parallel": {
-                                "processor_index": failed_idx,
-                                "total_processors": len(self.processors),
-                                "processor_class": type(self.processors[failed_idx]).__name__ if failed_idx >= 0 else "unknown",
-                                "stage": processor_stage,
-                                "failed": True,
+                    # Yield error record
+                    error_record = record.model_copy(
+                        update={
+                            "error": record.error + [str(error)] if record.error else [str(error)],
+                            "metadata": {
+                                **record.metadata,
+                                "parallel": {
+                                    "processor_index": proc_idx,
+                                    "total_processors": len(self.processors),
+                                    "processor_class": type(self.processors[proc_idx]).__name__ if proc_idx >= 0 else "unknown",
+                                    "stage": processor_stage,
+                                    "failed": True,
+                                },
                             },
-                        },
-                    }
-                )
-                logger.warning(
-                    "Processor failed in parallel execution, continuing with others",
-                    processor_stage=processor_stage,
-                    processor_idx=failed_idx,
-                    error=str(e),
-                )
-                yield error_record
+                        }
+                    )
+                    logger.warning(
+                        "Processor failed in parallel execution, continuing with others",
+                        processor_stage=processor_stage,
+                        processor_idx=proc_idx,
+                        error=str(error),
+                    )
+                    yield error_record
+                else:
+                    # Yield successful output immediately
+                    yield output
+
+            except asyncio.TimeoutError:
+                # No items in queue yet, continue checking tasks
+                continue

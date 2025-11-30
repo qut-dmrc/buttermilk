@@ -123,68 +123,91 @@ class VariantProcessor(BaseModel):
             Exception: If fail_on_error=True and any variant fails
         """
 
-        async def collect_variant_outputs(
-            processor: Any, variant_idx: int
-        ) -> tuple[int, list[BaseRecord]]:
-            """Collect all outputs from one variant processor."""
+        async def stream_variant_outputs(
+            processor: Any, variant_idx: int, output_queue: asyncio.Queue
+        ) -> None:
+            """Stream outputs from one variant processor to the queue as they're produced."""
             variant_stage = f"{processor_stage}_v{variant_idx}"
-            outputs: list[BaseRecord] = []
-            async for output in processor.process(
-                record,
-                processor_stage=variant_stage,
-                parent_trace_id=parent_trace_id,
-                **kwargs,
-            ):
-                outputs.append(output)
-            return variant_idx, outputs
-
-        # Create tasks for all variants
-        tasks = [
-            asyncio.create_task(collect_variant_outputs(proc, idx))
-            for idx, proc in enumerate(self._processors)
-        ]
-
-        # Yield results as each variant completes
-        for coro in asyncio.as_completed(tasks):
             try:
-                variant_idx, outputs = await coro
-                processor_class = type(self._processors[variant_idx]).__name__
-
-                for output in outputs:
-                    # Add variant metadata
+                async for output in processor.process(
+                    record,
+                    processor_stage=variant_stage,
+                    parent_trace_id=parent_trace_id,
+                    **kwargs,
+                ):
+                    # Add variant metadata immediately and put in queue
                     metadata = output.metadata.copy() if output.metadata else {}
                     metadata["variant"] = {
                         "index": variant_idx,
                         "total": len(self._processors),
-                        "processor_class": processor_class,
+                        "processor_class": type(processor).__name__,
                         "stage": processor_stage,
                     }
-                    yield output.model_copy(update={"metadata": metadata})
-
+                    await output_queue.put((variant_idx, output.model_copy(update={"metadata": metadata}), None))
             except Exception as e:
-                if self.fail_on_error:
-                    raise
-                # Yield error record so pipeline can track the failure
-                failed_idx = variant_idx if "variant_idx" in dir() else -1
-                error_record = record.model_copy(
-                    update={
-                        "error": record.error + [str(e)] if record.error else [str(e)],
-                        "metadata": {
-                            **record.metadata,
-                            "variant": {
-                                "index": failed_idx,
-                                "total": len(self._processors),
-                                "processor_class": self.processor_obj.split(".")[-1],
-                                "stage": processor_stage,
-                                "failed": True,
+                # Put error in queue
+                await output_queue.put((variant_idx, None, e))
+
+        # Create queue for streaming results
+        output_queue: asyncio.Queue = asyncio.Queue()
+
+        # Create tasks for all variants
+        tasks = [
+            asyncio.create_task(stream_variant_outputs(proc, idx, output_queue))
+            for idx, proc in enumerate(self._processors)
+        ]
+
+        # Yield results as they arrive in the queue
+        completed_count = 0
+        while completed_count < len(tasks):
+            # Check if any tasks completed (successfully or with error)
+            for task in tasks:
+                if task.done() and not task.cancelled():
+                    completed_count += 1
+                    # Remove from tasks list to avoid recounting
+                    tasks.remove(task)
+                    # Task exceptions are already in the queue, so we don't need to handle them here
+                    break
+
+            # Try to get items from queue (with timeout to check task completion)
+            try:
+                variant_idx, output, error = await asyncio.wait_for(output_queue.get(), timeout=0.1)
+
+                if error is not None:
+                    # Handle error
+                    if self.fail_on_error:
+                        # Cancel remaining tasks
+                        for task in tasks:
+                            task.cancel()
+                        raise error
+
+                    # Yield error record so pipeline can track the failure
+                    error_record = record.model_copy(
+                        update={
+                            "error": record.error + [str(error)] if record.error else [str(error)],
+                            "metadata": {
+                                **record.metadata,
+                                "variant": {
+                                    "index": variant_idx,
+                                    "total": len(self._processors),
+                                    "processor_class": self.processor_obj.split(".")[-1],
+                                    "stage": processor_stage,
+                                    "failed": True,
+                                },
                             },
-                        },
-                    }
-                )
-                logger.warning(
-                    "Variant failed in parallel execution, continuing with others",
-                    processor_stage=processor_stage,
-                    variant_idx=failed_idx,
-                    error=str(e),
-                )
-                yield error_record
+                        }
+                    )
+                    logger.warning(
+                        f"Variant failed in parallel execution for {processor_stage} {self.processor_obj.split('.')[-1]}, continuing with others",
+                        processor_stage=processor_stage,
+                        variant_idx=variant_idx,
+                        error=str(error),
+                    )
+                    yield error_record
+                else:
+                    # Yield successful output immediately
+                    yield output
+
+            except asyncio.TimeoutError:
+                # No items in queue yet, continue checking tasks
+                continue

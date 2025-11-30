@@ -14,9 +14,13 @@ import importlib
 import inspect
 import json
 import random
+import socket
 from collections.abc import Sequence
 from enum import Enum
 from typing import Any, Callable, TypeVar
+
+import urllib3.exceptions
+from google.auth.exceptions import TransportError as GoogleAuthTransportError
 
 # Core LLM library imports - these are required dependencies
 from anthropic import AsyncAnthropicVertex
@@ -1304,10 +1308,23 @@ class LiteLLMWrapper(BaseModel):
                 last_exception = e
                 error_msg = str(e).lower()
 
-                # Check if this is a retryable error
-                is_retryable = any(
+                # Check if this is a retryable error (by type or message)
+                retryable_types = (
+                    TimeoutError,
+                    ConnectionError,
+                    ConnectionResetError,
+                    ConnectionAbortedError,
+                    socket.gaierror,
+                    urllib3.exceptions.ProtocolError,
+                    urllib3.exceptions.TimeoutError,
+                    urllib3.exceptions.NameResolutionError,
+                    urllib3.exceptions.NewConnectionError,
+                    GoogleAuthTransportError,
+                )
+
+                is_retryable = isinstance(e, retryable_types) or any(
                     keyword in error_msg
-                    for keyword in ["rate limit", "timeout", "503", "429", "502", "500"]
+                    for keyword in ["rate limit", "timeout", "503", "429", "502", "500", "name resolution"]
                 )
 
                 if attempt < self.max_retries and is_retryable:
@@ -1416,6 +1433,25 @@ class LiteLLMWrapper(BaseModel):
                 if hasattr(schema, "model_json_schema")
                 else schema.schema()
             )
+
+            # Vertex AI requires enum values to be strings, not integers
+            # Convert integer enums to string enums in the schema
+            def convert_enum_values_to_strings(obj: Any) -> Any:
+                """Recursively convert integer enum values to strings for Vertex AI compatibility."""
+                if isinstance(obj, dict):
+                    # Check if this is an enum property
+                    if "enum" in obj and isinstance(obj["enum"], list):
+                        obj["enum"] = [str(v) for v in obj["enum"]]
+                    # Recursively process nested objects
+                    return {k: convert_enum_values_to_strings(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [convert_enum_values_to_strings(item) for item in obj]
+                return obj
+
+            # Apply conversion for Vertex AI models (gemini, etc.)
+            if self.litellm_model_name and ("gemini" in self.litellm_model_name.lower() or "vertex" in self.litellm_model_name.lower()):
+                schema_dict = convert_enum_values_to_strings(schema_dict)
+
             litellm_params["response_format"] = {
                 "type": "json_schema",
                 "json_schema": {
@@ -1484,6 +1520,11 @@ class LiteLLMWrapper(BaseModel):
 
             if litellm_tools:
                 litellm_params["tools"] = litellm_tools
+
+        # Disable LiteLLM's internal retry logic since we handle retries ourselves
+        # LiteLLM defaults to num_retries=3, which would stack with our retry wrapper
+        litellm_params["num_retries"] = 0
+        litellm_params["max_retries"] = 0
 
         # Execute with retry logic
         async def _call_litellm() -> Any:
