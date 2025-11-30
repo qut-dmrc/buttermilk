@@ -1524,7 +1524,6 @@ class LiteLLMWrapper(BaseModel):
         # Disable LiteLLM's internal retry logic since we handle retries ourselves
         # LiteLLM defaults to num_retries=3, which would stack with our retry wrapper
         litellm_params["num_retries"] = 0
-        litellm_params["max_retries"] = 0
 
         # Execute with retry logic
         async def _call_litellm() -> Any:
