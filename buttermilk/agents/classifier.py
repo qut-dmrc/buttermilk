@@ -487,6 +487,47 @@ class ZentropiClassifier(ClassifierCore):
             logger.error(f"Zentropi API call failed: {e}")
             raise
 
+    @staticmethod
+    def _extract_criteria(rendered_text: str) -> str:
+        """Extract criteria from rendered template, stripping role prefixes.
+
+        Templates render with role prefixes like 'system:', 'user:', 'assistant:'.
+        This method removes those prefixes and extracts just the criteria content,
+        excluding the final user message (which contains the content placeholder).
+
+        Args:
+            rendered_text: Full rendered template with role prefixes
+
+        Returns:
+            Criteria text without role prefixes
+        """
+        import re
+
+        lines = rendered_text.strip().split("\n")
+        criteria_lines = []
+
+        for line in lines:
+            # Check for role prefix at start of line
+            role_match = re.match(r"^(system|user|assistant):\s*", line, re.IGNORECASE)
+            if role_match:
+                # Add the rest of the line after the role prefix
+                rest = line[role_match.end() :].strip()
+                if rest:
+                    criteria_lines.append(rest)
+            else:
+                # Continue with current section
+                criteria_lines.append(line)
+
+        # Join and clean up
+        criteria = "\n".join(criteria_lines).strip()
+
+        # Remove the "# Text to Classify" section and anything after (that's where content goes)
+        text_to_classify_marker = "# Text to Classify"
+        if text_to_classify_marker in criteria:
+            criteria = criteria.split(text_to_classify_marker)[0].strip()
+
+        return criteria
+
     async def _classify_record(
         self, record: BaseRecord, **kwargs: Any
     ) -> ClassifierResult:
@@ -516,9 +557,11 @@ class ZentropiClassifier(ClassifierCore):
 
         content = str(record.content)
 
-        # Step 1: Render template (this becomes criteria_text)
+        # Step 1: Render template (criteria only, without content placeholder)
+        # We pass empty content to template so it renders criteria without duplicating content
         inputs = record.model_dump() if hasattr(record, "model_dump") else dict(record)
         inputs.update(kwargs)
+        inputs["content"] = ""  # Don't include content in template render
 
         try:
             rendered_text, unfilled_vars, template_hash = load_template(
@@ -533,9 +576,12 @@ class ZentropiClassifier(ClassifierCore):
         except Exception as e:
             raise ProcessingError(f"Template rendering failed: {e}") from e
 
-        # Step 2: Call Zentropi API with both criteria and content
+        # Step 2: Parse template to extract criteria (strip role prefixes)
+        criteria = self._extract_criteria(rendered_text)
+
+        # Step 3: Call Zentropi API with criteria and content
         try:
-            api_response = await self._classify(rendered_text, content=content)
+            api_response = await self._classify(criteria, content=content)
             logger.debug(f"ZentropiClassifier received API response: {type(api_response).__name__}")
         except Exception as e:
             raise ProcessingError(f"Zentropi API call failed: {e}") from e
