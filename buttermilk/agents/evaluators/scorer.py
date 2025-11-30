@@ -91,6 +91,8 @@ class CriticalErrorEvidence(BaseModel):
         rule_excerpt: Which rule was misapplied
     """
 
+    model_config = {"extra": "forbid"}  # Required for Azure OpenAI structured output
+
     error_type: ErrorType = Field(..., description="The type of error found")
     analyst_reasoning: str = Field(
         ..., description="Specific quoted string from reasons list"
@@ -116,6 +118,8 @@ class CriticalErrors(BaseModel):
         abuse_of_discretion: Analyst's discretion was unreasonable
         reasons: Evidence array, only populated if errors found
     """
+
+    model_config = {"extra": "forbid"}  # Required for Azure OpenAI structured output
 
     hallucinated_rule: bool = Field(
         default=False, description="Analyst invented a rule that doesn't exist"
@@ -151,6 +155,8 @@ class GroundTruthAlignment(BaseModel):
         alignment: Quality rating for how well the analyst aligned with this point
     """
 
+    model_config = {"extra": "forbid"}  # Required for Azure OpenAI structured output
+
     key_point: str = Field(..., description="The ground truth key point being assessed")
     key_point_type: KeyPointType = Field(
         ..., description="Whether this point is prohibited, required, or optional"
@@ -175,6 +181,8 @@ class QualScore(BaseModel):
         confidence: Scorer's self-assessment of confidence in this evaluation
         summary: 1-2 sentence explanation of the overall assessment
     """
+
+    model_config = {"extra": "forbid"}  # Required for Azure OpenAI structured output
 
     critical_errors: CriticalErrors = Field(
         ..., description="Binary flags and evidence for critical reasoning errors"
@@ -246,10 +254,9 @@ class LLMScorer(LLMAgent):
     """
 
     def __init__(self, **kwargs):
-        """Initializes the Judge agent with its specific configuration and output model."""
-        super().__init__(**kwargs)
-        # Set the expected output model for the LLM's response
-        self.output_model = QualScore  # Expected Pydantic model for LLM output
+        """Initializes the Scorer agent with its specific configuration and output model."""
+        # Pass output_model to super() so LLMCore is created with correct schema
+        super().__init__(output_model=QualScore, **kwargs)
 
     @message_handler(match=lambda msg, ctx: isinstance(msg.outputs, JudgeReasons))
     async def _score_judge(

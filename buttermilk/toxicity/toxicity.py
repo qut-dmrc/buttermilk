@@ -1117,27 +1117,28 @@ class ToxicChat(ToxicityModel):
 
 
 class Zentropi(ToxicityModel):
-    """Zentropi toxicity detection API wrapper.
+    """Zentropi labeling API wrapper.
 
-    Zentropi provides a classification API for content moderation.
+    Zentropi provides a classification API for content labeling.
     This class adapts the Zentropi API response format to the ToxicityModel interface.
+
+    The API requires:
+        - content_text: The text to be labeled
+        - criteria_text: The labeling criteria (passed as the system message/template)
 
     Expected Zentropi response format:
     {
-        "toxic": true/false,
-        "scores": {
-            "toxicity": 0.85,
-            "severity": 0.72,
-            "confidence": 0.91
-        },
-        "labels": ["profanity", "hate_speech"]
+        "label": "1",
+        "confidence": 0.87,
+        "compute_time": 0.324
     }
     """
 
-    model: str
+    model: str = "cope-latest"
     process_chain: str = "api"
     standard: str = "zentropi"
     client: Any = None
+    criteria: str = ""  # The labeling criteria (system message/template)
 
     def init_client(self) -> None:
         """Initialize client with credentials from credentials dict or environment variables.
@@ -1165,57 +1166,78 @@ class Zentropi(ToxicityModel):
 
         Args:
             response: Zentropi API response containing:
-                - toxic (bool): Whether content is toxic
-                - scores (dict): Score values by measure name
-                - labels (list): List of detected labels
+                - label (str): The classification label
+                - confidence (float): Confidence score for the label
+                - compute_time (float): Processing time in seconds
 
         Returns:
             EvalRecord with prediction, scores, and labels
 
         Raises:
-            ValueError: If required 'toxic' field is missing from response
+            ValueError: If required 'label' field is missing from response
         """
-        if "toxic" not in response:
+        if "label" not in response:
             raise ValueError(
-                f"Zentropi response missing required 'toxic' field. Got: {response.keys()}"
+                f"Zentropi response missing required 'label' field. Got: {response.keys()}"
             )
 
-        # Extract prediction
-        prediction = response["toxic"]
+        # Extract label and determine prediction
+        label = response["label"]
+        confidence = response.get("confidence", 0.0)
 
-        # Convert scores dict to Score objects
-        scores = []
-        if "scores" in response:
-            for measure, score_value in response["scores"].items():
-                scores.append(Score(measure=measure, score=score_value))
+        # Create score from confidence
+        scores = [Score(measure="confidence", score=confidence)]
 
-        # Extract labels
-        labels = response.get("labels", [])
+        # Add compute_time as metadata in a score if present
+        if "compute_time" in response:
+            scores.append(
+                Score(measure="compute_time", score=response["compute_time"])
+            )
+
+        # Prediction is True if label indicates positive classification
+        # Label "1" or truthy string values indicate positive
+        prediction = label in ("1", "true", "True", "yes", "Yes", True)
 
         return EvalRecord(
             prediction=prediction,
             scores=scores,
-            labels=labels,
+            labels=[label] if label else [],
         )
 
     def call_client(self, prompt: str, **kwargs) -> dict[str, Any]:
-        """Call Zentropi API with prompt.
+        """Call Zentropi API with content and criteria.
 
         Args:
-            prompt: Text content to classify
+            prompt: Text content to classify (content_text)
 
         Returns:
             Zentropi API response dict
 
         Raises:
             requests.exceptions.RequestException: If API call fails
+            ValueError: If criteria is not set
         """
         import requests
+
+        if not self.criteria:
+            raise ValueError(
+                "Zentropi requires criteria to be set. "
+                "Pass the system message/template as the 'criteria' field."
+            )
+
+        payload = {
+            "content_text": prompt,
+            "criteria_text": self.criteria,
+        }
+
+        # Add model if not default
+        if self.model and self.model != "cope-latest":
+            payload["model"] = self.model
 
         response = requests.post(
             self.client["base_url"],
             headers={"Authorization": f"Bearer {self.client['api_key']}"},
-            json={"text": prompt},
+            json=payload,
             timeout=30,
         )
         response.raise_for_status()

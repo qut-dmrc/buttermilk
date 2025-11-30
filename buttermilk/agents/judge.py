@@ -31,6 +31,8 @@ class Reasons(BaseModel):
 
     """
 
+    model_config = {"extra": "forbid"}  # Required for Azure OpenAI structured output
+
     conclusion: str = Field(
         ...,
         description="The overall conclusion, final answer, or summary, outlining any uncertainty.",
@@ -168,6 +170,5 @@ class Judge(LLMAgent):
 
     def __init__(self, **kwargs):
         """Initializes the Judge agent with its specific configuration and output model."""
-        super().__init__(**kwargs)
-        # Set the expected output model for the LLM's response
-        self.output_model = JudgeReasons
+        # Pass output_model to super() so LLMCore is created with correct schema
+        super().__init__(output_model=JudgeReasons, **kwargs)

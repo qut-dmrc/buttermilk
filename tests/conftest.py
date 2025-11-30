@@ -5,16 +5,11 @@ import inspect
 from pathlib import Path
 
 import pytest
-
 # weave import removed
 from pytest import MarkDecorator
 
 from buttermilk import BM, init
-from buttermilk._core.llms import (
-    CHAT_MODELS,
-    CHEAP_CHAT_MODELS,
-    LLMs,
-)
+from buttermilk._core.llms import CHAT_MODELS, CHEAP_CHAT_MODELS, LLMs
 from buttermilk._core.types import Record
 from buttermilk.runner.flowrunner import FlowRunContext, FlowRunner
 from buttermilk.utils.media import download_and_convert
@@ -82,6 +77,15 @@ def real_llms(real_bm: BM) -> LLMs:
 @pytest.fixture(params=CHEAP_CHAT_MODELS)
 def real_model_name(request) -> str:
     """Real model name for testing with actual models."""
+    return request.param
+
+
+@pytest.fixture(params=CHAT_MODELS)
+async def real_model_name_expensive(request, real_bm: BM, session_runner):
+    """Real expensive LLM instance for testing.
+
+    Depends on session_runner to ensure single event loop for session.
+    """
     return request.param
 
 
@@ -471,9 +475,7 @@ def pytest_addoption(parser):
 @pytest.fixture
 def in_memory_span_exporter():
     """Provides in-memory span exporter for testing OTEL spans."""
-    from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
-        InMemorySpanExporter,
-    )
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
     return InMemorySpanExporter()
 

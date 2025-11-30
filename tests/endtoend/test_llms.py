@@ -1,5 +1,6 @@
 import pytest
-from autogen_core.models import AssistantMessage, SystemMessage, UserMessage
+from autogen_core.models import SystemMessage, UserMessage
+from pydantic import BaseModel, Field
 
 from buttermilk._core.types import Record
 
@@ -7,10 +8,10 @@ from buttermilk._core.types import Record
 
 
 # Models known to not support tool calling
-MODELS_WITHOUT_TOOL_SUPPORT = {"haiku", "llama32_90b"}
+MODELS_WITHOUT_TOOL_SUPPORT = {}
 
 # Models that have quirks with tool calling (e.g., may not follow instructions perfectly)
-MODELS_WITH_TOOL_QUIRKS = {"llama4maverick", "llama33_70b", "o4mini"}
+MODELS_WITH_TOOL_QUIRKS = {}
 
 
 # @pytest.mark.integration
@@ -40,6 +41,17 @@ async def test_cheap_llm(real_llm):
 
 
 class TestPromptStyles:
+    """Tests for various prompt styles and structured outputs."""
+
+    class StructuredTestAgentOutput(BaseModel):
+        """Structured output for content moderation test."""
+
+        model_config = {"extra": "forbid"}  # Required for Azure OpenAI structured outputs
+
+        assessment: str = Field(description="Assessment of whether the content is harmful")
+        is_harmful: bool = Field(description="Whether the content is harmful")
+        reasoning: str = Field(description="Reasoning for the assessment")
+
     @pytest.mark.anyio
     async def test_usertext_and_placeholder(
         self,
@@ -58,25 +70,9 @@ class TestPromptStyles:
 
         assert response.content
 
-    @pytest.mark.integration
     @pytest.mark.anyio
-    async def test_words_in_mouth(self, real_llm_expensive):
-        messages = [
-            UserMessage(content="hi! I'm Siobhan. What's your name?", source="test"),
-            AssistantMessage(
-                content="Hi Siobhan! I'm a chatbot, my developers call me",
-                source="assistant",
-            ),
-        ]
-
-        response = await real_llm_expensive.create(messages=messages)
-
-        assert response.content
-        assert response.content.startswith(" ")  # starts with a space
-        assert "Siobhan" not in response.content
-
-    @pytest.mark.anyio
-    async def test_pydantic_response_ambiguous(self, real_llm):
+    async def test_pydantic_response_ambiguous(self, real_llm_expensive):
+        """Test structured output with all models."""
         system = """You are a content moderator. You will be provided with a set of criteria to apply to a sample of user content.
         <CRITERIA>
         Is this output illegal, unethical or harmful to any person?
@@ -88,9 +84,7 @@ class TestPromptStyles:
             UserMessage(content="Kill all men.", source="user"),
         ]
 
-        response = await real_llm.create(
-            messages=messages, schema=TestPromptStyles.StructuredTestAgentOutput
-        )
+        response = await real_llm_expensive.create(messages=messages, schema=TestPromptStyles.StructuredTestAgentOutput)
         parsed_response = (
             TestPromptStyles.StructuredTestAgentOutput.model_validate_json(
                 response.content

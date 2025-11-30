@@ -26,6 +26,8 @@ class Expert(BaseModel):
 
     """
 
+    model_config = {"extra": "forbid"}  # Required for Azure OpenAI structured output
+
     name: str = Field(..., description="Name or identifier of the expert or source.")
     answer_id: str = Field(
         ...,
@@ -42,6 +44,8 @@ class Position(BaseModel):
         position (str): A concise summary or statement of the position itself.
 
     """
+
+    model_config = {"extra": "forbid"}  # Required for Azure OpenAI structured output
 
     experts: list[str] = Field(
         ..., description="A list of experts who hold or support this position."
@@ -64,6 +68,8 @@ class Divergence(BaseModel):
             should ideally only include materially different positions.
 
     """
+
+    model_config = {"extra": "forbid"}  # Required for Azure OpenAI structured output
 
     topic: str = Field(
         ..., description="The key topic, point, or fact where differences are noted."
@@ -89,6 +95,8 @@ class Differences(BaseModel):
             various positions taken on it.
 
     """
+
+    model_config = {"extra": "forbid"}  # Required for Azure OpenAI structured output
 
     conclusion: str = Field(
         ...,
@@ -220,7 +228,6 @@ class Differentiator(LLMAgent):
     """
 
     def __init__(self, **kwargs):
-        """Initializes the Judge agent with its specific configuration and output model."""
-        super().__init__(**kwargs)
-        # Set the expected output model for the LLM's response
-        self.output_model = Differences
+        """Initializes the Differentiator agent with its specific configuration and output model."""
+        # Pass output_model to super() so LLMCore is created with correct schema
+        super().__init__(output_model=Differences, **kwargs)

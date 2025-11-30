@@ -1353,8 +1353,19 @@ class LiteLLMWrapper(BaseModel):
         merged_params.update(kwargs)
 
         # Build LiteLLM parameters
+        # Determine the model name for the API call:
+        # - For vertex_openai (custom GCP endpoint with extra_headers), use openai/<model> format
+        # - For other providers (Azure, Anthropic, etc.), use litellm_model_name with proper prefix
+        # Note: self.litellm_model_name is used for pricing lookups (may have different prefix)
+        if self.base_url and self.extra_headers:
+            # Vertex OpenAI-compatible endpoint - use openai/ prefix for OpenAI API format
+            api_model = f"openai/{self.model}"
+        else:
+            # Standard provider (Azure, Anthropic, etc.) - use the resolved litellm model name
+            api_model = self.litellm_model_name
+
         litellm_params = {
-            "model": self.litellm_model_name,
+            "model": api_model,
             "messages": litellm_messages,
             **merged_params,
         }

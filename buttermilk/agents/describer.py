@@ -21,6 +21,8 @@ from buttermilk.agents.llm import LLMAgent  # Base LLM Agent
 class MediaDescription(BaseModel):
     """Structured output for media descriptions."""
 
+    model_config = {"extra": "forbid"}  # Required for Azure OpenAI structured output
+
     description: str = Field(
         ...,
         description="The textual description of the media content (alt text, caption, or transcript)",
@@ -102,10 +104,9 @@ class Describer(LLMAgent):
     """
 
     def __init__(self, **kwargs):
-        """Initializes the Judge agent with its specific configuration and output model."""
-        super().__init__(**kwargs)
-        # Set the expected output model for the LLM's response
-        self.output_model = MediaDescription
+        """Initializes the Describer agent with its specific configuration and output model."""
+        # Pass output_model to super() so LLMCore is created with correct schema
+        super().__init__(output_model=MediaDescription, **kwargs)
 
     async def _process(
         self, *, message: AgentInput, **kwargs: Any

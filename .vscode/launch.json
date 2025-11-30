@@ -82,7 +82,8 @@
       "args": [
         "--config-dir=/home/nic/src/reliability/config",
         "--config-name=reliability",
-        "+run=pipeline_test"
+        "+run=pipeline",
+        "run.limit=1"
       ]
     },
     {
