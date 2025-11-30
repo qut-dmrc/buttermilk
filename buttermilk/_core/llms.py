@@ -33,7 +33,16 @@ try:
     # Suppress litellm logging - we handle errors via retry wrapper
     litellm.suppress_debug_info = True
     import logging
+
+    # Suppress all LiteLLM loggers including internal workers
     logging.getLogger("LiteLLM").setLevel(logging.CRITICAL)
+    logging.getLogger("litellm").setLevel(logging.CRITICAL)
+
+    # Suppress asyncio logging for LiteLLM's internal background tasks
+    # This prevents "LoggingWorker error: TimeoutError" messages from appearing
+    litellm_logger = logging.getLogger("litellm.litellm_core_utils.logging_worker")
+    litellm_logger.setLevel(logging.CRITICAL)
+    litellm_logger.propagate = False
 
     LITELLM_AVAILABLE = True
 except ImportError:

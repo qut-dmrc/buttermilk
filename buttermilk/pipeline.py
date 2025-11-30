@@ -701,82 +701,84 @@ class PipelineOrchestrator(BaseModel):
             completed_records = asyncio.Queue()
 
             async def process_and_queue(record: BaseRecord):
-                """Process BaseRecord and put all results in queue."""
+                """Process BaseRecord and put all results in queue, with semaphore-based concurrency control."""
                 record_id = getattr(record, "record_id", "unknown")
 
-                # Create span for individual task processing
-                task_span_attributes = {
-                    "record.id": record_id,
-                    "pipeline.name": self.pipeline_name,
-                }
+                # Acquire semaphore slot before processing (enforces concurrency limit)
+                async with self._semaphore:
+                    # Create span for individual task processing
+                    task_span_attributes = {
+                        "record.id": record_id,
+                        "pipeline.name": self.pipeline_name,
+                    }
 
-                with tracer.start_as_current_span(
-                    "pipeline.task.process", attributes=task_span_attributes
-                ) as task_span:
-                    try:
-                        results_count = 0
-                        async for processed_record in self._process_single_record(
-                            record
-                        ):
-                            await completed_records.put(("success", processed_record))
-                            results_count += 1
+                    with tracer.start_as_current_span(
+                        "pipeline.task.process", attributes=task_span_attributes
+                    ) as task_span:
+                        try:
+                            results_count = 0
+                            async for processed_record in self._process_single_record(
+                                record
+                            ):
+                                await completed_records.put(("success", processed_record))
+                                results_count += 1
 
-                        # Only count as processed if we got at least one output
-                        if results_count > 0:
-                            self._summary.increment_processed()
-                            task_span.set_attribute("outputs.count", results_count)
-                            task_span.set_attribute("status", "processed")
+                            # Only count as processed if we got at least one output
+                            if results_count > 0:
+                                self._summary.increment_processed()
+                                task_span.set_attribute("outputs.count", results_count)
+                                task_span.set_attribute("status", "processed")
+                                task_span.set_status(trace.Status(trace.StatusCode.OK))
+                            else:
+                                task_span.set_attribute("status", "no_outputs")
+                                task_span.set_status(trace.Status(trace.StatusCode.OK))
+
+                        except RecordSkippedException as e:
+                            self._summary.increment_skipped()
+                            task_span.set_attribute("status", "skipped")
+                            task_span.set_attribute("skip_reason", str(e))
                             task_span.set_status(trace.Status(trace.StatusCode.OK))
-                        else:
-                            task_span.set_attribute("status", "no_outputs")
-                            task_span.set_status(trace.Status(trace.StatusCode.OK))
+                            # Record was intentionally skipped, no error logging needed
+                            logger.debug(
+                                f"Record {record_id} skipped in stage {self.pipeline_name}: {e}",
+                                record_id=record_id,
+                                pipeline_name=self.pipeline_name,
+                                error=str(e),
+                            )
+                            # For now we just drop skipped records, don't put them in queue
 
-                    except RecordSkippedException as e:
-                        self._summary.increment_skipped()
-                        task_span.set_attribute("status", "skipped")
-                        task_span.set_attribute("skip_reason", str(e))
-                        task_span.set_status(trace.Status(trace.StatusCode.OK))
-                        # Record was intentionally skipped, no error logging needed
-                        logger.debug(
-                            f"Record {record_id} skipped in stage {self.pipeline_name}: {e}",
-                            record_id=record_id,
-                            pipeline_name=self.pipeline_name,
-                            error=str(e),
-                        )
-                        # For now we just drop skipped records, don't put them in queue
+                        except Exception as e:
+                            self._summary.increment_failed()
+                            task_span.set_attribute("status", "failed")
+                            task_span.set_attribute("error_type", type(e).__name__)
+                            task_span.set_status(
+                                trace.Status(trace.StatusCode.ERROR, str(e))
+                            )
+                            # Log failure but don't stop processing other records
+                            logger.error(
+                                f"❌ Failed to process record {record_id}: {type(e).__name__}",
+                                record_id=record_id,
+                                pipeline=self.pipeline_name,
+                                error=str(e),
+                                error_type=type(e).__name__,
+                            )
 
-                    except Exception as e:
-                        self._summary.increment_failed()
-                        task_span.set_attribute("status", "failed")
-                        task_span.set_attribute("error_type", type(e).__name__)
-                        task_span.set_status(
-                            trace.Status(trace.StatusCode.ERROR, str(e))
-                        )
-                        # Log failure but don't stop processing other records
-                        logger.error(
-                            f"❌ Failed to process record {record_id}: {type(e).__name__}",
-                            record_id=record_id,
-                            pipeline=self.pipeline_name,
-                            error=str(e),
-                            error_type=type(e).__name__,
-                        )
-
-                        # Add error metadata to record and put in queue
-                        existing_metadata = getattr(record, "metadata", None) or {}
-                        error_metadata = {
-                            **existing_metadata,
-                            self.pipeline_name: {
-                                "status": "failed",
-                                "timestamp": time.time(),
-                                "error": str(e),
-                                "error_type": type(e).__name__,
-                            },
-                        }
-                        failed_record = record.model_copy(
-                            update={"metadata": error_metadata}
-                        )
-                        await completed_records.put(("error", failed_record))
-                        # Continue processing other records - don't raise
+                            # Add error metadata to record and put in queue
+                            existing_metadata = getattr(record, "metadata", None) or {}
+                            error_metadata = {
+                                **existing_metadata,
+                                self.pipeline_name: {
+                                    "status": "failed",
+                                    "timestamp": time.time(),
+                                    "error": str(e),
+                                    "error_type": type(e).__name__,
+                                },
+                            }
+                            failed_record = record.model_copy(
+                                update={"metadata": error_metadata}
+                            )
+                            await completed_records.put(("error", failed_record))
+                            # Continue processing other records - don't raise
 
             # Producer: Create tasks for incoming BaseRecord objects
             async def producer():
@@ -802,15 +804,7 @@ class PipelineOrchestrator(BaseModel):
                         )
                         break
 
-                    # Maintain concurrency limit
-                    while len(pending_tasks) >= self.concurrency:
-                        await asyncio.sleep(
-                            0.01
-                        )  # Brief pause to allow task completion
-                        # Clean up completed tasks
-                        pending_tasks = {t for t in pending_tasks if not t.done()}
-
-                    # Create and track task
+                    # Create and track task (concurrency controlled by semaphore in process_and_queue)
                     task = asyncio.create_task(process_and_queue(record))
                     pending_tasks.add(task)
 
