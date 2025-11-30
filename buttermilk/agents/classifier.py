@@ -333,12 +333,50 @@ class HuggingFaceClassifier(ClassifierCore):
                 f"Available: {list(bm.llms.connections.keys())}"
             ) from e
 
-    async def _classify(self, text: str) -> dict[str, Any]:
-        """Call HuggingFace classification model via LiteLLM."""
-        from autogen_core.models import UserMessage
+    @staticmethod
+    def _parse_template_messages(rendered_text: str) -> list[tuple[str, str]]:
+        """Parse rendered template into (role, content) tuples.
 
+        Templates render with role prefixes like 'system:', 'user:', 'assistant:'.
+        This parses them into structured messages.
+
+        Args:
+            rendered_text: Full rendered template with role prefixes
+
+        Returns:
+            List of (role, content) tuples
+        """
+        import re
+
+        messages = []
+        current_role = None
+        current_content = []
+
+        for line in rendered_text.strip().split("\n"):
+            role_match = re.match(r"^(system|user|assistant):\s*", line, re.IGNORECASE)
+            if role_match:
+                # Save previous message if exists
+                if current_role and current_content:
+                    messages.append((current_role, "\n".join(current_content).strip()))
+                current_role = role_match.group(1).lower()
+                rest = line[role_match.end() :]
+                current_content = [rest] if rest.strip() else []
+            else:
+                current_content.append(line)
+
+        # Save last message
+        if current_role and current_content:
+            messages.append((current_role, "\n".join(current_content).strip()))
+
+        return messages
+
+    async def _classify(self, messages: list) -> dict[str, Any]:
+        """Call HuggingFace classification model via LiteLLM.
+
+        Args:
+            messages: List of autogen message objects
+        """
         try:
-            messages = [UserMessage(content=text, source="user")]
             result = await self._llm_wrapper.create(messages=messages, schema=None)
 
             if hasattr(result, "content") and result.content:
@@ -401,6 +439,83 @@ class HuggingFaceClassifier(ClassifierCore):
         except pydantic.ValidationError as e:
             logger.error(f"Failed to map HuggingFace response to {schema.__name__}: {e}")
             raise
+
+    async def _classify_record(
+        self, record: BaseRecord, **kwargs: Any
+    ) -> ClassifierResult:
+        """Override to parse template into proper LLM messages.
+
+        Parses template with role prefixes (system:, user:, assistant:) into
+        structured messages for the HuggingFace model.
+
+        Args:
+            record: Input record to classify
+            **kwargs: Additional template variables
+
+        Returns:
+            ClassifierResult with structured output and metadata
+        """
+        from autogen_core.models import AssistantMessage, SystemMessage, UserMessage
+
+        # Step 1: Render template
+        inputs = record.model_dump() if hasattr(record, "model_dump") else dict(record)
+        inputs.update(kwargs)
+
+        try:
+            rendered_text, unfilled_vars, template_hash = load_template(
+                template=self.template,
+                parameters=self.parameters,
+                untrusted_inputs=inputs,
+            )
+            logger.debug(
+                f"HuggingFaceClassifier rendered template '{self.template}', "
+                f"unfilled vars: {unfilled_vars}, hash: {template_hash}"
+            )
+        except Exception as e:
+            raise ProcessingError(f"Template rendering failed: {e}") from e
+
+        # Step 2: Parse template into messages
+        parsed_messages = self._parse_template_messages(rendered_text)
+
+        # Convert to autogen message objects
+        message_classes = {
+            "system": SystemMessage,
+            "user": UserMessage,
+            "assistant": AssistantMessage,
+        }
+        messages = []
+        for role, content in parsed_messages:
+            msg_class = message_classes.get(role, UserMessage)
+            if role == "user":
+                messages.append(msg_class(content=content, source="user"))
+            else:
+                messages.append(msg_class(content=content, source=role))
+
+        # Step 3: Call classification API
+        try:
+            api_response = await self._classify(messages)
+            logger.debug(f"HuggingFaceClassifier received API response: {type(api_response).__name__}")
+        except Exception as e:
+            raise ProcessingError(f"HuggingFace API call failed: {e}") from e
+
+        # Step 4: Map to schema
+        try:
+            structured_output = self._map_to_schema(api_response, self.output_model)
+            logger.debug(f"HuggingFaceClassifier mapped to schema: {type(structured_output).__name__}")
+        except Exception as e:
+            raise ProcessingError(
+                f"Failed to map response to {self.output_model.__name__}: {e}"
+            ) from e
+
+        return ClassifierResult(
+            content=structured_output,
+            metadata={"api_response": api_response},
+            template_metadata={
+                "name": self.template,
+                "hash": template_hash,
+                "unfilled_vars": list(unfilled_vars),
+            },
+        )
 
 
 class ZentropiClassifier(ClassifierCore):
