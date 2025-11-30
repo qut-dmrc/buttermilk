@@ -1491,6 +1491,14 @@ class LiteLLMWrapper(BaseModel):
 
         try:
             response = await self._execute_with_retry(_call_litellm)
+        except litellm.ContentPolicyViolationError as e:
+            # Handle content moderation errors from OpenAI/Azure without traceback
+            error_msg = f"Content blocked by provider safety filter: {e!s}"
+            logger.error(error_msg)
+            raise ContentBlockedError(
+                message=error_msg,
+                filter_result={}  # LiteLLM doesn't provide detailed filter results
+            ) from e
         except Exception as e:
             error_msg = f"LiteLLM call failed: {e}"
             raise ProcessingError(error_msg) from e
