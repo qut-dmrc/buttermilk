@@ -22,6 +22,7 @@ from buttermilk import logger
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.types import BaseRecord
 from buttermilk.utils.templating import load_template
+from buttermilk.utils.validators import import_class_from_path
 
 
 class ClassifierResult(BaseModel):
@@ -77,7 +78,7 @@ class ClassifierCore:
         self,
         *,
         template: str,
-        output_model: type[pydantic.BaseModel],
+        output_model: type[pydantic.BaseModel] | str,
         output_col: str = "output",
         **kwargs: Any,
     ) -> None:
@@ -85,12 +86,12 @@ class ClassifierCore:
 
         Args:
             template: Name of the prompt template to use.
-            output_model: Pydantic model class for structured output mapping.
+            output_model: Pydantic model class or string path for structured output.
             output_col: Name of the output column in the record (default: "output").
             **kwargs: Additional configuration (stored in self.parameters).
 
         Raises:
-            ValueError: If template or output_model is not specified.
+            ValueError: If template or output_model is not specified or cannot be resolved.
         """
         if not template:
             raise ValueError("'template' is required for ClassifierCore")
@@ -98,7 +99,16 @@ class ClassifierCore:
             raise ValueError("'output_model' is required for ClassifierCore")
 
         self.template = template
-        self.output_model = output_model
+
+        # Resolve output_model if it's a string path
+        if isinstance(output_model, str):
+            try:
+                self.output_model = import_class_from_path(output_model)
+            except Exception as e:
+                raise ValueError(f"Failed to resolve output_model '{output_model}': {e}") from e
+        else:
+            self.output_model = output_model
+
         self.output_col = output_col
         self.parameters = kwargs
 
