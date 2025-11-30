@@ -182,13 +182,7 @@ class ClassifierCore:
 
             except Exception as e:
                 span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
-                logger.error(
-                    f"Classification failed for record {record_id}: {e}",
-                    record_id=record_id,
-                    processor_stage=processor_stage,
-                    error=str(e),
-                )
-                raise ProcessingError(f"Classification failed: {e}") from e
+                raise ProcessingError(f"Classification failed {processor_stage} for record {record_id}: {e}") from e
 
     async def _classify_record(
         self, record: BaseRecord, **kwargs: Any
