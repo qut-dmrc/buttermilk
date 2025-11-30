@@ -325,7 +325,7 @@ class HuggingFaceClassifier(ClassifierCore):
 
     async def _classify(self, text: str) -> dict[str, Any]:
         """Call HuggingFace classification model via LiteLLM."""
-        from buttermilk._core.contract import UserMessage
+        from autogen_core.models import UserMessage
 
         try:
             messages = [UserMessage(content=text, source="user")]
@@ -374,7 +374,7 @@ class HuggingFaceClassifier(ClassifierCore):
             label = int(raw_label)
 
         confidence = float(prediction.get("score", 0.0))
-        category = prediction.get("label", "unknown")
+        category = str(prediction.get("label", "unknown"))
 
         available_mapping = {
             "label": label,
@@ -397,9 +397,13 @@ class ZentropiClassifier(ClassifierCore):
     """Zentropi API classifier with template support.
 
     Zentropi provides toxicity classification returning:
-    - toxic (bool): Whether content is toxic
-    - scores (dict): Score values by measure name
-    - labels (list): List of detected labels
+    - label (str): Classification label (e.g., "1" for toxic, "0" for safe)
+    - confidence (float): Confidence score
+    - compute_time (float): Time taken for classification
+
+    The API requires:
+    - content_text: The text to be classified
+    - criteria_text: The classification criteria (passed as criteria parameter)
 
     Example:
         ```python
@@ -410,20 +414,27 @@ class ZentropiClassifier(ClassifierCore):
 
         classifier = ZentropiClassifier(
             template="toxicity_prompt",
+            criteria="Classify if content is toxic or safe",
             output_model=ToxicityClassification,
         )
         ```
     """
 
-    def __init__(self, **kwargs: Any) -> None:
+    def __init__(self, criteria: str, **kwargs: Any) -> None:
         """Initialize ZentropiClassifier with API credentials.
 
+        Args:
+            criteria: Classification criteria text (required).
+
         Raises:
-            ValueError: If ZENTROPI_API_KEY is not in environment.
+            ValueError: If ZENTROPI_API_KEY is not in environment or criteria is empty.
         """
         super().__init__(**kwargs)
 
         import os
+
+        if not criteria:
+            raise ValueError("criteria parameter is required for ZentropiClassifier")
 
         api_key = os.environ.get("ZENTROPI_API_KEY")
         if not api_key:
@@ -431,6 +442,7 @@ class ZentropiClassifier(ClassifierCore):
 
         base_url = os.environ.get("ZENTROPI_BASE_URL", "https://api.zentropi.ai/v1/label")
 
+        self.criteria = criteria
         self._client = {"api_key": api_key, "base_url": base_url}
         logger.debug(f"ZentropiClassifier initialized with base_url: {base_url}")
 
@@ -439,17 +451,22 @@ class ZentropiClassifier(ClassifierCore):
         import requests
 
         try:
+            payload = {
+                "content_text": text,
+                "criteria_text": self.criteria,
+            }
+
             response = requests.post(
                 self._client["base_url"],
                 headers={"Authorization": f"Bearer {self._client['api_key']}"},
-                json={"text": text},
+                json=payload,
                 timeout=30,
             )
             response.raise_for_status()
             result = response.json()
 
-            if "toxic" not in result:
-                raise ValueError(f"Zentropi response missing 'toxic' field: {result.keys()}")
+            if "label" not in result:
+                raise ValueError(f"Zentropi response missing 'label' field: {result.keys()}")
 
             return result
         except requests.exceptions.RequestException as e:
@@ -459,16 +476,23 @@ class ZentropiClassifier(ClassifierCore):
     def _map_to_schema(
         self, response: dict[str, Any], schema: type[pydantic.BaseModel]
     ) -> pydantic.BaseModel:
-        """Map Zentropi API response to output schema."""
+        """Map Zentropi API response to output schema.
+
+        Zentropi returns:
+        - label: str (e.g., "1" for toxic, "0" for safe)
+        - confidence: float
+        - compute_time: float
+        """
         schema_fields = schema.model_fields.keys()
 
-        label = 1 if response["toxic"] else 0
+        # Convert string label to int: "1" → 1 (toxic), "0" → 0 (safe)
+        label_str = response.get("label", "0")
+        label = int(label_str)
 
-        confidence = 0.0
-        if "scores" in response and response["scores"]:
-            confidence = max(response["scores"].values())
+        confidence = response.get("confidence", 0.0)
 
-        categories = response.get("labels", [])
+        # Zentropi doesn't return categories, set empty list as fallback
+        categories: list[str] = []
 
         available_mapping = {
             "label": label,
