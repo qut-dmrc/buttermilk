@@ -498,7 +498,7 @@ class ZentropiClassifier(ClassifierCore):
             ValueError: If record.content is None or empty
         """
         from buttermilk._core.exceptions import ProcessingError
-        from buttermilk._core.template import load_template
+        from buttermilk.utils.templating import load_template
 
         # Extract content from record
         if not record.content:
