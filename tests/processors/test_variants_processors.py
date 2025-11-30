@@ -176,10 +176,19 @@ class TestVariantProcessorIntegration:
         ):
             outputs.append(output)
 
-        # Should get 2 outputs (the non-failing ones)
-        assert len(outputs) == 2
-        contents = {o.content for o in outputs}
+        # Should get 3 outputs: 2 successful + 1 error record
+        assert len(outputs) == 3
+
+        # Check successful outputs
+        successful = [o for o in outputs if not o.error]
+        assert len(successful) == 2
+        contents = {o.content for o in successful}
         assert contents == {"hello_OK1", "hello_OK2"}
+
+        # Check error record
+        error_records = [o for o in outputs if o.error]
+        assert len(error_records) == 1
+        assert "configured to fail" in str(error_records[0].error)
 
     @pytest.mark.anyio
     async def test_fail_on_error_raises(self):

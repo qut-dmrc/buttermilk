@@ -26,13 +26,14 @@ try:
     import litellm
     from litellm import acompletion
 
-    litellm._turn_on_debug()
     LITELLM_AVAILABLE = True
 except ImportError:
     LITELLM_AVAILABLE = False
     acompletion = None
 
 # Autogen library imports - these are required dependencies
+# OpenAI SDK for exception handling
+import openai
 from autogen_core import CancellationToken, FunctionCall  # Autogen core types
 from autogen_core.models import (
     AssistantMessage,
@@ -43,27 +44,26 @@ from autogen_core.models import (
     LLMMessage,
     ModelInfo,
 )
-from autogen_core.tools import Tool  # Autogen tool handling
-from autogen_core.tools import BaseTool, ToolSchema
-from autogen_ext.models.anthropic import AnthropicChatCompletionClient  # Autogen Anthropic client
-from autogen_ext.models.openai import (  # Autogen OpenAI clients
-    AzureOpenAIChatCompletionClient,
-    OpenAIChatCompletionClient,
+from autogen_core.tools import (
+    BaseTool,
+    Tool,  # Autogen tool handling
+    ToolSchema,
 )
+from autogen_ext.models.anthropic import AnthropicChatCompletionClient  # Autogen Anthropic client
+from autogen_ext.models.openai import AzureOpenAIChatCompletionClient, OpenAIChatCompletionClient  # Autogen OpenAI clients
 
-# OpenAI SDK for exception handling
-import openai
 # from google import genai  # Google Generative AI library (unused in current implementation)
-from pydantic import BaseModel  # Pydantic models for configuration
-from pydantic import ConfigDict, Field, field_validator
+from pydantic import (
+    BaseModel,  # Pydantic models for configuration
+    ConfigDict,
+    Field,
+    field_validator,
+)
 
 from buttermilk import bm, logger
+
 # ToolOutput import removed - using autogen's FunctionExecutionResult directly
-from buttermilk._core.constants import (  # Models cache constants
-    CONFIG_CACHE_FILENAME,
-    cache,
-    get_base_cache_dir,
-)
+from buttermilk._core.constants import CONFIG_CACHE_FILENAME, cache, get_base_cache_dir  # Models cache constants
 from buttermilk._core.exceptions import ContentBlockedError, ProcessingError  # Custom Buttermilk exceptions
 from buttermilk.utils.pricing import calculate_token_cost  # Token cost calculation
 
@@ -594,20 +594,19 @@ class AutoGenWrapper(BaseModel):
             # Check for Azure OpenAI content filter errors
             if isinstance(e, (openai.BadRequestError, openai.APIStatusError)):
                 # Check if it's a 400 status code
-                is_bad_request = (
-                    isinstance(e, openai.BadRequestError) or
-                    (isinstance(e, openai.APIStatusError) and getattr(e, 'status_code', None) == 400)
+                is_bad_request = isinstance(e, openai.BadRequestError) or (
+                    isinstance(e, openai.APIStatusError) and getattr(e, "status_code", None) == 400
                 )
 
-                if is_bad_request and hasattr(e, 'body') and isinstance(e.body, dict):
-                    error_code = e.body.get('code')
-                    innererror = e.body.get('innererror', {})
-                    innererror_code = innererror.get('code') if isinstance(innererror, dict) else None
+                if is_bad_request and hasattr(e, "body") and isinstance(e.body, dict):
+                    error_code = e.body.get("code")
+                    innererror = e.body.get("innererror", {})
+                    innererror_code = innererror.get("code") if isinstance(innererror, dict) else None
 
                     # Check for content filter indicators
-                    if error_code == 'content_filter' or innererror_code == 'ResponsibleAIPolicyViolation':
+                    if error_code == "content_filter" or innererror_code == "ResponsibleAIPolicyViolation":
                         # Extract filter result details
-                        filter_result = innererror.get('content_filter_result', {}) if isinstance(innererror, dict) else {}
+                        filter_result = innererror.get("content_filter_result", {}) if isinstance(innererror, dict) else {}
                         error_msg = f"Content blocked by Azure OpenAI safety filter: {e!s}"
                         logger.error(error_msg)
                         raise ContentBlockedError(
@@ -2124,8 +2123,7 @@ class LLMs(BaseModel):
         # Zentropi is a classification API, not an LLM - use ZentropiClassifier agent instead
         if config.client_type == ClientType.ZENTROPI:
             raise ProcessingError(
-                f"Zentropi models cannot be used as LLM clients. "
-                f"Use buttermilk.agents.ZentropiClassifier for classification tasks instead."
+                "Zentropi models cannot be used as LLM clients. Use buttermilk.agents.ZentropiClassifier for classification tasks instead."
             )
 
         # Choose wrapper type based on configuration

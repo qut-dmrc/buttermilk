@@ -168,7 +168,7 @@ class VariantProcessor(BaseModel):
                 failed_idx = variant_idx if "variant_idx" in dir() else -1
                 error_record = record.model_copy(
                     update={
-                        "error": str(e),
+                        "error": record.error + [str(e)] if record.error else [str(e)],
                         "metadata": {
                             **record.metadata,
                             "variant": {

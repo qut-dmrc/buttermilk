@@ -370,15 +370,33 @@ class HuggingFaceClassifier(ClassifierCore):
 
         return messages
 
-    async def _classify(self, messages: list) -> dict[str, Any]:
-        """Call HuggingFace classification model via LiteLLM.
+    async def _classify(self, messages: list) -> pydantic.BaseModel | dict[str, Any]:
+        """Call HuggingFace classification model via wrapper with structured output.
 
         Args:
             messages: List of autogen message objects
-        """
-        try:
-            result = await self._llm_wrapper.create(messages=messages, schema=None)
 
+        Returns:
+            Parsed Pydantic model if wrapper handled structured output,
+            otherwise raw dict for manual mapping.
+        """
+        from buttermilk._core.llms import ModelOutput
+
+        try:
+            # Pass schema to wrapper - it will use structured output or function calling
+            result = await self._llm_wrapper.create(
+                messages=messages,
+                schema=self.output_model,
+            )
+
+            # If wrapper returned a ModelOutput with parsed_object, use it directly
+            if isinstance(result, ModelOutput) and result.parsed_object is not None:
+                logger.debug(
+                    f"HuggingFace returned parsed {type(result.parsed_object).__name__} via structured output"
+                )
+                return result.parsed_object
+
+            # Fallback: parse raw content manually
             if hasattr(result, "content") and result.content:
                 import json
 
@@ -387,11 +405,13 @@ class HuggingFaceClassifier(ClassifierCore):
                 else:
                     response = result.content
 
-                logger.debug(f"HuggingFace response: {response}")
+                logger.debug(f"HuggingFace response (manual parse): {response}")
                 return response
             else:
                 raise ProcessingError(f"Empty response from HuggingFace: {result}")
 
+        except ProcessingError:
+            raise
         except Exception as e:
             logger.error(f"HuggingFace classification failed: {e}")
             raise ProcessingError(f"HuggingFace classification failed: {e}") from e
@@ -498,18 +518,29 @@ class HuggingFaceClassifier(ClassifierCore):
         except Exception as e:
             raise ProcessingError(f"HuggingFace API call failed: {e}") from e
 
-        # Step 4: Map to schema
-        try:
-            structured_output = self._map_to_schema(api_response, self.output_model)
-            logger.debug(f"HuggingFaceClassifier mapped to schema: {type(structured_output).__name__}")
-        except Exception as e:
-            raise ProcessingError(
-                f"Failed to map response to {self.output_model.__name__}: {e}"
-            ) from e
+        # Step 4: Use parsed result or map to schema
+        if isinstance(api_response, self.output_model):
+            # Wrapper already parsed and validated - use directly
+            structured_output = api_response
+            logger.debug(f"HuggingFaceClassifier using pre-parsed {type(structured_output).__name__}")
+        else:
+            # Fallback: manual mapping for raw dict responses
+            try:
+                structured_output = self._map_to_schema(api_response, self.output_model)
+                logger.debug(f"HuggingFaceClassifier mapped to schema: {type(structured_output).__name__}")
+            except Exception as e:
+                raise ProcessingError(
+                    f"Failed to map response to {self.output_model.__name__}: {e}"
+                ) from e
+
+        # Store raw response for debugging (convert Pydantic to dict if needed)
+        raw_response = (
+            api_response.model_dump() if hasattr(api_response, "model_dump") else api_response
+        )
 
         return ClassifierResult(
             content=structured_output,
-            metadata={"api_response": api_response},
+            metadata={"api_response": raw_response},
             template_metadata={
                 "name": self.template,
                 "hash": template_hash,
@@ -564,7 +595,7 @@ class ZentropiClassifier(ClassifierCore):
         logger.debug(f"ZentropiClassifier initialized with base_url: {base_url}")
 
     async def _classify(self, text: str, *, content: str) -> dict[str, Any]:
-        """Call Zentropi API with criteria and content.
+        """Call Zentropi API with criteria and content, with retry logic.
 
         Args:
             text: Rendered template containing classification criteria
@@ -575,31 +606,46 @@ class ZentropiClassifier(ClassifierCore):
 
         Raises:
             ValueError: If response is missing 'label' field
-            requests.exceptions.RequestException: If API call fails
+            aiohttp.ClientError: If API call fails after retries
         """
-        import requests
+        import aiohttp
 
-        try:
+        from buttermilk._core.retry import RetryWrapper
+
+        async def _make_request() -> dict[str, Any]:
             payload = {
                 "content_text": content,
                 "criteria_text": text,
             }
 
-            response = requests.post(
-                self._client["base_url"],
-                headers={"Authorization": f"Bearer {self._client['api_key']}"},
-                json=payload,
-                timeout=30,
-            )
-            response.raise_for_status()
-            result = response.json()
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    self._client["base_url"],
+                    headers={"Authorization": f"Bearer {self._client['api_key']}"},
+                    json=payload,
+                    timeout=aiohttp.ClientTimeout(total=30),
+                ) as response:
+                    response.raise_for_status()
+                    result = await response.json()
 
-            if "label" not in result:
-                raise ValueError(f"Zentropi response missing 'label' field: {result.keys()}")
+                    if "label" not in result:
+                        raise ValueError(f"Zentropi response missing 'label' field: {result.keys()}")
 
-            return result
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Zentropi API call failed: {e}")
+                    return result
+
+        # Use RetryWrapper for consistent retry logic across the codebase
+        retry_wrapper = RetryWrapper(
+            client=None,  # Not used, just need the retry config
+            max_retries=3,
+            min_wait_seconds=2.0,
+            max_wait_seconds=30.0,
+            jitter_seconds=2.0,
+        )
+
+        try:
+            return await retry_wrapper._execute_with_retry(_make_request)
+        except Exception as e:
+            logger.error(f"Zentropi API call failed after retries: {e}")
             raise
 
     @staticmethod

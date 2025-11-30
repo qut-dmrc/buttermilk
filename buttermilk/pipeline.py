@@ -975,6 +975,11 @@ class PipelineOrchestrator(BaseModel):
             trace_info["cache_base_dir"] = str(self._record_cache.base_dir)
 
         # Get all non-private attributes of the record
+        # Critical fields that should NEVER be truncated (needed for debugging)
+        critical_fields = {"record_id", "record_hash", "record_class", "error", "dataset_name", "split_type"}
+        # Fields that can be truncated (typically large content)
+        truncatable_fields = {"content", "alt_text", "body", "text", "description"}
+
         record_fields = {}
         for attr_name in dir(record):
             if (
@@ -987,9 +992,22 @@ class PipelineOrchestrator(BaseModel):
                     if attr_value is not None:
                         # Handle different types of fields
                         if isinstance(attr_value, str):
-                            record_fields[f"{attr_name}"] = attr_value[:20] + "..."
+                            if attr_name in critical_fields:
+                                # Never truncate critical fields
+                                record_fields[attr_name] = attr_value
+                            elif attr_name in truncatable_fields and len(attr_value) > 20:
+                                # Only truncate known large content fields
+                                record_fields[attr_name] = attr_value[:20] + "..."
+                            else:
+                                # Other string fields: full value
+                                record_fields[attr_name] = attr_value
                         elif isinstance(attr_value, list):
-                            record_fields[f"{attr_name}_count"] = len(attr_value)
+                            if attr_name == "error" and attr_value:
+                                # Show full error list for debugging
+                                record_fields["error"] = attr_value
+                                record_fields["error_count"] = len(attr_value)
+                            else:
+                                record_fields[f"{attr_name}_count"] = len(attr_value)
                         elif isinstance(attr_value, dict):
                             record_fields[f"{attr_name}_keys"] = list(attr_value.keys())
                 except Exception:

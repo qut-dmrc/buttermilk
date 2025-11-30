@@ -124,10 +124,27 @@ class ParallelProcessor(BaseModel):
             except Exception as e:
                 if self.fail_on_error:
                     raise
+                # Yield error record so pipeline can track the failure
+                failed_idx = proc_idx if proc_idx >= 0 else -1
+                error_record = record.model_copy(
+                    update={
+                        "error": record.error + [str(e)] if record.error else [str(e)],
+                        "metadata": {
+                            **record.metadata,
+                            "parallel": {
+                                "processor_index": failed_idx,
+                                "total_processors": len(self.processors),
+                                "processor_class": type(self.processors[failed_idx]).__name__ if failed_idx >= 0 else "unknown",
+                                "stage": processor_stage,
+                                "failed": True,
+                            },
+                        },
+                    }
+                )
                 logger.warning(
                     "Processor failed in parallel execution, continuing with others",
                     processor_stage=processor_stage,
-                    processor_idx=proc_idx,
+                    processor_idx=failed_idx,
                     error=str(e),
-                    exc_info=True,
                 )
+                yield error_record
