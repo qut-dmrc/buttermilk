@@ -26,6 +26,11 @@ try:
     import litellm
     from litellm import acompletion
 
+    # Suppress litellm debug/info logs - only show warnings and above
+    litellm.suppress_debug_info = True
+    import logging
+    logging.getLogger("LiteLLM").setLevel(logging.WARNING)
+
     LITELLM_AVAILABLE = True
 except ImportError:
     LITELLM_AVAILABLE = False
