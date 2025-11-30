@@ -12,3 +12,4 @@
 - You are working on the 'buttermilk' project. Use the 'bmem' skill to search for and update context in `$ACA_DATA/projects/buttermilk/`
 - use '-m ""' to run all tests (alternatively, either/or '-m "slow"' or '-m "endtoend"'?)
 - When asked to analyze log buttermilk log files: Use `ws_debug_cli analyze --file <path>` for buttermilk logs. Do NOT manually grep/read JSONL files.
+- our framework goal is success first time, every time, with just-in-time information, that doesn't cause unecessary cost or delay.

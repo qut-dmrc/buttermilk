@@ -156,17 +156,17 @@ class VariantProcessor(BaseModel):
             for idx, proc in enumerate(self._processors)
         ]
 
-        # Yield results as they arrive in the queue
+        # Track original task count to know when all tasks are done
+        original_task_count = len(tasks)
         completed_count = 0
-        while completed_count < len(tasks):
+
+        # Yield results as they arrive in the queue
+        while completed_count < original_task_count or not output_queue.empty():
             # Check if any tasks completed (successfully or with error)
-            for task in tasks:
+            for task in list(tasks):  # Iterate over copy to allow removal
                 if task.done() and not task.cancelled():
                     completed_count += 1
-                    # Remove from tasks list to avoid recounting
                     tasks.remove(task)
-                    # Task exceptions are already in the queue, so we don't need to handle them here
-                    break
 
             # Try to get items from queue (with timeout to check task completion)
             try:

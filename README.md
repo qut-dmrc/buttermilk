@@ -48,6 +48,10 @@ Buttermilk provides several components and features to facilitate HASS research:
 
 Buttermilk is actively under development. We welcome contributions and feedback. If you're interested in getting involved, please contact [nic](mailto:n.suzor@qut.edu.au).
 
+## Versioning
+
+Bump the version with `uv run bump-my-version bump patch` (or `minor`/`major`).
+
 ## Installation
 
 Create a new environment and install using uv:

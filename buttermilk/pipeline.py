@@ -277,7 +277,19 @@ class PipelineOrchestrator(BaseModel):
                 pipeline_name=self.pipeline_name,
             )
 
-        # Wrap source with ReplicatingSource if num_runs > 1
+        # Wrap source with LimitingSource FIRST (before replication)
+        # This ensures limit applies to original records, not replicated ones
+        if self.limit is not None and self.source is not None:
+            from buttermilk.storage.limiting_source import LimitingSource
+
+            self.source = LimitingSource(self.source, limit=self.limit)
+            logger.info(
+                f"🔢 Source wrapped with LimitingSource (limit={self.limit})",
+                pipeline_name=self.pipeline_name,
+                limit=self.limit,
+            )
+
+        # Wrap source with ReplicatingSource if num_runs > 1 (AFTER limiting)
         if self.num_runs > 1 and self.source is not None:
             from buttermilk.storage.replicating_source import ReplicatingSource
 
@@ -783,28 +795,12 @@ class PipelineOrchestrator(BaseModel):
                             # Continue processing other records - don't raise
 
             # Producer: Create tasks for incoming BaseRecord objects
+            # Note: Record limiting is handled by LimitingSource wrapper applied in model_post_init
+            # This ensures limit applies to original records BEFORE replication
             async def producer():
                 nonlocal pending_tasks
                 async for record in source_iter:
                     self._summary.increment_attempted()
-
-                    # Check if we've hit limit
-                    if (
-                        self.limit is not None
-                        and (
-                            self._summary.processed
-                            + self._summary.failed
-                            + self._summary.skipped
-                        )
-                        >= self.limit
-                    ):
-                        logger.info(
-                            f"🔚 Stage '{self.pipeline_name}' reached limit ({self._summary.attempted}/{self.limit}) – stopping",
-                            pipeline_name=self.pipeline_name,
-                            attempted=self._summary.attempted,
-                            limit=self.limit,
-                        )
-                        break
 
                     # Create and track task (concurrency controlled by semaphore in process_and_queue)
                     task = asyncio.create_task(process_and_queue(record))
@@ -847,10 +843,11 @@ class PipelineOrchestrator(BaseModel):
 
             # Yield from consumer with progress bar
             with progress:
-                # Create progress task
+                # Create progress task with no total (count upwards)
+                # We don't know how many outputs we'll get with 1:N transformations
                 progress_task = progress.add_task(
                     f"Pipeline: {self.pipeline_name}",
-                    total=self.limit if self.limit else None,
+                    total=None,  # Count upwards, don't show percentage
                     attempted=0,
                     output=0,
                     skipped=0,

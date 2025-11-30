@@ -4,7 +4,7 @@ authors = [
   { name = "Nicolas Suzor", email = "nic@suzor.com" },
 ]
 name = "buttermilk"
-version = "0.5.3"
+version = "0.5.4"
 description = "Modular AI research framework with async-first initialization"
 readme = "README.md"
 dependencies = [
@@ -178,6 +178,7 @@ dev = [
   "gradio>=5.4.0,<6.0.0",
   "opencv-python>=4.10.0.84,<5.0.0.0",
   "scikit-learn>=1.5.1,<2.0.0",
+  "bump-my-version>=1.2.2",
 ]
 
 # Everything (for backwards compatibility or quick start)
@@ -334,3 +335,4 @@ max-complexity = 15 # Buttermilk is more complex than bot
   "ARG", # Unused arguments common in fixtures
   "PLR2004", # Magic values OK in tests
 ]
+
