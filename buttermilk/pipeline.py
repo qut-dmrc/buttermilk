@@ -663,15 +663,17 @@ class PipelineOrchestrator(BaseModel):
         pending_tasks: set[asyncio.Task] = set()
 
         # Set up progress bar
+        # "attempted" = input records, "output" = yielded records (may differ due to 1:N processors)
         progress = Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             BarColumn(),
             TaskProgressColumn(),
             TextColumn("•"),
-            TextColumn("Processed: {task.fields[processed]}"),
-            TextColumn("Skipped: {task.fields[skipped]}"),
-            TextColumn("Failed: {task.fields[failed]}"),
+            TextColumn("In: {task.fields[attempted]}"),
+            TextColumn("Out: {task.fields[output]}"),
+            TextColumn("Skip: {task.fields[skipped]}"),
+            TextColumn("Fail: {task.fields[failed]}"),
             TextColumn("•"),
             TimeElapsedColumn(),
             disable=not show_progress,
@@ -849,17 +851,21 @@ class PipelineOrchestrator(BaseModel):
                 progress_task = progress.add_task(
                     f"Pipeline: {self.pipeline_name}",
                     total=self.limit if self.limit else None,
-                    processed=0,
+                    attempted=0,
+                    output=0,
                     skipped=0,
                     failed=0,
                 )
+                output_count = 0
 
                 async for record in consumer():
+                    output_count += 1
                     # Update progress with current stats
                     progress.update(
                         progress_task,
                         completed=self._summary.attempted,
-                        processed=self._summary.processed,
+                        attempted=self._summary.attempted,
+                        output=output_count,
                         skipped=self._summary.skipped,
                         failed=self._summary.failed,
                     )
@@ -872,7 +878,8 @@ class PipelineOrchestrator(BaseModel):
                 progress.update(
                     progress_task,
                     completed=self._summary.attempted,
-                    processed=self._summary.processed,
+                    attempted=self._summary.attempted,
+                    output=output_count,
                     skipped=self._summary.skipped,
                     failed=self._summary.failed,
                 )

@@ -27,9 +27,7 @@ class VariantProcessor(BaseModel):
     Attributes:
         processor_obj: Processor class path to instantiate (e.g., 'buttermilk.processors.LLMCore')
         variants: Parameter variations (e.g., {'model': ['gpt-4', 'claude-3']})
-        num_runs: Number of times to replicate each variant configuration
         parameters: Base parameters merged with variant params
-        fail_on_error: If True, raise on first variant failure. If False, log and continue.
 
     Example:
         ```yaml
@@ -65,11 +63,6 @@ class VariantProcessor(BaseModel):
         default_factory=dict,
         description="Base parameters merged with variant params",
     )
-    fail_on_error: bool = Field(
-        default=False,
-        description="If True, raise on first variant failure. If False, log and continue.",
-    )
-
     model_config = {"arbitrary_types_allowed": True}
 
     _processors: list[Any] = PrivateAttr(default_factory=list)
@@ -111,10 +104,8 @@ class VariantProcessor(BaseModel):
             **kwargs: Additional arguments passed to variant processors
 
         Yields:
-            BaseRecord outputs from each variant, with variant metadata added
-
-        Raises:
-            Exception: If fail_on_error=True and any variant fails
+            BaseRecord outputs from each variant, with variant metadata added.
+            Failed variants yield records with error field populated.
         """
 
         async def stream_variant_outputs(
@@ -137,10 +128,24 @@ class VariantProcessor(BaseModel):
                         "processor_class": type(processor).__name__,
                         "stage": processor_stage,
                     }
-                    await output_queue.put((variant_idx, output.model_copy(update={"metadata": metadata}), None))
+                    await output_queue.put(output.model_copy(update={"metadata": metadata}))
             except Exception as e:
-                # Put error in queue
-                await output_queue.put((variant_idx, None, e))
+                # Create error record and put in queue - variant failed but others continue
+                error_record = record.model_copy(
+                    update={
+                        "error": (record.error or []) + [str(e)],
+                        "metadata": {
+                            **(record.metadata or {}),
+                            "variant": {
+                                "index": variant_idx,
+                                "total": len(self._processors),
+                                "processor_class": type(processor).__name__,
+                                "stage": processor_stage,
+                            },
+                        },
+                    }
+                )
+                await output_queue.put(error_record)
 
         # Create queue for streaming results
         output_queue: asyncio.Queue = asyncio.Queue()
@@ -165,43 +170,15 @@ class VariantProcessor(BaseModel):
 
             # Try to get items from queue (with timeout to check task completion)
             try:
-                variant_idx, output, error = await asyncio.wait_for(output_queue.get(), timeout=0.1)
-
-                if error is not None:
-                    # Handle error
-                    if self.fail_on_error:
-                        # Cancel remaining tasks
-                        for task in tasks:
-                            task.cancel()
-                        raise error
-
-                    # Yield error record so pipeline can track the failure
-                    error_record = record.model_copy(
-                        update={
-                            "error": record.error + [str(error)] if record.error else [str(error)],
-                            "metadata": {
-                                **record.metadata,
-                                "variant": {
-                                    "index": variant_idx,
-                                    "total": len(self._processors),
-                                    "processor_class": self.processor_obj.split(".")[-1],
-                                    "stage": processor_stage,
-                                    "failed": True,
-                                },
-                            },
-                        }
-                    )
-                    logger.warning(
-                        f"Variant failed in parallel execution for {processor_stage} {self.processor_obj.split('.')[-1]}, continuing with others",
+                output = await asyncio.wait_for(output_queue.get(), timeout=0.1)
+                if output.error:
+                    logger.error(
+                        f"Variant failed: {output.error[-1]}",
+                        record_id=output.record_id,
                         processor_stage=processor_stage,
-                        variant_idx=variant_idx,
-                        error=str(error),
+                        variant=output.metadata.get("variant", {}),
                     )
-                    yield error_record
-                else:
-                    # Yield successful output immediately
-                    yield output
-
+                yield output
             except asyncio.TimeoutError:
                 # No items in queue yet, continue checking tasks
                 continue

@@ -49,12 +49,11 @@ class ReplicatingSource:
         ```
 
     Metadata:
-        Each replicated record gets metadata added:
+        Each replicated record gets metadata added (record_id is preserved):
         ```python
         record.metadata["replication"] = {
             "run_index": 0,        # Which run (0-4 for num_runs=5)
-            "total_runs": 5,        # Total number of runs
-            "original_record_id": "ABC123",  # Original record_id
+            "total_runs": 5,       # Total number of runs
         }
         ```
     """
@@ -100,33 +99,21 @@ class ReplicatingSource:
 
             # Yield num_runs copies of this record
             for run_index in range(self.num_runs):
-                # Create unique record_id for this run
-                if self.num_runs > 1:
-                    replicated_record_id = f"{original_record_id}_run_{run_index}"
-                else:
-                    # No replication, keep original record_id
-                    replicated_record_id = original_record_id
-
-                # Add replication metadata
+                # Add replication metadata (record_id stays unchanged)
                 metadata = record.metadata.copy() if record.metadata else {}
                 metadata["replication"] = {
                     "run_index": run_index,
                     "total_runs": self.num_runs,
-                    "original_record_id": original_record_id,
                 }
 
-                # Create replicated record with updated record_id and metadata
+                # Create replicated record with metadata only (preserve original record_id)
                 replicated_record = record.model_copy(
-                    update={
-                        "record_id": replicated_record_id,
-                        "metadata": metadata,
-                    }
+                    update={"metadata": metadata}
                 )
 
                 logger.debug(
                     f"🔄 Yielding replicated record {run_index + 1}/{self.num_runs}",
-                    original_record_id=original_record_id,
-                    replicated_record_id=replicated_record_id,
+                    record_id=original_record_id,
                     run_index=run_index,
                 )
 
