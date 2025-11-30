@@ -210,6 +210,11 @@ class PipelineOrchestrator(BaseModel):
         default=None,
         description="Base directory for record cache (defaults to ~/.cache/buttermilk)",
     )
+    num_runs: int = Field(
+        default=1,
+        ge=1,
+        description="Number of times to replicate each source record (for reliability studies)",
+    )
 
     # Inputs configured after instantiation
     source: Optional[Any] = Field(
@@ -270,6 +275,17 @@ class PipelineOrchestrator(BaseModel):
             logger.info(
                 "🚫 Record cache disabled for pipeline stage",
                 pipeline_name=self.pipeline_name,
+            )
+
+        # Wrap source with ReplicatingSource if num_runs > 1
+        if self.num_runs > 1 and self.source is not None:
+            from buttermilk.storage.replicating_source import ReplicatingSource
+
+            self.source = ReplicatingSource(self.source, num_runs=self.num_runs)
+            logger.info(
+                f"🔄 Source wrapped with ReplicatingSource (num_runs={self.num_runs})",
+                pipeline_name=self.pipeline_name,
+                num_runs=self.num_runs,
             )
 
         return self

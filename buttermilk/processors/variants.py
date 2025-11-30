@@ -61,11 +61,6 @@ class VariantProcessor(BaseModel):
         default_factory=dict,
         description="Parameter variations (e.g., {'model': ['gpt-4', 'claude-3']})",
     )
-    num_runs: int = Field(
-        default=1,
-        ge=1,
-        description="Number of times to replicate each variant configuration",
-    )
     parameters: dict[str, Any] = Field(
         default_factory=dict,
         description="Base parameters merged with variant params",
@@ -86,7 +81,6 @@ class VariantProcessor(BaseModel):
         variant_cfg = ProcessorVariants(
             processor_obj=self.processor_obj,
             variants=self.variants,
-            num_runs=self.num_runs,
             parameters=self.parameters,
         )
 

@@ -63,6 +63,11 @@ class PipelineConfig(BaseModel):
         default=None,
         description="Number of samples to collect from source (for sampling pipelines)",
     )
+    num_runs: int = Field(
+        default=1,
+        ge=1,
+        description="Number of times to replicate each source record (for reliability studies)",
+    )
 
     # Uploader configuration
     buffer_size: int = Field(
@@ -133,10 +138,13 @@ class ProcessorVariants(BaseModel):
     instances with different parameter combinations for A/B testing, ensemble
     methods, or quality comparison.
 
+    NOTE: For repeated runs (num_runs), use ReplicatingSource at the pipeline
+    source level instead of replicating processors. This prevents exponential
+    API call multiplication.
+
     Attributes:
         processor_obj: Processor class path to instantiate (e.g., 'buttermilk.processors.LLMCore')
         variants: Parallel variant parameters (e.g., {'model': ['gpt-4', 'claude-3']})
-        num_runs: Number of times to replicate each variant configuration
         parameters: Base processor parameters merged with variant params
 
     Example:
@@ -156,11 +164,6 @@ class ProcessorVariants(BaseModel):
     variants: dict[str, list[Any]] = Field(
         default_factory=dict,
         description="Parameters for parallel processor variations (e.g., {'model': ['gpt-4', 'claude-3']})",
-    )
-    num_runs: int = Field(
-        default=1,
-        ge=1,
-        description="Number of times to replicate each variant configuration",
     )
     parameters: dict[str, Any] = Field(
         default_factory=dict,
@@ -219,16 +222,15 @@ class ProcessorVariants(BaseModel):
 
         generated_configs: list[tuple[type[Any], dict[str, Any]]] = []
 
-        for _ in range(self.num_runs):
-            for variant_params in variant_combinations:
-                # Merge parameters: flow defaults, then base, then variant-specific
-                final_params = {
-                    **flow_default_params,
-                    **self.parameters,
-                    **variant_params,
-                }
+        for variant_params in variant_combinations:
+            # Merge parameters: flow defaults, then base, then variant-specific
+            final_params = {
+                **flow_default_params,
+                **self.parameters,
+                **variant_params,
+            }
 
-                generated_configs.append((processor_class, final_params))
+            generated_configs.append((processor_class, final_params))
 
         if not generated_configs:
             raise FatalError(
