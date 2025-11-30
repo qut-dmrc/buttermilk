@@ -403,7 +403,7 @@ class ZentropiClassifier(ClassifierCore):
 
     The API requires:
     - content_text: The text to be classified
-    - criteria_text: The classification criteria (passed as criteria parameter)
+    - criteria_text: The classification criteria (loaded from template)
 
     Example:
         ```python
@@ -414,27 +414,20 @@ class ZentropiClassifier(ClassifierCore):
 
         classifier = ZentropiClassifier(
             template="toxicity_prompt",
-            criteria="Classify if content is toxic or safe",
             output_model=ToxicityClassification,
         )
         ```
     """
 
-    def __init__(self, criteria: str, **kwargs: Any) -> None:
+    def __init__(self, **kwargs: Any) -> None:
         """Initialize ZentropiClassifier with API credentials.
 
-        Args:
-            criteria: Classification criteria text (required).
-
         Raises:
-            ValueError: If ZENTROPI_API_KEY is not in environment or criteria is empty.
+            ValueError: If ZENTROPI_API_KEY is not in environment.
         """
         super().__init__(**kwargs)
 
         import os
-
-        if not criteria:
-            raise ValueError("criteria parameter is required for ZentropiClassifier")
 
         api_key = os.environ.get("ZENTROPI_API_KEY")
         if not api_key:
@@ -442,18 +435,29 @@ class ZentropiClassifier(ClassifierCore):
 
         base_url = os.environ.get("ZENTROPI_BASE_URL", "https://api.zentropi.ai/v1/label")
 
-        self.criteria = criteria
         self._client = {"api_key": api_key, "base_url": base_url}
         logger.debug(f"ZentropiClassifier initialized with base_url: {base_url}")
 
-    async def _classify(self, text: str) -> dict[str, Any]:
-        """Call Zentropi API with text."""
+    async def _classify(self, text: str, *, content: str) -> dict[str, Any]:
+        """Call Zentropi API with criteria and content.
+
+        Args:
+            text: Rendered template containing classification criteria
+            content: Text content to classify
+
+        Returns:
+            Dictionary with 'label', 'confidence', and 'compute_time'
+
+        Raises:
+            ValueError: If response is missing 'label' field
+            requests.exceptions.RequestException: If API call fails
+        """
         import requests
 
         try:
             payload = {
-                "content_text": text,
-                "criteria_text": self.criteria,
+                "content_text": content,
+                "criteria_text": text,
             }
 
             response = requests.post(
@@ -472,6 +476,78 @@ class ZentropiClassifier(ClassifierCore):
         except requests.exceptions.RequestException as e:
             logger.error(f"Zentropi API call failed: {e}")
             raise
+
+    async def _classify_record(
+        self, record: BaseRecord, **kwargs: Any
+    ) -> ClassifierResult:
+        """Override to extract content separately for Zentropi API.
+
+        Zentropi requires two separate fields:
+        - criteria_text: Classification instructions (from template)
+        - content_text: Text to classify (from record.content)
+
+        Args:
+            record: Input record to classify
+            **kwargs: Additional template variables
+
+        Returns:
+            ClassifierResult with structured output and metadata
+
+        Raises:
+            ProcessingError: If template rendering, API call, or mapping fails
+            ValueError: If record.content is None or empty
+        """
+        from buttermilk._core.exceptions import ProcessingError
+        from buttermilk._core.template import load_template
+
+        # Extract content from record
+        if not record.content:
+            raise ValueError("record.content cannot be None or empty for classification")
+
+        content = str(record.content)
+
+        # Step 1: Render template (this becomes criteria_text)
+        inputs = record.model_dump() if hasattr(record, "model_dump") else dict(record)
+        inputs.update(kwargs)
+
+        try:
+            rendered_text, unfilled_vars, template_hash = load_template(
+                template=self.template,
+                parameters=self.parameters,
+                untrusted_inputs=inputs,
+            )
+            logger.debug(
+                f"ZentropiClassifier rendered template '{self.template}', "
+                f"unfilled vars: {unfilled_vars}, hash: {template_hash}"
+            )
+        except Exception as e:
+            raise ProcessingError(f"Template rendering failed: {e}") from e
+
+        # Step 2: Call Zentropi API with both criteria and content
+        try:
+            api_response = await self._classify(rendered_text, content=content)
+            logger.debug(f"ZentropiClassifier received API response: {type(api_response).__name__}")
+        except Exception as e:
+            raise ProcessingError(f"Zentropi API call failed: {e}") from e
+
+        # Step 3: Map to schema
+        try:
+            structured_output = self._map_to_schema(api_response, self.output_model)
+            logger.debug(f"ZentropiClassifier mapped to schema: {type(structured_output).__name__}")
+        except Exception as e:
+            raise ProcessingError(
+                f"Failed to map response to {self.output_model.__name__}: {e}"
+            ) from e
+
+        return ClassifierResult(
+            content=structured_output,
+            metadata={"api_response": api_response},
+            template_metadata={
+                "name": self.template,
+                "hash": template_hash,
+                "unfilled_vars": list(unfilled_vars),
+            },
+        )
 
     def _map_to_schema(
         self, response: dict[str, Any], schema: type[pydantic.BaseModel]
