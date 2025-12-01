@@ -2,14 +2,14 @@ name: Performance Tests
 on:
   pull_request:
     types: [opened, reopened] # Only on PR open/reopen, not every commit
-    branches: [main, dev]
+    branches: [main]  # Only run on PRs to main (not dev)
     paths:
       - "buttermilk/**/*.py"
       - "tests/**/*.py"
       - "pyproject.toml"
   push:
-    branches: [main, dev]
-  workflow_dispatch: # Allow manual triggering
+    branches: [main]  # Only run on pushes to main (not dev)
+  workflow_dispatch: # Allow manual triggering for any branch
 jobs:
   performance:
     runs-on: ubuntu-latest
@@ -48,7 +48,7 @@ jobs:
           python scripts/performance/monitor_performance.py --compare --threshold 10
         continue-on-error: true
       - name: Save current results
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/cache@v4
         with:
           path: .benchmarks/baseline
