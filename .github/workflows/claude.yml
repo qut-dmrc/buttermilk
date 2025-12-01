@@ -39,12 +39,10 @@ jobs:
           ANTHROPIC_VERTEX_PROJECT_ID: ${{ vars.GOOGLE_CLOUD_PROJECT }}
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          # This is an optional setting that allows Claude to read CI results on PRs
-          additional_permissions: |
-            actions: read
           claude_args: |
             --model opus
             --allowedTools "Bash,Read,Write,Edit,Glob,Grep,LS,mcp__github,mcp__github__create_pull_request,mcp__github__create_issue,mcp__github__comment_on_issue,mcp__github__comment_on_pr,mcp__github__list_files,mcp__github__get_file_content"
+            --max-turns 50
           #custom_instructions: |
           #  CRITICAL: Follow instructions in @docs/bots/INSTRUCTIONS.md
           # Optional: Custom environment variables for Claude
