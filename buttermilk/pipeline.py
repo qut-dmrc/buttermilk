@@ -676,23 +676,23 @@ class PipelineOrchestrator(BaseModel):
         tracer = trace.get_tracer("buttermilk.pipeline")
         pending_tasks: set[asyncio.Task] = set()
 
-        # Track output timing for rate calculation
-        # Keep timestamps for last N outputs where N = concurrency * 5
+        # Track input record completion timing for rate calculation
+        # Keep timestamps for last N completed inputs where N = concurrency * 5
         rate_window_size = max(self.concurrency * 5, 10)
-        output_timestamps: deque[float] = deque(maxlen=rate_window_size)
+        input_completion_timestamps: deque[float] = deque(maxlen=rate_window_size)
 
         def calculate_rate() -> str:
-            """Calculate seconds per output over the recent window."""
-            if len(output_timestamps) < 2:
-                return "-- s/rec"
+            """Calculate seconds per input record over the recent window."""
+            if len(input_completion_timestamps) < 2:
+                return "-- s/in"
             # Time span between oldest and newest in window
-            time_span = output_timestamps[-1] - output_timestamps[0]
+            time_span = input_completion_timestamps[-1] - input_completion_timestamps[0]
             # Number of intervals = number of records - 1
-            num_intervals = len(output_timestamps) - 1
+            num_intervals = len(input_completion_timestamps) - 1
             if num_intervals > 0 and time_span > 0:
                 sec_per_record = time_span / num_intervals
-                return f"{sec_per_record:.2f} s/rec"
-            return "-- s/rec"
+                return f"{sec_per_record:.1f} s/in"
+            return "-- s/in"
 
         # Set up progress bar
         # Shows total outputs yielded, skip/fail counts, rate, and elapsed time
@@ -761,6 +761,7 @@ class PipelineOrchestrator(BaseModel):
                             # Only count as processed if we got at least one output
                             if results_count > 0:
                                 self._summary.increment_processed()
+                                input_completion_timestamps.append(time.monotonic())
                                 task_span.set_attribute("outputs.count", results_count)
                                 task_span.set_attribute("status", "processed")
                                 task_span.set_status(trace.Status(trace.StatusCode.OK))
@@ -872,13 +873,12 @@ class PipelineOrchestrator(BaseModel):
                     output=0,
                     skipped=0,
                     failed=0,
-                    rate="-- s/rec",
+                    rate="-- s/in",
                 )
                 output_count = 0
 
                 async for record in consumer():
                     output_count += 1
-                    output_timestamps.append(time.monotonic())
                     # Update progress with current stats
                     progress.update(
                         progress_task,
