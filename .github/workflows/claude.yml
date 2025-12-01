@@ -34,7 +34,7 @@ jobs:
           service_account: "${{ vars.SERVICE_ACCOUNT_EMAIL }}"
       - name: Run Claude Code
         id: claude
-        uses: anthropics/claude-code-action@latest
+        uses: anthropics/claude-code-action@v1
         env:
           ANTHROPIC_VERTEX_PROJECT_ID: ${{ vars.GOOGLE_CLOUD_PROJECT }}
         with:
