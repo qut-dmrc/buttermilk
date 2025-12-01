@@ -19,6 +19,7 @@ from opentelemetry import trace
 from pydantic import BaseModel, Field
 
 from buttermilk import logger
+from buttermilk._core.contract import ExecutionTrace
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.types import BaseRecord
 from buttermilk.utils.templating import load_template
@@ -111,6 +112,16 @@ class ClassifierCore:
 
         self.output_col = output_col
         self.parameters = kwargs
+        self._trace_writer = None
+
+    @property
+    def trace_writer(self) -> Any:
+        """Lazy-load trace writer for BigQuery persistence."""
+        if self._trace_writer is None:
+            from buttermilk.utils.trace_writer import get_trace_writer
+
+            self._trace_writer = get_trace_writer()
+        return self._trace_writer
 
     async def process(
         self,
@@ -178,9 +189,59 @@ class ClassifierCore:
                 span.set_attribute("processing.time_ms", processing_time_ms)
                 span.set_status(trace.Status(trace.StatusCode.OK))
 
+                # Write ExecutionTrace to BigQuery (same pattern as LLMCore)
+                execution_trace = ExecutionTrace(
+                    call_id=result.trace_id,
+                    agent_info={
+                        "component_name": self.__class__.__name__,
+                        "execution_type": "classification",
+                        "config": {"template": self.template, **self.parameters},
+                        "processor_stage": processor_stage,
+                    },
+                    inputs={"record_id": record_id, "content": getattr(record, "content", None)},
+                    outputs=output_content,
+                    parameters={"template": self.template, **self.parameters},
+                    metadata={
+                        **stage_metadata,
+                        "duration_ms": processing_time_ms,
+                    },
+                    parent_call_id=parent_trace_id,
+                )
+
+                if self.trace_writer:
+                    try:
+                        await self.trace_writer.add(execution_trace)
+                    except Exception as e:
+                        logger.warning(f"Failed to emit classifier trace: {e}")
+
                 yield enriched_record
 
             except Exception as e:
+                # Write error trace
+                error_trace = ExecutionTrace(
+                    agent_info={
+                        "component_name": self.__class__.__name__,
+                        "execution_type": "classification",
+                        "config": {"template": self.template, **self.parameters},
+                        "processor_stage": processor_stage,
+                    },
+                    inputs={"record_id": record_id, "content": getattr(record, "content", None)},
+                    error={
+                        "event": str(e),
+                        "details": {"error_type": type(e).__name__},
+                    },
+                    metadata={
+                        "duration_ms": int((time.time() - start_time) * 1000),
+                    },
+                    parent_call_id=parent_trace_id,
+                )
+
+                if self.trace_writer:
+                    try:
+                        await self.trace_writer.add(error_trace)
+                    except Exception as te:
+                        logger.warning(f"Failed to emit classifier error trace: {te}")
+
                 span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                 raise ProcessingError(f"Classification failed {processor_stage} for record {record_id}: {e}") from e
 
