@@ -662,6 +662,8 @@ class PipelineOrchestrator(BaseModel):
             start_time: Start time of the pipeline
             show_progress: Whether to display a progress bar (default: True)
         """
+        from collections import deque
+
         from rich.progress import (
             BarColumn,
             Progress,
@@ -674,18 +676,37 @@ class PipelineOrchestrator(BaseModel):
         tracer = trace.get_tracer("buttermilk.pipeline")
         pending_tasks: set[asyncio.Task] = set()
 
+        # Track output timing for rate calculation
+        # Keep timestamps for last N outputs where N = concurrency * 5
+        rate_window_size = max(self.concurrency * 5, 10)
+        output_timestamps: deque[float] = deque(maxlen=rate_window_size)
+
+        def calculate_rate() -> str:
+            """Calculate seconds per output over the recent window."""
+            if len(output_timestamps) < 2:
+                return "-- s/rec"
+            # Time span between oldest and newest in window
+            time_span = output_timestamps[-1] - output_timestamps[0]
+            # Number of intervals = number of records - 1
+            num_intervals = len(output_timestamps) - 1
+            if num_intervals > 0 and time_span > 0:
+                sec_per_record = time_span / num_intervals
+                return f"{sec_per_record:.2f} s/rec"
+            return "-- s/rec"
+
         # Set up progress bar
-        # "attempted" = input records, "output" = yielded records (may differ due to 1:N processors)
+        # Shows total outputs yielded, skip/fail counts, rate, and elapsed time
         progress = Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             BarColumn(),
             TaskProgressColumn(),
             TextColumn("•"),
-            TextColumn("In: {task.fields[attempted]}"),
-            TextColumn("Out: {task.fields[output]}"),
+            TextColumn("Processed: {task.fields[output]}"),
             TextColumn("Skip: {task.fields[skipped]}"),
             TextColumn("Fail: {task.fields[failed]}"),
+            TextColumn("•"),
+            TextColumn("{task.fields[rate]}"),
             TextColumn("•"),
             TimeElapsedColumn(),
             disable=not show_progress,
@@ -848,23 +869,24 @@ class PipelineOrchestrator(BaseModel):
                 progress_task = progress.add_task(
                     f"Pipeline: {self.pipeline_name}",
                     total=None,  # Count upwards, don't show percentage
-                    attempted=0,
                     output=0,
                     skipped=0,
                     failed=0,
+                    rate="-- s/rec",
                 )
                 output_count = 0
 
                 async for record in consumer():
                     output_count += 1
+                    output_timestamps.append(time.monotonic())
                     # Update progress with current stats
                     progress.update(
                         progress_task,
-                        completed=self._summary.attempted,
-                        attempted=self._summary.attempted,
+                        completed=output_count,
                         output=output_count,
                         skipped=self._summary.skipped,
                         failed=self._summary.failed,
+                        rate=calculate_rate(),
                     )
                     yield record
 
@@ -874,11 +896,11 @@ class PipelineOrchestrator(BaseModel):
                 # Final progress update
                 progress.update(
                     progress_task,
-                    completed=self._summary.attempted,
-                    attempted=self._summary.attempted,
+                    completed=output_count,
                     output=output_count,
                     skipped=self._summary.skipped,
                     failed=self._summary.failed,
+                    rate=calculate_rate(),
                 )
 
             # Call finalize_processing on all processors
