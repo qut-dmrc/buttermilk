@@ -1531,8 +1531,16 @@ class LiteLLMWrapper(BaseModel):
                 litellm_params["tools"] = litellm_tools
 
         # Disable LiteLLM's internal retry logic since we handle retries ourselves
-        # LiteLLM defaults to num_retries=3, which would stack with our retry wrapper
-        litellm_params["num_retries"] = 0
+        # LiteLLM defaults to num_retries=None (no retries), but some providers
+        # may have their own defaults. We explicitly set num_retries=0 to ensure
+        # we control all retry behavior via our own _execute_with_retry wrapper.
+        #
+        # Note: HuggingFace models don't support max_retries and will log a warning
+        # if it's passed. Since we handle retries ourselves, we skip num_retries
+        # for HuggingFace to avoid the spurious warning.
+        is_huggingface = api_model.startswith("huggingface/") if api_model else False
+        if not is_huggingface:
+            litellm_params["num_retries"] = 0
 
         # Execute with retry logic
         async def _call_litellm() -> Any:
