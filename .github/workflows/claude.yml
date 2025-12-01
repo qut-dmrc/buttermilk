@@ -34,7 +34,7 @@ jobs:
           service_account: "${{ vars.SERVICE_ACCOUNT_EMAIL }}"
       - name: Run Claude Code
         id: claude
-        uses: anthropics/claude-code-action@beta
+        uses: anthropics/claude-code-action@latest
         env:
           ANTHROPIC_VERTEX_PROJECT_ID: ${{ vars.GOOGLE_CLOUD_PROJECT }}
         with:
@@ -42,17 +42,11 @@ jobs:
           # This is an optional setting that allows Claude to read CI results on PRs
           additional_permissions: |
             actions: read
-          allowed_tools: "Bash,Read,Write,Edit,Glob,Grep,LS,mcp__github,mcp__github__create_pull_request,mcp__github__create_issue,mcp__github__comment_on_issue,mcp__github__comment_on_pr,mcp__github__list_files,mcp__github__get_file_content"
-          # Optional: Specify model (defaults to Claude Sonnet 4, uncomment for Claude Opus 4)
-          model: "claude-opus-4-1"
-          # Optional: Customize the trigger phrase (default: @claude)
-          # trigger_phrase: "/claude"
-
-          # Optional: Trigger when specific user is assigned to an issue
-          assignee_trigger: "claude"
-          # Optional: Add custom instructions for Claude to customize its behavior for your project
-          custom_instructions: |
-            CRITICAL: Follow instructions in @docs/bots/INSTRUCTIONS.md
+          claude_args: |
+            --model opus
+            --allowedTools "Bash,Read,Write,Edit,Glob,Grep,LS,mcp__github,mcp__github__create_pull_request,mcp__github__create_issue,mcp__github__comment_on_issue,mcp__github__comment_on_pr,mcp__github__list_files,mcp__github__get_file_content"
+          #custom_instructions: |
+          #  CRITICAL: Follow instructions in @docs/bots/INSTRUCTIONS.md
           # Optional: Custom environment variables for Claude
           # claude_env: |
           #   NODE_ENV: test
