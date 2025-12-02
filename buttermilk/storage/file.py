@@ -2,6 +2,7 @@
 
 import csv
 import json
+import random
 from typing import TYPE_CHECKING, Any, Iterator
 
 from cloudpathlib import AnyPath  # For handling local and cloud paths
@@ -58,64 +59,84 @@ class FileStorage(Storage):
             # Default to json
             return "json"
 
+    def _load_records(self) -> list[BaseRecord]:
+        """Load all records from file into a list.
+
+        Returns:
+            List of BaseRecord objects from the file
+        """
+        records = []
+
+        if not self.exists():
+            logger.warning(f"File does not exist: {self.path}")
+            return records
+
+        file_format = self._get_format()
+
+        # Handle both local and cloud paths (GCS, S3, etc.)
+        if str(self.path).startswith(("gs://", "s3://", "azure://")):
+            # Use cloudpathlib for cloud storage paths
+            file_obj = self.path.open("r", encoding="utf-8")
+        else:
+            # Use regular open for local files
+            file_obj = open(self.path, "r", encoding="utf-8")
+
+        try:
+            if file_format == "csv":
+                # Handle CSV format
+                reader = csv.DictReader(file_obj)
+                for row_num, row in enumerate(reader, 1):
+                    try:
+                        record = self._dict_to_record(dict(row), row_num)
+                        records.append(record)
+                    except Exception as e:
+                        logger.warning(f"Error processing CSV row {row_num}: {e}")
+                        continue
+            elif file_format == "json":
+                # Handle JSON array format
+                data_array = json.load(file_obj)
+                for line_num, data in enumerate(data_array, 1):
+                    try:
+                        record = self._dict_to_record(data, line_num)
+                        records.append(record)
+                    except Exception as e:
+                        logger.warning(
+                            f"Error processing JSON array item {line_num}: {e}"
+                        )
+            else:
+                # Handle JSONL format (one JSON object per line)
+                for line_num, line_str in enumerate(file_obj, 1):
+                    line = line_str.strip()
+                    if not line:
+                        continue
+                    try:
+                        data = json.loads(line)
+                        record = self._dict_to_record(data, line_num)
+                        records.append(record)
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"Invalid JSON on line {line_num}: {e}")
+                        continue
+        finally:
+            file_obj.close()
+
+        return records
+
     def __iter__(self) -> Iterator[BaseRecord]:
         """Iterate over records from file.
+
+        If config.randomize is True, records are shuffled before yielding.
 
         Yields:
             BaseRecord objects from the file (Record, Title, or other subclasses)
         """
         try:
-            if not self.exists():
-                logger.warning(f"File does not exist: {self.path}")
-                return
+            records = self._load_records()
 
-            file_format = self._get_format()
+            # Shuffle if randomize is enabled (default is True in StorageConfig)
+            if getattr(self.config, "randomize", True):
+                random.shuffle(records)
 
-            # Handle both local and cloud paths (GCS, S3, etc.)
-            if str(self.path).startswith(("gs://", "s3://", "azure://")):
-                # Use cloudpathlib for cloud storage paths
-                file_obj = self.path.open("r", encoding="utf-8")
-            else:
-                # Use regular open for local files
-                file_obj = open(self.path, "r", encoding="utf-8")
-
-            try:
-                if file_format == "csv":
-                    # Handle CSV format
-                    reader = csv.DictReader(file_obj)
-                    for row_num, row in enumerate(reader, 1):
-                        try:
-                            record = self._dict_to_record(dict(row), row_num)
-                            yield record
-                        except Exception as e:
-                            logger.warning(f"Error processing CSV row {row_num}: {e}")
-                            continue
-                elif file_format == "json":
-                    # Handle JSON array format
-                    data_array = json.load(file_obj)
-                    for line_num, data in enumerate(data_array, 1):
-                        try:
-                            record = self._dict_to_record(data, line_num)
-                            yield record
-                        except Exception as e:
-                            logger.warning(
-                                f"Error processing JSON array item {line_num}: {e}"
-                            )
-                else:
-                    # Handle JSONL format (one JSON object per line)
-                    for line_num, line_str in enumerate(file_obj, 1):
-                        line = line_str.strip()
-                        if not line:
-                            continue
-                        try:
-                            data = json.loads(line)
-                            record = self._dict_to_record(data, line_num)
-                            yield record
-                        except json.JSONDecodeError as e:
-                            logger.warning(f"Invalid JSON on line {line_num}: {e}")
-                            continue
-            finally:
-                file_obj.close()
+            yield from records
 
         except Exception as e:
             logger.error(f"Error reading from file {self.path}: {e}")

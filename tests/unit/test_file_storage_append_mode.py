@@ -22,13 +22,14 @@ class TestFileStorageAppendMode:
             tmp_path = tmp.name
 
         try:
-            # Create config with append=True
+            # Create config with append=True, randomize=False to preserve order for testing
             config = FileStorageConfig(
                 type="file",
                 path=tmp_path,
                 dataset_name="test",
                 split_type="test",
                 append=True,
+                randomize=False,
             )
 
             storage = FileStorage(config)
@@ -90,13 +91,14 @@ class TestFileStorageAppendMode:
             tmp_path = tmp.name
 
         try:
-            # Create config with append=True
+            # Create config with append=True, randomize=False to preserve order for testing
             config = FileStorageConfig(
                 type="file",
                 path=tmp_path,
                 dataset_name="test",
                 split_type="test",
                 append=True,
+                randomize=False,
             )
 
             storage = FileStorage(config)
@@ -144,12 +146,13 @@ class TestFileStorageAppendMode:
             tmp_path = tmp.name
 
         try:
-            # Create config with default append=False
+            # Create config with default append=False, randomize=False for predictable order
             config = FileStorageConfig(
                 type="file",
                 path=tmp_path,
                 dataset_name="test",
                 split_type="test",
+                randomize=False,
                 # append defaults to False
             )
 
@@ -198,13 +201,14 @@ class TestFileStorageAppendMode:
             # File is automatically deleted, so it doesn't exist
 
         try:
-            # Create config with append=True
+            # Create config with append=True, randomize=False for predictable order
             config = FileStorageConfig(
                 type="file",
                 path=tmp_path,
                 dataset_name="test",
                 split_type="test",
                 append=True,
+                randomize=False,
             )
 
             storage = FileStorage(config)
