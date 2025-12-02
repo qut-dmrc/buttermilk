@@ -975,7 +975,7 @@ class AutoGenWrapper(BaseModel):
             logger.warning(
                 "LLM response had no usage data - using 0 tokens for pricing"
             )
-            return {"prompt_tokens": 0, "completion_tokens": 0, "total_cost": 0.0}
+            return {"total_cost": 0.0}
 
         # Extract tokens from usage object
         prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
@@ -988,11 +988,8 @@ class AutoGenWrapper(BaseModel):
             completion_tokens=completion_tokens,
         )
 
-        return {
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": completion_tokens,
-            "total_cost": total_cost,
-        }
+        # Only return total_cost - token counts are already in usage object
+        return {"total_cost": total_cost}
 
     @staticmethod
     async def _parse_structured_output(  # noqa: PLR0912
@@ -1766,7 +1763,7 @@ class LiteLLMWrapper(BaseModel):
             logger.warning(
                 "LLM response had no usage data - using 0 tokens for pricing"
             )
-            return {"prompt_tokens": 0, "completion_tokens": 0, "total_cost": 0.0}
+            return {"total_cost": 0.0}
 
         prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
         completion_tokens = getattr(usage, "completion_tokens", 0) or 0
@@ -1778,11 +1775,8 @@ class LiteLLMWrapper(BaseModel):
             completion_tokens=completion_tokens,
         )
 
-        return {
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": completion_tokens,
-            "total_cost": total_cost,
-        }
+        # Only return total_cost - token counts are already in usage object
+        return {"total_cost": total_cost}
 
 
 class LLMs(BaseModel):

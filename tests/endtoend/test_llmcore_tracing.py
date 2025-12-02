@@ -378,6 +378,66 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
         f"✅ Messages field validated: {len(messages)} messages with roles {roles}"
     )
 
+    # Validate parameters field contains model hyperparameters
+    # Query for parameters field from BigQuery
+    query_with_parameters = f"""
+        SELECT
+            call_id,
+            parameters
+        FROM `{real_bm.bq.project}.testing.traces`
+        WHERE call_id = '{trace.call_id}'
+        LIMIT 1
+    """
+    df_parameters = real_bm.run_query(query_with_parameters)
+
+    assert df_parameters.shape[0] == 1, "Should retrieve the trace with parameters"
+    parameters = df_parameters.iloc[0].parameters
+
+    # FAIL-FAST: Parameters must exist and be parseable
+    assert parameters is not None, "Parameters field should not be None"
+
+    # Parse if JSON string
+    if isinstance(parameters, str):
+        parameters = json.loads(parameters)
+
+    assert isinstance(parameters, dict), (
+        f"Parameters should be a dict, got {type(parameters).__name__}"
+    )
+
+    # Validate core LLMCore parameters are present
+    assert "model" in parameters, (
+        f"Parameters should contain 'model'. Got keys: {parameters.keys()}"
+    )
+    assert "template" in parameters, (
+        f"Parameters should contain 'template'. Got keys: {parameters.keys()}"
+    )
+
+    # Validate model configs are captured (temperature, api_version, etc. from models.json)
+    # The configs dict is stored in LLMConfig.configs, NOT in ModelParameters
+    if real_model_name_expensive in real_bm.llms.connections:
+        llm_config = real_bm.llms.connections[real_model_name_expensive]
+        model_configs = llm_config.configs if llm_config.configs else {}
+
+        if "temperature" in model_configs:
+            assert "temperature" in parameters, (
+                f"Parameters should contain 'temperature' from model configs. "
+                f"Model configs: {model_configs}, got parameters: {parameters}"
+            )
+            assert parameters["temperature"] == model_configs["temperature"], (
+                f"Temperature should match model config: expected {model_configs['temperature']}, "
+                f"got {parameters.get('temperature')}"
+            )
+            logger.info(f"✅ Hyperparameter 'temperature' logged correctly: {parameters['temperature']}")
+
+        if "api_version" in model_configs:
+            assert "api_version" in parameters, (
+                f"Parameters should contain 'api_version' from model configs. "
+                f"Model configs: {model_configs}, got parameters: {parameters}"
+            )
+            logger.info(f"✅ Config 'api_version' logged correctly: {parameters['api_version']}")
+
+    logger.info(f"✅ Parameters field validated: {list(parameters.keys())}")
+
     logger.info("✅ All trace validations passed")
     logger.info(f"Trace metadata: {metadata}")
 

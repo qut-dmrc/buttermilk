@@ -219,12 +219,24 @@ class LLMCore:
                 )
                 # Create ExecutionTrace for observability
                 duration_ms = (time.time() - start_time) * 1000
+
+                # Get model configuration for complete traceability
+                # model_configs contains temperature, api_version, safety_settings, etc. from models.json
+                model_configs = {}
+                if self.model in bm.llms.connections:
+                    llm_config = bm.llms.connections[self.model]
+                    model_configs = llm_config.configs.copy() if llm_config.configs else {}
+
+                # Build trace parameters: LLMCore params + model configs (no duplication)
+                # - self.parameters has: model (alias), template, and any runtime kwargs
+                # - model_configs has: temperature, api_version, safety_settings, etc.
+                trace_parameters = {**self.parameters, **model_configs}
+
                 execution_trace = ExecutionTrace(
                     call_id=result.trace_id,
                     agent_info={
                         "component_name": component_name,
                         "execution_type": "llm_processing",
-                        "config": self.parameters,
                         "processor_stage": processor_stage,
                     },
                     inputs=result.resolved_inputs
@@ -232,7 +244,7 @@ class LLMCore:
                     else {"record": record, **kwargs},
                     outputs=result.content,
                     messages=result.messages,
-                    parameters=self.parameters,
+                    parameters=trace_parameters,
                     metadata={
                         **result.metadata,
                         "duration_ms": duration_ms,
@@ -261,15 +273,23 @@ class LLMCore:
                 yield enriched_record
 
             except ProcessingError as e:
-                # Create error trace
+                # Create error trace with same structure as success trace
                 duration_ms = (time.time() - start_time) * 1000
+
+                # Get model configs for error trace too
+                error_model_configs = {}
+                if self.model in bm.llms.connections:
+                    error_llm_config = bm.llms.connections[self.model]
+                    error_model_configs = error_llm_config.configs.copy() if error_llm_config.configs else {}
+
                 error_trace = ExecutionTrace(
                     agent_info={
                         "component_name": component_name,
                         "execution_type": "llm_processing",
-                        "config": self.parameters,
+                        "processor_stage": processor_stage,
                     },
                     inputs=record,
+                    parameters={**self.parameters, **error_model_configs},
                     error={
                         "event": str(e),
                         "details": {"error_type": type(e).__name__},
