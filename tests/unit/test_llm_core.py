@@ -69,11 +69,11 @@ class TestLLMCore:
 
     @pytest.mark.anyio
     async def test_fill_template_basic(self):
-        """Test template filling with basic inputs using real template file."""
+        """Test template filling with basic template_vars using real template file."""
         core = LLMCore(model="gpt-4", template="test/simple")
 
         messages = await core._fill_template(
-            inputs={"var": "test value", "context": [], "records": []}
+            template_vars={"var": "test value", "context": [], "records": []}
         )
 
         # Should have system and user messages
@@ -100,7 +100,7 @@ class TestLLMCore:
         # Only provide required_var, leave missing_var undefined
         with pytest.raises(ProcessingError, match="unfilled parameters"):
             await core._fill_template(
-                inputs={"required_var": "value", "context": [], "records": []}
+                template_vars={"required_var": "value", "context": [], "records": []}
             )
 
     @pytest.mark.anyio
@@ -114,7 +114,7 @@ class TestLLMCore:
 
         # Only provide required_var, leave missing_var undefined
         messages = await core._fill_template(
-            inputs={"required_var": "value", "context": [], "records": []}
+            template_vars={"required_var": "value", "context": [], "records": []}
         )
 
         # Should return messages even with unfilled vars
@@ -168,71 +168,6 @@ class TestLLMCore:
                     parent_trace_id=None,
                 )
 
-    def test_combine_inputs_with_dict_and_kwargs(self):
-        """Test that _combine_inputs properly merges dict inputs with kwargs."""
-        core = LLMCore(model="gpt-4", template="test_template")
-
-        # Test dict inputs + kwargs
-        dict_inputs = {"my_var": "from_dict", "context": []}
-        kwargs = {"my_var": "from_kwargs", "other_var": "kwargs_only"}
-
-        combined = core._combine_inputs(dict_inputs, kwargs)
-
-        # kwargs should take precedence
-        assert combined["my_var"] == "from_kwargs"
-        assert combined["other_var"] == "kwargs_only"
-        assert combined["context"] == []
-
-    def test_combine_inputs_with_none_and_kwargs(self):
-        """Test that _combine_inputs handles None inputs with kwargs."""
-        core = LLMCore(model="gpt-4", template="test_template")
-
-        kwargs = {"my_var": "from_kwargs", "other_var": "kwargs_only"}
-        combined = core._combine_inputs(None, kwargs)
-
-        assert combined["my_var"] == "from_kwargs"
-        assert combined["other_var"] == "kwargs_only"
-
-    def test_combine_inputs_with_agentinput_and_kwargs(self):
-        """Test that _combine_inputs properly handles AgentInput objects with kwargs."""
-        from buttermilk._core.contract import AgentInput
-        from buttermilk._core.types import Record
-
-        core = LLMCore(model="gpt-4", template="test_template")
-
-        agent_input = AgentInput(
-            inputs={"agent_var": "agent_value"},
-            context=[],
-            record=Record(record_id="test", content="test"),
-        )
-
-        kwargs = {"kwargs_var": "kwargs_value"}
-        combined = core._combine_inputs(agent_input, kwargs)
-
-        # Should contain all AgentInput fields plus kwargs
-        assert combined["inputs"]["agent_var"] == "agent_value"
-        assert combined["kwargs_var"] == "kwargs_value"
-        assert combined["context"] == []
-        assert combined["record"] is not None
-
-    def test_template_variable_treated_normally(self):
-        """Test that 'template' input variable is treated like any other variable."""
-        core = LLMCore(model="gpt-4", template="test_template")
-
-        # Template variable in inputs should be preserved as normal variable
-        inputs = {"template": "input_template_value", "other": "value"}
-        kwargs = {"more": "kwargs_value"}
-
-        combined = core._combine_inputs(inputs, kwargs)
-
-        # Template should be treated as normal input variable
-        assert combined["template"] == "input_template_value"
-        assert combined["other"] == "value"
-        assert combined["more"] == "kwargs_value"
-
-        # The LLMCore should still use its own template from init
-        assert core.template == "test_template"  # From constructor, not inputs
-
     @pytest.mark.anyio
     async def test_process_with_llm_success(self):
         """Test full LLM processing pipeline - real template, boundary-only mocking."""
@@ -251,9 +186,7 @@ class TestLLMCore:
 
         with patch("buttermilk._core.llm_core.bm", mock_bm):
             result = await core.process_with_llm(
-                inputs={"var": "test input"},
-                context=None,
-                records=None,
+                template_vars={"var": "test input"},
                 parent_trace_id="trace_123",
             )
 
@@ -290,7 +223,7 @@ class TestLLMCore:
         mock_bm.llms.get_autogen_chat_client.return_value = mock_client
 
         with patch("buttermilk._core.llm_core.bm", mock_bm):
-            result = await core.process_with_llm(inputs={"text": "analyze this"})
+            result = await core.process_with_llm(template_vars={"text": "analyze this"})
 
             # Verify structured output was parsed correctly
             assert isinstance(result.content, OutputModelForTesting)
@@ -309,7 +242,7 @@ class TestLLMCore:
 
         # Don't provide required variables - should trigger ProcessingError in _fill_template
         with pytest.raises(ProcessingError, match="unfilled parameters"):
-            await core.process_with_llm(inputs={"context": [], "records": []})
+            await core.process_with_llm(template_vars={"context": [], "records": []})
 
     @pytest.mark.anyio
     async def test_process_with_llm_unexpected_error(self):
@@ -319,7 +252,7 @@ class TestLLMCore:
 
         # Should wrap the error in ProcessingError
         with pytest.raises(ProcessingError, match="LLMCore processing failed"):
-            await core.process_with_llm(inputs={"text": "test"})
+            await core.process_with_llm(template_vars={"text": "test"})
 
     @pytest.mark.anyio
     async def test_process_with_records(self):
@@ -342,7 +275,10 @@ class TestLLMCore:
         mock_bm.llms.get_autogen_chat_client.return_value = mock_client
 
         with patch("buttermilk._core.llm_core.bm", mock_bm):
-            result = await core.process_with_llm(inputs={}, records=[record1, record2])
+            # Pass records as template variables since there's no separate records param
+            result = await core.process_with_llm(
+                template_vars={"records": [record1, record2]}
+            )
 
             # Verify records were processed
             assert result.content == "Processed records"
@@ -382,7 +318,7 @@ class TestLLMCore:
         mock_bm.llms.get_autogen_chat_client.return_value = mock_client
 
         with patch("buttermilk._core.llm_core.bm", mock_bm):
-            result = await core.process_with_llm(inputs={"var": "test input"})
+            result = await core.process_with_llm(template_vars={"var": "test input"})
 
             # The bug: template metadata should be in result.metadata
             # If the bug exists, template metadata would be overwritten
@@ -426,14 +362,14 @@ class TestLLMCore:
         # Test 1: Truly undefined variable MUST fail
         with pytest.raises(ProcessingError, match="unfilled parameters"):
             await core._fill_template(
-                inputs={"required_var": "value", "context": [], "records": []}
+                template_vars={"required_var": "value", "context": [], "records": []}
                 # missing_var is NOT provided - truly undefined
             )
 
         # Test 2: Literal 'undefined' string is treated as a value (BUG!)
         # This currently DOES NOT fail, but arguably should
         messages = await core._fill_template(
-            inputs={
+            template_vars={
                 "required_var": "value",
                 "missing_var": "undefined",  # Literal string "undefined"
                 "context": [],
@@ -473,7 +409,7 @@ class TestLLMCore:
         # Should fail because default is strict mode
         with pytest.raises(ProcessingError, match="unfilled parameters"):
             await core._fill_template(
-                inputs={"required_var": "value", "context": [], "records": []}
+                template_vars={"required_var": "value", "context": [], "records": []}
                 # missing_var is NOT provided
             )
 
