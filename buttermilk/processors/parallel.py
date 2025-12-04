@@ -47,8 +47,8 @@ class ParallelProcessor(BaseModel):
         description="List of processor instances to run in parallel",
     )
     fail_on_error: bool = Field(
-        default=False,
-        description="If True, raise on first processor failure. If False, log and continue.",
+        default=True,
+        description="If True, raise on first processor failure. If False, log and continue but raise if ALL fail.",
     )
 
     model_config = {"arbitrary_types_allowed": True}
@@ -73,7 +73,8 @@ class ParallelProcessor(BaseModel):
             BaseRecord outputs from all processors, with parallel metadata added
 
         Raises:
-            Exception: If fail_on_error=True and any processor fails
+            Exception: If fail_on_error=True and any processor fails.
+            Exception: If fail_on_error=False but ALL processors fail.
         """
 
         async def stream_processor_outputs(
@@ -119,6 +120,8 @@ class ParallelProcessor(BaseModel):
         # Track original task count to know when all tasks are done
         original_task_count = len(tasks)
         completed_count = 0
+        success_count = 0
+        first_error: Exception | None = None
 
         # Yield results as they arrive in the queue
         while completed_count < original_task_count or not output_queue.empty():
@@ -134,39 +137,32 @@ class ParallelProcessor(BaseModel):
 
                 if error is not None:
                     # Handle error
+                    logger.warning(
+                        f"Processor {proc_idx} failed in parallel execution",
+                        processor_stage=processor_stage,
+                        processor_idx=proc_idx,
+                        processor_class=type(self.processors[proc_idx]).__name__ if proc_idx >= 0 else "unknown",
+                        error=str(error),
+                    )
+
                     if self.fail_on_error:
-                        # Cancel remaining tasks
+                        # Cancel remaining tasks and raise
                         for task in tasks:
                             task.cancel()
                         raise error
 
-                    # Yield error record
-                    error_record = record.model_copy(
-                        update={
-                            "error": record.error + [str(error)] if record.error else [str(error)],
-                            "metadata": {
-                                **record.metadata,
-                                "parallel": {
-                                    "processor_index": proc_idx,
-                                    "total_processors": len(self.processors),
-                                    "processor_class": type(self.processors[proc_idx]).__name__ if proc_idx >= 0 else "unknown",
-                                    "stage": processor_stage,
-                                    "failed": True,
-                                },
-                            },
-                        }
-                    )
-                    logger.warning(
-                        "Processor failed in parallel execution, continuing with others",
-                        processor_stage=processor_stage,
-                        processor_idx=proc_idx,
-                        error=str(error),
-                    )
-                    yield error_record
+                    # Track first error for potential re-raise
+                    if first_error is None:
+                        first_error = error
                 else:
                     # Yield successful output immediately
+                    success_count += 1
                     yield output
 
             except asyncio.TimeoutError:
                 # No items in queue yet, continue checking tasks
                 continue
+
+        # If ALL processors failed, raise the first error
+        if success_count == 0 and first_error is not None:
+            raise first_error

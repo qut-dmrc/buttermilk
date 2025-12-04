@@ -632,13 +632,16 @@ class LLMCore:
                     schema=self.output_model if self.output_model else None,
                 )
 
-                # Make the actual LLM call
-                result = await model_client.call_chat(
-                    messages=messages,
-                    tools_list=self.tools,
-                    cancellation_token=cancellation_token,
-                    schema=self.output_model,
-                )
+                # Make the actual LLM call, respecting API concurrency limits
+                from buttermilk._core.context import ApiSemaphoreContext
+
+                async with ApiSemaphoreContext():
+                    result = await model_client.call_chat(
+                        messages=messages,
+                        tools_list=self.tools,
+                        cancellation_token=cancellation_token,
+                        schema=self.output_model,
+                    )
 
                 # Record token usage in span if available
                 if hasattr(result, "usage") and result.usage:

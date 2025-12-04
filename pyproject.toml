@@ -4,7 +4,7 @@ authors = [
   { name = "Nicolas Suzor", email = "nic@suzor.com" },
 ]
 name = "buttermilk"
-version = "0.5.8"
+version = "0.5.9"
 description = "Modular AI research framework with async-first initialization"
 readme = "README.md"
 dependencies = [
