@@ -9,12 +9,14 @@ APIs that return pre-defined categories and confidence scores. They follow
 the same design pattern as LLMCore: stateless processors with tracing.
 """
 
+import json
 import time
 import uuid
 from abc import abstractmethod
 from typing import Any, AsyncGenerator
 
 import pydantic
+from autogen_core.models import AssistantMessage, SystemMessage, UserMessage
 from opentelemetry import trace
 from pydantic import BaseModel, Field
 
@@ -193,7 +195,13 @@ class ClassifierCore:
                 span.set_status(trace.Status(trace.StatusCode.OK))
 
                 # Write ExecutionTrace to BigQuery (same pattern as LLMCore)
-                # Classifiers store rendered_prompt in inputs (not messages - they aren't chat-based)
+                # Build messages list: rendered_prompt as UserMessage, response as AssistantMessage
+                response_content = json.dumps(output_content) if isinstance(output_content, dict) else str(output_content)
+                trace_messages = [
+                    UserMessage(content=result.rendered_prompt, source="classifier"),
+                    AssistantMessage(content=response_content, source=self.__class__.__name__),
+                ]
+
                 execution_trace = ExecutionTrace(
                     call_id=result.trace_id,
                     agent_info={
@@ -205,9 +213,9 @@ class ClassifierCore:
                     inputs={
                         "record_id": record_id,
                         "content": getattr(record, "content", None),
-                        "rendered_prompt": result.rendered_prompt,
                     },
                     outputs=output_content,
+                    messages=trace_messages,
                     parameters={"template": self.template, **self.parameters},
                     metadata={
                         **stage_metadata,
@@ -464,8 +472,6 @@ class HuggingFaceClassifier(ClassifierCore):
 
             # Fallback: parse raw content manually
             if hasattr(result, "content") and result.content:
-                import json
-
                 if isinstance(result.content, str):
                     response = json.loads(result.content)
                 else:
@@ -541,8 +547,6 @@ class HuggingFaceClassifier(ClassifierCore):
         Returns:
             ClassifierResult with structured output and metadata
         """
-        from autogen_core.models import AssistantMessage, SystemMessage, UserMessage
-
         # Step 1: Render template
         inputs = record.model_dump() if hasattr(record, "model_dump") else dict(record)
         inputs.update(kwargs)
