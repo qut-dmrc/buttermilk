@@ -202,6 +202,11 @@ class ClassifierCore:
                     AssistantMessage(content=response_content, source=self.__class__.__name__),
                 ]
 
+                # Build metadata: merge input metadata (from record) with output metadata
+                input_metadata = {}
+                if record is not None and hasattr(record, "metadata") and record.metadata:
+                    input_metadata = {"input": record.metadata}
+
                 execution_trace = ExecutionTrace(
                     call_id=result.trace_id,
                     agent_info={
@@ -210,14 +215,14 @@ class ClassifierCore:
                         "config": {"template": self.template, **self.parameters},
                         "processor_stage": processor_stage,
                     },
-                    inputs={
-                        "record_id": record_id,
-                        "content": getattr(record, "content", None),
-                    },
+                    # inputs = template variables only (record stored separately in record field)
+                    inputs=kwargs if kwargs else None,
                     outputs=output_content,
                     messages=trace_messages,
                     parameters={"template": self.template, **self.parameters},
+                    # metadata merges: input metadata (under 'input' key) + stage metadata + duration
                     metadata={
+                        **input_metadata,
                         **stage_metadata,
                         "duration_ms": processing_time_ms,
                     },
@@ -234,6 +239,11 @@ class ClassifierCore:
                 yield enriched_record
 
             except Exception as e:
+                # Build error metadata with input metadata if available
+                error_input_metadata = {}
+                if record is not None and hasattr(record, "metadata") and record.metadata:
+                    error_input_metadata = {"input": record.metadata}
+
                 # Write error trace
                 error_trace = ExecutionTrace(
                     agent_info={
@@ -242,12 +252,14 @@ class ClassifierCore:
                         "config": {"template": self.template, **self.parameters},
                         "processor_stage": processor_stage,
                     },
-                    inputs={"record_id": record_id, "content": getattr(record, "content", None)},
+                    # inputs = template variables only (record stored separately)
+                    inputs=kwargs if kwargs else None,
                     error={
                         "event": str(e),
                         "details": {"error_type": type(e).__name__},
                     },
                     metadata={
+                        **error_input_metadata,
                         "duration_ms": int((time.time() - start_time) * 1000),
                     },
                     parent_call_id=parent_trace_id,

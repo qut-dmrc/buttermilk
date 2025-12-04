@@ -232,6 +232,12 @@ class LLMCore:
                 # - model_configs has: temperature, api_version, safety_settings, etc.
                 trace_parameters = {**self.parameters, **model_configs}
 
+                # Build metadata: merge input metadata (from record) with output metadata
+                # Input metadata comes from record.metadata if available
+                input_metadata = {}
+                if record is not None and hasattr(record, "metadata") and record.metadata:
+                    input_metadata = {"input": record.metadata}
+
                 execution_trace = ExecutionTrace(
                     call_id=result.trace_id,
                     agent_info={
@@ -239,13 +245,14 @@ class LLMCore:
                         "execution_type": "llm_processing",
                         "processor_stage": processor_stage,
                     },
-                    inputs=result.resolved_inputs
-                    if result.resolved_inputs
-                    else {"record": record, **kwargs},
+                    # inputs = template variables only (record/context stored separately)
+                    inputs=result.resolved_inputs if result.resolved_inputs else kwargs,
                     outputs=result.content,
                     messages=result.messages,
                     parameters=trace_parameters,
+                    # metadata merges: input metadata (under 'input' key) + output metadata + duration
                     metadata={
+                        **input_metadata,
                         **result.metadata,
                         "duration_ms": duration_ms,
                     },
@@ -283,19 +290,26 @@ class LLMCore:
                     error_llm_config = bm.llms.connections[self.model]
                     error_model_configs = error_llm_config.configs.copy() if error_llm_config.configs else {}
 
+                # Build error metadata with input metadata if available
+                error_input_metadata = {}
+                if record is not None and hasattr(record, "metadata") and record.metadata:
+                    error_input_metadata = {"input": record.metadata}
+
                 error_trace = ExecutionTrace(
                     agent_info={
                         "component_name": component_name,
                         "execution_type": "llm_processing",
                         "processor_stage": processor_stage,
                     },
-                    inputs=record,
+                    # inputs = template variables only (kwargs passed to process)
+                    inputs=kwargs if kwargs else None,
                     parameters={**self.parameters, **error_model_configs},
                     error={
                         "event": str(e),
                         "details": {"error_type": type(e).__name__},
                     },
                     metadata={
+                        **error_input_metadata,
                         "duration_ms": duration_ms,
                     },
                     parent_call_id=parent_trace_id,
@@ -407,11 +421,9 @@ class LLMCore:
                 combined_inputs.pop("context", None)
 
                 # Store resolved inputs for complete traceability (observability requirement)
+                # Note: record and context are stored separately in ExecutionTrace fields,
+                # NOT in resolved_inputs, to avoid duplication
                 result.resolved_inputs = combined_inputs.copy()
-                if record is not None:
-                    result.resolved_inputs["record"] = record
-                if context:
-                    result.resolved_inputs["context"] = context
 
                 # Fill template
                 llm_messages = await self._fill_template(
