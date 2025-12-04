@@ -385,14 +385,51 @@ def _parse_prompty(string_template: str) -> str:
         str: The main content of the Prompty template (after the frontmatter),
              or the original string if no frontmatter is found.
 
+    Raises:
+        ProcessingError: If template contains ambiguous --- horizontal rule markers
+                        in the body content that could be confused with frontmatter.
+
     """
-    # Regex to find frontmatter (e.g., --- \n frontmatter \n --- \n content)
-    # It captures the frontmatter in group 1 and the main content in group 2.
-    pattern = r"^-{3,}\s*?\n(.*?)^-{3,}\s*?\n(.*)"
-    match = re.search(pattern, string_template, re.DOTALL | re.MULTILINE)
-    if not match:
-        return string_template  # No frontmatter found, return original string
-    return match.group(2).strip()  # Return the content part, stripped
+    # Horizontal rule pattern: --- at start of line (with optional trailing whitespace)
+    horizontal_rule_pattern = r"^-{3,}\s*$"
+
+    # Check if template starts with frontmatter (must be at very beginning)
+    has_frontmatter = string_template.lstrip().startswith("---")
+
+    if has_frontmatter:
+        # Regex to find frontmatter (e.g., --- \n frontmatter \n --- \n content)
+        # It captures the frontmatter in group 1 and the main content in group 2.
+        # Use \A to match only at start of string (not start of any line)
+        pattern = r"\A-{3,}\s*?\n(.*?)^-{3,}\s*?\n(.*)"
+        match = re.search(pattern, string_template, re.DOTALL | re.MULTILINE)
+
+        if not match:
+            raise ProcessingError(
+                "Template starts with --- but does not have valid frontmatter structure. "
+                "Expected: ---\\nfrontmatter\\n---\\ncontent"
+            )
+
+        body_content = match.group(2)
+
+        # Check body for additional horizontal rules
+        if re.search(horizontal_rule_pattern, body_content, re.MULTILINE):
+            raise ProcessingError(
+                "Template contains ambiguous --- horizontal rule markers in body content "
+                "after frontmatter. These could be confused with Prompty frontmatter delimiters. "
+                "Please remove horizontal rules or use alternative formatting."
+            )
+
+        return body_content.strip()
+
+    else:
+        # No frontmatter - check entire template for horizontal rules
+        if re.search(horizontal_rule_pattern, string_template, re.MULTILINE):
+            raise ProcessingError(
+                "Template contains ambiguous --- horizontal rule markers in body content. "
+                "These could be confused with Prompty frontmatter delimiters. "
+                "Please remove horizontal rules or use alternative formatting."
+            )
+        return string_template
 
 
 def load_template(
