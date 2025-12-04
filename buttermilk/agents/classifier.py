@@ -43,6 +43,9 @@ class ClassifierResult(BaseModel):
     template_metadata: dict[str, Any] = Field(
         default_factory=dict, description="Template name, hash, etc"
     )
+    rendered_prompt: str = Field(
+        default="", description="The rendered prompt/criteria sent to the classification API"
+    )
     error: str | None = Field(None, description="Error message if processing failed")
 
 
@@ -190,6 +193,7 @@ class ClassifierCore:
                 span.set_status(trace.Status(trace.StatusCode.OK))
 
                 # Write ExecutionTrace to BigQuery (same pattern as LLMCore)
+                # Classifiers store rendered_prompt in inputs (not messages - they aren't chat-based)
                 execution_trace = ExecutionTrace(
                     call_id=result.trace_id,
                     agent_info={
@@ -198,7 +202,11 @@ class ClassifierCore:
                         "config": {"template": self.template, **self.parameters},
                         "processor_stage": processor_stage,
                     },
-                    inputs={"record_id": record_id, "content": getattr(record, "content", None)},
+                    inputs={
+                        "record_id": record_id,
+                        "content": getattr(record, "content", None),
+                        "rendered_prompt": result.rendered_prompt,
+                    },
                     outputs=output_content,
                     parameters={"template": self.template, **self.parameters},
                     metadata={
@@ -298,6 +306,7 @@ class ClassifierCore:
                 "hash": template_hash,
                 "unfilled_vars": list(unfilled_vars),
             },
+            rendered_prompt=rendered_text,
         )
 
     @abstractmethod
@@ -601,6 +610,7 @@ class HuggingFaceClassifier(ClassifierCore):
                 "hash": template_hash,
                 "unfilled_vars": list(unfilled_vars),
             },
+            rendered_prompt=rendered_text,
         )
 
 
@@ -802,7 +812,7 @@ class ZentropiClassifier(ClassifierCore):
         except Exception as e:
             raise ProcessingError(f"Zentropi API call failed: {e}") from e
 
-        # Step 3: Map to schema
+        # Step 4: Map to schema
         try:
             structured_output = self._map_to_schema(api_response, self.output_model)
             logger.debug(f"ZentropiClassifier mapped to schema: {type(structured_output).__name__}")
@@ -819,6 +829,7 @@ class ZentropiClassifier(ClassifierCore):
                 "hash": template_hash,
                 "unfilled_vars": list(unfilled_vars),
             },
+            rendered_prompt=criteria,
         )
 
     def _map_to_schema(
