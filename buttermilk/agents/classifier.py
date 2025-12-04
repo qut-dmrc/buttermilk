@@ -406,6 +406,8 @@ class HuggingFaceClassifier(ClassifierCore):
             raise ValueError("'model' is required for HuggingFaceClassifier")
 
         self.model = model
+        # Add model to parameters so it appears in trace as parameters.model (not agent_name)
+        self.parameters["model"] = model
 
         # Get LLM wrapper from buttermilk connections
         from buttermilk import bm
@@ -675,6 +677,8 @@ class ZentropiClassifier(ClassifierCore):
         base_url = os.environ.get("ZENTROPI_BASE_URL", "https://api.zentropi.ai/v1/label")
 
         self._client = {"api_key": api_key, "base_url": base_url}
+        # Add model to parameters for consistent trace format (parameters.model)
+        self.parameters["model"] = "zentropi"
         logger.debug(f"ZentropiClassifier initialized with base_url: {base_url}")
 
     async def _classify(self, text: str, *, content: str) -> dict[str, Any]:
