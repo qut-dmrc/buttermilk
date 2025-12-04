@@ -9,6 +9,7 @@ from buttermilk._core.types import Record
 @pytest.mark.anyio
 async def test_multimodal_question(
     multimodal_record: Record,
+    llm_wrapper_type,
 ):
     # Test that the multimodal record contains content
     assert multimodal_record.content is not None
