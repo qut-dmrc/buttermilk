@@ -250,6 +250,7 @@ class LLMCore:
                         "duration_ms": duration_ms,
                     },
                     parent_call_id=parent_trace_id,
+                    record=record,
                 )
 
                 # Emit trace if trace writer is available
@@ -298,6 +299,7 @@ class LLMCore:
                         "duration_ms": duration_ms,
                     },
                     parent_call_id=parent_trace_id,
+                    record=record,
                 )
 
                 # Emit error trace

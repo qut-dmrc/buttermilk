@@ -214,6 +214,7 @@ class ClassifierCore:
                         "duration_ms": processing_time_ms,
                     },
                     parent_call_id=parent_trace_id,
+                    record=record,
                 )
 
                 if self.trace_writer:
@@ -242,6 +243,7 @@ class ClassifierCore:
                         "duration_ms": int((time.time() - start_time) * 1000),
                     },
                     parent_call_id=parent_trace_id,
+                    record=record,
                 )
 
                 if self.trace_writer:
