@@ -56,7 +56,6 @@ async def test_concurrent_token_refresh_is_thread_safe(real_bm: BM):
         # This mimics real refresh behavior where token value changes
         cloud_manager.gcp_credentials.token = f"refreshed_token_{refresh_call_count}"
         # Return None (refresh doesn't return a value)
-        return None
 
     # Mock the token_state property to return STALE initially, then FRESH after first refresh
     def mock_token_state():
@@ -67,11 +66,11 @@ async def test_concurrent_token_refresh_is_thread_safe(real_bm: BM):
     # Patch both the refresh method and token_state property
     with patch.object(
         cloud_manager.gcp_credentials,
-        'refresh',
+        "refresh",
         side_effect=mock_refresh
     ), patch.object(
         type(cloud_manager.gcp_credentials),
-        'token_state',
+        "token_state",
         property(lambda self: mock_token_state())
     ):
         # Create threads that will call get_access_token concurrently
@@ -126,8 +125,8 @@ async def test_litellm_wrapper_accepts_token_provider():
     token_provider callable, which will be used later to refresh tokens
     dynamically on each API call.
     """
+
     from buttermilk._core.llms import LiteLLMWrapper
-    from pydantic import ValidationError
 
     # Define a simple token provider callable
     def get_fresh_token() -> str:
@@ -180,8 +179,9 @@ async def test_litellm_create_uses_token_provider_for_auth():
     2. That the token from token_provider appears in the Authorization header
     3. That calling create() twice results in two token_provider calls
     """
-    from buttermilk._core.llms import LiteLLMWrapper
     from autogen_core.models import UserMessage
+
+    from buttermilk._core.llms import LiteLLMWrapper
 
     # Track token_provider calls
     token_provider_call_count = 0
@@ -257,4 +257,91 @@ async def test_litellm_create_uses_token_provider_for_auth():
     assert "fresh_token_2" in captured_headers[1]["Authorization"], (
         f"Expected fresh_token_2 in Authorization header, "
         f"got: {captured_headers[1].get('Authorization')}"
+    )
+
+
+@pytest.mark.anyio
+async def test_get_autogen_chat_client_passes_token_provider_for_vertex(real_bm: BM):
+    """Test that get_autogen_chat_client() passes token_provider for Vertex models.
+
+    ACCEPTANCE CRITERION: When get_autogen_chat_client() creates a LiteLLMWrapper
+    for Vertex/GCP models, it must pass a token_provider callable that calls
+    bm.get_gcp_access_token().
+
+    BEHAVIOR BEING TESTED: The LiteLLMWrapper returned by get_autogen_chat_client()
+    for Vertex models should have token_provider set to a callable that fetches
+    fresh GCP tokens.
+
+    EXPECTED FAILURE: Currently get_autogen_chat_client() doesn't pass token_provider
+    to LiteLLMWrapper at line 2252-2262, so the wrapper will not have this field set.
+
+    This test verifies that:
+    1. LiteLLMWrapper for Vertex models has token_provider set
+    2. The token_provider callable returns a valid token string
+    3. The token matches what get_gcp_access_token() returns
+
+    Args:
+        real_bm: Real ButtermilkBM instance from conftest.py fixture
+    """
+    from buttermilk._core.llms import ClientType, LiteLLMWrapper
+
+    # Get a model that uses Vertex
+    # Based on testing.yaml, we use llms:debug which has gemini-flash
+    # Need to verify this model uses ClientType.GEMINI_VERTEX or VERTEX_OPENAI
+    model_name = "gemini-flash"
+
+    # Verify the model config uses a Vertex client_type
+    llms = real_bm.llms
+    config = llms.connections.get(model_name)
+    assert config is not None, f"Model {model_name} not found in connections"
+
+    vertex_types = {ClientType.GEMINI_VERTEX, ClientType.VERTEX_OPENAI, ClientType.ANTHROPIC_VERTEX}
+    assert config.client_type in vertex_types, (
+        f"Model {model_name} uses {config.client_type}, expected a Vertex type. "
+        f"This test requires a Vertex model to verify token_provider is passed."
+    )
+
+    # Get LiteLLMWrapper via get_autogen_chat_client
+    # This should be configured with token_provider for Vertex models
+    wrapper = llms.get_autogen_chat_client(model_name)
+
+    # ASSERT: wrapper should be LiteLLMWrapper (not AutoGenWrapper)
+    assert isinstance(wrapper, LiteLLMWrapper), (
+        f"Expected LiteLLMWrapper for Vertex model {model_name}, "
+        f"got {type(wrapper).__name__}"
+    )
+
+    # ASSERT: wrapper should have token_provider field
+    # EXPECTED TO FAIL: Currently LiteLLMWrapper doesn't have token_provider field
+    assert hasattr(wrapper, "token_provider"), (
+        f"LiteLLMWrapper for {model_name} missing token_provider field. "
+        f"Need to add token_provider field to LiteLLMWrapper class and pass it "
+        f"in get_autogen_chat_client() at line ~2252."
+    )
+
+    # ASSERT: token_provider should be set (not None)
+    # EXPECTED TO FAIL: Currently get_autogen_chat_client() doesn't pass token_provider
+    assert wrapper.token_provider is not None, (
+        f"token_provider is None for Vertex model {model_name}. "
+        f"Need to pass token_provider=bm.get_gcp_access_token in get_autogen_chat_client() "
+        f"when creating LiteLLMWrapper for Vertex models."
+    )
+
+    # ASSERT: token_provider should be callable
+    assert callable(wrapper.token_provider), (
+        f"token_provider is not callable, got {type(wrapper.token_provider)}"
+    )
+
+    # ASSERT: calling token_provider() should return a valid token string
+    token = wrapper.token_provider()
+    assert isinstance(token, str), (
+        f"token_provider() should return str, got {type(token)}"
+    )
+    assert len(token) > 0, "token_provider() returned empty string"
+
+    # ASSERT: token should match what bm.get_gcp_access_token() returns
+    expected_token = real_bm.get_gcp_access_token()
+    assert token == expected_token, (
+        f"token_provider() returned different token than bm.get_gcp_access_token(). "
+        f"Expected: {expected_token[:50]}..., got: {token[:50]}..."
     )

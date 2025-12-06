@@ -20,10 +20,10 @@ from enum import Enum
 from typing import Any, Callable, TypeVar
 
 import urllib3.exceptions
-from google.auth.exceptions import TransportError as GoogleAuthTransportError
 
 # Core LLM library imports - these are required dependencies
 from anthropic import AsyncAnthropicVertex
+from google.auth.exceptions import TransportError as GoogleAuthTransportError
 
 # LiteLLM imports
 try:
@@ -2249,6 +2249,14 @@ class LLMs(BaseModel):
                 vertex_project = config.configs.get("project_id")
                 vertex_location = config.configs.get("region")
 
+            # Determine if token_provider is needed for this provider
+            token_provider = None
+            if config.client_type in (ClientType.VERTEX_OPENAI, ClientType.GEMINI_VERTEX):
+                # Vertex models need GCP token refresh
+                def get_vertex_token() -> str:
+                    return bm.get_gcp_access_token()
+                token_provider = get_vertex_token
+
             wrapped_client = LiteLLMWrapper(
                 model=model_name,
                 model_info=config.model_info,
@@ -2259,6 +2267,7 @@ class LLMs(BaseModel):
                 vertex_project=vertex_project,
                 vertex_location=vertex_location,
                 default_parameters=merged_params,
+                token_provider=token_provider,
             )
         else:
             # Use AutoGenWrapper (existing behavior)
