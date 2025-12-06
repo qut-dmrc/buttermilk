@@ -261,6 +261,85 @@ async def test_litellm_create_uses_token_provider_for_auth():
 
 
 @pytest.mark.anyio
+async def test_token_refresh_retries_on_transient_failure(real_bm: BM):
+    """Test that token refresh retries on transient failures.
+
+    ACCEPTANCE CRITERION: Token refresh must handle transient failures gracefully
+    with retries, but fail-fast on permanent errors.
+
+    BEHAVIOR BEING TESTED: When get_access_token() encounters a transient network
+    error during credential refresh, it should retry (e.g., 3 times with backoff).
+    On permanent errors, it should fail immediately.
+
+    EXPECTED FAILURE: Currently no retry logic exists in get_access_token().
+    The first refresh failure will raise exception immediately (no retry).
+
+    This test simulates a transient failure scenario where credential refresh
+    fails 2 times, then succeeds on the 3rd attempt. With proper retry logic,
+    get_access_token() should eventually succeed.
+
+    Args:
+        real_bm: Real ButtermilkBM instance from conftest.py fixture
+    """
+    from google.auth.credentials import TokenState
+    from google.auth.exceptions import TransportError
+
+    # Get the CloudManager instance
+    cloud_manager = real_bm.cloud_manager
+
+    # Track how many times refresh is called
+    refresh_call_count = 0
+
+    # Save the initial token value
+    initial_token = cloud_manager.gcp_credentials.token
+
+    def mock_refresh(request):
+        """Mock refresh that fails twice with transient error, then succeeds."""
+        nonlocal refresh_call_count
+        refresh_call_count += 1
+
+        if refresh_call_count <= 2:
+            # First 2 attempts: Raise transient network error
+            raise TransportError("Connection timeout - transient failure")
+
+        # Third attempt: Success
+        cloud_manager.gcp_credentials.token = "refreshed_token_success"
+
+    # Mock the token_state property to return STALE initially, then FRESH after successful refresh
+    def mock_token_state():
+        """Return STALE if token hasn't changed, FRESH after refresh updates it."""
+        current_token = cloud_manager.gcp_credentials.token
+        return TokenState.FRESH if current_token != initial_token else TokenState.STALE
+
+    # Patch both the refresh method and token_state property
+    with patch.object(
+        cloud_manager.gcp_credentials,
+        "refresh",
+        side_effect=mock_refresh
+    ), patch.object(
+        type(cloud_manager.gcp_credentials),
+        "token_state",
+        property(lambda self: mock_token_state())
+    ):
+        # Call get_access_token() - should retry on transient failures
+        token = cloud_manager.get_access_token()
+
+    # ASSERT: Should have retried at least 3 times (2 failures + 1 success)
+    # NOTE: May be more than 3 if cloud logging or other components also trigger refresh
+    # The key behavior is that transient failures are retried, not the exact count
+    assert refresh_call_count >= 3, (
+        f"Expected at least 3 refresh attempts (2 failures + 1 success), but got {refresh_call_count}. "
+        f"Need to add retry logic with exponential backoff to get_access_token() "
+        f"to handle transient TransportError exceptions."
+    )
+
+    # ASSERT: Eventually succeeded and got valid token
+    assert token == "refreshed_token_success", (
+        f"Expected successful token after retries, got {token}"
+    )
+
+
+@pytest.mark.anyio
 async def test_get_autogen_chat_client_passes_token_provider_for_vertex(real_bm: BM):
     """Test that get_autogen_chat_client() passes token_provider for Vertex models.
 

@@ -7,8 +7,15 @@ from typing import Any
 from google import genai
 from google.auth import default
 from google.auth.credentials import Credentials as GoogleCredentials, TokenState
+from google.auth.exceptions import TransportError
 from google.cloud import bigquery, storage
 from google.cloud.logging_v2.client import Client as CloudLoggingClient
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from buttermilk._core.config import CloudProviderCfg
 from buttermilk._core.exceptions import FatalError
@@ -64,6 +71,33 @@ class CloudManager:
     def _needs_credentials_refresh(self, credentials: GoogleCredentials) -> bool:
         """Check if credentials need to be refreshed."""
         return hasattr(credentials, "valid") and not credentials.valid
+
+    @retry(
+        retry=retry_if_exception_type((TransportError, ConnectionError)),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=4),
+        reraise=True,
+    )
+    def _refresh_credentials(self, credentials: GoogleCredentials) -> None:
+        """Refresh credentials with retry logic for transient failures.
+
+        Retries up to 3 times with exponential backoff (1s, 2s, 4s) for
+        transient errors like TransportError and ConnectionError.
+        Fails immediately on non-retryable errors.
+
+        Args:
+            credentials: Google credentials to refresh
+
+        Raises:
+            TransportError: After 3 failed retry attempts
+            ConnectionError: After 3 failed retry attempts
+            Other exceptions: Immediately (no retry)
+
+        """
+        from google.auth.transport.requests import Request
+
+        request = Request()
+        credentials.refresh(request)
 
     @refreshable_cached_property
     def gcp_credentials(self) -> GoogleCredentials:
@@ -133,10 +167,7 @@ class CloudManager:
                     return creds.token
 
                 # Token still stale and unchanged, we need to refresh
-                from google.auth.transport.requests import Request
-
-                request = Request()
-                creds.refresh(request)
+                self._refresh_credentials(creds)
 
         return creds.token
 
