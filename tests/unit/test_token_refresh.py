@@ -158,3 +158,103 @@ async def test_litellm_wrapper_accepts_token_provider():
         f"token_provider was not set correctly. "
         f"Expected {get_fresh_token}, got {getattr(wrapper, 'token_provider', None)}"
     )
+
+
+@pytest.mark.anyio
+async def test_litellm_create_uses_token_provider_for_auth():
+    """Test that LiteLLMWrapper.create() calls token_provider dynamically.
+
+    ACCEPTANCE CRITERION: LiteLLMWrapper.create() must call token_provider()
+    dynamically for each API call, not use a static token.
+
+    BEHAVIOR BEING TESTED: When create() is called, if token_provider is set,
+    it should be invoked to get a fresh token and that token should be used
+    in the Authorization header passed to litellm.acompletion.
+
+    EXPECTED FAILURE: Currently create() uses self.extra_headers statically
+    at line 1415, so token_provider is never called. This test will fail
+    because token_provider_call_count remains 0.
+
+    This test mocks litellm.acompletion to avoid API costs and tracks:
+    1. How many times token_provider is called
+    2. That the token from token_provider appears in the Authorization header
+    3. That calling create() twice results in two token_provider calls
+    """
+    from buttermilk._core.llms import LiteLLMWrapper
+    from autogen_core.models import UserMessage
+
+    # Track token_provider calls
+    token_provider_call_count = 0
+
+    def mock_token_provider() -> str:
+        """Mock token provider that returns incrementing tokens."""
+        nonlocal token_provider_call_count
+        token_provider_call_count += 1
+        return f"fresh_token_{token_provider_call_count}"
+
+    # Mock litellm.acompletion to capture the headers passed
+    captured_headers = []
+
+    async def mock_acompletion(**kwargs):
+        """Mock acompletion that captures headers."""
+        # Capture the extra_headers if provided
+        if "extra_headers" in kwargs:
+            captured_headers.append(kwargs["extra_headers"])
+        # Return a minimal valid response structure that matches litellm format
+        mock_response = Mock()
+        mock_choice = Mock()
+        mock_choice.message = Mock(content="test response", tool_calls=None)
+        mock_choice.finish_reason = "stop"  # Must be a valid finish_reason
+        mock_response.choices = [mock_choice]
+        mock_response.usage = Mock(prompt_tokens=10, completion_tokens=5, total_tokens=15)
+        mock_response.cached = False  # Boolean, not Mock
+        mock_response.model = "test-model"
+        return mock_response
+
+    # Patch litellm.acompletion where it's imported in llms.py
+    with patch("buttermilk._core.llms.acompletion", new=mock_acompletion):
+        # Create LiteLLMWrapper with token_provider
+        # Must create inside patch context so it doesn't try to validate with real litellm
+        model_info = {"family": "test", "structured_output": False}
+        wrapper = LiteLLMWrapper(
+            model="test-model",
+            model_info=model_info,
+            litellm_model_name="openai/test-model",  # Use valid litellm format
+            token_provider=mock_token_provider,
+            base_url="https://test.openai.azure.com",  # Need base_url to trigger extra_headers path
+            api_key="fake-api-key",  # Provide api_key to avoid auth errors
+        )
+
+        # Call create() first time
+        messages = [UserMessage(content="test message", source="user")]
+        await wrapper.create(messages=messages)
+
+        # Call create() second time
+        await wrapper.create(messages=messages)
+
+    # ASSERT: token_provider should have been called twice (once per create() call)
+    # EXPECTED TO FAIL: Currently token_provider is never called because
+    # create() uses self.extra_headers statically instead of calling token_provider
+    assert token_provider_call_count == 2, (
+        f"Expected token_provider to be called 2 times (once per create() call), "
+        f"but it was called {token_provider_call_count} times. "
+        f"Need to modify create() to call token_provider() dynamically instead of "
+        f"using self.extra_headers statically."
+    )
+
+    # ASSERT: The token from token_provider should appear in the Authorization header
+    assert len(captured_headers) == 2, "Should have captured headers from both create() calls"
+
+    # First call should use fresh_token_1
+    assert "Authorization" in captured_headers[0], "Authorization header missing from first call"
+    assert "fresh_token_1" in captured_headers[0]["Authorization"], (
+        f"Expected fresh_token_1 in Authorization header, "
+        f"got: {captured_headers[0].get('Authorization')}"
+    )
+
+    # Second call should use fresh_token_2
+    assert "Authorization" in captured_headers[1], "Authorization header missing from second call"
+    assert "fresh_token_2" in captured_headers[1]["Authorization"], (
+        f"Expected fresh_token_2 in Authorization header, "
+        f"got: {captured_headers[1].get('Authorization')}"
+    )

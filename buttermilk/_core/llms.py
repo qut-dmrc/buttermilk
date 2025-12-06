@@ -1410,9 +1410,19 @@ class LiteLLMWrapper(BaseModel):
         if self.base_url:
             litellm_params["base_url"] = self.base_url
 
+        # Get fresh token from token_provider if configured
+        headers_to_add = {}
+        if self.token_provider:
+            fresh_token = self.token_provider()
+            headers_to_add["Authorization"] = f"Bearer {fresh_token}"
+
         # Add extra headers if provided (e.g., Authorization for GCP)
         if self.extra_headers:
-            litellm_params["extra_headers"] = self.extra_headers
+            # Merge token_provider headers with extra_headers
+            merged_headers = {**self.extra_headers, **headers_to_add}
+            litellm_params["extra_headers"] = merged_headers
+        elif headers_to_add:
+            litellm_params["extra_headers"] = headers_to_add
 
         # Add Vertex AI configuration if provided (for anthropic_vertex, gemini_vertex)
         if self.vertex_project:
