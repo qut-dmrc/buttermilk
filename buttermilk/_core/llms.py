@@ -1261,6 +1261,9 @@ class LiteLLMWrapper(BaseModel):
     extra_headers: dict[str, str] | None = Field(
         default=None, description="Extra headers for the API request (e.g., Authorization)"
     )
+    token_provider: Callable[[], str] | None = Field(
+        default=None, description="Optional callable that returns an authentication token"
+    )
     vertex_project: str | None = Field(
         default=None, description="GCP project ID for Vertex AI providers"
     )
