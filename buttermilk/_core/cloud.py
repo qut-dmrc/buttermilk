@@ -1,6 +1,7 @@
 """Cloud provider client management and connection utilities."""
 
 import os
+import threading
 from typing import Any
 
 from google import genai
@@ -30,6 +31,8 @@ class CloudManager:
         """
         self.clouds = clouds or []
         self._gcp_project = ""
+        # Instance-level lock for thread-safe token refresh
+        self._refresh_lock = threading.Lock()
 
         # Find GCP cloud config for initialization
         self.gcp_cloud_cfg = next(
@@ -101,18 +104,39 @@ class CloudManager:
     def get_access_token(self) -> str:
         """Get a valid access token from GCP credentials, refreshing if needed.
 
+        Thread-safe using double-check locking pattern to prevent race conditions
+        when multiple threads attempt to refresh simultaneously.
+
         Returns:
             str: A valid OAuth2 access token
 
         """
         creds = self.gcp_credentials
 
-        # Refresh if needed
+        # First check: Fast path for fresh tokens (no lock needed)
         if creds.token_state != TokenState.FRESH:
-            from google.auth.transport.requests import Request
+            # Save current token BEFORE acquiring lock
+            token_before_lock = creds.token
 
-            request = Request()
-            creds.refresh(request)
+            # Acquire lock for refresh
+            with self._refresh_lock:
+                # Second check: Re-check both token_state AND token value
+                # to detect if another thread refreshed while we waited for the lock
+
+                # If token_state became FRESH, another thread refreshed
+                if creds.token_state == TokenState.FRESH:
+                    return creds.token
+
+                # If token value changed, another thread refreshed
+                # (This handles cases where token_state might be mocked in tests)
+                if creds.token != token_before_lock:
+                    return creds.token
+
+                # Token still stale and unchanged, we need to refresh
+                from google.auth.transport.requests import Request
+
+                request = Request()
+                creds.refresh(request)
 
         return creds.token
 
