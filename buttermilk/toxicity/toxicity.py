@@ -419,7 +419,7 @@ class ToxicityClassifierCore(BaseModel):
                         "duration_ms": duration_ms,
                         "eval_id": eval_record.eval_id,
                     },
-                    parent_call_id=parent_trace_id or kwargs.get("parent_trace_id"),
+                    parent_call_id=parent_trace_id,
                     record=record,
                 )
 
