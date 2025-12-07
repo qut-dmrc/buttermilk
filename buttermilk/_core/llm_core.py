@@ -5,6 +5,9 @@ LLM operations (template rendering, LLM calling, tracing) that can be
 reused across different contexts - both in Agent-based flows and in
 pipeline processors.
 
+LLMCore extends ProcessorCore to share common infrastructure (trace_writer,
+tracing patterns) with ClassifierCore and ToxicityClassifierCore.
+
 The design intentionally avoids Agent-specific concepts to maintain
 flexibility while preserving full observability through metadata tracking.
 """
@@ -24,6 +27,7 @@ from buttermilk import bm, logger
 from buttermilk._core.contract import ErrorEvent, ExecutionTrace
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llms import CreateResult, ModelOutput
+from buttermilk._core.processor_core import ProcessorCore
 from buttermilk._core.types import BaseRecord
 from buttermilk.utils.templating import load_template, make_messages
 from buttermilk.utils.utils import clean_empty_values, scrub_serializable
@@ -60,11 +64,12 @@ class LLMResult(BaseModel):
     )
 
 
-class LLMCore:
+class LLMCore(ProcessorCore):
     """Core LLM functionality shared between agents and processors.
 
-    This class extracts the essential LLM operations from LLMAgent,
-    making them reusable in different contexts while maintaining
+    Extends ProcessorCore to share common infrastructure with ClassifierCore
+    and ToxicityClassifierCore. Extracts the essential LLM operations from
+    LLMAgent, making them reusable in different contexts while maintaining
     observability and traceability.
 
     Key responsibilities:
@@ -97,7 +102,8 @@ class LLMCore:
         """
         # CRITICAL: Include model and template in parameters for trace writing
         # Issue #280: Traces need these fields for observability/analysis
-        self.parameters = {"model": model, "template": template, **kwargs}
+        # Initialize ProcessorCore with model and template in kwargs
+        super().__init__(model=model, template=template, **kwargs)
 
         # Resolve output_model if it's a string
         if isinstance(output_model, str):
@@ -122,18 +128,6 @@ class LLMCore:
 
         # Template metadata for tracking
         self.template_metadata: dict[str, Any] = {}
-
-        # Initialize trace writer (lazy loading)
-        self._trace_writer = None
-
-    @property
-    def trace_writer(self) -> Any:
-        """Lazy load trace writer."""
-        if self._trace_writer is None:
-            from buttermilk.utils.trace_writer import get_trace_writer
-
-            self._trace_writer = get_trace_writer()
-        return self._trace_writer
 
     def _combine_inputs(self, inputs: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
         """Combine explicit inputs and kwargs into a single dict.
