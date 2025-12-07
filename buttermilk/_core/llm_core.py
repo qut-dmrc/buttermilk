@@ -180,7 +180,7 @@ class LLMCore:
                 # Build template_vars: if kwargs provided, merge with record fields
                 # Otherwise let process_with_llm derive from record
                 template_vars = (
-                    {**record.model_dump(), **kwargs} if kwargs else None
+                    {**(record.model_dump() if record and hasattr(record, "model_dump") else {}), **kwargs} if kwargs else None
                 )
 
                 result = await self.process_with_llm(
