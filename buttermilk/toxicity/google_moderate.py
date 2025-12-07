@@ -4,7 +4,7 @@ from typing import (
 
 from google.cloud import language_v2
 
-from .toxicity import EvalRecord, Score, ToxicityModel
+from .toxicity import EvalRecord, Score, ToxicityClassifierCore, ToxicityModel
 
 # These are categories that we do not interpret as relevant to an overall 'toxic' result
 NON_TOXIC_CATS = [
@@ -18,7 +18,7 @@ NON_TOXIC_CATS = [
 ]
 
 
-class GoogleModerate(ToxicityModel):
+class GoogleModerate(ToxicityClassifierCore):
     model: str = "PaLM 2"
     standard: str = "Google Moderate Text v2"
     process_chain: str = "LanguageServiceClient"

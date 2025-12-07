@@ -7,10 +7,10 @@ from buttermilk._core.llms import LLMs
 from buttermilk.utils.json_parser import ChatParser
 from buttermilk.utils.utils import read_yaml
 
-from .toxicity import EvalRecord, Score, ToxicityModel
+from .toxicity import EvalRecord, Score, ToxicityClassifierCore, ToxicityModel
 
 
-class Nemo(ToxicityModel):
+class Nemo(ToxicityClassifierCore):
     standard: Literal[
         "nemo_self_check.input",
         "nemo_self_check.output",

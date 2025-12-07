@@ -7,6 +7,9 @@ structured labels/scores.
 Unlike LLMAgent which uses LLMs for reasoning, classifiers call external
 APIs that return pre-defined categories and confidence scores. They follow
 the same design pattern as LLMCore: stateless processors with tracing.
+
+ClassifierCore extends ProcessorCore to share common infrastructure
+(trace_writer, tracing patterns) with LLMCore and ToxicityClassifierCore.
 """
 
 import json
@@ -23,6 +26,7 @@ from pydantic import BaseModel, Field
 from buttermilk import logger
 from buttermilk._core.contract import ExecutionTrace
 from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.processor_core import ProcessorCore
 from buttermilk._core.types import BaseRecord
 from buttermilk.utils.templating import load_template
 from buttermilk.utils.validators import import_class_from_path
@@ -51,11 +55,12 @@ class ClassifierResult(BaseModel):
     error: str | None = Field(None, description="Error message if processing failed")
 
 
-class ClassifierCore:
+class ClassifierCore(ProcessorCore):
     """Stateless classification processor with template support.
 
-    Design mirrors LLMCore: stateless, traceable, works directly with BaseRecord.
-    No Agent inheritance, no AgentInput/AgentOutput - just process() and yield.
+    Extends ProcessorCore to share common infrastructure with LLMCore and
+    ToxicityClassifierCore. Design: stateless, traceable, works directly
+    with BaseRecord. No Agent inheritance - just process() and yield.
 
     Workflow:
     1. Render template with record data to create text
@@ -99,6 +104,9 @@ class ClassifierCore:
         Raises:
             ValueError: If template or output_model is not specified or cannot be resolved.
         """
+        # Initialize ProcessorCore with kwargs as parameters
+        super().__init__(**kwargs)
+
         if not template:
             raise ValueError("'template' is required for ClassifierCore")
         if not output_model:
@@ -116,17 +124,9 @@ class ClassifierCore:
             self.output_model = output_model
 
         self.output_col = output_col
-        self.parameters = kwargs
-        self._trace_writer = None
-
-    @property
-    def trace_writer(self) -> Any:
-        """Lazy-load trace writer for BigQuery persistence."""
-        if self._trace_writer is None:
-            from buttermilk.utils.trace_writer import get_trace_writer
-
-            self._trace_writer = get_trace_writer()
-        return self._trace_writer
+        # Note: self.parameters is set by ProcessorCore.__init__
+        # Add template to parameters for tracing
+        self.parameters["template"] = template
 
     async def process(
         self,
