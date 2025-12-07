@@ -446,3 +446,77 @@ class TestLLMCore:
         # Additional kwargs should also be present
         assert core.parameters["temperature"] == 0.7
         assert core.parameters["max_tokens"] == 1000
+
+    @pytest.mark.anyio
+    async def test_process_with_llm_derives_vars_from_record(self):
+        """Test that template_vars=None derives variables from record.
+
+        When template_vars is None, process_with_llm should use record.model_dump()
+        to derive template variables. This is the processor mode pattern.
+        """
+        core = LLMCore(model="gpt-4", template="test/simple")
+
+        # Create a record with a field that matches the template variable
+        record = BaseRecord(
+            record_id="test",
+            dataset_name="test_dataset",
+            split_type="train",
+            var="test value from record",  # This should be used as template var
+        )
+
+        # Mock ONLY the external LLM boundary
+        mock_bm = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.call_chat.return_value = CreateResult(
+            content="Success",
+            finish_reason="stop",
+            usage=RequestUsage(prompt_tokens=10, completion_tokens=10),
+            cached=False,
+        )
+        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+
+        with patch("buttermilk._core.llm_core.bm", mock_bm):
+            result = await core.process_with_llm(
+                template_vars=None,  # Should derive from record
+                record=record,
+            )
+
+            assert result.content == "Success"
+            # Verify record fields were used as template vars
+            assert result.resolved_inputs["template_vars"]["var"] == "test value from record"
+            assert result.resolved_inputs["template_vars"]["record_id"] == "test"
+            assert result.resolved_inputs["template_vars"]["dataset_name"] == "test_dataset"
+
+    @pytest.mark.anyio
+    async def test_process_with_llm_none_vars_none_record(self):
+        """Test that template_vars=None and record=None results in empty dict.
+
+        Edge case: when both template_vars and record are None, template_vars
+        should default to an empty dict.
+        """
+        core = LLMCore(
+            model="gpt-4",
+            template="test/simple",
+            fail_on_unfilled_parameters=False,  # Allow unfilled for this test
+        )
+
+        # Mock ONLY the external LLM boundary
+        mock_bm = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.call_chat.return_value = CreateResult(
+            content="Response with unfilled",
+            finish_reason="stop",
+            usage=RequestUsage(prompt_tokens=10, completion_tokens=10),
+            cached=False,
+        )
+        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+
+        with patch("buttermilk._core.llm_core.bm", mock_bm):
+            result = await core.process_with_llm(
+                template_vars=None,
+                record=None,
+            )
+
+            # Should have empty template_vars
+            assert result.resolved_inputs["template_vars"] == {}
+            assert result.resolved_inputs["record"] is None
