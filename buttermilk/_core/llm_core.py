@@ -129,39 +129,17 @@ class LLMCore(ProcessorCore):
         # Template metadata for tracking
         self.template_metadata: dict[str, Any] = {}
 
-    def _combine_inputs(self, inputs: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
-        """Combine explicit inputs and kwargs into a single dict.
+        # Initialize trace writer (lazy loading)
+        self._trace_writer = None
 
-        Args:
-            inputs: Any mappable object or None
-            kwargs: Keyword arguments to merge
+    @property
+    def trace_writer(self) -> Any:
+        """Lazy load trace writer."""
+        if self._trace_writer is None:
+            from buttermilk.utils.trace_writer import get_trace_writer
 
-        Returns:
-            Combined dictionary with kwargs taking precedence
-        """
-        # Convert inputs to dict first
-        if inputs is None:
-            input_dict = {}
-        elif hasattr(inputs, "model_dump"):
-            # Pydantic model
-            input_dict = inputs.model_dump()
-        elif hasattr(inputs, "__dict__"):
-            # Object with attributes
-            input_dict = vars(inputs).copy()
-        elif isinstance(inputs, dict):
-            # Already a dict
-            input_dict = inputs.copy()
-        else:
-            # Try to convert to dict
-            try:
-                input_dict = dict(inputs)
-            except (TypeError, ValueError):
-                # If conversion fails, start with empty dict
-                input_dict = {}
-
-        # Merge kwargs, with kwargs taking precedence
-        combined = {**input_dict, **kwargs}
-        return combined
+            self._trace_writer = get_trace_writer()
+        return self._trace_writer
 
     async def process(
         self,
@@ -205,11 +183,17 @@ class LLMCore(ProcessorCore):
             "llm_core.unified_process", attributes=span_attributes
         ) as span:
             try:
+                # Build template_vars: if kwargs provided, merge with record fields
+                # Otherwise let process_with_llm derive from record
+                template_vars = (
+                    {**(record.model_dump() if record and hasattr(record, "model_dump") else {}), **kwargs} if kwargs else None
+                )
+
                 result = await self.process_with_llm(
+                    template_vars=template_vars,
                     record=record,
                     parent_trace_id=parent_trace_id,
                     cancellation_token=cancellation_token,
-                    **kwargs,
                 )
                 # Create ExecutionTrace for observability
                 duration_ms = (time.time() - start_time) * 1000
@@ -327,31 +311,48 @@ class LLMCore(ProcessorCore):
                 span.record_exception(e)
                 raise ProcessingError(f"LLMCore processing failed: {e}") from e
 
-    async def process_with_llm(  # noqa: PLR0912
+    async def process_with_llm(
         self,
-        inputs: Any = None,
+        template_vars: dict[str, Any] | None = None,
+        *,
+        record: Optional[BaseRecord] = None,
+        context: Optional[list[LLMMessage]] = None,
         parent_trace_id: Optional[str] = None,
         cancellation_token: Optional[CancellationToken] = None,
-        **kwargs: Any,
     ) -> LLMResult:
-        """Process inputs through template rendering and LLM calling.
+        """Process through template rendering and LLM calling.
 
-        This is the main entry point for agents for the full LLM workflow.
+        This is the main entry point for both agents and processors.
 
         Args:
-            inputs: Any mappable object (dict, Pydantic model, object with attributes, etc.)
-                   that contains template variables and optionally context/records
-            parent_trace_id: Optional parent trace ID for correlation
-            cancellation_token: Optional token for cancelling LLM calls
-            **kwargs: Additional template variables passed as keyword arguments
+            template_vars: Variables to fill Jinja2 template placeholders.
+                          If None and record is provided, uses record.model_dump().
+            record: Optional record for {{ render_or_include(record) }} placeholders.
+                   NOT used as template variables unless template_vars is None.
+            context: Optional conversation history for message context injection.
+            parent_trace_id: Optional parent trace ID for correlation.
+            cancellation_token: Optional token for cancelling LLM calls.
 
         Returns:
-            LLMResult with the processed output and metadata
+            LLMResult with the processed output and metadata.
+
+        Example - Agent mode (explicit template vars):
+            result = await llm_core.process_with_llm(
+                template_vars={"question": "What is 2+2?"},
+                record=document_record,
+                context=conversation_history,
+            )
+
+        Example - Processor mode (template vars from record):
+            result = await llm_core.process_with_llm(
+                template_vars=None,  # Will use record.model_dump()
+                record=enriched_record,
+            )
         """
         tracer = trace.get_tracer("buttermilk.llm_core")
         result = LLMResult(content=None, error=None)
 
-        # Build span attributes, filtering out None values
+        # Build span attributes
         span_attributes = {
             "llm.model": self.model,
             "llm.template": self.template,
@@ -363,65 +364,27 @@ class LLMCore(ProcessorCore):
             "llm_core.process", attributes=span_attributes
         ) as span:
             try:
-                # Extract record and context BEFORE combining to avoid serialization
-                record = None
-                context = None
-
-                # First check kwargs (they take precedence)
-                record = kwargs.pop("record", None)
-                context = kwargs.pop("context", None)
-
-                # If not in kwargs, extract from inputs
-                if record is None:
-                    if hasattr(inputs, "record"):
-                        record = inputs.record
-                    elif isinstance(inputs, dict):
-                        record = inputs.get("record")
-
-                if context is None:
-                    if hasattr(inputs, "context"):
-                        context = inputs.context
-                    elif isinstance(inputs, dict):
-                        context = inputs.get("context")
+                # === NORMALIZE INPUTS ===
+                # If template_vars not provided, derive from record
+                if template_vars is None:
+                    template_vars = record.model_dump() if record else {}
 
                 # Ensure context is always a list
                 if context is None:
                     context = []
                 elif not isinstance(context, list):
-                    # If context is a single message or string, wrap it in a list
                     context = [context]
 
-                # Combine inputs and kwargs (record/context already removed from kwargs)
-                # LLMCore has TWO modes based on how it's called:
-                #
-                # 1. PROCESSOR MODE (used in pipelines):
-                #    - Called via process(record, ...) - NO inputs parameter
-                #    - Previous processors (like JMESPathTransform) enrich the record
-                #    - Template vars come FROM the enriched record
-                #    - Example: record has {answers, criteria, expected} from JMESPathTransform
-                #
-                # 2. AGENT MODE (used standalone):
-                #    - Called via process_with_llm(inputs={...}, record=..., context=...)
-                #    - Template vars come FROM inputs parameter
-                #    - record/context are separate (used for render_or_include placeholders)
-                #
-                # CRITICAL: If inputs is None, we're in Processor mode - extract from record
-                if inputs is None and record is not None:
-                    combined_inputs = self._combine_inputs(record, kwargs)
-                else:
-                    combined_inputs = self._combine_inputs(inputs, kwargs)
-                # Remove record/context from combined_inputs if they were in inputs dict
-                combined_inputs.pop("record", None)
-                combined_inputs.pop("context", None)
-
-                # Store resolved inputs for complete traceability (observability requirement)
-                # Note: record and context are stored separately in ExecutionTrace fields,
-                # NOT in resolved_inputs, to avoid duplication
-                result.resolved_inputs = combined_inputs.copy()
+                # Store resolved inputs for traceability
+                result.resolved_inputs = {
+                    "template_vars": template_vars,
+                    "record": record,
+                    "context": context,
+                }
 
                 # Fill template
                 llm_messages = await self._fill_template(
-                    combined_inputs, record=record, context=context
+                    template_vars, record=record, context=context
                 )
 
                 # Store template metadata
@@ -508,7 +471,7 @@ class LLMCore(ProcessorCore):
 
     async def _fill_template(
         self,
-        inputs: Any,
+        template_vars: dict[str, Any],
         *,
         record: BaseRecord = None,
         context: list[LLMMessage] | None = None,
@@ -516,44 +479,24 @@ class LLMCore(ProcessorCore):
         """Render the template with provided data.
 
         Args:
-            inputs: Any mappable object (dict, Pydantic model, object with attributes, etc.)
-                   that contains template variables and optionally context/records
+            template_vars: Dictionary of variables to fill template placeholders.
+            record: Optional record for render_or_include placeholders.
+            context: Optional conversation history for context injection.
         """
         template_name = self.template
         if not template_name:
             raise ProcessingError("'template' is required but not specified")
 
-        # Convert any mappable input to dict
-        if inputs is None:
-            input_dict = {}
-        elif hasattr(inputs, "model_dump"):
-            # Pydantic model
-            input_dict = inputs.model_dump()
-        elif hasattr(inputs, "__dict__"):
-            # Object with attributes
-            input_dict = vars(inputs).copy()
-        elif isinstance(inputs, dict):
-            # Already a dict
-            input_dict = inputs.copy()
-        else:
-            # Try to convert to dict
-            try:
-                input_dict = dict(inputs)
-            except (TypeError, ValueError):
-                raise ProcessingError(
-                    f"Cannot convert inputs of type {type(inputs)} to dict"
-                )
-
         logger.debug(f"LLMCore: Using template '{template_name}'")
 
-        # Clean and prepare inputs
-        filtered_inputs = clean_empty_values(input_dict).copy() if input_dict else {}
+        # Clean and prepare template variables
+        filtered_vars = clean_empty_values(template_vars) if template_vars else {}
 
         # Load and render template
         rendered_template_str, unfilled_vars, template_hash = load_template(
             template=template_name,
             parameters=self.parameters,
-            untrusted_inputs=filtered_inputs,
+            untrusted_inputs=filtered_vars,
         )
 
         try:

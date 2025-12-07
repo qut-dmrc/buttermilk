@@ -179,11 +179,10 @@ class LLMAgent(Agent):
         try:
             # Process through LLMCore (yields LLMResult)
             llm_result = await llm_core.process_with_llm(
-                inputs=message.inputs,
+                template_vars=message.inputs,
                 record=message.record,
                 context=message.context,
                 parent_trace_id=message.parent_call_id,
-                component_name=f"LLMAgent[{self.agent_name}]",
                 cancellation_token=cancellation_token,
             )
             # Prepare metadata for AgentOutput
