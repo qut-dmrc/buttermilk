@@ -63,6 +63,10 @@ class VariantProcessor(BaseModel):
         default_factory=dict,
         description="Base parameters merged with variant params",
     )
+    fail_on_error: bool = Field(
+        default=True,
+        description="If True, raise on first variant failure. If False, log and continue.",
+    )
     model_config = {"arbitrary_types_allowed": True}
 
     _processors: list[Any] = PrivateAttr(default_factory=list)
@@ -105,7 +109,10 @@ class VariantProcessor(BaseModel):
 
         Yields:
             BaseRecord outputs from each variant, with variant metadata added.
-            Failed variants yield records with error field populated.
+
+        Raises:
+            Exception: If fail_on_error=True and any variant fails.
+            Exception: If fail_on_error=False but ALL variants fail.
         """
 
         async def stream_variant_outputs(
@@ -128,24 +135,11 @@ class VariantProcessor(BaseModel):
                         "processor_class": type(processor).__name__,
                         "stage": processor_stage,
                     }
-                    await output_queue.put(output.model_copy(update={"metadata": metadata}))
+                    # Put (variant_idx, output, None) - None means no error
+                    await output_queue.put((variant_idx, output.model_copy(update={"metadata": metadata}), None))
             except Exception as e:
-                # Create error record and put in queue - variant failed but others continue
-                error_record = record.model_copy(
-                    update={
-                        "error": (record.error or []) + [str(e)],
-                        "metadata": {
-                            **(record.metadata or {}),
-                            "variant": {
-                                "index": variant_idx,
-                                "total": len(self._processors),
-                                "processor_class": type(processor).__name__,
-                                "stage": processor_stage,
-                            },
-                        },
-                    }
-                )
-                await output_queue.put(error_record)
+                # Put (variant_idx, None, error) - signal failure
+                await output_queue.put((variant_idx, None, e))
 
         # Create queue for streaming results
         output_queue: asyncio.Queue = asyncio.Queue()
@@ -159,6 +153,8 @@ class VariantProcessor(BaseModel):
         # Track original task count to know when all tasks are done
         original_task_count = len(tasks)
         completed_count = 0
+        success_count = 0
+        first_error: Exception | None = None
 
         # Yield results as they arrive in the queue
         while completed_count < original_task_count or not output_queue.empty():
@@ -170,15 +166,35 @@ class VariantProcessor(BaseModel):
 
             # Try to get items from queue (with timeout to check task completion)
             try:
-                output = await asyncio.wait_for(output_queue.get(), timeout=0.1)
-                if output.error:
-                    logger.error(
-                        f"Variant failed: {output.error[-1]}",
-                        record_id=output.record_id,
+                variant_idx, output, error = await asyncio.wait_for(output_queue.get(), timeout=0.1)
+
+                if error is not None:
+                    # Handle error
+                    logger.warning(
+                        f"Variant {variant_idx} failed: {error}",
+                        record_id=record.record_id,
                         processor_stage=processor_stage,
-                        variant=output.metadata.get("variant", {}),
+                        variant_idx=variant_idx,
+                        error=str(error),
                     )
-                yield output
+
+                    if self.fail_on_error:
+                        # Cancel remaining tasks and raise
+                        for task in tasks:
+                            task.cancel()
+                        raise error
+
+                    # Track first error for potential re-raise
+                    if first_error is None:
+                        first_error = error
+                else:
+                    # Success - yield the output
+                    success_count += 1
+                    yield output
             except asyncio.TimeoutError:
                 # No items in queue yet, continue checking tasks
                 continue
+
+        # If ALL variants failed, raise the first error
+        if success_count == 0 and first_error is not None:
+            raise first_error

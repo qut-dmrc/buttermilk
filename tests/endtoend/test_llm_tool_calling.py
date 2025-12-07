@@ -94,7 +94,7 @@ async def calculate_sum(a: float, b: float) -> float:
 
 
 @pytest.mark.anyio
-async def test_structured_output_without_tools(real_llm_expensive):
+async def test_structured_output_without_tools(real_llm_expensive, llm_wrapper_type):
     system = """You are a content moderator. You will be provided with a set of criteria to apply to a sample of user content.
     <CRITERIA>
     Is this output illegal, unethical or harmful to any person?
@@ -116,7 +116,7 @@ async def test_structured_output_without_tools(real_llm_expensive):
 
 
 @pytest.mark.anyio
-async def test_single_tool_call(real_llm_expensive):
+async def test_single_tool_call(real_llm_expensive, llm_wrapper_type):
     """Test that each LLM can make a single tool call."""
     llm = real_llm_expensive
 
@@ -163,7 +163,7 @@ async def test_single_tool_call(real_llm_expensive):
 
 
 @pytest.mark.anyio
-async def test_multiple_tool_calls(real_llm):
+async def test_multiple_tool_calls(real_llm, llm_wrapper_type):
     """Test that LLMs can handle multiple tools and select the right one."""
     # Skip if model doesn't support tools
     model_name = getattr(real_llm, "_model_name", None)
@@ -224,7 +224,7 @@ async def test_multiple_tool_calls(real_llm):
 
 
 @pytest.mark.anyio
-async def test_no_tool_needed(real_llm):
+async def test_no_tool_needed(real_llm, llm_wrapper_type):
     """Test that LLMs don't use tools when not needed."""
     # Skip if model doesn't support tools
     model_name = getattr(real_llm, "_model_name", None)
@@ -290,7 +290,7 @@ async def test_no_tool_needed(real_llm):
 
 
 @pytest.mark.anyio
-async def test_call_chat_intercept_tools_returns_function_calls(real_llm):
+async def test_call_chat_intercept_tools_returns_function_calls(real_llm, llm_wrapper_type):
     """Verify that call_chat(intercept_tools=True) returns FunctionCall objects without executing."""
     # Skip if model doesn't support tools
     model_name = getattr(real_llm, "_model_name", None)
@@ -340,7 +340,7 @@ async def test_call_chat_intercept_tools_returns_function_calls(real_llm):
 
 
 @pytest.mark.anyio
-async def test_structured_output_with_incorrect_tools(real_llm_expensive):
+async def test_structured_output_with_incorrect_tools(real_llm_expensive, llm_wrapper_type):
     """Test that models handle requests for structured output with irrelevant tools passed."""
 
     class Answer(BaseModel):
@@ -384,7 +384,7 @@ async def test_structured_output_with_incorrect_tools(real_llm_expensive):
 
 
 @pytest.mark.anyio
-async def test_call_chat_tool_exec_then_synthesis_with_schema(real_llm_expensive):
+async def test_call_chat_tool_exec_then_synthesis_with_schema(real_llm_expensive, llm_wrapper_type):
     """Cover the full flow: initial tool call -> tool execution -> synthesis call with schema.
 
     This test helps surface issues where the synthesis call incorrectly sets a structured

@@ -1,13 +1,21 @@
 """Cloud provider client management and connection utilities."""
 
 import os
+import threading
 from typing import Any
 
 from google import genai
 from google.auth import default
 from google.auth.credentials import Credentials as GoogleCredentials, TokenState
+from google.auth.exceptions import TransportError
 from google.cloud import bigquery, storage
 from google.cloud.logging_v2.client import Client as CloudLoggingClient
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from buttermilk._core.config import CloudProviderCfg
 from buttermilk._core.exceptions import FatalError
@@ -30,6 +38,8 @@ class CloudManager:
         """
         self.clouds = clouds or []
         self._gcp_project = ""
+        # Instance-level lock for thread-safe token refresh
+        self._refresh_lock = threading.Lock()
 
         # Find GCP cloud config for initialization
         self.gcp_cloud_cfg = next(
@@ -61,6 +71,33 @@ class CloudManager:
     def _needs_credentials_refresh(self, credentials: GoogleCredentials) -> bool:
         """Check if credentials need to be refreshed."""
         return hasattr(credentials, "valid") and not credentials.valid
+
+    @retry(
+        retry=retry_if_exception_type((TransportError, ConnectionError)),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=4),
+        reraise=True,
+    )
+    def _refresh_credentials(self, credentials: GoogleCredentials) -> None:
+        """Refresh credentials with retry logic for transient failures.
+
+        Retries up to 3 times with exponential backoff (1s, 2s, 4s) for
+        transient errors like TransportError and ConnectionError.
+        Fails immediately on non-retryable errors.
+
+        Args:
+            credentials: Google credentials to refresh
+
+        Raises:
+            TransportError: After 3 failed retry attempts
+            ConnectionError: After 3 failed retry attempts
+            Other exceptions: Immediately (no retry)
+
+        """
+        from google.auth.transport.requests import Request
+
+        request = Request()
+        credentials.refresh(request)
 
     @refreshable_cached_property
     def gcp_credentials(self) -> GoogleCredentials:
@@ -101,18 +138,36 @@ class CloudManager:
     def get_access_token(self) -> str:
         """Get a valid access token from GCP credentials, refreshing if needed.
 
+        Thread-safe using double-check locking pattern to prevent race conditions
+        when multiple threads attempt to refresh simultaneously.
+
         Returns:
             str: A valid OAuth2 access token
 
         """
         creds = self.gcp_credentials
 
-        # Refresh if needed
+        # First check: Fast path for fresh tokens (no lock needed)
         if creds.token_state != TokenState.FRESH:
-            from google.auth.transport.requests import Request
+            # Save current token BEFORE acquiring lock
+            token_before_lock = creds.token
 
-            request = Request()
-            creds.refresh(request)
+            # Acquire lock for refresh
+            with self._refresh_lock:
+                # Second check: Re-check both token_state AND token value
+                # to detect if another thread refreshed while we waited for the lock
+
+                # If token_state became FRESH, another thread refreshed
+                if creds.token_state == TokenState.FRESH:
+                    return creds.token
+
+                # If token value changed, another thread refreshed
+                # (This handles cases where token_state might be mocked in tests)
+                if creds.token != token_before_lock:
+                    return creds.token
+
+                # Token still stale and unchanged, we need to refresh
+                self._refresh_credentials(creds)
 
         return creds.token
 

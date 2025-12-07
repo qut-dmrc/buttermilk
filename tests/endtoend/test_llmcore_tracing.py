@@ -10,14 +10,17 @@ This test validates the complete tracing pipeline:
 
 import asyncio
 import datetime
+import json
 
 import pytest
 from pydantic import BaseModel, Field
 
 from buttermilk import logger
 from buttermilk._core.contract import ExecutionTrace
+from buttermilk._core.hashing import compute_record_hash, compute_template_hash, hash_dict
 from buttermilk._core.llm_core import LLMCore
 from buttermilk._core.types import BaseRecord
+from buttermilk.utils.templating import load_template
 from buttermilk.utils.trace_writer import get_trace_writer
 
 
@@ -85,7 +88,7 @@ MODELS_WITHOUT_STRUCTURED_OUTPUT = {
 
 
 @pytest.mark.anyio
-async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, real_model_name_expensive: str):
+async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, real_model_name_expensive: str, llm_wrapper_type):
     """Test LLMCore processes request and uploads ExecutionTrace to BigQuery.
 
     This test:
@@ -205,7 +208,6 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
     # Validate agent_info
     agent_info = trace.agent_info
     if isinstance(agent_info, str):
-        import json
 
         agent_info = json.loads(agent_info)
 
@@ -220,7 +222,6 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
     # Validate metadata contains LLM info
     metadata = trace.metadata
     if isinstance(metadata, str):
-        import json
 
         metadata = json.loads(metadata)
 
@@ -235,7 +236,6 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
     # Validate inputs contain our test data
     inputs = trace.inputs
     if isinstance(inputs, str):
-        import json
 
         inputs = json.loads(inputs)
 
@@ -245,7 +245,6 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
     # Validate record structure - ensure record_id, dataset_name, split_type are preserved
     record_in_inputs = inputs["record"]
     if isinstance(record_in_inputs, str):
-        import json
 
         record_in_inputs = json.loads(record_in_inputs)
 
@@ -285,7 +284,6 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
     if isinstance(outputs, str):
         # Could be JSON string, try to parse
         try:
-            import json
 
             outputs = json.loads(outputs)
         except (json.JSONDecodeError, TypeError):
@@ -374,11 +372,155 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
         "Messages should contain the LLM's response mentioning Paris"
     )
 
+    # Validate message ordering: template system prompt in messages[0], user content in messages[1]
+    # The "ra" template has system prompt: "You are a careful research assistant..."
+    assert len(parsed_messages) >= 3, f"Expected at least 3 messages (system + user + answer), got {len(parsed_messages)}"
+
+    # messages[0] should contain the template system prompt
+    first_msg = parsed_messages[0]
+    first_role = first_msg.get("role", first_msg.get("type", "")).lower()
+    first_content = first_msg.get("content", "")
+    assert "system" in first_role, f"First message should be system role from template, got role: {first_role}"
+    assert "research assistant" in first_content.lower(), (
+        f"First message should contain template system prompt 'research assistant', got: {first_content[:200]}..."
+    )
+
+    # messages[1] should contain the user's prompt about France's capital
+    second_msg = parsed_messages[1]
+    second_role = second_msg.get("role", second_msg.get("type", "")).lower()
+    second_content = second_msg.get("content", "")
+    assert "user" in second_role, f"Second message should be user role with prompt, got role: {second_role}"
+    assert "capital" in second_content.lower() or "france" in second_content.lower(), (
+        f"Second message should contain user prompt about France's capital, got: {second_content[:200]}..."
+    )
+
     logger.info(
         f"✅ Messages field validated: {len(messages)} messages with roles {roles}"
     )
 
-    logger.info("✅ All trace validations passed")
+    # Validate parameters field contains model hyperparameters
+    # Query for parameters field from BigQuery
+    query_with_parameters = f"""
+        SELECT
+            call_id,
+            parameters
+        FROM `{real_bm.bq.project}.testing.traces`
+        WHERE call_id = '{trace.call_id}'
+        LIMIT 1
+    """
+    df_parameters = real_bm.run_query(query_with_parameters)
+
+    assert df_parameters.shape[0] == 1, "Should retrieve the trace with parameters"
+    parameters = df_parameters.iloc[0].parameters
+
+    # FAIL-FAST: Parameters must exist and be parseable
+    assert parameters is not None, "Parameters field should not be None"
+
+    # Parse if JSON string
+    if isinstance(parameters, str):
+        parameters = json.loads(parameters)
+
+    assert isinstance(parameters, dict), (
+        f"Parameters should be a dict, got {type(parameters).__name__}"
+    )
+
+    # Validate core LLMCore parameters are present
+    assert "model" in parameters, (
+        f"Parameters should contain 'model'. Got keys: {parameters.keys()}"
+    )
+    assert "template" in parameters, (
+        f"Parameters should contain 'template'. Got keys: {parameters.keys()}"
+    )
+
+    # Validate model configs are captured (temperature, api_version, etc. from models.json)
+    # The configs dict is stored in LLMConfig.configs, NOT in ModelParameters
+    if real_model_name_expensive in real_bm.llms.connections:
+        llm_config = real_bm.llms.connections[real_model_name_expensive]
+        model_configs = llm_config.configs if llm_config.configs else {}
+
+        if "temperature" in model_configs:
+            assert "temperature" in parameters, (
+                f"Parameters should contain 'temperature' from model configs. "
+                f"Model configs: {model_configs}, got parameters: {parameters}"
+            )
+            assert parameters["temperature"] == model_configs["temperature"], (
+                f"Temperature should match model config: expected {model_configs['temperature']}, "
+                f"got {parameters.get('temperature')}"
+            )
+            logger.info(f"✅ Hyperparameter 'temperature' logged correctly: {parameters['temperature']}")
+
+        if "api_version" in model_configs:
+            assert "api_version" in parameters, (
+                f"Parameters should contain 'api_version' from model configs. "
+                f"Model configs: {model_configs}, got parameters: {parameters}"
+            )
+            logger.info(f"✅ Config 'api_version' logged correctly: {parameters['api_version']}")
+
+    logger.info(f"✅ Parameters field validated: {list(parameters.keys())}")
+
+    # ==========================================================================
+    # HASH VALIDATION: Verify hashes exist and match recomputed values
+    # ==========================================================================
+
+    # 1. Validate template_hash exists in metadata and matches recomputed hash
+    assert "template" in metadata, (
+        f"Metadata should contain 'template' with template_hash. Got keys: {metadata.keys()}"
+    )
+    template_metadata = metadata["template"]
+    if isinstance(template_metadata, str):
+        template_metadata = json.loads(template_metadata)
+
+    assert "template_hash" in template_metadata, (
+        f"Template metadata should contain 'template_hash'. Got: {template_metadata.keys()}"
+    )
+    logged_template_hash = template_metadata["template_hash"]
+    assert logged_template_hash is not None, "template_hash should not be None"
+    assert len(logged_template_hash) == 64, (
+        f"template_hash should be 64-char SHA256, got {len(logged_template_hash)} chars: {logged_template_hash}"
+    )
+
+    # Recompute template hash and verify it matches
+    # The test uses template="ra"
+    _, _, expected_template_hash = load_template(
+        template="ra",
+        parameters={},
+        untrusted_inputs={},
+    )
+    assert logged_template_hash == expected_template_hash, (
+        f"Logged template_hash should match recomputed hash.\n"
+        f"Logged:   {logged_template_hash}\n"
+        f"Expected: {expected_template_hash}"
+    )
+    logger.info(f"✅ template_hash validated: {logged_template_hash[:16]}...")
+
+    # 2. Validate record exists in inputs and has record_id for hash verification
+    # The record_hash is computed from record.as_markdown()
+    record_in_trace = inputs.get("record")
+    assert record_in_trace is not None, "Inputs should contain record"
+
+    if isinstance(record_in_trace, str):
+        record_in_trace = json.loads(record_in_trace)
+
+    assert "record_id" in record_in_trace, (
+        f"Record in trace should have record_id. Got keys: {record_in_trace.keys()}"
+    )
+    # Verify the record_id matches our sample_record
+    assert record_in_trace["record_id"] == sample_record.record_id, (
+        f"Record ID in trace should match input record.\n"
+        f"Trace:    {record_in_trace['record_id']}\n"
+        f"Expected: {sample_record.record_id}"
+    )
+    logger.info(f"✅ record_id validated: {record_in_trace['record_id']}")
+
+    # 3. Validate config hash can be computed from parameters
+    # The parameters field contains the LLMCore config that should be hashable
+    config_hash = hash_dict(parameters)
+    assert len(config_hash) == 64, (
+        f"config_hash should be 64-char SHA256, got {len(config_hash)} chars"
+    )
+    logger.info(f"✅ config_hash computed from parameters: {config_hash[:16]}...")
+
+    logger.info("✅ All hash validations passed")
     logger.info(f"Trace metadata: {metadata}")
 
     # Success!
@@ -392,7 +534,7 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
 
 
 @pytest.mark.anyio
-async def test_trace_writer_initialization(real_bm):
+async def test_trace_writer_initialization(real_bm, llm_wrapper_type):
     """Test that TraceWriter initializes correctly with storage config."""
     trace_writer = get_trace_writer()
 
@@ -411,7 +553,7 @@ async def test_trace_writer_initialization(real_bm):
 
 
 @pytest.mark.anyio
-async def test_trace_writer_save(real_bm):
+async def test_trace_writer_save(real_bm, llm_wrapper_type):
     """Test that TraceWriter can save a dummy trace."""
     trace_writer = get_trace_writer()
     trace_writer._ensure_initialized()
@@ -487,7 +629,6 @@ async def test_trace_writer_save(real_bm):
     # Validate agent_info
     agent_info = trace.agent_info
     if isinstance(agent_info, str):
-        import json
 
         agent_info = json.loads(agent_info)
 
@@ -501,7 +642,6 @@ async def test_trace_writer_save(real_bm):
     # Validate metadata
     metadata = trace.metadata
     if isinstance(metadata, str):
-        import json
 
         metadata = json.loads(metadata)
 
@@ -513,7 +653,6 @@ async def test_trace_writer_save(real_bm):
     # Validate inputs and outputs
     inputs = trace.inputs
     if isinstance(inputs, str):
-        import json
 
         inputs = json.loads(inputs)
 
@@ -521,7 +660,6 @@ async def test_trace_writer_save(real_bm):
 
     outputs = trace.outputs
     if isinstance(outputs, str):
-        import json
 
         outputs = json.loads(outputs)
 

@@ -16,7 +16,7 @@ MODELS_WITH_TOOL_QUIRKS = {}
 
 # @pytest.mark.integration
 @pytest.mark.anyio
-async def test_all_llm(real_llm_expensive):
+async def test_all_llm(real_llm_expensive, llm_wrapper_type):
     assert real_llm_expensive
 
     messages = [
@@ -29,7 +29,7 @@ async def test_all_llm(real_llm_expensive):
 
 
 @pytest.mark.anyio
-async def test_cheap_llm(real_llm):
+async def test_cheap_llm(real_llm, llm_wrapper_type):
     assert real_llm
 
     messages = [
@@ -57,6 +57,7 @@ class TestPromptStyles:
         self,
         real_llm,
         text_record: Record,
+        llm_wrapper_type,
     ):
         messages = [
             UserMessage(
@@ -71,7 +72,7 @@ class TestPromptStyles:
         assert response.content
 
     @pytest.mark.anyio
-    async def test_pydantic_response_ambiguous(self, real_llm_expensive):
+    async def test_pydantic_response_ambiguous(self, real_llm_expensive, llm_wrapper_type):
         """Test structured output with all models."""
         system = """You are a content moderator. You will be provided with a set of criteria to apply to a sample of user content.
         <CRITERIA>

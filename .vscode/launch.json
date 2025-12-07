@@ -83,7 +83,8 @@
         "--config-dir=/home/nic/src/reliability/config",
         "--config-name=reliability",
         "+run=pipeline",
-        "run.limit=1"
+        "run.limit=1",
+        "run.pipeline.num_runs=1 "
       ]
     },
     {

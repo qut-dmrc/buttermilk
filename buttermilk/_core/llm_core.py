@@ -5,6 +5,9 @@ LLM operations (template rendering, LLM calling, tracing) that can be
 reused across different contexts - both in Agent-based flows and in
 pipeline processors.
 
+LLMCore extends ProcessorCore to share common infrastructure (trace_writer,
+tracing patterns) with ClassifierCore and ToxicityClassifierCore.
+
 The design intentionally avoids Agent-specific concepts to maintain
 flexibility while preserving full observability through metadata tracking.
 """
@@ -24,6 +27,7 @@ from buttermilk import bm, logger
 from buttermilk._core.contract import ErrorEvent, ExecutionTrace
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llms import CreateResult, ModelOutput
+from buttermilk._core.processor_core import ProcessorCore
 from buttermilk._core.types import BaseRecord
 from buttermilk.utils.templating import load_template, make_messages
 from buttermilk.utils.utils import clean_empty_values, scrub_serializable
@@ -60,11 +64,12 @@ class LLMResult(BaseModel):
     )
 
 
-class LLMCore:
+class LLMCore(ProcessorCore):
     """Core LLM functionality shared between agents and processors.
 
-    This class extracts the essential LLM operations from LLMAgent,
-    making them reusable in different contexts while maintaining
+    Extends ProcessorCore to share common infrastructure with ClassifierCore
+    and ToxicityClassifierCore. Extracts the essential LLM operations from
+    LLMAgent, making them reusable in different contexts while maintaining
     observability and traceability.
 
     Key responsibilities:
@@ -97,7 +102,8 @@ class LLMCore:
         """
         # CRITICAL: Include model and template in parameters for trace writing
         # Issue #280: Traces need these fields for observability/analysis
-        self.parameters = {"model": model, "template": template, **kwargs}
+        # Initialize ProcessorCore with model and template in kwargs
+        super().__init__(model=model, template=template, **kwargs)
 
         # Resolve output_model if it's a string
         if isinstance(output_model, str):
@@ -191,25 +197,45 @@ class LLMCore:
                 )
                 # Create ExecutionTrace for observability
                 duration_ms = (time.time() - start_time) * 1000
+
+                # Get model configuration for complete traceability
+                # model_configs contains temperature, api_version, safety_settings, etc. from models.json
+                model_configs = {}
+                if self.model in bm.llms.connections:
+                    llm_config = bm.llms.connections[self.model]
+                    model_configs = llm_config.configs.copy() if llm_config.configs else {}
+
+                # Build trace parameters: LLMCore params + model configs (no duplication)
+                # - self.parameters has: model (alias), template, and any runtime kwargs
+                # - model_configs has: temperature, api_version, safety_settings, etc.
+                trace_parameters = {**self.parameters, **model_configs}
+
+                # Build metadata: merge input metadata (from record) with output metadata
+                # Input metadata comes from record.metadata if available
+                input_metadata = {}
+                if record is not None and hasattr(record, "metadata") and record.metadata:
+                    input_metadata = {"input": record.metadata}
+
                 execution_trace = ExecutionTrace(
                     call_id=result.trace_id,
                     agent_info={
                         "component_name": component_name,
                         "execution_type": "llm_processing",
-                        "config": self.parameters,
                         "processor_stage": processor_stage,
                     },
-                    inputs=result.resolved_inputs
-                    if result.resolved_inputs
-                    else {"record": record, **kwargs},
+                    # inputs = template variables only (record/context stored separately)
+                    inputs=result.resolved_inputs if result.resolved_inputs else kwargs,
                     outputs=result.content,
                     messages=result.messages,
-                    parameters=self.parameters,
+                    parameters=trace_parameters,
+                    # metadata merges: input metadata (under 'input' key) + output metadata + duration
                     metadata={
+                        **input_metadata,
                         **result.metadata,
                         "duration_ms": duration_ms,
                     },
                     parent_call_id=parent_trace_id,
+                    record=record,
                 )
 
                 # Emit trace if trace writer is available
@@ -233,23 +259,39 @@ class LLMCore:
                 yield enriched_record
 
             except ProcessingError as e:
-                # Create error trace
+                # Create error trace with same structure as success trace
                 duration_ms = (time.time() - start_time) * 1000
+
+                # Get model configs for error trace too
+                error_model_configs = {}
+                if self.model in bm.llms.connections:
+                    error_llm_config = bm.llms.connections[self.model]
+                    error_model_configs = error_llm_config.configs.copy() if error_llm_config.configs else {}
+
+                # Build error metadata with input metadata if available
+                error_input_metadata = {}
+                if record is not None and hasattr(record, "metadata") and record.metadata:
+                    error_input_metadata = {"input": record.metadata}
+
                 error_trace = ExecutionTrace(
                     agent_info={
                         "component_name": component_name,
                         "execution_type": "llm_processing",
-                        "config": self.parameters,
+                        "processor_stage": processor_stage,
                     },
-                    inputs=record,
+                    # inputs = template variables only (kwargs passed to process)
+                    inputs=kwargs if kwargs else None,
+                    parameters={**self.parameters, **error_model_configs},
                     error={
                         "event": str(e),
                         "details": {"error_type": type(e).__name__},
                     },
                     metadata={
+                        **error_input_metadata,
                         "duration_ms": duration_ms,
                     },
                     parent_call_id=parent_trace_id,
+                    record=record,
                 )
 
                 # Emit error trace
@@ -527,13 +569,16 @@ class LLMCore:
                     schema=self.output_model if self.output_model else None,
                 )
 
-                # Make the actual LLM call
-                result = await model_client.call_chat(
-                    messages=messages,
-                    tools_list=self.tools,
-                    cancellation_token=cancellation_token,
-                    schema=self.output_model,
-                )
+                # Make the actual LLM call, respecting API concurrency limits
+                from buttermilk._core.context import ApiSemaphoreContext
+
+                async with ApiSemaphoreContext():
+                    result = await model_client.call_chat(
+                        messages=messages,
+                        tools_list=self.tools,
+                        cancellation_token=cancellation_token,
+                        schema=self.output_model,
+                    )
 
                 # Record token usage in span if available
                 if hasattr(result, "usage") and result.usage:

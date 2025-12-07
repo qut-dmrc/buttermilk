@@ -15,7 +15,7 @@ storage:
     dataset_name: traces
     schema_path: traces.schema.json
 session:
-  llm_wrapper: autogen
+  llm_wrapper: litellm
 infrastructure:
   clouds:
     - type: gcp

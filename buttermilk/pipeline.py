@@ -196,6 +196,10 @@ class PipelineOrchestrator(BaseModel):
     """
 
     concurrency: int = Field(default=1, description="Max concurrent record processing")
+    api_concurrency: int = Field(
+        default=10,
+        description="Max concurrent API calls across all processors (limits nested parallelism)",
+    )
     limit: Optional[int] | None = Field(
         default=None, description="Maximum records to process"
     )
@@ -226,6 +230,7 @@ class PipelineOrchestrator(BaseModel):
 
     # Internal state
     _semaphore: asyncio.Semaphore = PrivateAttr()
+    _api_semaphore: asyncio.Semaphore = PrivateAttr()
     _record_cache: Any = PrivateAttr(default=None)
     _summary: Any = PrivateAttr(default=None)  # ProcessingSummary instance
 
@@ -247,10 +252,13 @@ class PipelineOrchestrator(BaseModel):
 
     @pydantic.model_validator(mode="after")
     def _init(self):
-        """Initialize semaphore, record cache, and processing summary."""
+        """Initialize semaphores, record cache, and processing summary."""
+        from buttermilk._core.context import set_api_semaphore
         from buttermilk._core.types import ProcessingSummary
 
         self._semaphore = asyncio.Semaphore(self.concurrency)
+        self._api_semaphore = asyncio.Semaphore(self.api_concurrency)
+        set_api_semaphore(self._api_semaphore)
         self._summary = ProcessingSummary()
 
         # Initialize record cache (lazy base_dir resolution happens in RecordCache)

@@ -7,20 +7,26 @@ structured labels/scores.
 Unlike LLMAgent which uses LLMs for reasoning, classifiers call external
 APIs that return pre-defined categories and confidence scores. They follow
 the same design pattern as LLMCore: stateless processors with tracing.
+
+ClassifierCore extends ProcessorCore to share common infrastructure
+(trace_writer, tracing patterns) with LLMCore and ToxicityClassifierCore.
 """
 
+import json
 import time
 import uuid
 from abc import abstractmethod
 from typing import Any, AsyncGenerator
 
 import pydantic
+from autogen_core.models import AssistantMessage, SystemMessage, UserMessage
 from opentelemetry import trace
 from pydantic import BaseModel, Field
 
 from buttermilk import logger
 from buttermilk._core.contract import ExecutionTrace
 from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.processor_core import ProcessorCore
 from buttermilk._core.types import BaseRecord
 from buttermilk.utils.templating import load_template
 from buttermilk.utils.validators import import_class_from_path
@@ -43,14 +49,18 @@ class ClassifierResult(BaseModel):
     template_metadata: dict[str, Any] = Field(
         default_factory=dict, description="Template name, hash, etc"
     )
+    rendered_prompt: str = Field(
+        default="", description="The rendered prompt/criteria sent to the classification API"
+    )
     error: str | None = Field(None, description="Error message if processing failed")
 
 
-class ClassifierCore:
+class ClassifierCore(ProcessorCore):
     """Stateless classification processor with template support.
 
-    Design mirrors LLMCore: stateless, traceable, works directly with BaseRecord.
-    No Agent inheritance, no AgentInput/AgentOutput - just process() and yield.
+    Extends ProcessorCore to share common infrastructure with LLMCore and
+    ToxicityClassifierCore. Design: stateless, traceable, works directly
+    with BaseRecord. No Agent inheritance - just process() and yield.
 
     Workflow:
     1. Render template with record data to create text
@@ -94,6 +104,9 @@ class ClassifierCore:
         Raises:
             ValueError: If template or output_model is not specified or cannot be resolved.
         """
+        # Initialize ProcessorCore with kwargs as parameters
+        super().__init__(**kwargs)
+
         if not template:
             raise ValueError("'template' is required for ClassifierCore")
         if not output_model:
@@ -111,17 +124,9 @@ class ClassifierCore:
             self.output_model = output_model
 
         self.output_col = output_col
-        self.parameters = kwargs
-        self._trace_writer = None
-
-    @property
-    def trace_writer(self) -> Any:
-        """Lazy-load trace writer for BigQuery persistence."""
-        if self._trace_writer is None:
-            from buttermilk.utils.trace_writer import get_trace_writer
-
-            self._trace_writer = get_trace_writer()
-        return self._trace_writer
+        # Note: self.parameters is set by ProcessorCore.__init__
+        # Add template to parameters for tracing
+        self.parameters["template"] = template
 
     async def process(
         self,
@@ -190,6 +195,18 @@ class ClassifierCore:
                 span.set_status(trace.Status(trace.StatusCode.OK))
 
                 # Write ExecutionTrace to BigQuery (same pattern as LLMCore)
+                # Build messages list: rendered_prompt as UserMessage, response as AssistantMessage
+                response_content = json.dumps(output_content) if isinstance(output_content, dict) else str(output_content)
+                trace_messages = [
+                    UserMessage(content=result.rendered_prompt, source="classifier"),
+                    AssistantMessage(content=response_content, source=self.__class__.__name__),
+                ]
+
+                # Build metadata: merge input metadata (from record) with output metadata
+                input_metadata = {}
+                if record is not None and hasattr(record, "metadata") and record.metadata:
+                    input_metadata = {"input": record.metadata}
+
                 execution_trace = ExecutionTrace(
                     call_id=result.trace_id,
                     agent_info={
@@ -198,14 +215,19 @@ class ClassifierCore:
                         "config": {"template": self.template, **self.parameters},
                         "processor_stage": processor_stage,
                     },
-                    inputs={"record_id": record_id, "content": getattr(record, "content", None)},
+                    # inputs = template variables only (record stored separately in record field)
+                    inputs=kwargs if kwargs else None,
                     outputs=output_content,
+                    messages=trace_messages,
                     parameters={"template": self.template, **self.parameters},
+                    # metadata merges: input metadata (under 'input' key) + stage metadata + duration
                     metadata={
+                        **input_metadata,
                         **stage_metadata,
                         "duration_ms": processing_time_ms,
                     },
                     parent_call_id=parent_trace_id,
+                    record=record,
                 )
 
                 if self.trace_writer:
@@ -217,6 +239,11 @@ class ClassifierCore:
                 yield enriched_record
 
             except Exception as e:
+                # Build error metadata with input metadata if available
+                error_input_metadata = {}
+                if record is not None and hasattr(record, "metadata") and record.metadata:
+                    error_input_metadata = {"input": record.metadata}
+
                 # Write error trace
                 error_trace = ExecutionTrace(
                     agent_info={
@@ -225,15 +252,18 @@ class ClassifierCore:
                         "config": {"template": self.template, **self.parameters},
                         "processor_stage": processor_stage,
                     },
-                    inputs={"record_id": record_id, "content": getattr(record, "content", None)},
+                    # inputs = template variables only (record stored separately)
+                    inputs=kwargs if kwargs else None,
                     error={
                         "event": str(e),
                         "details": {"error_type": type(e).__name__},
                     },
                     metadata={
+                        **error_input_metadata,
                         "duration_ms": int((time.time() - start_time) * 1000),
                     },
                     parent_call_id=parent_trace_id,
+                    record=record,
                 )
 
                 if self.trace_writer:
@@ -298,6 +328,7 @@ class ClassifierCore:
                 "hash": template_hash,
                 "unfilled_vars": list(unfilled_vars),
             },
+            rendered_prompt=rendered_text,
         )
 
     @abstractmethod
@@ -375,6 +406,8 @@ class HuggingFaceClassifier(ClassifierCore):
             raise ValueError("'model' is required for HuggingFaceClassifier")
 
         self.model = model
+        # Add model to parameters so it appears in trace as parameters.model (not agent_name)
+        self.parameters["model"] = model
 
         # Get LLM wrapper from buttermilk connections
         from buttermilk import bm
@@ -453,8 +486,6 @@ class HuggingFaceClassifier(ClassifierCore):
 
             # Fallback: parse raw content manually
             if hasattr(result, "content") and result.content:
-                import json
-
                 if isinstance(result.content, str):
                     response = json.loads(result.content)
                 else:
@@ -530,8 +561,6 @@ class HuggingFaceClassifier(ClassifierCore):
         Returns:
             ClassifierResult with structured output and metadata
         """
-        from autogen_core.models import AssistantMessage, SystemMessage, UserMessage
-
         # Step 1: Render template
         inputs = record.model_dump() if hasattr(record, "model_dump") else dict(record)
         inputs.update(kwargs)
@@ -601,6 +630,7 @@ class HuggingFaceClassifier(ClassifierCore):
                 "hash": template_hash,
                 "unfilled_vars": list(unfilled_vars),
             },
+            rendered_prompt=rendered_text,
         )
 
 
@@ -647,6 +677,8 @@ class ZentropiClassifier(ClassifierCore):
         base_url = os.environ.get("ZENTROPI_BASE_URL", "https://api.zentropi.ai/v1/label")
 
         self._client = {"api_key": api_key, "base_url": base_url}
+        # Add model to parameters for consistent trace format (parameters.model)
+        self.parameters["model"] = "zentropi"
         logger.debug(f"ZentropiClassifier initialized with base_url: {base_url}")
 
     async def _classify(self, text: str, *, content: str) -> dict[str, Any]:
@@ -802,7 +834,7 @@ class ZentropiClassifier(ClassifierCore):
         except Exception as e:
             raise ProcessingError(f"Zentropi API call failed: {e}") from e
 
-        # Step 3: Map to schema
+        # Step 4: Map to schema
         try:
             structured_output = self._map_to_schema(api_response, self.output_model)
             logger.debug(f"ZentropiClassifier mapped to schema: {type(structured_output).__name__}")
@@ -819,6 +851,7 @@ class ZentropiClassifier(ClassifierCore):
                 "hash": template_hash,
                 "unfilled_vars": list(unfilled_vars),
             },
+            rendered_prompt=criteria,
         )
 
     def _map_to_schema(

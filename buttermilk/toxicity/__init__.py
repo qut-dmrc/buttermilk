@@ -40,7 +40,8 @@ from .toxicity import (
     ShieldGemma,
     ShieldGemma2b,
     ShieldGemma9b,
-    ToxicityModel,
+    ToxicityClassifierCore,
+    ToxicityModel,  # Backward-compatible alias for ToxicityClassifierCore
     Zentropi,
 )
 from .wildguard import Wildguard
@@ -94,11 +95,11 @@ TOXCLIENTS_LOCAL = [
 
 
 # Let's provide an interface for all the various toxicity models
-def get_tox_flow(flow: str, **kwargs) -> ToxicityModel:
+def get_tox_flow(flow: str, **kwargs) -> ToxicityClassifierCore:
     return globals()[flow]
 
 
-def load_tox_flow(flow: str, credentials: dict[str, str] | None = None, **kwargs) -> ToxicityModel:
+def load_tox_flow(flow: str, credentials: dict[str, str] | None = None, **kwargs) -> ToxicityClassifierCore:
     """Load a toxicity model with optional credential injection.
 
     Args:

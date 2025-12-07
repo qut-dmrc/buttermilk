@@ -20,10 +20,10 @@ from enum import Enum
 from typing import Any, Callable, TypeVar
 
 import urllib3.exceptions
-from google.auth.exceptions import TransportError as GoogleAuthTransportError
 
 # Core LLM library imports - these are required dependencies
 from anthropic import AsyncAnthropicVertex
+from google.auth.exceptions import TransportError as GoogleAuthTransportError
 
 # LiteLLM imports
 try:
@@ -975,7 +975,7 @@ class AutoGenWrapper(BaseModel):
             logger.warning(
                 "LLM response had no usage data - using 0 tokens for pricing"
             )
-            return {"prompt_tokens": 0, "completion_tokens": 0, "total_cost": 0.0}
+            return {"total_cost": 0.0}
 
         # Extract tokens from usage object
         prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
@@ -988,11 +988,8 @@ class AutoGenWrapper(BaseModel):
             completion_tokens=completion_tokens,
         )
 
-        return {
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": completion_tokens,
-            "total_cost": total_cost,
-        }
+        # Only return total_cost - token counts are already in usage object
+        return {"total_cost": total_cost}
 
     @staticmethod
     async def _parse_structured_output(  # noqa: PLR0912
@@ -1264,6 +1261,9 @@ class LiteLLMWrapper(BaseModel):
     extra_headers: dict[str, str] | None = Field(
         default=None, description="Extra headers for the API request (e.g., Authorization)"
     )
+    token_provider: Callable[[], str] | None = Field(
+        default=None, description="Optional callable that returns an authentication token"
+    )
     vertex_project: str | None = Field(
         default=None, description="GCP project ID for Vertex AI providers"
     )
@@ -1410,9 +1410,19 @@ class LiteLLMWrapper(BaseModel):
         if self.base_url:
             litellm_params["base_url"] = self.base_url
 
+        # Get fresh token from token_provider if configured
+        headers_to_add = {}
+        if self.token_provider:
+            fresh_token = self.token_provider()
+            headers_to_add["Authorization"] = f"Bearer {fresh_token}"
+
         # Add extra headers if provided (e.g., Authorization for GCP)
         if self.extra_headers:
-            litellm_params["extra_headers"] = self.extra_headers
+            # Merge token_provider headers with extra_headers
+            merged_headers = {**self.extra_headers, **headers_to_add}
+            litellm_params["extra_headers"] = merged_headers
+        elif headers_to_add:
+            litellm_params["extra_headers"] = headers_to_add
 
         # Add Vertex AI configuration if provided (for anthropic_vertex, gemini_vertex)
         if self.vertex_project:
@@ -1766,7 +1776,7 @@ class LiteLLMWrapper(BaseModel):
             logger.warning(
                 "LLM response had no usage data - using 0 tokens for pricing"
             )
-            return {"prompt_tokens": 0, "completion_tokens": 0, "total_cost": 0.0}
+            return {"total_cost": 0.0}
 
         prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
         completion_tokens = getattr(usage, "completion_tokens", 0) or 0
@@ -1778,11 +1788,8 @@ class LiteLLMWrapper(BaseModel):
             completion_tokens=completion_tokens,
         )
 
-        return {
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": completion_tokens,
-            "total_cost": total_cost,
-        }
+        # Only return total_cost - token counts are already in usage object
+        return {"total_cost": total_cost}
 
 
 class LLMs(BaseModel):
@@ -2242,6 +2249,14 @@ class LLMs(BaseModel):
                 vertex_project = config.configs.get("project_id")
                 vertex_location = config.configs.get("region")
 
+            # Determine if token_provider is needed for this provider
+            token_provider = None
+            if config.client_type in (ClientType.VERTEX_OPENAI, ClientType.GEMINI_VERTEX):
+                # Vertex models need GCP token refresh
+                def get_vertex_token() -> str:
+                    return bm.get_gcp_access_token()
+                token_provider = get_vertex_token
+
             wrapped_client = LiteLLMWrapper(
                 model=model_name,
                 model_info=config.model_info,
@@ -2252,6 +2267,7 @@ class LLMs(BaseModel):
                 vertex_project=vertex_project,
                 vertex_location=vertex_location,
                 default_parameters=merged_params,
+                token_provider=token_provider,
             )
         else:
             # Use AutoGenWrapper (existing behavior)

@@ -221,6 +221,9 @@ test_health_data.json
 # messed up cloud storage reference
 gs:/
 
+# Mock objects accidentally written as files
+<Mock *
+
 # academicOps managed files - DO NOT COMMIT
 # These files are symlinked/copied from academicOps framework
 

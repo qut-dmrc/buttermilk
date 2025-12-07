@@ -16,6 +16,7 @@ at relevant points in the application's lifecycle to ensure that log messages
 can be correlated with specific sessions, batches, and agent activities.
 """
 
+import asyncio
 from contextvars import ContextVar
 
 # Simplified session-centric context variables
@@ -62,3 +63,51 @@ def clear_logging_context() -> None:
     session_id_var.set(None)
     batch_id_var.set(None)
     agent_id_var.set(None)
+
+
+# API concurrency control - shared semaphore for limiting concurrent API calls
+# This allows nested processors (VariantProcessor, ParallelProcessor) to share
+# a global limit on API calls, preventing overwhelming external APIs.
+api_semaphore_var: ContextVar[asyncio.Semaphore | None] = ContextVar(
+    "api_semaphore_var", default=None
+)
+
+
+def set_api_semaphore(semaphore: asyncio.Semaphore) -> None:
+    """Set the API concurrency semaphore in context."""
+    api_semaphore_var.set(semaphore)
+
+
+def get_api_semaphore() -> asyncio.Semaphore | None:
+    """Get the API concurrency semaphore from context."""
+    return api_semaphore_var.get()
+
+
+class ApiSemaphoreContext:
+    """Async context manager that acquires the API semaphore if set.
+
+    Usage:
+        async with ApiSemaphoreContext():
+            await make_api_call()
+
+    If no semaphore is set in context, this is a no-op.
+    """
+
+    def __init__(self) -> None:
+        self._semaphore: asyncio.Semaphore | None = None
+
+    async def __aenter__(self) -> "ApiSemaphoreContext":
+        self._semaphore = get_api_semaphore()
+        if self._semaphore is not None:
+            await self._semaphore.acquire()
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object,
+    ) -> bool:
+        if self._semaphore is not None:
+            self._semaphore.release()
+        return False

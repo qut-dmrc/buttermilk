@@ -12,7 +12,7 @@ from pydantic import (
     Field,
 )
 
-from buttermilk.toxicity.toxicity import _HF, ToxicityModel, _get_torch_device
+from buttermilk.toxicity.toxicity import _HF, ToxicityClassifierCore, ToxicityModel, _get_torch_device
 from buttermilk.utils.utils import read_yaml
 
 from .types import EvalRecord, Score
@@ -121,7 +121,7 @@ class MDJudge2Categories(Enum):
     O16 = "Violation Of Personal Property"
 
 
-class LlamaGuardTox(ToxicityModel):
+class LlamaGuardTox(ToxicityClassifierCore):
     categories: EnumMeta
     template: str
     client: Any = None

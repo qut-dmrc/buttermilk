@@ -1,9 +1,24 @@
+"""Toxicity classification processors for Buttermilk.
+
+This module provides ToxicityClassifierCore (formerly ToxicityModel) and its
+subclasses for toxicity/safety classification using various APIs and models.
+
+ToxicityClassifierCore implements the Processor protocol for pipeline compatibility.
+It uses EvalRecord as the standard output format for toxicity results.
+
+Key classes:
+- ToxicityClassifierCore: Base class for all toxicity classifiers
+- ToxicityModel: Alias for ToxicityClassifierCore (backward compatibility)
+- Perspective, Comprehend, AzureContentSafety, etc.: Specific implementations
+"""
+
 from __future__ import annotations
 
 import abc
 import asyncio
 import os
 import time
+import uuid
 from io import StringIO
 from pathlib import Path
 from typing import (
@@ -77,8 +92,36 @@ PerspectiveAttributesExperimental = Literal[
 ]
 
 
-# Let's provide an interface for all the various toxicity models
-class ToxicityModel(BaseModel):
+# Base class for all toxicity classifiers
+class ToxicityClassifierCore(BaseModel):
+    """Base class for toxicity/safety classification processors.
+
+    Implements the Processor protocol for pipeline compatibility. Uses EvalRecord
+    as the standard output format for toxicity classification results.
+
+    Subclasses must implement:
+    - init_client(): Initialize the API client
+    - make_prompt(content): Format content for the API
+    - interpret(response): Convert API response to EvalRecord
+
+    Example:
+        ```python
+        class MyToxicityClassifier(ToxicityClassifierCore):
+            model: str = "my-model"
+            process_chain: str = "api"
+            standard: str = "my-standard"
+
+            def init_client(self):
+                self.client = MyAPIClient()
+
+            def make_prompt(self, content: str) -> str:
+                return content
+
+            def interpret(self, response: Any) -> EvalRecord:
+                return EvalRecord(prediction=response["is_toxic"])
+        ```
+    """
+
     model: str
     process_chain: str
     standard: str
@@ -88,15 +131,30 @@ class ToxicityModel(BaseModel):
     options: ClassVar[dict] = {}
     call_options: ClassVar[dict] = {}
 
+    # Lazy-loaded trace writer for BigQuery persistence
+    _trace_writer: Any = None
+
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
     @model_validator(mode="after")
-    def validate_model(self) -> ToxicityModel:
+    def validate_model(self) -> ToxicityClassifierCore:
         if self.client is None:
             self.init_client(**self.options)
             if self.client is None:
                 raise ValueError(f"Unable to initialize client for {self.model}")
         return self
+
+    @property
+    def trace_writer(self) -> Any:
+        """Lazy-load trace writer for BigQuery persistence."""
+        if self._trace_writer is None:
+            try:
+                from buttermilk.utils.trace_writer import get_trace_writer
+
+                self._trace_writer = get_trace_writer()
+            except Exception as e:
+                logger.warning(f"Failed to initialize trace writer: {e}")
+        return self._trace_writer
 
     def init_client(self) -> None:
         if self.client is None:
@@ -278,6 +336,7 @@ class ToxicityModel(BaseModel):
         record: BaseRecord,
         *,
         processor_stage: str,
+        parent_trace_id: str | None = None,
         **kwargs: Any,
     ) -> AsyncGenerator[BaseRecord, None]:
         """Processor protocol implementation for pipeline use.
@@ -285,9 +344,15 @@ class ToxicityModel(BaseModel):
         Wraps the synchronous moderate() method for use in async pipelines.
         Stores EvalRecord results in record.metadata[processor_stage].
 
+        Consistent with ClassifierCore and LLMCore:
+        - Uses trace_writer property for lazy loading
+        - Builds standardized ExecutionTrace with agent_info, parameters, etc.
+        - Stores results in record.metadata[processor_stage]
+
         Args:
             record: Input record to analyze for toxicity
             processor_stage: Pipeline stage name for metadata namespacing
+            parent_trace_id: Optional parent trace ID for distributed tracing
 
         Yields:
             Record with toxicity results in metadata[processor_stage]
@@ -296,6 +361,7 @@ class ToxicityModel(BaseModel):
             ValueError: If record has no content
         """
         start_time = time.time()
+        trace_id = str(uuid.uuid4())
 
         content = record.content
         if not content:
@@ -313,38 +379,53 @@ class ToxicityModel(BaseModel):
         # Calculate duration
         duration_ms = (time.time() - start_time) * 1000
 
-        # Emit execution trace
-        try:
-            from buttermilk.utils.trace_writer import get_trace_writer
+        # Emit execution trace (consistent with ClassifierCore/LLMCore)
+        if self.trace_writer:
+            try:
+                # Build input metadata from record if available
+                input_metadata = {}
+                if record.metadata:
+                    input_metadata = {"input": record.metadata}
 
-            trace = ExecutionTrace(
-                agent_info={
-                    "component_name": self.__class__.__name__,
-                    "execution_type": "toxicity_api",
-                    "processor_stage": processor_stage,
-                },
-                inputs={
-                    "content": content[:500],  # Truncate for safety
-                    "record_id": record.record_id,
-                },
-                outputs={
-                    "prediction": eval_record.prediction,
-                    "scores": [s.model_dump() for s in eval_record.scores],
-                    "labels": eval_record.labels,
-                },
-                parameters={"model": self.model, "standard": self.standard},
-                record={"record_id": record.record_id},
-                metadata={
-                    "duration_ms": duration_ms,
-                    "eval_id": eval_record.eval_id,
-                },
-                parent_call_id=kwargs.get("parent_trace_id"),
-            )
+                execution_trace = ExecutionTrace(
+                    call_id=trace_id,
+                    agent_info={
+                        "component_name": self.__class__.__name__,
+                        "execution_type": "toxicity_classification",
+                        "config": {
+                            "model": self.model,
+                            "process_chain": self.process_chain,
+                            "standard": self.standard,
+                        },
+                        "processor_stage": processor_stage,
+                    },
+                    inputs={
+                        "content": content[:500] if len(content) > 500 else content,
+                        "record_id": record.record_id,
+                    },
+                    outputs={
+                        "prediction": eval_record.prediction,
+                        "scores": [s.model_dump() for s in eval_record.scores],
+                        "labels": eval_record.labels,
+                        "error": eval_record.error,
+                    },
+                    parameters={
+                        "model": self.model,
+                        "process_chain": self.process_chain,
+                        "standard": self.standard,
+                    },
+                    metadata={
+                        **input_metadata,
+                        "duration_ms": duration_ms,
+                        "eval_id": eval_record.eval_id,
+                    },
+                    parent_call_id=parent_trace_id,
+                    record=record,
+                )
 
-            trace_writer = get_trace_writer()
-            await trace_writer.add(trace)
-        except Exception as e:
-            logger.warning(f"Failed to emit trace: {e}")
+                await self.trace_writer.add(execution_trace)
+            except Exception as e:
+                logger.warning(f"Failed to emit trace: {e}")
 
         # Build output dict with prediction and optional labels
         output = {"prediction": eval_record.prediction}
@@ -353,9 +434,12 @@ class ToxicityModel(BaseModel):
         if eval_record.scores:
             output["scores"] = [s.model_dump() for s in eval_record.scores]
 
-        # Store full results in metadata
+        # Store full results in metadata (processor_stage namespaced)
         updated_metadata = record.metadata.copy() if record.metadata else {}
         updated_metadata[processor_stage] = {
+            "classifier": self.__class__.__name__,
+            "trace_id": trace_id,
+            "processing_time_ms": int(duration_ms),
             "prediction": eval_record.prediction,
             "scores": [s.model_dump() for s in eval_record.scores],
             "labels": eval_record.labels,
@@ -369,7 +453,11 @@ class ToxicityModel(BaseModel):
         yield record.model_copy(update={"output": output, "metadata": updated_metadata})
 
 
-class _HF(ToxicityModel):
+# Backward-compatible alias
+ToxicityModel = ToxicityClassifierCore
+
+
+class _HF(ToxicityClassifierCore):
     process_chain: str = "local transformers"
     model: str
     device: str | Any = Field(
@@ -439,7 +527,7 @@ class _HF(ToxicityModel):
     #     inputs = {key: val.to(model.device) for key, val in inputs.items()}
 
 
-class Perspective(ToxicityModel):
+class Perspective(ToxicityClassifierCore):
     model: str = "perspective"
     process_chain: str = "api"
     standard: str = "perspective"
@@ -501,7 +589,7 @@ class Perspective(ToxicityModel):
         return response
 
 
-class Comprehend(ToxicityModel):
+class Comprehend(ToxicityClassifierCore):
     model: str = "comprehend"
     process_chain: str = "api"
     standard: str = "comprehend"
@@ -556,7 +644,7 @@ class Comprehend(ToxicityModel):
         return outcome
 
 
-class AzureContentSafety(ToxicityModel):
+class AzureContentSafety(ToxicityClassifierCore):
     model: str = "AzureContentSafety"
     process_chain: str = "api"
     standard: str = "AzureContentSafety 2023-10-01"
@@ -647,7 +735,7 @@ class AzureContentSafety(ToxicityModel):
         return outcome
 
 
-class AzureModerator(ToxicityModel):
+class AzureModerator(ToxicityClassifierCore):
     model: str = "azure content-moderator"
     process_chain: str = "text-moderation-api"
     standard: str = "Azure Content Moderator"
@@ -740,7 +828,7 @@ class AzureModerator(ToxicityModel):
         return outcome
 
 
-class REGARD(ToxicityModel):
+class REGARD(ToxicityClassifierCore):
     model: str = "regard"
     process_chain: str = "evaluate"
     standard: str = "regard"
@@ -788,7 +876,7 @@ class REGARD(ToxicityModel):
         return outcome
 
 
-class HONEST(ToxicityModel):
+class HONEST(ToxicityClassifierCore):
     model: str = "honest"
     process_chain: str = "evaluate"
     standard: str = "honest"
@@ -820,7 +908,7 @@ class HONEST(ToxicityModel):
         return outcome
 
 
-class LFTW(ToxicityModel):
+class LFTW(ToxicityClassifierCore):
     model: str = "facebook/roberta-hate-speech-dynabench-r4-target"
     process_chain: str = "hf_transformers"
     standard: str = "lftw_r4_target"
@@ -888,7 +976,7 @@ class LFTW(ToxicityModel):
         return outcome
 
 
-class GPTJT(ToxicityModel):
+class GPTJT(ToxicityClassifierCore):
     # Load model directly
     model: str = "togethercomputer/GPT-JT-Moderation-6B"
     process_chain: str = "hf_transformers"
@@ -972,11 +1060,11 @@ class GPTJT(ToxicityModel):
 ####
 
 
-class OpenAIOmni(ToxicityModel):
+class OpenAIOmni(ToxicityClassifierCore):
     model: str = ""
 
 
-class OpenAIModerator(ToxicityModel):
+class OpenAIModerator(ToxicityClassifierCore):
     model: str = "text-moderation-latest"
     process_chain: str = "api"
     standard: str = "openaimod"
@@ -1015,7 +1103,7 @@ class OpenAIModerator(ToxicityModel):
         return outcome
 
 
-class ShieldGemma(ToxicityModel):
+class ShieldGemma(ToxicityClassifierCore):
     model: str = "google/shieldgemma-27b"
     process_chain: str = "local transformers"
     standard: str = "shieldgemma"
@@ -1103,7 +1191,7 @@ class ShieldGemma9b(ShieldGemma):
     model: str = "google/shieldgemma-9b"
 
 
-class ToxicChat(ToxicityModel):
+class ToxicChat(ToxicityClassifierCore):
     model: str = "toxicchat"
     process_chain: str = "hf-api"
     standard: str = "toxicchat"
@@ -1116,7 +1204,7 @@ class ToxicChat(ToxicityModel):
         return EvalRecord(**response)
 
 
-class Zentropi(ToxicityModel):
+class Zentropi(ToxicityClassifierCore):
     """Zentropi labeling API wrapper.
 
     Zentropi provides a classification API for content labeling.
