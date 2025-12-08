@@ -49,7 +49,7 @@ jobs:
           # Attestations/SBOM can slow builds and require push; disable by default
           provenance: false
           sbom: false
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           file: ./containers/deploy/Dockerfile
           tags: |
             us-central1-docker.pkg.dev/prosocial-443205/reg/buttermilk:${{ steps.docker_tag.outputs.branch_tag }}
