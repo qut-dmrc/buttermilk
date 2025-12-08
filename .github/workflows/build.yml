@@ -16,6 +16,15 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     steps:
+      - name: Free disk space
+        run: |
+          # Remove unnecessary packages and clean up disk space
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          sudo docker image prune --all --force
+          df -h
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
