@@ -20,6 +20,8 @@ import pytest
 from buttermilk import logger
 from buttermilk.runner.flowrunner import FlowRunner, RunRequest
 
+pytestmark = pytest.mark.slow
+
 
 @pytest.fixture(scope="function")
 def bm_function():

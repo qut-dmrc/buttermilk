@@ -74,6 +74,7 @@
   "[jinja]": {
     "editor.defaultFormatter": "GlenBuktenica.unicode-substitutions"
   },
+  "peacock.remoteColor": "#ecff68",
   "workbench.colorCustomizations": {
     "activityBar.activeBackground": "#f2ff9b",
     "activityBar.background": "#f2ff9b",
@@ -93,5 +94,5 @@
     "titleBar.inactiveBackground": "#ecff6899",
     "titleBar.inactiveForeground": "#15202b99"
   },
-  "peacock.remoteColor": "#ecff68"
+  "peacock.color": "#ecff68"
 }

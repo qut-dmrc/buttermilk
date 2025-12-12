@@ -7,6 +7,7 @@ import pytest
 from buttermilk.debug.debug_agent import DebugAgent
 
 
+@pytest.mark.slow
 @pytest.mark.anyio
 async def test_debug_agent_puppet_mode():
     """Demonstrate the DebugAgent puppet mode for flow debugging."""

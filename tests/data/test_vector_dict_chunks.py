@@ -11,6 +11,8 @@ import pytest
 
 from buttermilk.data.vector import _get_chunk_embedding, _set_chunk_embedding
 
+pytestmark = pytest.mark.slow
+
 
 class TestVectorDictChunks:
     """Test that vector.py handles dict chunks from SemanticSplitter."""

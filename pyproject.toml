@@ -130,7 +130,7 @@ ml = [
 
 # Development tools
 dev = [
-  
+
   # Development tools
   "pytest>=8.3.2",
   "pytest-mock>=3.14.0,<4.0.0",
@@ -269,7 +269,7 @@ addopts = [
   "-rfEX", # show extra summary info for failed/errors only
   "--tb=short",
   "-m",
-  "not endtoend",
+  "not endtoend and not slow",
 ]
 
 filterwarnings = [

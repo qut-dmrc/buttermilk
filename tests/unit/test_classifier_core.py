@@ -8,6 +8,11 @@ from buttermilk._core.types import BaseRecord
 from buttermilk.agents.classifier import ClassifierCore
 
 
+import pytest
+
+pytestmark = pytest.mark.slow
+
+
 class ClassificationOutput(BaseModel):
     """Output model for classifier tests."""
 

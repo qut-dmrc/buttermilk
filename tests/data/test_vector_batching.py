@@ -15,6 +15,8 @@ import pytest
 from buttermilk._core.types import Record
 from buttermilk.data.vector import ChromaDBEmbeddings, ChunkedDocument
 
+pytestmark = pytest.mark.slow
+
 
 class TestChromaDBBatching:
     """Test ChromaDB batching for large upsert operations."""
