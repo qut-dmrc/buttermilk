@@ -41,6 +41,7 @@ from buttermilk._core.contract import (
     AgentInput,
     ExecutionTrace,
 )  # Import AgentInput and ExecutionTrace
+from buttermilk._core.processor_core import ProcessorCore
 from buttermilk._core.types import BaseRecord
 from buttermilk.utils.utils import read_text, read_yaml, scrub_serializable
 
@@ -93,8 +94,11 @@ PerspectiveAttributesExperimental = Literal[
 
 
 # Base class for all toxicity classifiers
-class ToxicityClassifierCore(BaseModel):
+class ToxicityClassifierCore(ProcessorCore, BaseModel):
     """Base class for toxicity/safety classification processors.
+
+    Extends ProcessorCore to share common infrastructure (trace_writer, tracing patterns)
+    with ClassifierCore and LLMCore.
 
     Implements the Processor protocol for pipeline compatibility. Uses EvalRecord
     as the standard output format for toxicity classification results.
@@ -131,30 +135,31 @@ class ToxicityClassifierCore(BaseModel):
     options: ClassVar[dict] = {}
     call_options: ClassVar[dict] = {}
 
-    # Lazy-loaded trace writer for BigQuery persistence
-    _trace_writer: Any = None
+    # Note: trace_writer is inherited from ProcessorCore
 
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
-    @model_validator(mode="after")
-    def validate_model(self) -> ToxicityClassifierCore:
+    def model_post_init(self, __context: Any) -> None:
+        """Initialize ProcessorCore attributes after Pydantic validation.
+
+        Pydantic's __init__ doesn't call ProcessorCore.__init__, so we need
+        to initialize ProcessorCore's attributes here.
+        """
+        # Initialize ProcessorCore attributes for trace_writer property
+        self.parameters: dict[str, Any] = {
+            "model": self.model,
+            "process_chain": self.process_chain,
+            "standard": self.standard,
+        }
+        self._trace_writer = None
+
+        # Initialize the API client
         if self.client is None:
             self.init_client(**self.options)
             if self.client is None:
                 raise ValueError(f"Unable to initialize client for {self.model}")
-        return self
 
-    @property
-    def trace_writer(self) -> Any:
-        """Lazy-load trace writer for BigQuery persistence."""
-        if self._trace_writer is None:
-            try:
-                from buttermilk.utils.trace_writer import get_trace_writer
-
-                self._trace_writer = get_trace_writer()
-            except Exception as e:
-                logger.warning(f"Failed to initialize trace writer: {e}")
-        return self._trace_writer
+    # trace_writer property is inherited from ProcessorCore
 
     def init_client(self) -> None:
         if self.client is None:
