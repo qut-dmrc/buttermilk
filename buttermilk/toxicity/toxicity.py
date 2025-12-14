@@ -18,7 +18,6 @@ import abc
 import asyncio
 import os
 import time
-import uuid
 from io import StringIO
 from pathlib import Path
 from typing import (
@@ -41,6 +40,7 @@ from buttermilk._core.contract import (
     AgentInput,
     ExecutionTrace,
 )  # Import AgentInput and ExecutionTrace
+from buttermilk._core.tracing_mixin import TracingMixin, calculate_duration_ms
 from buttermilk._core.types import BaseRecord
 from buttermilk.utils.utils import read_text, read_yaml, scrub_serializable
 
@@ -93,8 +93,11 @@ PerspectiveAttributesExperimental = Literal[
 
 
 # Base class for all toxicity classifiers
-class ToxicityClassifierCore(BaseModel):
+class ToxicityClassifierCore(TracingMixin, BaseModel):
     """Base class for toxicity/safety classification processors.
+
+    Inherits from TracingMixin to provide unified trace emission functionality
+    shared with LLMCore and ClassifierCore.
 
     Implements the Processor protocol for pipeline compatibility. Uses EvalRecord
     as the standard output format for toxicity classification results.
@@ -131,10 +134,23 @@ class ToxicityClassifierCore(BaseModel):
     options: ClassVar[dict] = {}
     call_options: ClassVar[dict] = {}
 
-    # Lazy-loaded trace writer for BigQuery persistence
+    # Lazy-loaded trace writer for BigQuery persistence (used by TracingMixin)
     _trace_writer: Any = None
 
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
+
+    @property
+    def parameters(self) -> dict[str, Any]:
+        """Return parameters dict for TracingMixin compatibility.
+
+        TracingMixin expects a parameters attribute. For ToxicityClassifierCore,
+        this is constructed from the model's key attributes.
+        """
+        return {
+            "model": self.model,
+            "process_chain": self.process_chain,
+            "standard": self.standard,
+        }
 
     @model_validator(mode="after")
     def validate_model(self) -> ToxicityClassifierCore:
@@ -143,18 +159,6 @@ class ToxicityClassifierCore(BaseModel):
             if self.client is None:
                 raise ValueError(f"Unable to initialize client for {self.model}")
         return self
-
-    @property
-    def trace_writer(self) -> Any:
-        """Lazy-load trace writer for BigQuery persistence."""
-        if self._trace_writer is None:
-            try:
-                from buttermilk.utils.trace_writer import get_trace_writer
-
-                self._trace_writer = get_trace_writer()
-            except Exception as e:
-                logger.warning(f"Failed to initialize trace writer: {e}")
-        return self._trace_writer
 
     def init_client(self) -> None:
         if self.client is None:
@@ -344,10 +348,8 @@ class ToxicityClassifierCore(BaseModel):
         Wraps the synchronous moderate() method for use in async pipelines.
         Stores EvalRecord results in record.metadata[processor_stage].
 
-        Consistent with ClassifierCore and LLMCore:
-        - Uses trace_writer property for lazy loading
-        - Builds standardized ExecutionTrace with agent_info, parameters, etc.
-        - Stores results in record.metadata[processor_stage]
+        Uses TracingMixin helpers for consistent trace emission across all
+        processor types (ClassifierCore, LLMCore, ToxicityClassifierCore).
 
         Args:
             record: Input record to analyze for toxicity
@@ -361,7 +363,6 @@ class ToxicityClassifierCore(BaseModel):
             ValueError: If record has no content
         """
         start_time = time.time()
-        trace_id = str(uuid.uuid4())
 
         content = record.content
         if not content:
@@ -376,56 +377,31 @@ class ToxicityClassifierCore(BaseModel):
             record_id=record.record_id,
         )
 
-        # Calculate duration
-        duration_ms = (time.time() - start_time) * 1000
+        # Calculate duration using helper
+        duration_ms = calculate_duration_ms(start_time)
 
-        # Emit execution trace (consistent with ClassifierCore/LLMCore)
-        if self.trace_writer:
-            try:
-                # Build input metadata from record if available
-                input_metadata = {}
-                if record.metadata:
-                    input_metadata = {"input": record.metadata}
+        # Build outputs for trace
+        outputs = {
+            "prediction": eval_record.prediction,
+            "scores": [s.model_dump() for s in eval_record.scores],
+            "labels": eval_record.labels,
+            "error": eval_record.error,
+        }
 
-                execution_trace = ExecutionTrace(
-                    call_id=trace_id,
-                    agent_info={
-                        "component_name": self.__class__.__name__,
-                        "execution_type": "toxicity_classification",
-                        "config": {
-                            "model": self.model,
-                            "process_chain": self.process_chain,
-                            "standard": self.standard,
-                        },
-                        "processor_stage": processor_stage,
-                    },
-                    inputs={
-                        "content": content[:500] if len(content) > 500 else content,
-                        "record_id": record.record_id,
-                    },
-                    outputs={
-                        "prediction": eval_record.prediction,
-                        "scores": [s.model_dump() for s in eval_record.scores],
-                        "labels": eval_record.labels,
-                        "error": eval_record.error,
-                    },
-                    parameters={
-                        "model": self.model,
-                        "process_chain": self.process_chain,
-                        "standard": self.standard,
-                    },
-                    metadata={
-                        **input_metadata,
-                        "duration_ms": duration_ms,
-                        "eval_id": eval_record.eval_id,
-                    },
-                    parent_call_id=parent_trace_id,
-                    record=record,
-                )
-
-                await self.trace_writer.add(execution_trace)
-            except Exception as e:
-                logger.warning(f"Failed to emit trace: {e}")
+        # Emit execution trace using TracingMixin helper
+        trace_id = await self._emit_success_trace(
+            record=record,
+            outputs=outputs,
+            processor_stage=processor_stage,
+            parent_trace_id=parent_trace_id,
+            duration_ms=duration_ms,
+            inputs={
+                "content": content[:500] if len(content) > 500 else content,
+                "record_id": record.record_id,
+            },
+            extra_metadata={"eval_id": eval_record.eval_id},
+            execution_type="toxicity_classification",
+        )
 
         # Build output dict with prediction and optional labels
         output = {"prediction": eval_record.prediction}

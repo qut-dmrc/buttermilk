@@ -9,7 +9,8 @@ APIs that return pre-defined categories and confidence scores. They follow
 the same design pattern as LLMCore: stateless processors with tracing.
 
 ClassifierCore extends ProcessorCore to share common infrastructure
-(trace_writer, tracing patterns) with LLMCore and ToxicityClassifierCore.
+(trace_writer, tracing patterns via TracingMixin) with LLMCore and
+ToxicityClassifierCore.
 """
 
 import json
@@ -24,9 +25,9 @@ from opentelemetry import trace
 from pydantic import BaseModel, Field
 
 from buttermilk import logger
-from buttermilk._core.contract import ExecutionTrace
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.processor_core import ProcessorCore
+from buttermilk._core.tracing_mixin import calculate_duration_ms
 from buttermilk._core.types import BaseRecord
 from buttermilk.utils.templating import load_template
 from buttermilk.utils.validators import import_class_from_path
@@ -138,6 +139,9 @@ class ClassifierCore(ProcessorCore):
     ) -> AsyncGenerator[BaseRecord, None]:
         """Process a BaseRecord through classification.
 
+        Uses TracingMixin helpers for consistent trace emission across all
+        processor types (ClassifierCore, LLMCore, ToxicityClassifierCore).
+
         Args:
             record: Input BaseRecord to classify
             processor_stage: Unique stage identifier for tracing
@@ -164,14 +168,16 @@ class ClassifierCore(ProcessorCore):
             try:
                 result = await self._classify_record(record, **kwargs)
 
+                # Calculate duration using helper
+                duration_ms = calculate_duration_ms(start_time)
+
                 # Build processing metadata
-                processing_time_ms = int((time.time() - start_time) * 1000)
                 stage_metadata = {
                     "classifier": self.__class__.__name__,
                     "template": self.template,
                     "template_hash": result.template_metadata.get("hash"),
                     "trace_id": result.trace_id,
-                    "processing_time_ms": processing_time_ms,
+                    "processing_time_ms": int(duration_ms),
                     "api_response": result.metadata.get("api_response"),
                 }
 
@@ -179,6 +185,27 @@ class ClassifierCore(ProcessorCore):
                 output_content = result.content
                 if hasattr(output_content, "model_dump"):
                     output_content = output_content.model_dump()
+
+                # Build messages list: rendered_prompt as UserMessage, response as AssistantMessage
+                response_content = json.dumps(output_content) if isinstance(output_content, dict) else str(output_content)
+                trace_messages = [
+                    UserMessage(content=result.rendered_prompt, source="classifier"),
+                    AssistantMessage(content=response_content, source=self.__class__.__name__),
+                ]
+
+                # Emit trace using TracingMixin helper
+                await self._emit_success_trace(
+                    record=record,
+                    outputs=output_content,
+                    processor_stage=processor_stage,
+                    parent_trace_id=parent_trace_id,
+                    duration_ms=duration_ms,
+                    messages=trace_messages,
+                    inputs=kwargs if kwargs else None,
+                    extra_metadata=stage_metadata,
+                    execution_type="classification",
+                    trace_id=result.trace_id,
+                )
 
                 # Enrich record
                 enriched_record = record.model_copy(
@@ -191,86 +218,25 @@ class ClassifierCore(ProcessorCore):
                     }
                 )
 
-                span.set_attribute("processing.time_ms", processing_time_ms)
+                span.set_attribute("processing.time_ms", int(duration_ms))
                 span.set_status(trace.Status(trace.StatusCode.OK))
-
-                # Write ExecutionTrace to BigQuery (same pattern as LLMCore)
-                # Build messages list: rendered_prompt as UserMessage, response as AssistantMessage
-                response_content = json.dumps(output_content) if isinstance(output_content, dict) else str(output_content)
-                trace_messages = [
-                    UserMessage(content=result.rendered_prompt, source="classifier"),
-                    AssistantMessage(content=response_content, source=self.__class__.__name__),
-                ]
-
-                # Build metadata: merge input metadata (from record) with output metadata
-                input_metadata = {}
-                if record is not None and hasattr(record, "metadata") and record.metadata:
-                    input_metadata = {"input": record.metadata}
-
-                execution_trace = ExecutionTrace(
-                    call_id=result.trace_id,
-                    agent_info={
-                        "component_name": self.__class__.__name__,
-                        "execution_type": "classification",
-                        "config": {"template": self.template, **self.parameters},
-                        "processor_stage": processor_stage,
-                    },
-                    # inputs = template variables only (record stored separately in record field)
-                    inputs=kwargs if kwargs else None,
-                    outputs=output_content,
-                    messages=trace_messages,
-                    parameters={"template": self.template, **self.parameters},
-                    # metadata merges: input metadata (under 'input' key) + stage metadata + duration
-                    metadata={
-                        **input_metadata,
-                        **stage_metadata,
-                        "duration_ms": processing_time_ms,
-                    },
-                    parent_call_id=parent_trace_id,
-                    record=record,
-                )
-
-                if self.trace_writer:
-                    try:
-                        await self.trace_writer.add(execution_trace)
-                    except Exception as e:
-                        logger.warning(f"Failed to emit classifier trace: {e}")
 
                 yield enriched_record
 
             except Exception as e:
-                # Build error metadata with input metadata if available
-                error_input_metadata = {}
-                if record is not None and hasattr(record, "metadata") and record.metadata:
-                    error_input_metadata = {"input": record.metadata}
+                # Calculate duration for error trace
+                duration_ms = calculate_duration_ms(start_time)
 
-                # Write error trace
-                error_trace = ExecutionTrace(
-                    agent_info={
-                        "component_name": self.__class__.__name__,
-                        "execution_type": "classification",
-                        "config": {"template": self.template, **self.parameters},
-                        "processor_stage": processor_stage,
-                    },
-                    # inputs = template variables only (record stored separately)
-                    inputs=kwargs if kwargs else None,
-                    error={
-                        "event": str(e),
-                        "details": {"error_type": type(e).__name__},
-                    },
-                    metadata={
-                        **error_input_metadata,
-                        "duration_ms": int((time.time() - start_time) * 1000),
-                    },
-                    parent_call_id=parent_trace_id,
+                # Emit error trace using TracingMixin helper
+                await self._emit_error_trace(
                     record=record,
+                    error=e,
+                    processor_stage=processor_stage,
+                    parent_trace_id=parent_trace_id,
+                    duration_ms=duration_ms,
+                    inputs=kwargs if kwargs else None,
+                    execution_type="classification",
                 )
-
-                if self.trace_writer:
-                    try:
-                        await self.trace_writer.add(error_trace)
-                    except Exception as te:
-                        logger.warning(f"Failed to emit classifier error trace: {te}")
 
                 span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                 raise ProcessingError(f"Classification failed {processor_stage} for record {record_id}: {e}") from e

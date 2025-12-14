@@ -6,7 +6,7 @@ reused across different contexts - both in Agent-based flows and in
 pipeline processors.
 
 LLMCore extends ProcessorCore to share common infrastructure (trace_writer,
-tracing patterns) with ClassifierCore and ToxicityClassifierCore.
+tracing patterns via TracingMixin) with ClassifierCore and ToxicityClassifierCore.
 
 The design intentionally avoids Agent-specific concepts to maintain
 flexibility while preserving full observability through metadata tracking.
@@ -24,10 +24,11 @@ from opentelemetry import trace
 from pydantic import BaseModel, Field
 
 from buttermilk import bm, logger
-from buttermilk._core.contract import ErrorEvent, ExecutionTrace
+from buttermilk._core.contract import ErrorEvent
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llms import CreateResult, ModelOutput
 from buttermilk._core.processor_core import ProcessorCore
+from buttermilk._core.tracing_mixin import calculate_duration_ms
 from buttermilk._core.types import BaseRecord
 from buttermilk.utils.templating import load_template, make_messages
 from buttermilk.utils.utils import clean_empty_values, scrub_serializable
@@ -129,17 +130,7 @@ class LLMCore(ProcessorCore):
         # Template metadata for tracking
         self.template_metadata: dict[str, Any] = {}
 
-        # Initialize trace writer (lazy loading)
-        self._trace_writer = None
-
-    @property
-    def trace_writer(self) -> Any:
-        """Lazy load trace writer."""
-        if self._trace_writer is None:
-            from buttermilk.utils.trace_writer import get_trace_writer
-
-            self._trace_writer = get_trace_writer()
-        return self._trace_writer
+        # Note: _trace_writer is initialized by ProcessorCore.__init__() via TracingMixin
 
     async def process(
         self,
@@ -152,6 +143,9 @@ class LLMCore(ProcessorCore):
         **kwargs: Any,
     ) -> AsyncGenerator[BaseRecord, None]:
         """Unified LLM processing method for Pipeline operations.
+
+        Uses TracingMixin helpers for consistent trace emission across all
+        processor types (ClassifierCore, LLMCore, ToxicityClassifierCore).
 
         Args:
             inputs: BaseRecord object
@@ -195,55 +189,30 @@ class LLMCore(ProcessorCore):
                     parent_trace_id=parent_trace_id,
                     cancellation_token=cancellation_token,
                 )
-                # Create ExecutionTrace for observability
-                duration_ms = (time.time() - start_time) * 1000
+
+                # Calculate duration using helper
+                duration_ms = calculate_duration_ms(start_time)
 
                 # Get model configuration for complete traceability
-                # model_configs contains temperature, api_version, safety_settings, etc. from models.json
                 model_configs = {}
                 if self.model in bm.llms.connections:
                     llm_config = bm.llms.connections[self.model]
                     model_configs = llm_config.configs.copy() if llm_config.configs else {}
 
-                # Build trace parameters: LLMCore params + model configs (no duplication)
-                # - self.parameters has: model (alias), template, and any runtime kwargs
-                # - model_configs has: temperature, api_version, safety_settings, etc.
-                trace_parameters = {**self.parameters, **model_configs}
-
-                # Build metadata: merge input metadata (from record) with output metadata
-                # Input metadata comes from record.metadata if available
-                input_metadata = {}
-                if record is not None and hasattr(record, "metadata") and record.metadata:
-                    input_metadata = {"input": record.metadata}
-
-                execution_trace = ExecutionTrace(
-                    call_id=result.trace_id,
-                    agent_info={
-                        "component_name": component_name,
-                        "execution_type": "llm_processing",
-                        "processor_stage": processor_stage,
-                    },
-                    # inputs = template variables only (record/context stored separately)
-                    inputs=result.resolved_inputs if result.resolved_inputs else kwargs,
-                    outputs=result.content,
-                    messages=result.messages,
-                    parameters=trace_parameters,
-                    # metadata merges: input metadata (under 'input' key) + output metadata + duration
-                    metadata={
-                        **input_metadata,
-                        **result.metadata,
-                        "duration_ms": duration_ms,
-                    },
-                    parent_call_id=parent_trace_id,
+                # Emit trace using TracingMixin helper
+                await self._emit_success_trace(
                     record=record,
+                    outputs=result.content,
+                    processor_stage=processor_stage,
+                    parent_trace_id=parent_trace_id,
+                    duration_ms=duration_ms,
+                    messages=result.messages,
+                    inputs=result.resolved_inputs if result.resolved_inputs else kwargs,
+                    extra_metadata=result.metadata,
+                    execution_type="llm_processing",
+                    trace_id=result.trace_id,
+                    extra_parameters=model_configs,
                 )
-
-                # Emit trace if trace writer is available
-                if hasattr(self, "trace_writer") and self.trace_writer:
-                    try:
-                        await self.trace_writer.add(execution_trace)
-                    except Exception as e:
-                        logger.warning(f"Failed to emit trace: {e}")
 
                 span.set_status(trace.Status(trace.StatusCode.OK))
 
@@ -259,8 +228,8 @@ class LLMCore(ProcessorCore):
                 yield enriched_record
 
             except ProcessingError as e:
-                # Create error trace with same structure as success trace
-                duration_ms = (time.time() - start_time) * 1000
+                # Calculate duration for error trace
+                duration_ms = calculate_duration_ms(start_time)
 
                 # Get model configs for error trace too
                 error_model_configs = {}
@@ -268,38 +237,17 @@ class LLMCore(ProcessorCore):
                     error_llm_config = bm.llms.connections[self.model]
                     error_model_configs = error_llm_config.configs.copy() if error_llm_config.configs else {}
 
-                # Build error metadata with input metadata if available
-                error_input_metadata = {}
-                if record is not None and hasattr(record, "metadata") and record.metadata:
-                    error_input_metadata = {"input": record.metadata}
-
-                error_trace = ExecutionTrace(
-                    agent_info={
-                        "component_name": component_name,
-                        "execution_type": "llm_processing",
-                        "processor_stage": processor_stage,
-                    },
-                    # inputs = template variables only (kwargs passed to process)
-                    inputs=kwargs if kwargs else None,
-                    parameters={**self.parameters, **error_model_configs},
-                    error={
-                        "event": str(e),
-                        "details": {"error_type": type(e).__name__},
-                    },
-                    metadata={
-                        **error_input_metadata,
-                        "duration_ms": duration_ms,
-                    },
-                    parent_call_id=parent_trace_id,
+                # Emit error trace using TracingMixin helper
+                await self._emit_error_trace(
                     record=record,
+                    error=e,
+                    processor_stage=processor_stage,
+                    parent_trace_id=parent_trace_id,
+                    duration_ms=duration_ms,
+                    inputs=kwargs if kwargs else None,
+                    execution_type="llm_processing",
+                    extra_parameters=error_model_configs,
                 )
-
-                # Emit error trace
-                if hasattr(self, "trace_writer") and self.trace_writer:
-                    try:
-                        await self.trace_writer.add(error_trace)
-                    except Exception as te:
-                        logger.warning(f"Failed to emit error trace: {te}")
 
                 span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                 span.record_exception(e)
