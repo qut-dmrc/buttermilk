@@ -26,6 +26,10 @@ from buttermilk.utils.otel import (
 @pytest.fixture
 def otel_setup():
     """Set up OTEL tracer with in-memory exporter for testing."""
+    # Reset the global tracer provider before setting new one
+    # This is necessary because OTEL doesn't allow overriding by default
+    trace._TRACER_PROVIDER = None
+
     # Create in-memory exporter to capture spans
     exporter = InMemorySpanExporter()
 
@@ -41,6 +45,7 @@ def otel_setup():
 
     # Cleanup
     exporter.clear()
+    trace._TRACER_PROVIDER = None
 
 
 def test_session_root_span_creates_and_ends(otel_setup):

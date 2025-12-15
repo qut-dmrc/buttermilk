@@ -258,7 +258,7 @@ testpaths = [
 ]
 
 norecursedirs = ["docs", "*.egg-info", "*.egg", "bin", "demo", ".git", "appdir", ".tox", "mediamarkets", "scrapers"]
-timeout = 600
+timeout = 60
 # Note: Using pytest-anyio, not pytest-asyncio.
 # Session-scoped event loop is achieved via session_runner fixture in conftest.py.
 addopts = [

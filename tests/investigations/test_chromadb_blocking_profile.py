@@ -16,7 +16,7 @@ import pytest
 
 from buttermilk.data.vector import ChromaDBEmbeddings
 
-pytestmark = pytest.mark.anyio
+pytestmark = [pytest.mark.anyio, pytest.mark.slow]
 
 
 class TestChromaDBBlockingProfile:

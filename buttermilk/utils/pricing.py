@@ -24,7 +24,7 @@ _MODEL_MAPPINGS = {
 }
 
 
-def _simple_model_resolution(model_name: str) -> str:
+def _simple_model_resolution(model_name: str | None) -> str:
     """Normalize model names to litellm-compatible format for pricing lookups.
 
     Handles various model name formats:
@@ -32,6 +32,9 @@ def _simple_model_resolution(model_name: str) -> str:
     - Double-prefixed names like "openai/google/gemini-2.5-flash" → "gemini/gemini-2.5-flash"
     - Names with incorrect provider prefixes
     """
+    if model_name is None:
+        return "unknown"
+
     # Check direct mappings first
     if model_name in _MODEL_MAPPINGS:
         return _MODEL_MAPPINGS[model_name]

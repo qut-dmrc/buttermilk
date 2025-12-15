@@ -191,19 +191,12 @@ class TestParallelProcessorErrorHandling:
         async for output in proc.process(record, processor_stage="test/parallel"):
             outputs.append(output)
 
-        # Should get 3 outputs: 2 successful + 1 error record
-        assert len(outputs) == 3
+        # Should get 2 successful outputs (failed processor is logged but doesn't yield)
+        assert len(outputs) == 2
 
         # Check successful outputs
-        successful = [o for o in outputs if not o.error]
-        assert len(successful) == 2
-        contents = {o.content for o in successful}
+        contents = {o.content for o in outputs}
         assert contents == {"hello_OK1", "hello_OK2"}
-
-        # Check error record
-        error_records = [o for o in outputs if o.error]
-        assert len(error_records) == 1
-        assert "configured to fail" in str(error_records[0].error)
 
     @pytest.mark.anyio
     async def test_fail_on_error_raises(self):

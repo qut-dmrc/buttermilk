@@ -70,7 +70,7 @@ async def test_wrapper_type_matches_requested_type(
     else:
         pytest.fail(f"Unexpected wrapper type: {llm_wrapper_type}")
 
-
+@pytest.mark.slow
 @pytest.mark.anyio
 async def test_wrapper_parameterization_creates_functional_wrapper(
     real_bm,
