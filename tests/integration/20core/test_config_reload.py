@@ -33,7 +33,7 @@ defaults:
 
 flows:
   test_flow:
-    _target_: buttermilk.orchestrators.groupchat.GroupChatOrchestrator
+    _target_: buttermilk.orchestrators.groupchat.AutogenOrchestrator
     name: test_flow
     agents: {}
     parameters: {}
