@@ -229,5 +229,12 @@ class Differentiator(LLMAgent):
 
     def __init__(self, **kwargs):
         """Initializes the Differentiator agent with its specific configuration and output model."""
-        # Pass output_model to super() so LLMCore is created with correct schema
+        # Fail explicitly if config tries to override output_model - Differentiator requires Differences
+        if "output_model" in kwargs and kwargs["output_model"] is not None:
+            raise ValueError(
+                f"Differentiator agent requires output_model=Differences. "
+                f"Cannot override with {kwargs['output_model']}. "
+                f"Remove 'output_model' from config."
+            )
+        kwargs.pop("output_model", None)  # Remove None values to avoid duplicate kwarg
         super().__init__(output_model=Differences, **kwargs)

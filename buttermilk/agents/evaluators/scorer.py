@@ -255,7 +255,14 @@ class LLMScorer(LLMAgent):
 
     def __init__(self, **kwargs):
         """Initializes the Scorer agent with its specific configuration and output model."""
-        # Pass output_model to super() so LLMCore is created with correct schema
+        # Fail explicitly if config tries to override output_model - Scorer requires QualScore
+        if "output_model" in kwargs and kwargs["output_model"] is not None:
+            raise ValueError(
+                f"Scorer agent requires output_model=QualScore. "
+                f"Cannot override with {kwargs['output_model']}. "
+                f"Remove 'output_model' from config."
+            )
+        kwargs.pop("output_model", None)  # Remove None values to avoid duplicate kwarg
         super().__init__(output_model=QualScore, **kwargs)
 
     @message_handler(match=lambda msg, ctx: isinstance(msg.outputs, JudgeReasons))
