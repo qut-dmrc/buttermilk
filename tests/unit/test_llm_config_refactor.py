@@ -16,6 +16,8 @@ def test_client_type_enum():
         "gemini",
         "gemini_vertex",
         "vertex_openai",
+        "huggingface",
+        "zentropi",
     ]
     actual_types = [ct.value for ct in ClientType]
     assert set(expected_types) == set(actual_types)

@@ -59,7 +59,6 @@ class Nemo(ToxicityClassifierCore):
 
 class NemoLangchain(Nemo):
     model: str
-    client: Any = None
     process_chain: str = "langchain"
     options: ClassVar[dict] = {}
 
@@ -74,7 +73,7 @@ class NemoLangchain(Nemo):
         input_vars = dict(content=prompt)
         input_vars.update({k: v for k, v in kwargs.items() if v})
 
-        output = self.client.invoke(input=input_vars, **kwargs)
+        output = self._client.invoke(input=input_vars, **kwargs)
 
         return output
 
@@ -97,7 +96,7 @@ class NemoLangchain(Nemo):
         )
 
         chain = langchain_template | llm | ChatParser()
-        self.client = chain
+        self._client = chain
 
 
 class NemoInputSimpleGPT4o(NemoLangchain):

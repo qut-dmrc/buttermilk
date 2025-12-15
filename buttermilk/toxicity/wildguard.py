@@ -15,7 +15,6 @@ class Wildguard(ToxicityClassifierCore):
     model: str = "allenai/wildguard"
     process_chain: str = "hf_transformers"
     standard: str = "wildguard"
-    client: Any = None
     device: str | Any = Field(
         default_factory=_get_torch_device,
         description="Device type (CPU or CUDA)",
@@ -29,7 +28,7 @@ class Wildguard(ToxicityClassifierCore):
     def init_client(self) -> None:
         from transformers import pipeline
 
-        self.client = pipeline(
+        self._client = pipeline(
             "text-generation",
             model=self.model,
             device=self.device,
@@ -45,7 +44,7 @@ class Wildguard(ToxicityClassifierCore):
         prompt: str,
         **kwargs,
     ) -> Any:
-        response = self.client(prompt)
+        response = self._client(prompt)
         return str(response[0]["generated_text"]).strip()
 
     def interpret(self, response: Any) -> EvalRecord:

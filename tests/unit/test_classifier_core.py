@@ -1,7 +1,7 @@
 """Unit tests for ClassifierCore validation."""
 
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.types import BaseRecord
@@ -33,25 +33,25 @@ class ConcreteClassifier(ClassifierCore):
 class TestClassifierCoreValidation:
     """Test suite for ClassifierCore initialization validation."""
 
-    def test_raises_valueerror_when_template_is_empty_string(self):
-        """ClassifierCore should raise ValueError when template is empty string."""
-        with pytest.raises(ValueError, match="'template' is required"):
+    def test_raises_validationerror_when_template_is_empty_string(self):
+        """ClassifierCore should raise ValidationError when template is empty string."""
+        with pytest.raises(ValidationError):
             ConcreteClassifier(
                 template="",
                 output_model=ClassificationOutput,
             )
 
-    def test_raises_valueerror_when_template_is_none(self):
-        """ClassifierCore should raise ValueError when template is None."""
-        with pytest.raises(ValueError, match="'template' is required"):
+    def test_raises_validationerror_when_template_is_none(self):
+        """ClassifierCore should raise ValidationError when template is None."""
+        with pytest.raises(ValidationError):
             ConcreteClassifier(
                 template=None,
                 output_model=ClassificationOutput,
             )
 
-    def test_raises_valueerror_when_output_model_is_none(self):
-        """ClassifierCore should raise ValueError when output_model is None."""
-        with pytest.raises(ValueError, match="'output_model' is required"):
+    def test_raises_validationerror_when_output_model_is_none(self):
+        """ClassifierCore should raise ValidationError when output_model is None."""
+        with pytest.raises(ValidationError):
             ConcreteClassifier(
                 template="test/classify",
                 output_model=None,

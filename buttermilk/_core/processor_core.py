@@ -11,11 +11,11 @@ The design enables:
 """
 
 import time
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from typing import Any, AsyncGenerator, Optional
 
 from opentelemetry import trace
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, PrivateAttr, computed_field
 
 from buttermilk import logger
 from buttermilk._core.contract import ExecutionTrace
@@ -23,7 +23,7 @@ from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.types import BaseRecord
 
 
-class ProcessorCore:
+class ProcessorCore(ABC, BaseModel):
     """Minimal shared base for all pipeline processors.
 
     Provides:
@@ -54,14 +54,25 @@ class ProcessorCore:
         ```
     """
 
-    def __init__(self, **kwargs: Any) -> None:
-        """Initialize processor with configuration.
+    model_config = ConfigDict(
+        extra="forbid",  # Strict - no unknown fields
+        arbitrary_types_allowed=True,
+        frozen=False,
+    )
 
-        Args:
-            **kwargs: Configuration stored in self.parameters
-        """
-        self.parameters: dict[str, Any] = kwargs
-        self._trace_writer: Any = None
+    # Private attributes (not included in serialization)
+    _trace_writer: Any = PrivateAttr(default=None)
+
+    @computed_field
+    @property
+    def parameters(self) -> dict[str, Any]:
+        """Return processor config for tracing (JSON-serializable)."""
+        excluded = {"client", "credentials", "tokenizer", "parameters"}
+        return {
+            k: v
+            for k, v in self.model_dump(exclude_none=True, exclude={"parameters"}).items()
+            if k not in excluded
+        }
 
     @property
     def trace_writer(self) -> Any:
@@ -157,6 +168,10 @@ class ProcessorCore:
         inputs: Optional[dict[str, Any]] = None,
         extra_metadata: Optional[dict[str, Any]] = None,
         execution_type: str = "processing",
+        trace_id: Optional[str] = None,
+        parameters: Optional[dict[str, Any]] = None,
+        component_name: Optional[str] = None,
+        extra_agent_config: Optional[dict[str, Any]] = None,
     ) -> str:
         """Emit a success execution trace.
 
@@ -170,21 +185,33 @@ class ProcessorCore:
             inputs: Optional template inputs/variables
             extra_metadata: Additional metadata
             execution_type: Type of execution
+            trace_id: Optional trace ID (generated if not provided)
+            parameters: Optional parameters override (defaults to self.parameters)
+            component_name: Optional component name (defaults to class name)
+            extra_agent_config: Additional config for agent_info
 
         Returns:
-            trace_id: The generated trace ID
+            trace_id: The trace ID used
         """
         import uuid
 
-        trace_id = str(uuid.uuid4())
+        if trace_id is None:
+            trace_id = str(uuid.uuid4())
+
+        # Build agent_info with optional overrides
+        agent_info = self._build_agent_info(
+            processor_stage, execution_type, extra_config=extra_agent_config
+        )
+        if component_name:
+            agent_info["component_name"] = component_name
 
         execution_trace = ExecutionTrace(
             call_id=trace_id,
-            agent_info=self._build_agent_info(processor_stage, execution_type),
+            agent_info=agent_info,
             inputs=inputs,
             outputs=outputs,
             messages=messages,
-            parameters=self.parameters,
+            parameters=parameters if parameters is not None else self.parameters,
             metadata=self._build_trace_metadata(record, duration_ms, extra_metadata),
             parent_call_id=parent_trace_id,
             record=record,
@@ -202,6 +229,9 @@ class ProcessorCore:
         duration_ms: float,
         inputs: Optional[dict[str, Any]] = None,
         execution_type: str = "processing",
+        parameters: Optional[dict[str, Any]] = None,
+        component_name: Optional[str] = None,
+        extra_agent_config: Optional[dict[str, Any]] = None,
     ) -> None:
         """Emit an error execution trace.
 
@@ -213,15 +243,25 @@ class ProcessorCore:
             duration_ms: Processing duration in milliseconds
             inputs: Optional template inputs/variables
             execution_type: Type of execution
+            parameters: Optional parameters override (defaults to self.parameters)
+            component_name: Optional component name (defaults to class name)
+            extra_agent_config: Additional config for agent_info
         """
+        # Build agent_info with optional overrides
+        agent_info = self._build_agent_info(
+            processor_stage, execution_type, extra_config=extra_agent_config
+        )
+        if component_name:
+            agent_info["component_name"] = component_name
+
         error_trace = ExecutionTrace(
-            agent_info=self._build_agent_info(processor_stage, execution_type),
+            agent_info=agent_info,
             inputs=inputs,
             error={
                 "event": str(error),
                 "details": {"error_type": type(error).__name__},
             },
-            parameters=self.parameters,
+            parameters=parameters if parameters is not None else self.parameters,
             metadata=self._build_trace_metadata(record, duration_ms),
             parent_call_id=parent_trace_id,
             record=record,

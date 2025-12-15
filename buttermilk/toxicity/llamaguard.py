@@ -124,7 +124,6 @@ class MDJudge2Categories(Enum):
 class LlamaGuardTox(ToxicityClassifierCore):
     categories: EnumMeta
     template: str
-    client: Any = None
     tokenizer: Any = None
     model: str
     options: ClassVar[dict] = dict()
@@ -220,10 +219,9 @@ class LlamaGuard1Together(LlamaGuardTox):
     model: str = "Meta-Llama/Llama-Guard-7b"
     process_chain: str = "together"
     options: ClassVar[dict] = dict(temperature=1.0, top_k=1)
-    client: "Together" = None
 
     def init_client(self) -> None:
-        self.client = Together(model=self.model, **self.options)
+        self._client = Together(model=self.model, **self.options)
 
 
 class LlamaGuard1Replicate(LlamaGuardTox):
@@ -234,10 +232,9 @@ class LlamaGuard1Replicate(LlamaGuardTox):
     model: str = "tomasmcm/llamaguard-7b:86a2d8b79335b1557fc5709d237113aa34e3ae391ee46a68cc8440180151903d"
     standard: str = "llamaguard1"
     process_chain: str = "replicate"
-    client: Any = None
 
     def init_client(self) -> None:
-        self.client = Replicate(model=self.model, **self.options)
+        self._client = Replicate(model=self.model, **self.options)
 
 
 class LlamaGuard2Replicate(LlamaGuardTox):
@@ -248,10 +245,9 @@ class LlamaGuard2Replicate(LlamaGuardTox):
     model: str = "meta/meta-llama-guard-2-8b:b063023ee937f28e922982abdbf97b041ffe34ad3b35a53d33e1d74bb19b36c4"
     standard: str = "llamaguard2"
     process_chain: str = "replicate"
-    client: Any = None
 
     def init_client(self) -> None:
-        self.client = Replicate(model=self.model, **self.options)
+        self._client = Replicate(model=self.model, **self.options)
 
 
 class LlamaGuard2Together(LlamaGuardTox):
@@ -262,11 +258,10 @@ class LlamaGuard2Together(LlamaGuardTox):
     standard: str = "llamaguard2"
     model: str = "meta-llama/LlamaGuard-2-8b"
     process_chain: str = "together"
-    client: "Together" = None
     options: ClassVar[dict] = dict(temperature=1.0)
 
     def init_client(self) -> None:
-        self.client = Together(model=self.model, **self.options)
+        self._client = Together(model=self.model, **self.options)
 
 
 class LlamaGuard2Local(_HF, LlamaGuardTox):
@@ -277,7 +272,6 @@ class LlamaGuard2Local(_HF, LlamaGuardTox):
     standard: str = "llamaguard2"
     process_chain: str = "local transformers"
     model: str = "meta-llama/Meta-Llama-Guard-2-8B"
-    client: Any = None
     options: ClassVar[dict] = dict(temperature=1.0)
     call_options: ClassVar[dict] = dict(max_new_tokens=128)
 
@@ -290,12 +284,11 @@ class LlamaGuard2HF(LlamaGuardTox):
     model: str = "meta-llama/Meta-Llama-Guard-2-8B"
     standard: str = "llamaguard2"
     process_chain: str = "huggingface API"
-    client: Any = None
 
     def init_client(self) -> None:
         from buttermilk.libs import HFInferenceClient
 
-        self.client = HFInferenceClient(hf_model_path=self.model, **self.options)
+        self._client = HFInferenceClient(hf_model_path=self.model, **self.options)
 
 
 class _LlamaGuard3Common(LlamaGuardTox):
@@ -345,7 +338,7 @@ class LlamaGuard3LocalInt8(LlamaGuard3Local):
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
         if not self.tokenizer.pad_token_id:
             self.tokenizer.pad_token_id = 0
-        self.client = AutoModelForCausalLM.from_pretrained(
+        self._client = AutoModelForCausalLM.from_pretrained(
             self.model,
             torch_dtype=torch.bfloat16,
             device_map=self.device,
@@ -359,14 +352,13 @@ class LlamaGuard3Together(_LlamaGuard3Common):
     process_chain: str = "Together API"
 
     def init_client(self) -> None:
-        self.client = Together(model=self.model, **self.options)
+        self._client = Together(model=self.model, **self.options)
 
 
 # MDJudge has the same response style as LlamaGuard
 class MDJudgeLocal(LlamaGuardTox):
     process_chain: str = "local transformers"
     model: str = "OpenSafetyLab/MD-Judge-v0.1"
-    client: Any = None
     tokenizer: Any = None
     template: str
 
@@ -379,7 +371,7 @@ class MDJudgeLocal(LlamaGuardTox):
 
         login(token=token, new_session=False)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
-        self.client = AutoModelForCausalLM.from_pretrained(
+        self._client = AutoModelForCausalLM.from_pretrained(
             self.model,
             device_map="auto",
             torch_dtype=torch.bfloat16,
@@ -413,7 +405,6 @@ class MDJudge2(MDJudgeLocal):
     process_chain: str = "local transformers"
     model: str = "OpenSafetyLab/MD-Judge-v0_2-internlm2_7b"
     standard: str = "MDJudge_v0.2"
-    client: Any = None
     tokenizer: Any = None
     template: str = Field(
         default_factory=lambda: llamaguard_template(LlamaGuardTemplate.MDJUDGE2),
@@ -431,7 +422,7 @@ class MDJudge2(MDJudgeLocal):
             self.model,
             trust_remote_code=True,
         )
-        self.client = AutoModelForCausalLM.from_pretrained(
+        self._client = AutoModelForCausalLM.from_pretrained(
             self.model,
             trust_remote_code=True,
         ).to("cuda")
@@ -455,7 +446,7 @@ class MDJudge2(MDJudgeLocal):
             add_special_tokens=True,
         ).to("cuda")
 
-        outputs = self.client.generate(**inputs, max_new_tokens=256)
+        outputs = self._client.generate(**inputs, max_new_tokens=256)
         outputs = outputs[0].cpu().tolist()[len(inputs["input_ids"][0]) :]
         resp = self.tokenizer.decode(
             outputs,

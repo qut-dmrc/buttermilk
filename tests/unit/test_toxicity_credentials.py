@@ -18,7 +18,7 @@ class MockToxicityModel(ToxicityModel):
 
     def init_client(self) -> None:
         """Mock init_client to avoid NotImplementedError."""
-        self.client = "mock_client"
+        self._client = "mock_client"
 
     def make_prompt(self, content: str) -> str:
         """Mock make_prompt implementation."""

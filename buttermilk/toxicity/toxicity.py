@@ -33,6 +33,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    PrivateAttr,
     model_validator,
 )
 
@@ -41,6 +42,7 @@ from buttermilk._core.contract import (
     AgentInput,
     ExecutionTrace,
 )  # Import AgentInput and ExecutionTrace
+from buttermilk._core.processor_core import ProcessorCore
 from buttermilk._core.types import BaseRecord
 from buttermilk.utils.utils import read_text, read_yaml, scrub_serializable
 
@@ -93,7 +95,7 @@ PerspectiveAttributesExperimental = Literal[
 
 
 # Base class for all toxicity classifiers
-class ToxicityClassifierCore(BaseModel):
+class ToxicityClassifierCore(ProcessorCore):
     """Base class for toxicity/safety classification processors.
 
     Implements the Processor protocol for pipeline compatibility. Uses EvalRecord
@@ -112,7 +114,7 @@ class ToxicityClassifierCore(BaseModel):
             standard: str = "my-standard"
 
             def init_client(self):
-                self.client = MyAPIClient()
+                self._client = MyAPIClient()
 
             def make_prompt(self, content: str) -> str:
                 return content
@@ -125,39 +127,26 @@ class ToxicityClassifierCore(BaseModel):
     model: str
     process_chain: str
     standard: str
-    client: Any = None
     info_url: str | None = None
     credentials: dict[str, str] = Field(default_factory=dict)
     options: ClassVar[dict] = {}
     call_options: ClassVar[dict] = {}
 
-    # Lazy-loaded trace writer for BigQuery persistence
-    _trace_writer: Any = None
+    # Private client attribute (not serialized)
+    _client: Any = PrivateAttr(default=None)
 
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
     @model_validator(mode="after")
     def validate_model(self) -> ToxicityClassifierCore:
-        if self.client is None:
+        if self._client is None:
             self.init_client(**self.options)
-            if self.client is None:
+            if self._client is None:
                 raise ValueError(f"Unable to initialize client for {self.model}")
         return self
 
-    @property
-    def trace_writer(self) -> Any:
-        """Lazy-load trace writer for BigQuery persistence."""
-        if self._trace_writer is None:
-            try:
-                from buttermilk.utils.trace_writer import get_trace_writer
-
-                self._trace_writer = get_trace_writer()
-            except Exception as e:
-                logger.warning(f"Failed to initialize trace writer: {e}")
-        return self._trace_writer
-
     def init_client(self) -> None:
-        if self.client is None:
+        if self._client is None:
             raise NotImplementedError
 
     def _get_credential(self, key: str, required: bool = True) -> str | None:
@@ -243,7 +232,7 @@ class ToxicityClassifierCore(BaseModel):
         prompt: str,
         **kwargs,
     ) -> EvalRecord:
-        return self.client.__call__(prompt, **self.call_options, **kwargs)
+        return self._client.__call__(prompt, **self.call_options, **kwargs)
 
     @abc.abstractmethod
     def make_prompt(self, content):
@@ -379,53 +368,36 @@ class ToxicityClassifierCore(BaseModel):
         # Calculate duration
         duration_ms = (time.time() - start_time) * 1000
 
-        # Emit execution trace (consistent with ClassifierCore/LLMCore)
-        if self.trace_writer:
-            try:
-                # Build input metadata from record if available
-                input_metadata = {}
-                if record.metadata:
-                    input_metadata = {"input": record.metadata}
-
-                execution_trace = ExecutionTrace(
-                    call_id=trace_id,
-                    agent_info={
-                        "component_name": self.__class__.__name__,
-                        "execution_type": "toxicity_classification",
-                        "config": {
-                            "model": self.model,
-                            "process_chain": self.process_chain,
-                            "standard": self.standard,
-                        },
-                        "processor_stage": processor_stage,
-                    },
-                    inputs={
-                        "content": content[:500] if len(content) > 500 else content,
-                        "record_id": record.record_id,
-                    },
-                    outputs={
-                        "prediction": eval_record.prediction,
-                        "scores": [s.model_dump() for s in eval_record.scores],
-                        "labels": eval_record.labels,
-                        "error": eval_record.error,
-                    },
-                    parameters={
-                        "model": self.model,
-                        "process_chain": self.process_chain,
-                        "standard": self.standard,
-                    },
-                    metadata={
-                        **input_metadata,
-                        "duration_ms": duration_ms,
-                        "eval_id": eval_record.eval_id,
-                    },
-                    parent_call_id=parent_trace_id,
-                    record=record,
-                )
-
-                await self.trace_writer.add(execution_trace)
-            except Exception as e:
-                logger.warning(f"Failed to emit trace: {e}")
+        # Emit execution trace using inherited helper (consistent with ClassifierCore/LLMCore)
+        await self._emit_success_trace(
+            record=record,
+            outputs={
+                "prediction": eval_record.prediction,
+                "scores": [s.model_dump() for s in eval_record.scores],
+                "labels": eval_record.labels,
+                "error": eval_record.error,
+            },
+            processor_stage=processor_stage,
+            parent_trace_id=parent_trace_id,
+            duration_ms=duration_ms,
+            inputs={
+                "content": content[:500] if len(content) > 500 else content,
+                "record_id": record.record_id,
+            },
+            extra_metadata={"eval_id": eval_record.eval_id},
+            execution_type="toxicity_classification",
+            trace_id=trace_id,
+            parameters={
+                "model": self.model,
+                "process_chain": self.process_chain,
+                "standard": self.standard,
+            },
+            extra_agent_config={
+                "model": self.model,
+                "process_chain": self.process_chain,
+                "standard": self.standard,
+            },
+        )
 
         # Build output dict with prediction and optional labels
         output = {"prediction": eval_record.prediction}
@@ -466,7 +438,6 @@ class _HF(ToxicityClassifierCore):
     )
     options: ClassVar[dict] = dict(temperature=1.0)
     call_options: ClassVar[dict] = dict(max_new_tokens=128)
-    client: Any = None
     tokenizer: Any = None
 
     def init_client(self) -> None:
@@ -486,7 +457,7 @@ class _HF(ToxicityClassifierCore):
                 self.tokenizer.eos_token_id
             )  # Set a padding token
 
-        self.client = AutoModelForCausalLM.from_pretrained(
+        self._client = AutoModelForCausalLM.from_pretrained(
             self.model,
             trust_remote_code=True,
         ).to(self.device)
@@ -500,7 +471,7 @@ class _HF(ToxicityClassifierCore):
             self.device,
         )["input_ids"]
 
-        output = self.client.generate(
+        output = self._client.generate(
             input_ids=input_ids,
             **self.options,
             **self.call_options,
@@ -531,14 +502,13 @@ class Perspective(ToxicityClassifierCore):
     model: str = "perspective"
     process_chain: str = "api"
     standard: str = "perspective"
-    client: Any = None
 
     def init_client(self) -> None:
         import google.auth
         from googleapiclient import discovery
 
         credentials, _ = google.auth.default()
-        self.client = discovery.build(
+        self._client = discovery.build(
             "commentanalyzer",
             "v1alpha1",
             credentials=credentials,
@@ -584,7 +554,7 @@ class Perspective(ToxicityClassifierCore):
             "doNotStore": True,
         }
 
-        response = self.client.comments().analyze(body=analyze_request).execute()
+        response = self._client.comments().analyze(body=analyze_request).execute()
 
         return response
 
@@ -593,7 +563,6 @@ class Comprehend(ToxicityClassifierCore):
     model: str = "comprehend"
     process_chain: str = "api"
     standard: str = "comprehend"
-    client: Any = None
 
     def init_client(self) -> None:
         import boto3
@@ -602,7 +571,7 @@ class Comprehend(ToxicityClassifierCore):
         secret_key = self._get_credential("AWS_SECRET_ACCESS_KEY")
         region = self._get_credential("AWS_REGION")
 
-        self.client = boto3.client(
+        self._client = boto3.client(
             service_name="comprehend",
             aws_access_key_id=access_key,
             aws_secret_access_key=secret_key,
@@ -617,7 +586,7 @@ class Comprehend(ToxicityClassifierCore):
         prompt: str,
         **kwargs,
     ) -> Any:
-        return self.client.detect_toxic_content(
+        return self._client.detect_toxic_content(
             LanguageCode="en",
             TextSegments=[{"Text": prompt}],
         )
@@ -648,7 +617,6 @@ class AzureContentSafety(ToxicityClassifierCore):
     model: str = "AzureContentSafety"
     process_chain: str = "api"
     standard: str = "AzureContentSafety 2023-10-01"
-    client: Any = None
 
     """ Azure Content Safety API: https://aka.ms/acs-doc
         https://contentsafety.cognitive.azure.com/
@@ -676,7 +644,7 @@ class AzureContentSafety(ToxicityClassifierCore):
         credential = AzureKeyCredential(API_KEY)
         content_safety_client = ContentSafetyClient(ENDPOINT, credential)
         # blocklist_client = BlocklistClient(endpoint, credential)
-        self.client = content_safety_client
+        self._client = content_safety_client
 
     def make_prompt(self, content: str) -> str:
         return content
@@ -695,7 +663,7 @@ class AzureContentSafety(ToxicityClassifierCore):
             text=prompt,
             output_type=AnalyzeTextOutputType.EIGHT_SEVERITY_LEVELS,
         )
-        return self.client.analyze_text(request)
+        return self._client.analyze_text(request)
 
     def interpret(self, response: Any) -> EvalRecord:
         # Load the message info into the output
@@ -739,7 +707,6 @@ class AzureModerator(ToxicityClassifierCore):
     model: str = "azure content-moderator"
     process_chain: str = "text-moderation-api"
     standard: str = "Azure Content Moderator"
-    client: Any = None
 
     """ Azure Content Moderator screen text
         https://learn.microsoft.com/en-us/azure/ai-services/content-moderator/overview
@@ -767,7 +734,7 @@ class AzureModerator(ToxicityClassifierCore):
         if not ENDPOINT:
             ENDPOINT = "https://westus.api.cognitive.microsoft.com"
 
-        self.client = ContentModeratorClient(
+        self._client = ContentModeratorClient(
             endpoint=ENDPOINT,
             credentials=CognitiveServicesCredentials(subscription_key=SUBSCRIPTION_KEY),
         )
@@ -781,7 +748,7 @@ class AzureModerator(ToxicityClassifierCore):
         **kwargs,
     ) -> Any:
         text_stream = StringIO(prompt)
-        response = self.client.text_moderation.screen_text(
+        response = self._client.text_moderation.screen_text(
             language="eng",
             text_content_type="text/plain",
             text_content=text_stream,
@@ -832,20 +799,19 @@ class REGARD(ToxicityClassifierCore):
     model: str = "regard"
     process_chain: str = "evaluate"
     standard: str = "regard"
-    client: Any = None
 
     def init_client(self) -> None:
         import evaluate
 
         device = _get_torch_device()
         if device == "cuda":
-            self.client = evaluate.load(
+            self._client = evaluate.load(
                 "regard",
                 module_type="measurement",
                 device="cuda",
             )
         else:
-            self.client = evaluate.load("regard", module_type="measurement")
+            self._client = evaluate.load("regard", module_type="measurement")
 
     def make_prompt(self, content: str) -> str:
         return content
@@ -855,7 +821,7 @@ class REGARD(ToxicityClassifierCore):
         prompt: str,
         **kwargs,
     ) -> Any:
-        result = self.client.compute(data=[prompt])
+        result = self._client.compute(data=[prompt])
         return result
 
     def interpret(self, response: Any) -> EvalRecord:
@@ -880,12 +846,11 @@ class HONEST(ToxicityClassifierCore):
     model: str = "honest"
     process_chain: str = "evaluate"
     standard: str = "honest"
-    client: Any = None
 
     def init_client(self) -> None:
         import evaluate
 
-        self.client = evaluate.load("honest", "en")
+        self._client = evaluate.load("honest", "en")
 
     def make_prompt(self, content: str) -> list[str]:
         return content.split(" ")
@@ -895,7 +860,7 @@ class HONEST(ToxicityClassifierCore):
         prompt: str,
         **kwargs,
     ) -> Any:
-        result = self.client.compute(predictions=prompt)
+        result = self._client.compute(predictions=prompt)
         return result
 
     def interpret(self, response: Any) -> EvalRecord:
@@ -939,7 +904,7 @@ class LFTW(ToxicityClassifierCore):
             )  # Set a padding token
         cfg = AutoConfig.from_pretrained(self.model)
         self.classes = cfg.id2label
-        self.client = AutoModelForSequenceClassification.from_pretrained(self.model).to(
+        self._client = AutoModelForSequenceClassification.from_pretrained(self.model).to(
             self.device,
         )
 
@@ -957,7 +922,7 @@ class LFTW(ToxicityClassifierCore):
             "input_ids"
         ]
         with torch.no_grad():
-            response = self.client(input_ids=input_ids, **self.options, **kwargs)
+            response = self._client(input_ids=input_ids, **self.options, **kwargs)
         logits = response.logits
         prediction_class_id = logits.argmax().item()
         result = self.classes[prediction_class_id]
@@ -989,7 +954,6 @@ class GPTJT(ToxicityClassifierCore):
         description="Device type (CPU or CUDA)",
     )
 
-    client: Any = None
 
     ResponseMap: dict[str, int] = {
         "casual": 1,
@@ -1008,7 +972,7 @@ class GPTJT(ToxicityClassifierCore):
         token = self._get_credential("HUGGINGFACEHUB_API_TOKEN")
 
         login(token=token, new_session=False)
-        self.client = hf_pipeline(
+        self._client = hf_pipeline(
             hf_model_path="togethercomputer/GPT-JT-Moderation-6B",
             device=self.device,
             max_new_tokens=3,
@@ -1023,7 +987,7 @@ class GPTJT(ToxicityClassifierCore):
         prompt: str,
         **kwargs,
     ) -> Any:
-        response = self.client(prompt)
+        response = self._client(prompt)
 
         if len(response) > 1:
             raise ValueError("Expected only one result from model")
@@ -1068,13 +1032,12 @@ class OpenAIModerator(ToxicityClassifierCore):
     model: str = "text-moderation-latest"
     process_chain: str = "api"
     standard: str = "openaimod"
-    client: Any = None
 
     def init_client(self) -> None:
         import openai
 
         openai.api_type = "openai"
-        self.client = openai.moderations
+        self._client = openai.moderations
 
     def make_prompt(self, content: str) -> str:
         return content
@@ -1084,7 +1047,7 @@ class OpenAIModerator(ToxicityClassifierCore):
         prompt: str,
         **kwargs,
     ) -> Any:
-        return self.client.create(input=prompt, model=self.model)
+        return self._client.create(input=prompt, model=self.model)
 
     def interpret(self, response: Any) -> EvalRecord:
         if len(response.results) > 1:
@@ -1107,7 +1070,6 @@ class ShieldGemma(ToxicityClassifierCore):
     model: str = "google/shieldgemma-27b"
     process_chain: str = "local transformers"
     standard: str = "shieldgemma"
-    client: Any = None
     tokenizer: Any = None
     classes: Any = None
     _tpl: str = ""
@@ -1127,7 +1089,7 @@ class ShieldGemma(ToxicityClassifierCore):
 
         login(token=token, new_session=False)
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
-        self.client = AutoModelForCausalLM.from_pretrained(
+        self._client = AutoModelForCausalLM.from_pretrained(
             self.model,
             device_map="auto",
             torch_dtype=torch.bfloat16,
@@ -1153,7 +1115,7 @@ class ShieldGemma(ToxicityClassifierCore):
         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
 
         with torch.no_grad():
-            model_outputs = self.client(**inputs)
+            model_outputs = self._client(**inputs)
 
         logits = model_outputs.logits
 
@@ -1195,7 +1157,6 @@ class ToxicChat(ToxicityClassifierCore):
     model: str = "toxicchat"
     process_chain: str = "hf-api"
     standard: str = "toxicchat"
-    client: Any = None
 
     def init_client(self) -> None:
         pass
@@ -1225,7 +1186,6 @@ class Zentropi(ToxicityClassifierCore):
     model: str = "cope-latest"
     process_chain: str = "api"
     standard: str = "zentropi"
-    client: Any = None
     criteria: str = ""  # The labeling criteria (system message/template)
 
     def init_client(self) -> None:
@@ -1240,7 +1200,7 @@ class Zentropi(ToxicityClassifierCore):
         if not base_url:
             base_url = "https://api.zentropi.ai/v1/label"
 
-        self.client = {
+        self._client = {
             "api_key": api_key,
             "base_url": base_url,
         }

@@ -630,7 +630,7 @@ async def test_llmcore_raises_error_on_empty_expected():
 
     This is the real-world usage pattern - not just load_template in isolation.
     """
-    from buttermilk._core.exceptions import ProcessingError
+    from buttermilk._core.exceptions import FatalError, ProcessingError
     from buttermilk._core.llm_core import LLMCore
 
     # Create LLMCore with score template
@@ -641,9 +641,9 @@ async def test_llmcore_raises_error_on_empty_expected():
     )
 
     # Test Case 1: Empty string expected
-    with pytest.raises(ProcessingError, match="unfilled parameters.*expected"):
+    with pytest.raises(FatalError, match="unfilled parameters.*expected"):
         await llm_core._fill_template(
-            inputs={
+            {
                 "answers": [{"agent_id": "test", "result": "test"}],
                 "criteria": ["test"],
                 "expected": "",  # Empty string - should be cleaned and marked unfilled
@@ -651,9 +651,9 @@ async def test_llmcore_raises_error_on_empty_expected():
         )
 
     # Test Case 2: Empty dict expected
-    with pytest.raises(ProcessingError, match="unfilled parameters.*expected"):
+    with pytest.raises(FatalError, match="unfilled parameters.*expected"):
         await llm_core._fill_template(
-            inputs={
+            {
                 "answers": [{"agent_id": "test", "result": "test"}],
                 "criteria": ["test"],
                 "expected": {},  # Empty dict - should be cleaned and marked unfilled
@@ -661,9 +661,9 @@ async def test_llmcore_raises_error_on_empty_expected():
         )
 
     # Test Case 3: Dict with empty reasons list
-    with pytest.raises(ProcessingError, match="unfilled parameters.*expected"):
+    with pytest.raises(FatalError, match="unfilled parameters.*expected"):
         await llm_core._fill_template(
-            inputs={
+            {
                 "answers": [{"agent_id": "test", "result": "test"}],
                 "criteria": ["test"],
                 "expected": {"reasons": []},  # Empty nested value - should be cleaned
@@ -671,9 +671,9 @@ async def test_llmcore_raises_error_on_empty_expected():
         )
 
     # Test Case 4: Whitespace-only expected
-    with pytest.raises(ProcessingError, match="unfilled parameters.*expected"):
+    with pytest.raises(FatalError, match="unfilled parameters.*expected"):
         await llm_core._fill_template(
-            inputs={
+            {
                 "answers": [{"agent_id": "test", "result": "test"}],
                 "criteria": ["test"],
                 "expected": "   ",  # Whitespace only - should be cleaned

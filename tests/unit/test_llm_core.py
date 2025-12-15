@@ -6,7 +6,7 @@ import pytest
 from autogen_core.models import RequestUsage, SystemMessage, UserMessage
 from pydantic import BaseModel
 
-from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk._core.llm_core import LLMCore, LLMResult
 from buttermilk._core.llms import CreateResult, ModelOutput
 from buttermilk._core.types import BaseRecord
@@ -39,7 +39,7 @@ class TestLLMCore:
 
         assert core.model == "gpt-4"
         assert core.template == "test_template"
-        assert core._fail_on_unfilled_parameters is False
+        assert core.fail_on_unfilled_parameters is False
         assert core.output_model is None
         assert core.tools == []
 
@@ -65,7 +65,9 @@ class TestLLMCore:
             output_model=OutputModelForTesting,
         )
 
-        assert core.output_model == OutputModelForTesting
+        # output_model is stored as string path, resolved class is in _resolved_output_model
+        assert core.output_model == "test_llm_core.OutputModelForTesting"
+        assert core._resolved_output_model == OutputModelForTesting
 
     @pytest.mark.anyio
     async def test_fill_template_basic(self):
@@ -98,7 +100,7 @@ class TestLLMCore:
         )
 
         # Only provide required_var, leave missing_var undefined
-        with pytest.raises(ProcessingError, match="unfilled parameters"):
+        with pytest.raises(FatalError, match="unfilled parameters"):
             await core._fill_template(
                 template_vars={"required_var": "value", "context": [], "records": []}
             )
@@ -360,7 +362,7 @@ class TestLLMCore:
         )
 
         # Test 1: Truly undefined variable MUST fail
-        with pytest.raises(ProcessingError, match="unfilled parameters"):
+        with pytest.raises(FatalError, match="unfilled parameters"):
             await core._fill_template(
                 template_vars={"required_var": "value", "context": [], "records": []}
                 # missing_var is NOT provided - truly undefined
@@ -407,14 +409,14 @@ class TestLLMCore:
         )
 
         # Should fail because default is strict mode
-        with pytest.raises(ProcessingError, match="unfilled parameters"):
+        with pytest.raises(FatalError, match="unfilled parameters"):
             await core._fill_template(
                 template_vars={"required_var": "value", "context": [], "records": []}
                 # missing_var is NOT provided
             )
 
-        # Verify the internal flag is set to True
-        assert core._fail_on_unfilled_parameters is True
+        # Verify the flag is set to True
+        assert core.fail_on_unfilled_parameters is True
 
     def test_parameters_includes_model_and_template(self):
         """Test that self.parameters captures model and template for trace writing.
