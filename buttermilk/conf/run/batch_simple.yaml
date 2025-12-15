@@ -1,0 +1,19 @@
+#@package _global_
+# Simple batch mode: Pipeline-based processing without Pub/Sub
+# Uses OrchestratorProcessor to wrap flows as pipeline processors
+#
+# Usage:
+#   python -m buttermilk.runner.cli run=batch_simple run.flow=<flow_name>
+#   python -m buttermilk.runner.cli run=batch_simple run.flow=trans run.limit=10
+#   python -m buttermilk.runner.cli run=batch_simple run.flow=trans run.concurrency=3
+defaults:
+  - _self_
+run:
+  mode: batch_simple
+  flow: null  # Required: specify flow name
+  limit: null  # Optional: limit number of records
+  concurrency: 1  # Number of records to process concurrently
+  human_in_loop: false
+project_name: buttermilk
+job: batch_simple
+verbose: true

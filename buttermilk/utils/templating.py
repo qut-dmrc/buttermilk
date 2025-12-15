@@ -519,18 +519,19 @@ def load_template(
     # Trusted `parameters` can override `untrusted_inputs` if keys collide.
     rendering_context = {**effective_untrusted_inputs, **parameters}
 
+    # Exclude 'record' and 'context' from Jinja2 rendering - these are handled
+    # specially by make_messages() as placeholder roles, not template variables.
+    # If they're in rendering_context, Jinja2 would render them as JSON/dict
+    # instead of leaving {{record}} for make_messages to process.
+    placeholder_keys = {"record", "context"}
+    rendering_context = {k: v for k, v in rendering_context.items() if k not in placeholder_keys}
+
     rendered_string = jinja_template.render(**rendering_context)
 
-    # Check if fail_on_unfilled_parameters is enabled and there are undefined variables
-    fail_on_unfilled = parameters.get("fail_on_unfilled_parameters", False)
-    if fail_on_unfilled and collected_undefined_vars:
-        # Fail-fast: Raise exception when variables are unfilled and flag is enabled
-        unfilled_list = ", ".join(sorted(set(collected_undefined_vars)))
-        raise FatalError(
-            f"Template '{template}' has unfilled parameters: {unfilled_list}. "
-            f"This violates fail_on_unfilled_parameters=True. "
-            f"Ensure all required variables are provided in parameters or untrusted_inputs."
-        )
+    # Note: fail_on_unfilled_parameters check is NOT done here.
+    # This allows make_messages() to process placeholder roles (e.g., record, context)
+    # before the final unfilled check happens in LLMCore._fill_template().
+    # The unfilled_vars are returned to the caller for downstream validation.
 
     # Calculate template hash for version tracking
     try:

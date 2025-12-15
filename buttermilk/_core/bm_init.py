@@ -190,7 +190,7 @@ class SessionInfo(BaseModel):
         default_factory=list, description="Paths to search for templates."
     )
     llm_wrapper: str = Field(
-        default="autogen",
+        default="litellm",
         description="Global LLM wrapper selection (autogen or litellm). Per-model use_litellm overrides this.",
     )
 

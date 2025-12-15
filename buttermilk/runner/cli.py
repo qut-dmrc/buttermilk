@@ -55,7 +55,7 @@ def _validate_flow_config(conf: DictConfig, mode: str) -> None:
     )
 
     # Modes that require a flow to be specified
-    flow_required_modes = {"console", "batch", "batch_all"}
+    flow_required_modes = {"console", "batch", "batch_all", "batch_simple"}
 
     if mode_str in flow_required_modes:
         if not hasattr(conf.run, "flow") or not conf.run.flow:
@@ -112,22 +112,24 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
 
     Hydra Configuration Overrides:
         You can override any configuration parameter using Hydra's dot notation:
-        - run.mode=<mode>        : Set operational mode (console, batch, batch_run, batch_all, api, pipeline, streamlit, slackbot)
+        - run.mode=<mode>        : Set operational mode (console, batch, batch_run, batch_all, batch_simple, api, pipeline, streamlit, slackbot)
         - run.flow=<flow_name>   : Specify which flow to run (required for most modes)
         - run.limit=<number>     : Limit number of records/jobs to process
         - run.record_id=<id>     : Run on a specific record (console mode)
+        - run.concurrency=<n>    : Number of concurrent records (batch_simple, pipeline modes)
         - llms=<config>          : Override LLM configuration
         - storage=<config>       : Override storage configuration
 
     Available Modes:
-        - console    : Run a single flow interactively in the terminal
-        - batch      : Create batch jobs and add them to a queue
-        - batch_run  : Process jobs from the queue (worker mode)
-        - batch_all  : Create and process batch jobs in one command
-        - api        : Start FastAPI server for HTTP API access
-        - pipeline   : Run data processing pipeline
-        - streamlit  : Launch Streamlit web interface
-        - slackbot   : Start Slack bot integration
+        - console      : Run a single flow interactively in the terminal
+        - batch        : Create batch jobs and add them to a Pub/Sub queue
+        - batch_run    : Process jobs from the Pub/Sub queue (worker mode)
+        - batch_all    : Create and process batch jobs via Pub/Sub in one command
+        - batch_simple : Process records through a flow using pipeline (no Pub/Sub, recommended)
+        - api          : Start FastAPI server for HTTP API access
+        - pipeline     : Run data processing pipeline
+        - streamlit    : Launch Streamlit web interface
+        - slackbot     : Start Slack bot integration
 
     """
     OmegaConf.resolve(conf)
@@ -506,6 +508,72 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
             except Exception as e:
                 logger.error(f"✗ Pipeline failed: {e}")
                 raise
+        case "batch_simple":
+            # Simple batch mode: Pipeline-based processing without Pub/Sub
+            # Uses OrchestratorProcessor to wrap flows as pipeline processors
+            flow_name = conf.run.flow
+            limit = conf.run.limit
+            concurrency = getattr(conf.run, "concurrency", 1) or 1
+
+            logger.info(
+                f"Batch simple mode: Processing flow '{flow_name}' via pipeline"
+            )
+            if limit:
+                logger.info(f"Processing limit: {limit} records")
+            logger.info(f"Concurrency: {concurrency}")
+
+            async def run_batch_simple() -> None:
+                from buttermilk.pipeline import PipelineOrchestrator
+                from buttermilk.processors.orchestrator_processor import (
+                    OrchestratorProcessor,
+                )
+
+                # Get flow configuration
+                flow = flow_runner.flows[flow_name]
+
+                # Get source storage (same logic as create_batch)
+                if hasattr(flow, "storage") and flow.storage:
+                    if "initial" in flow.storage:
+                        storage_cfg = flow.storage["initial"]
+                    else:
+                        storage_cfg = next(iter(flow.storage.values()))
+                else:
+                    raise ValueError(
+                        f"Flow '{flow_name}' has no storage configuration"
+                    )
+
+                source = bm.get_storage(storage_cfg)
+
+                # Create OrchestratorProcessor to wrap the flow
+                processor = OrchestratorProcessor(
+                    flow_config=flow,
+                    flow_name=flow_name,
+                    bm=bm,  # Pass session-scoped BM for observability
+                )
+
+                # Create pipeline with the orchestrator processor
+                pipeline = PipelineOrchestrator(
+                    pipeline_name=f"batch_{flow_name}",
+                    source=source,
+                    processors=[processor],
+                    limit=limit,
+                    concurrency=concurrency,
+                    enable_record_cache=False,  # Explicit: no caching for orchestrators
+                )
+
+                logger.info("Starting pipeline-based batch processing...")
+                async for _ in pipeline():
+                    pass  # Results handled by orchestrator callbacks
+
+                await bm.graceful_shutdown()
+
+            try:
+                asyncio.run(run_batch_simple())
+                logger.info(f"✓ Batch simple mode completed for flow '{flow_name}'")
+            except Exception as e:
+                logger.error(f"✗ Batch simple mode failed: {e}")
+                raise
+
         case _:
             # Handles any unsupported modes specified in the configuration.
             valid_modes = [
@@ -513,6 +581,7 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
                 "batch",
                 "batch_run",
                 "batch_all",
+                "batch_simple",
                 "api",
                 "pipeline",
                 "streamlit",

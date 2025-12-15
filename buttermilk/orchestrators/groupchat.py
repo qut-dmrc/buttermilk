@@ -170,6 +170,7 @@ class AutogenOrchestrator(Orchestrator):
         self._runtime = SingleThreadedAgentRuntime(
             tracer_provider=NoOpTracerProvider(),
             intervention_handlers=[termination_handler, interrupt_handler],
+            ignore_unhandled_exceptions=False,
         )
 
         # Start the Autogen runtime's processing loop in the background.

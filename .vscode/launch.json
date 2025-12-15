@@ -197,7 +197,7 @@
       "console": "integratedTerminal"
     },
     {
-      "name": "batch run",
+      "name": "batch simple",
       "type": "debugpy",
       "request": "launch",
       "module": "buttermilk.runner.cli",
@@ -208,13 +208,12 @@
       ],
       "justMyCode": false,
       "args": [
-        "+run=batch",
-        "run.mode=batch_run",
+        "run=batch_simple",
         "+run.flow=trans",
         "+flows=[trans]",
         "verbose=true",
         "llms=${input:llms}",
-        "run.limit=2"
+        "run.limit=1"
       ],
       "envFile": "${userHome}/.env",
       "console": "integratedTerminal"

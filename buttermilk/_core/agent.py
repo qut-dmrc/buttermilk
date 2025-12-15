@@ -444,17 +444,6 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
         # --- Prepare the input state for processing ---
         try:
-            # Backward compatibility: allow direct string prompt + optional context
-            if isinstance(message, str):
-                message = AgentInput(
-                    inputs={"prompt": message, "context": context or ""}
-                )
-            # Fallback: if an unexpected type is provided, coerce to AgentInput using string representation
-            elif not isinstance(message, (AgentInput, StepRequest)):
-                message = AgentInput(
-                    inputs={"prompt": str(message), "context": context or ""}
-                )
-
             final_input = await self._add_state_to_input(message)
         except Exception as e:
             logger.error(f"Error preparing data for Agent {self.agent_id}: {e}")
@@ -981,12 +970,24 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
         # TODO: @nicsuzor decide if we need to remove inputs that are not in the Agent's input schema.
 
+        # Remove empty lists from inputs (JMESPath returns [] when no match)
+        if updated_inputs.inputs:
+            updated_inputs.inputs = {
+                k: v for k, v in updated_inputs.inputs.items()
+                if not (isinstance(v, list) and len(v) == 0)
+            }
+
         logger.debug(
             f"Agent {self.agent_id}: Added state to input. "
             f"Final input keys: {list(updated_inputs.inputs.keys()) if updated_inputs.inputs else []}, "
             f"Context length: {len(updated_inputs.context)}, "
             f"Has record: {updated_inputs.record is not None}.",
         )
+        # DEBUG: Log actual values to diagnose template unfilled issue
+        if updated_inputs.inputs:
+            for k, v in updated_inputs.inputs.items():
+                val_preview = str(v)[:100] if v else "<EMPTY>"
+                logger.debug(f"Agent {self.agent_id}: input[{k}] = {val_preview}")
 
         return updated_inputs
 

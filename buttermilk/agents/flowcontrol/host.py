@@ -25,6 +25,7 @@ from buttermilk._core.contract import (
     UserResponseMessage,
 )
 from buttermilk._core.exceptions import FatalError, ProcessingError
+from buttermilk._core.types import BaseRecord
 
 TRUNCATE_LEN = 1000  # characters per history message
 
@@ -56,6 +57,9 @@ class HostAgent(Agent):
         self._failed_tasks_by_agent: defaultdict[str, int] = defaultdict(int)
         self._total_tasks_in_step: int = 0
         self._conductor_task: asyncio.Task | None = None
+
+        # Record propagation - stores latest record from agent outputs
+        self._current_record: BaseRecord | None = None
 
         # Agent registry attributes
         self._agent_registry: dict[str, AgentAnnouncement] = {}
@@ -253,13 +257,27 @@ class HostAgent(Agent):
         message: ExecutionTrace,
         ctx: MessageContext,
     ) -> None:
-        """Handle ExecutionTrace messages and add to conversation history."""
+        """Handle ExecutionTrace messages and add to conversation history.
+
+        Also captures any BaseRecord in message.outputs for propagation to subsequent steps.
+        This ensures records flow through the pipeline (e.g., FETCH -> JUDGE -> SYNTHESISER).
+        """
         content_to_log = str(message.content)[:TRUNCATE_LEN]
         await self._model_context.add_message(
             AssistantMessage(
                 content=content_to_log, source=ctx.sender.key if ctx.sender else ""
             ),
         )
+
+        # Capture record output for propagation to next steps
+        if message.outputs is not None and isinstance(message.outputs, BaseRecord):
+            self._current_record = message.outputs
+            logger.debug(
+                "Host captured record from agent trace for propagation",
+                agent_name=self.agent_name,
+                record_id=self._current_record.record_id,
+                source_agent=ctx.sender.key if ctx.sender else "unknown",
+            )
 
     @message_handler
     async def handle_manager_message(
@@ -591,6 +609,10 @@ class HostAgent(Agent):
     async def _sequence(self) -> AsyncGenerator[StepRequest, None]:
         """Generate a sequence of steps to execute.
 
+        Uses captured record from previous agent outputs to propagate data through the flow.
+        The first step uses the record from initial inputs, subsequent steps use the
+        most recent record captured from agent ExecutionTrace outputs.
+
         Yields:
             StepRequest: The next step request in the sequence.
 
@@ -601,12 +623,13 @@ class HostAgent(Agent):
 
             # Separate record from inputs dict - record should be in the record field, not inputs
             step_inputs = self._host_initial_inputs.copy()
-            record = step_inputs.pop("record", None)
+            initial_record = step_inputs.pop("record", None)
+
+            # Use the most recent captured record from agent outputs, or fall back to initial record
+            record = self._current_record or initial_record
 
             # Reconstruct record if needed
             if record:
-                from buttermilk._core.types import BaseRecord
-
                 # If it's a list, take the last item (most recent)
                 if isinstance(record, list):
                     record = record[-1] if record else None

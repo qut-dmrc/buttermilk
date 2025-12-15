@@ -28,13 +28,7 @@ from pydantic import BaseModel, Field, PrivateAttr
 from buttermilk._core.cloud import CloudManager
 from buttermilk._core.cloud_config import CloudProvider
 from buttermilk._core.config import LoggerConfig, Tracing
-from buttermilk._core.constants import (
-    CONFIG_CACHE_FILENAME,
-    MODELS_CFG_KEY,
-    SHARED_CREDENTIALS_KEY,
-    cache,
-    get_base_cache_dir,
-)
+from buttermilk._core.constants import CONFIG_CACHE_FILENAME, MODELS_CFG_KEY, SHARED_CREDENTIALS_KEY, cache, get_base_cache_dir
 from buttermilk._core.keys import SecretsManager
 from buttermilk._core.llms import LLMs
 from buttermilk._core.log import logger, setup_console_logging, setup_file_logging
@@ -115,7 +109,7 @@ class ExecutionContext(BaseModel):
         default_factory=dict, description="Shared dataset configurations."
     )
     default_llm_wrapper: str = Field(
-        default="autogen",
+        default="litellm",
         description="Default LLM wrapper type (autogen or litellm). Passed to LLMs instance.",
     )
     llm_model_parameters: dict[str, Any] = Field(
@@ -706,8 +700,8 @@ def get_or_create_execution_context(**kwargs) -> ExecutionContext:
 
 async def from_config_async(
     infrastructure,
+    default_llm_wrapper: str,
     project_name: str | None = None,
-    default_llm_wrapper: str = "autogen",
     llms_config: dict[str, Any] | None = None,
 ):
     """Create ExecutionContext from typed infrastructure config.
@@ -718,7 +712,7 @@ async def from_config_async(
     Args:
         infrastructure: Typed InfrastructureConfig from ButtermilkConfig
         project_name: Optional project name
-        default_llm_wrapper: Default LLM wrapper type (autogen or litellm). Defaults to "autogen" for backward compatibility.
+        default_llm_wrapper: Default LLM wrapper type (autogen or litellm).
         llms_config: Optional root-level llms config dict (for extracting model_parameters when llms is at config root instead of infrastructure.llms)
 
     Returns:
@@ -756,11 +750,11 @@ async def from_config_async(
     if llms_config is not None and isinstance(llms_config, dict):
         llms_dict = llms_config
     # Priority 2: Check infrastructure.llms (new structure)
-    elif hasattr(infrastructure, 'llms') and isinstance(infrastructure.llms, dict) and infrastructure.llms:
+    elif hasattr(infrastructure, "llms") and isinstance(infrastructure.llms, dict) and infrastructure.llms:
         llms_dict = infrastructure.llms
 
     if llms_dict:
-        llm_model_parameters = llms_dict.get('model_parameters', {})
+        llm_model_parameters = llms_dict.get("model_parameters", {})
 
     # Extract components from typed config
     context = await get_or_create_execution_context_async(

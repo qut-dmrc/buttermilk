@@ -102,6 +102,13 @@ class LLMCore(ProcessorCore):
     stop_sequences: list[str] | None = None
     seed: int | None = None
 
+    # Template variables - user-defined variables for Jinja2 rendering
+    # Separate from LLM config to maintain strict validation on config fields
+    template_vars: dict[str, Any] = Field(
+        default_factory=dict,
+        description="User-defined template variables (e.g., criteria, instructions)",
+    )
+
     # Private attrs for runtime objects
     _resolved_output_model: type[BaseModel] | None = PrivateAttr(default=None)
     _template_metadata: dict[str, Any] = PrivateAttr(default_factory=dict)
@@ -436,9 +443,13 @@ class LLMCore(ProcessorCore):
         """Render the template with provided data.
 
         Args:
-            template_vars: Dictionary of variables to fill template placeholders.
+            template_vars: Runtime variables to fill template placeholders.
             record: Optional record for render_or_include placeholders.
             context: Optional conversation history for context injection.
+
+        Template variable precedence (later overrides earlier):
+        1. self.template_vars (from LLMCore config, set at init)
+        2. template_vars argument (runtime variables from caller)
         """
         template_name = self.template
         if not template_name:
@@ -446,8 +457,9 @@ class LLMCore(ProcessorCore):
 
         logger.debug(f"LLMCore: Using template '{template_name}'")
 
-        # Clean and prepare template variables
-        filtered_vars = clean_empty_values(template_vars) if template_vars else {}
+        # Merge template variables: config defaults, then runtime overrides
+        merged_vars = {**self.template_vars, **(template_vars or {})}
+        filtered_vars = clean_empty_values(merged_vars) if merged_vars else {}
 
         # Load and render template
         rendered_template_str, unfilled_vars, template_hash = load_template(
