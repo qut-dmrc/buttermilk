@@ -660,6 +660,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             },
             parameters=message.parameters if hasattr(message, "parameters") else None,
             tracing={"tracing_link": tracing_link} if tracing_link else None,
+            record=message.record if hasattr(message, "record") else None,
         )
 
         return trace_object

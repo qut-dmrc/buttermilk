@@ -707,6 +707,7 @@ class ExecutionTrace(BaseModel):
         parameters: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
         tracing: dict[str, Any] | None = None,
+        record: Any = None,
     ) -> "ExecutionTrace":
         """Create an ExecutionTrace instance from an existing AgentOutput.
 
@@ -719,6 +720,7 @@ class ExecutionTrace(BaseModel):
             parameters: Runtime parameters.
             metadata: Additional metadata to include.
             tracing: Tracing information.
+            record: Optional record data. If provided, used directly; otherwise extracted from inputs.
 
         Returns:
             ExecutionTrace: A new instance of ExecutionTrace populated with data from the output and inputs.
@@ -740,9 +742,9 @@ class ExecutionTrace(BaseModel):
         if metadata:
             combined_metadata.update(metadata)
 
-        # Extract record information from inputs if available
-        record_obj = None
-        if inputs and hasattr(inputs, "record") and inputs.record:
+        # Use provided record or extract from inputs if available
+        record_obj = record
+        if record_obj is None and inputs and hasattr(inputs, "record") and inputs.record:
             record_obj = inputs.record
             inputs = dict(inputs)
             _ = inputs.pop("record", None)

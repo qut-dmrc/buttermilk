@@ -103,6 +103,62 @@ class TestExecutionTrace:
         assert trace.record["dataset_name"] == "test_dataset"
         assert trace.record["split_type"] == "train"
 
+    def test_execution_trace_from_output_loses_record_with_dict_inputs(self, real_bm):
+        """Test that from_output() loses record when inputs is a dict without .record attribute.
+
+        This tests the bug where agent.py at line 645 calls from_output() with dict inputs,
+        and from_output() only extracts record from inputs.record (line 745-748 of contract.py).
+        When inputs is a dict, it has no .record attribute, so the record is lost.
+
+        Expected behavior: trace.record should contain the record data from message.record.
+        Current bug: trace.record is None because:
+          1. agent.py passes inputs as dict (no .record attribute)
+          2. agent.py doesn't pass record parameter to from_output()
+          3. from_output() only looks for inputs.record, doesn't accept record parameter
+
+        Fix requires: Add record parameter to from_output() signature and use it when
+        inputs doesn't have .record attribute.
+        """
+        from buttermilk._core.types import BaseRecord
+
+        # Create output (what agent produces)
+        output = AgentOutput(
+            agent_id="test_agent",
+            outputs="Processed result",
+            messages=[UserMessage(content="Test", source="test")],
+        )
+
+        # Create a mock message-like object with record attribute
+        class MockMessage:
+            def __init__(self):
+                self.record = BaseRecord(
+                    record_id="rec_456",
+                    dataset_name="test_dataset",
+                    split_type="validation",
+                )
+                self.inputs = {"input_text": "test data"}
+
+        message = MockMessage()
+
+        # Simulate what agent.py does at line 645:
+        # - Passes inputs as dict (from trace_inputs, which is often a dict)
+        # - Passes record explicitly to preserve it
+        trace = ExecutionTrace.from_output(
+            output,
+            agent_info={"component_name": "TestAgent", "execution_type": "agent"},
+            inputs={"input_text": "test data"},  # Dict has no .record attribute
+            record=message.record,  # Pass record explicitly so it's not lost
+        )
+
+        # Verify that trace.record was populated from the explicit record parameter
+        assert trace.record is not None, (
+            "trace.record should preserve record when passed explicitly to from_output(). "
+            "When inputs is a dict (no .record attribute), explicit record param is required."
+        )
+        assert trace.record.record_id == "rec_456"
+        assert trace.record.dataset_name == "test_dataset"
+        assert trace.record.split_type == "validation"
+
     def test_execution_trace_model_dump(self, real_bm):
         """Test ExecutionTrace serialization for BigQuery."""
         trace = ExecutionTrace(
