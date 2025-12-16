@@ -436,6 +436,32 @@ class ModelOutput(CreateResult):
     )
 
 
+def _validate_schema_constraints(schema: type[BaseModel], model_info: Any) -> None:
+    """Validate that the schema meets provider requirements (e.g. OpenAI/Azure extra='forbid')."""
+    # Normalize model_info to get family
+    family = ""
+    if isinstance(model_info, dict):
+        family = model_info.get("family", "")
+    else:
+        # Assuming object with attributes (Autogen ModelInfo)
+        family = getattr(model_info, "family", "")
+
+    family = str(family).lower()
+
+    # Check for OpenAI/Azure families
+    # These providers strictly require additionalProperties: false in JSON schema
+    if "gpt" in family or "openai" in family or "azure" in family:
+        # Check Pydantic config for extra='forbid'
+        config = getattr(schema, "model_config", {})
+        extra = config.get("extra")
+
+        if extra != "forbid":
+            raise ValueError(
+                f"Model family '{family}' requires structured output schemas to have "
+                "extra='forbid'. Please add `model_config = ConfigDict(extra='forbid')` to your Pydantic model."
+            )
+
+
 class AutoGenWrapper(BaseModel):
     """Wraps an Autogen `ChatCompletionClient` to add rate limiting and robust retry logic.
 
@@ -559,6 +585,7 @@ class AutoGenWrapper(BaseModel):
         if is_valid_schema_type:
             if self.model_info.get("structured_output", False):
                 # Native structured output supported
+                _validate_schema_constraints(schema, self.model_info)
                 create_call_kwargs["json_output"] = schema  # type: ignore[arg-type]
             elif self.model_info.get("function_calling", True) and not tools:
                 # No native structured output, but tool calling available and not used: use a fake tool
@@ -1454,6 +1481,7 @@ class LiteLLMWrapper(BaseModel):
 
         if schema and structured_output_enabled:
             # Native structured output supported - use response_format
+            _validate_schema_constraints(schema, self.model_info)
             schema_dict = (
                 schema.model_json_schema()
                 if hasattr(schema, "model_json_schema")
