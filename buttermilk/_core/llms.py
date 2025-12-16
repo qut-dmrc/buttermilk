@@ -1731,11 +1731,13 @@ class LiteLLMWrapper(BaseModel):
             except Exception as e:
                 raise ProcessingError(f"Failed to execute tools: {e}") from e
 
-            # Step 3: Synthesis call with schema only (no tools)
+            # Step 3: Synthesis call with schema and tools
+            # Note: tools must be passed to maintain context for Anthropic models
+            # when conversation history contains tool calls and results
             try:
                 synthesis_result = await self.create(
                     messages=messages,
-                    tools=[],
+                    tools=tools_list,
                     cancellation_token=cancellation_token,
                     schema=schema,
                 )
