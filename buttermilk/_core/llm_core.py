@@ -354,6 +354,13 @@ class LLMCore(ProcessorCore):
                 # Store template metadata
                 result.metadata["template"] = self._template_metadata
 
+                # Store record metadata if record is present
+                if record is not None:
+                    result.metadata["record"] = {
+                        "record_id": record.record_id,
+                        "record_hash": record.record_hash,
+                    }
+
                 # Call LLM
                 llm_result = await self._call_llm_with_trace(
                     messages=llm_messages,

@@ -339,6 +339,56 @@ class TestLLMCore:
             assert result.metadata["finish_reason"] == "stop"
 
     @pytest.mark.anyio
+    async def test_record_metadata_preserved_in_result(self):
+        """Test that record metadata (including record_hash) is stored in LLMResult.
+
+        Similar to template_metadata test, this verifies that when a record is
+        provided, its metadata (record_id and record_hash) is preserved in the
+        result.metadata["record"] dictionary.
+        """
+        core = LLMCore(model="gpt-4", template="test/simple")
+
+        # Create a test record
+        record = BaseRecord(
+            record_id="test_record_123",
+            dataset_name="test_dataset",
+            split_type="train",
+        )
+
+        # Mock ONLY the external LLM boundary
+        mock_bm = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.call_chat.return_value = CreateResult(
+            content="LLM response",
+            finish_reason="stop",
+            usage=RequestUsage(prompt_tokens=25, completion_tokens=15),
+            cached=False,
+        )
+        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+
+        with patch("buttermilk._core.llm_core.bm", mock_bm):
+            result = await core.process_with_llm(
+                template_vars={"var": "test input"}, record=record
+            )
+
+            # Verify record metadata is present in result.metadata
+            assert "record" in result.metadata, (
+                "Record metadata should be present in result"
+            )
+            assert result.metadata["record"]["record_id"] == "test_record_123"
+            assert "record_hash" in result.metadata["record"]
+            assert result.metadata["record"]["record_hash"] != ""  # Should have a hash
+            assert len(result.metadata["record"]["record_hash"]) == 64  # SHA256 length
+
+            # Verify the hash matches the record's computed hash
+            assert result.metadata["record"]["record_hash"] == record.record_hash
+
+            # Also verify other metadata is still there (wasn't overwritten)
+            assert result.metadata["model"] == "gpt-4"
+            assert result.metadata["finish_reason"] == "stop"
+            assert "template" in result.metadata
+
+    @pytest.mark.anyio
     async def test_undefined_string_literal_vs_truly_undefined(self):
         """Test that passing literal 'undefined' string is different from truly undefined var.
 

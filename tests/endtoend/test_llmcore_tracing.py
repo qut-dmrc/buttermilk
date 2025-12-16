@@ -520,6 +520,32 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
     )
     logger.info(f"✅ record_id validated: {record_in_trace['record_id']}")
 
+    # Validate record_hash exists in metadata and matches recomputed hash
+    assert "record" in metadata, (
+        f"Metadata should contain 'record' with record_hash. Got keys: {metadata.keys()}"
+    )
+    record_metadata = metadata["record"]
+    if isinstance(record_metadata, str):
+        record_metadata = json.loads(record_metadata)
+
+    assert "record_hash" in record_metadata, (
+        f"Record metadata should contain 'record_hash'. Got: {record_metadata.keys()}"
+    )
+    logged_record_hash = record_metadata["record_hash"]
+    assert logged_record_hash is not None, "record_hash should not be None"
+    assert len(logged_record_hash) == 64, (
+        f"record_hash should be 64-char SHA256, got {len(logged_record_hash)} chars: {logged_record_hash}"
+    )
+
+    # Recompute record hash and verify it matches
+    expected_record_hash = compute_record_hash(sample_record.as_markdown())
+    assert logged_record_hash == expected_record_hash, (
+        f"Logged record_hash should match recomputed hash.\n"
+        f"Logged:   {logged_record_hash}\n"
+        f"Expected: {expected_record_hash}"
+    )
+    logger.info(f"✅ record_hash validated: {logged_record_hash[:16]}...")
+
     # 3. Validate config hash can be computed from parameters
     # The parameters field contains the LLMCore config that should be hashable
     config_hash = hash_dict(parameters)

@@ -27,6 +27,9 @@ from pydantic import (
 
 from .log import logger
 
+# Keys to exclude from markdown (derived values that shouldn't affect content hash)
+HASH_METADATA_KEYS = {"record_hash", "ground_truth_hash"}
+
 
 class BaseRecord(BaseModel):
     """Base class for all records in pipelines and storage.
@@ -160,7 +163,8 @@ class BaseRecord(BaseModel):
 
         if self.metadata:
             for key, value in self.metadata.items():
-                parts.append(f"**{key}**: {value!s}")
+                if key not in HASH_METADATA_KEYS:
+                    parts.append(f"**{key}**: {value!s}")
 
         # Handle content based on its type
         if self.content and isinstance(self.content, str):
@@ -223,7 +227,7 @@ class BaseRecord(BaseModel):
         """Computes SHA256 hash of the record's as_markdown() output.
 
         This enables detection of record changes by comparing hash values.
-        The hash is automatically accessible via metadata['record_hash'].
+        This property is pure and does not modify the record.
 
         Returns:
             str: SHA256 hexdigest of the record's markdown representation.
@@ -232,8 +236,6 @@ class BaseRecord(BaseModel):
 
         markdown_content = self.as_markdown()
         hash_value = compute_record_hash(markdown_content)
-        # Store in metadata for easy access
-        self.metadata["record_hash"] = hash_value
         return hash_value
 
     @computed_field
@@ -346,7 +348,7 @@ class Record(BaseRecord):
         """Computes SHA256 hash of the ground_truth values if they exist.
 
         This enables detection of ground truth changes by comparing hash values.
-        The hash is automatically accessible via metadata['ground_truth_hash'].
+        This property is pure and does not modify the record.
 
         Returns:
             str | None: SHA256 hexdigest of ground_truth data, or None if no ground_truth.
@@ -354,8 +356,6 @@ class Record(BaseRecord):
         from buttermilk._core.hashing import compute_ground_truth_hash
 
         hash_value = compute_ground_truth_hash(self.ground_truth)
-        # Store in metadata for easy access
-        self.metadata["ground_truth_hash"] = hash_value
         return hash_value
 
     def model_dump(self, **kwargs) -> dict[str, Any]:
@@ -403,7 +403,7 @@ class Record(BaseRecord):
                     "fetch_timestamp_utc",
                     "fetch_source_id",
                     "components",
-                ]:  # Exclude some common internal/structural keys
+                ] and key not in HASH_METADATA_KEYS:  # Exclude internal/structural and hash keys
                     parts.append(f"**{key}**: {value!s}")
             if parts:  # Add a separator only if metadata was added
                 parts.append("---")  # Separator after metadata block
