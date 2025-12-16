@@ -1566,8 +1566,9 @@ class FlowRunner(BaseModel):
             # Save configuration snapshot for reproducibility
             self._save_config_snapshot(run_request)
 
-        # Set the callback_to_ui for the run_request, which will be used by the orchestrator
-        run_request.callback_to_ui = _session.send_message_to_ui
+        # Set the callback_to_ui for the run_request if not already set
+        if run_request.callback_to_ui is None:
+            run_request.callback_to_ui = _session.send_message_to_ui
         logger.debug(
             "[FlowRunner.run_flow] Callback configured for session",
             session_id=_session.session_id,
