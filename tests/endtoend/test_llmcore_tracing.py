@@ -240,7 +240,6 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
         inputs = json.loads(inputs)
 
     assert "record" in inputs, "Inputs should contain record"
-    assert "prompt" in inputs, "Inputs should contain prompt"
 
     # Validate record structure - ensure record_id, dataset_name, split_type are preserved
     record_in_inputs = inputs["record"]
@@ -251,6 +250,15 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
     assert isinstance(record_in_inputs, dict), (
         f"Record should be a dict, got {type(record_in_inputs).__name__}"
     )
+
+    # Validate prompt exists in template_vars (prompt is passed as kwarg, not as record field)
+    template_vars = inputs.get("template_vars", {})
+    if isinstance(template_vars, str):
+        template_vars = json.loads(template_vars)
+    assert "prompt" in template_vars, (
+        f"template_vars should contain prompt field. template_vars keys: {template_vars.keys()}"
+    )
+
     assert "record_id" in record_in_inputs, "Record should have record_id field"
     assert record_in_inputs["record_id"] is not None, (
         "Record record_id should not be None"
