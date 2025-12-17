@@ -189,15 +189,20 @@ class LLMCore(ProcessorCore):
                 # Build template_vars: if kwargs provided, merge with record fields
                 # Otherwise let process_with_llm derive from record
                 # Exclude computed hashes to prevent duplication in trace
-                template_vars = (
-                    {**(record.model_dump(exclude={'record_hash', 'ground_truth_hash'}) if record and hasattr(record, "model_dump") else {}), **kwargs} if kwargs else None
-                )
+                template_vars_derived_from_record = False
+                if kwargs:
+                    # Merge record fields with kwargs to create template_vars
+                    template_vars = {**(record.model_dump(exclude={'record_hash', 'ground_truth_hash'}) if record and hasattr(record, "model_dump") else {}), **kwargs}
+                    template_vars_derived_from_record = bool(record)
+                else:
+                    template_vars = None
 
                 result = await self.process_with_llm(
                     template_vars=template_vars,
                     record=record,
                     parent_trace_id=parent_trace_id,
                     cancellation_token=cancellation_token,
+                    _template_vars_derived_from_record=template_vars_derived_from_record,
                 )
                 # Create ExecutionTrace for observability
                 duration_ms = (time.time() - start_time) * 1000
@@ -215,8 +220,11 @@ class LLMCore(ProcessorCore):
                 trace_parameters = {**self.parameters, **model_configs}
 
                 # Emit success trace using inherited helper
+                # Avoid record duplication: if template_vars was derived from record,
+                # don't pass record separately (it's already in inputs.template_vars)
+                template_vars_from_record = result.metadata.get("_template_vars_from_record", False)
                 await self._emit_success_trace(
-                    record=record,
+                    record=None if template_vars_from_record else record,
                     outputs=result.content,
                     processor_stage=processor_stage,
                     parent_trace_id=parent_trace_id,
@@ -254,13 +262,16 @@ class LLMCore(ProcessorCore):
                     error_model_configs = error_llm_config.configs.copy() if error_llm_config.configs else {}
 
                 # Emit error trace using inherited helper
+                # Avoid record duplication: if template_vars was derived from record,
+                # don't pass record separately (it's already in inputs.template_vars)
+                template_vars_from_record = result.metadata.get("_template_vars_from_record", False)
                 await self._emit_error_trace(
-                    record=record,
+                    record=None if template_vars_from_record else record,
                     error=e,
                     processor_stage=processor_stage,
                     parent_trace_id=parent_trace_id,
                     duration_ms=duration_ms,
-                    inputs=kwargs if kwargs else None,
+                    inputs=result.resolved_inputs if result.resolved_inputs else kwargs,
                     execution_type="llm_processing",
                     parameters={**self.parameters, **error_model_configs},
                     component_name=component_name,
@@ -284,6 +295,7 @@ class LLMCore(ProcessorCore):
         context: Optional[list[LLMMessage]] = None,
         parent_trace_id: Optional[str] = None,
         cancellation_token: Optional[CancellationToken] = None,
+        _template_vars_derived_from_record: bool = False,
     ) -> LLMResult:
         """Process through template rendering and LLM calling.
 
@@ -334,6 +346,7 @@ class LLMCore(ProcessorCore):
                 # Exclude computed hashes to prevent duplication in trace
                 if template_vars is None:
                     template_vars = record.model_dump(exclude={'record_hash', 'ground_truth_hash'}) if record else {}
+                    _template_vars_derived_from_record = bool(record)
 
                 # Ensure context is always a list
                 if context is None:
@@ -342,13 +355,17 @@ class LLMCore(ProcessorCore):
                     context = [context]
 
                 # Store resolved inputs for traceability
-                # Include full record context but exclude computed hashes to prevent duplication
-                # The canonical record_hash location is metadata.record.record_hash
+                # Avoid duplication: if template_vars was derived from record, don't store record again
                 result.resolved_inputs = {
                     "template_vars": template_vars,
-                    "record": record.model_dump(exclude={'record_hash', 'ground_truth_hash'}) if record else None,
+                    "record": None if _template_vars_derived_from_record else (
+                        record.model_dump(exclude={'record_hash', 'ground_truth_hash'}) if record else None
+                    ),
                     "context": context,
                 }
+
+                # Store this for later use in trace emission
+                result.metadata["_template_vars_from_record"] = _template_vars_derived_from_record
 
                 # Fill template
                 llm_messages = await self._fill_template(

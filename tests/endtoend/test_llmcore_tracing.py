@@ -996,3 +996,133 @@ async def test_template_hash_stored_in_single_location(real_bm, sample_record: B
     )
 
     logger.info(f"✅ template_hash appears in exactly ONE location: {all_template_hash_paths[0]}")
+
+
+@pytest.mark.endtoend
+@pytest.mark.anyio
+async def test_no_duplicate_record_in_resolved_inputs(real_bm, sample_record: BaseRecord, real_model_name_expensive: str, llm_wrapper_type):
+    """Test that record data is NOT duplicated in both inputs.record and inputs.template_vars.
+
+    When template_vars=None is passed to LLMCore, it derives template_vars from record.
+    This test verifies that the resolved_inputs does NOT duplicate record data between:
+    - inputs.template_vars (containing record fields)
+    - inputs.record (also containing full record data)
+
+    Expected failure: Currently both contain the full record data (duplication exists).
+
+    Acceptance criterion: If template_vars contains record fields (text, dataset_name, etc.),
+    then inputs.record should NOT contain the same full content.
+    """
+    # Skip structured output test for models that don't support it
+    if real_model_name_expensive in MODELS_WITHOUT_STRUCTURED_OUTPUT:
+        pytest.skip(f"{real_model_name_expensive} doesn't reliably support structured JSON output")
+
+    # Step 1: Create LLMCore with template_vars=None (will be derived from record)
+    llm_core = LLMCore(
+        model=real_model_name_expensive,
+        template="ra",  # Simple research assistant template
+        output_model=CapitalCityResponse,
+        fail_on_unfilled_parameters=False,
+    )
+
+    # Process the request WITHOUT passing template_vars explicitly
+    # This forces LLMCore to derive template_vars from record
+    processor_stage = f"test_no_duplicate_record_{real_model_name_expensive}"
+    test_start_time = datetime.datetime.now(datetime.timezone.utc)
+
+    logger.info("Processing LLMCore request with template_vars=None (derived from record)...")
+    results = []
+    async for result in llm_core.process(
+        record=sample_record,
+        processor_stage=processor_stage,
+        component_name="test_no_duplicate_record",
+        prompt="What is the capital of France?",
+        # Note: NOT passing template_vars - it will be derived from record
+    ):
+        results.append(result)
+
+    assert len(results) == 1, "Expected exactly one result from process()"
+    result = results[0]
+
+    # Step 2: Force trace flush to BigQuery
+    trace_writer = get_trace_writer()
+    assert trace_writer is not None, "TraceWriter should be initialized"
+
+    await asyncio.sleep(1)
+    logger.info("Flushing traces to BigQuery...")
+    await trace_writer.flush()
+    await asyncio.sleep(2)
+
+    # Step 3: Query BigQuery for the trace
+    query = f"""
+        SELECT
+            call_id,
+            agent_info,
+            inputs,
+            outputs,
+            metadata,
+            parameters,
+            timestamp
+        FROM `{real_bm.bq.project}.testing.traces`
+        WHERE timestamp >= TIMESTAMP('{test_start_time.isoformat()}')
+            AND JSON_VALUE(agent_info, '$.component_name') = 'test_no_duplicate_record'
+            AND JSON_VALUE(agent_info, '$.processor_stage') = '{processor_stage}'
+        ORDER BY timestamp DESC
+        LIMIT 1
+    """
+
+    logger.debug(f"Querying BigQuery for uploaded trace:\n{query}")
+    df = real_bm.run_query(query)
+
+    assert df.shape[0] > 0, (
+        f"Expected at least one trace in BigQuery. Query returned {df.shape[0]} rows."
+    )
+
+    trace = df.iloc[0]
+    logger.info(f"Retrieved trace call_id: {trace.call_id}")
+
+    # Step 4: Parse the trace inputs
+    inputs = trace.inputs
+    if isinstance(inputs, str):
+        inputs = json.loads(inputs)
+
+    # Step 5: Check for duplication
+    template_vars = inputs.get("template_vars", {})
+    record_in_inputs = inputs.get("record")
+
+    if isinstance(template_vars, str):
+        template_vars = json.loads(template_vars)
+    if isinstance(record_in_inputs, str):
+        record_in_inputs = json.loads(record_in_inputs)
+
+    logger.info(f"template_vars keys: {template_vars.keys() if template_vars else 'None'}")
+    logger.info(f"record keys: {record_in_inputs.keys() if record_in_inputs else 'None'}")
+
+    # Check if template_vars contains record-like fields
+    record_fields = {"text", "dataset_name", "split_type", "metadata", "record_id"}
+    tv_has_record_data = bool(record_fields & set(template_vars.keys() if template_vars else []))
+
+    if tv_has_record_data:
+        logger.info("✓ template_vars contains record fields (expected when derived from record)")
+
+        # CRITICAL: If template_vars has record data, inputs.record should NOT duplicate it
+        if record_in_inputs and "text" in record_in_inputs:
+            # Check if the text content is duplicated
+            tv_text = template_vars.get("text", "")
+            record_text = record_in_inputs.get("text", "")
+
+            # This should FAIL - proving duplication exists
+            assert tv_text != record_text or record_text == "", (
+                f"Record content duplicated: 'text' appears in both template_vars and inputs.record.\n"
+                f"template_vars.text: {tv_text[:100]}...\n"
+                f"inputs.record.text: {record_text[:100]}...\n"
+                f"When template_vars is derived from record, inputs.record should NOT contain duplicate data."
+            )
+
+            logger.info(f"✗ DUPLICATION DETECTED: text exists in both locations")
+            logger.info(f"  template_vars.text length: {len(tv_text)}")
+            logger.info(f"  inputs.record.text length: {len(record_text)}")
+        else:
+            logger.info("✓ No duplication - inputs.record does not contain text field")
+    else:
+        logger.info("✓ template_vars does not contain record fields (no duplication possible)")
