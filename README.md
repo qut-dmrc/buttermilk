@@ -42,7 +42,7 @@ Buttermilk provides several components and features to facilitate HASS research:
 - Standard cloud logging, flexible data storage options, secure credential management (e.g., Azure KeyVault, Google Secrets), built-in database storage (e.g., BigQuery), and tracing capabilities (e.g., Promptflow, Langchain).
 - An API and CLI for integrating components and orchestrating complex workflows.
 - Support for running code locally, on remote GPUs, or in cloud compute environments (Azure/Google Compute, with AWS Lambda planned).
-- A distributed queue system (e.g., pub/sub) for managing batch runs.
+- Batch processing capabilities for managing large-scale data processing tasks.
 
 ## Contributing
 
@@ -87,9 +87,7 @@ bm run.mode=console llms=debug      # Fast, cheap models for testing
 bm run.mode=console llms=full       # Production-quality models
 
 # Batch processing
-bm run.mode=batch run.flow=trans run.limit=100        # Create batch jobs
-bm run.mode=batch_run run.limit=5                     # Process queued jobs
-bm run.mode=batch_all run.flow=trans run.limit=100   # Create and process
+bm run.mode=batch run.flow=trans run.limit=100        # Process in batch mode
 
 # Start API server
 bm run.mode=api
@@ -98,7 +96,7 @@ bm run.mode=api
 bm run.mode=pipeline run.limit=100
 ```
 
-Available modes: `console`, `batch`, `batch_run`, `batch_all`, `api`, `pipeline`, `streamlit`, `slackbot`
+Available modes: `console`, `batch`, `api`, `pipeline`, `streamlit`, `slackbot`
 
 Available LLM configurations: `debug`, `lite`, `full`, `expensive` (see `conf/llms/` for details)
 
