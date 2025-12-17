@@ -998,6 +998,41 @@ async def test_template_hash_stored_in_single_location(real_bm, sample_record: B
     logger.info(f"✅ template_hash appears in exactly ONE location: {all_template_hash_paths[0]}")
 
 
+@pytest.mark.anyio
+async def test_warning_raised_on_record_mismatch(real_bm, caplog):
+    """Test that a warning is raised when record data mismatches template_vars.
+
+    This validates issue #305 acceptance criterion:
+    If inputs.record is filled AND inputs.template_vars.record != inputs.record,
+    raise a warning about data inconsistency.
+    """
+    import logging
+
+    # Create record with one text
+    record = BaseRecord(text="Content A", dataset_name="test", record_id="test-1")
+
+    # Create template_vars with DIFFERENT text
+    template_vars = {"text": "Content B"}
+
+    llm_core = LLMCore(model="gemini-flash-lite", template="ra", fail_on_unfilled_parameters=False)
+
+    with caplog.at_level(logging.WARNING):
+        results = []
+        async for result in llm_core.process(
+            record=record,
+            template_vars=template_vars,  # Different from record!
+            processor_stage="test_mismatch_warning",
+            component_name="test_mismatch",
+        ):
+            results.append(result)
+
+    # Should have logged a warning about mismatch
+    warning_messages = [r.message for r in caplog.records if r.levelno >= logging.WARNING]
+    assert any("mismatch" in msg.lower() for msg in warning_messages), (
+        f"Expected warning about record mismatch, got: {warning_messages}"
+    )
+
+
 @pytest.mark.endtoend
 @pytest.mark.anyio
 async def test_no_duplicate_record_in_resolved_inputs(real_bm, sample_record: BaseRecord, real_model_name_expensive: str, llm_wrapper_type):

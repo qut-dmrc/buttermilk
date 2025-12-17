@@ -354,6 +354,19 @@ class LLMCore(ProcessorCore):
                 elif not isinstance(context, list):
                     context = [context]
 
+                # Detect potential record mismatch
+                # Check if template_vars was passed as a kwarg (nested dict case from process() method)
+                if template_vars is not None and record is not None:
+                    # If template_vars dict contains a 'template_vars' key, user passed it through process()
+                    actual_template_vars = template_vars.get("template_vars", template_vars)
+                    tv_text = actual_template_vars.get("text") if isinstance(actual_template_vars, dict) else None
+                    record_text = getattr(record, "text", None)
+                    if tv_text and record_text and tv_text != record_text:
+                        logger.warning(
+                            f"Record mismatch detected: template_vars.text differs from record.text. "
+                            f"This may indicate data integrity issues."
+                        )
+
                 # Store resolved inputs for traceability
                 # Avoid duplication: if template_vars was derived from record, don't store record again
                 result.resolved_inputs = {
