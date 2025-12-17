@@ -7,9 +7,7 @@ defined in YAML files and overridden via command-line arguments.
 Based on the configuration, this script can:
 - Run a Buttermilk flow directly in the console for interactive use (`console` mode).
 - Start a FastAPI web server to expose Buttermilk flows via an HTTP API (`api` mode).
-- Create batch jobs by adding multiple `RunRequest` instances to a queue (`batch` mode).
-- Process jobs from a queue in a worker-like fashion (`batch_run` mode).
-- Combined batch operations: enqueue and/or process jobs (`batch_all` mode).
+- Process records through a flow using pipeline (`batch` mode).
 - Launch a Streamlit web application for a graphical user interface (`streamlit` mode).
 - Start a Google Cloud Pub/Sub listener for message-driven flow execution (`pub/sub` mode,
   potentially delegating to `batch_cli.main`).
@@ -55,7 +53,7 @@ def _validate_flow_config(conf: DictConfig, mode: str) -> None:
     )
 
     # Modes that require a flow to be specified
-    flow_required_modes = {"console", "batch", "batch_all", "batch_simple"}
+    flow_required_modes = {"console", "batch"}
 
     if mode_str in flow_required_modes:
         if not hasattr(conf.run, "flow") or not conf.run.flow:
@@ -112,20 +110,17 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
 
     Hydra Configuration Overrides:
         You can override any configuration parameter using Hydra's dot notation:
-        - run.mode=<mode>        : Set operational mode (console, batch, batch_run, batch_all, batch_simple, api, pipeline, streamlit, slackbot)
+        - run.mode=<mode>        : Set operational mode (console, batch, api, pipeline, streamlit, slackbot)
         - run.flow=<flow_name>   : Specify which flow to run (required for most modes)
         - run.limit=<number>     : Limit number of records/jobs to process
         - run.record_id=<id>     : Run on a specific record (console mode)
-        - run.concurrency=<n>    : Number of concurrent records (batch_simple, pipeline modes)
+        - run.concurrency=<n>    : Number of concurrent records (batch, pipeline modes)
         - llms=<config>          : Override LLM configuration
         - storage=<config>       : Override storage configuration
 
     Available Modes:
         - console      : Run a single flow interactively in the terminal
-        - batch        : Create batch jobs and add them to a Pub/Sub queue
-        - batch_run    : Process jobs from the Pub/Sub queue (worker mode)
-        - batch_all    : Create and process batch jobs via Pub/Sub in one command
-        - batch_simple : Process records through a flow using pipeline (no Pub/Sub, recommended)
+        - batch        : Process records through a flow using pipeline (recommended)
         - api          : Start FastAPI server for HTTP API access
         - pipeline     : Run data processing pipeline
         - streamlit    : Launch Streamlit web interface
@@ -192,97 +187,6 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
                 logger.info(f"✓ Flow '{run_request.flow}' completed successfully")
             except Exception as e:
                 logger.error(f"✗ Flow '{run_request.flow}' failed: {e}")
-                raise
-
-        case "batch":
-            # Batch mode: Create batch jobs and enqueue them
-            flow_name = conf.run.flow
-            limit = conf.run.limit
-            logger.info(f"Batch mode: Creating jobs for flow '{flow_name}'")
-            if limit:
-                logger.info(f"Processing limit: {limit} records")
-
-            async def run_with_shutdown() -> None:
-                # Get storage config from run section
-                storage_config = conf.run.storage_config or None
-
-                await flow_runner.create_batch(
-                    flow_name=flow_name,
-                    storage_config=storage_config,
-                    max_records=limit,
-                )
-                await bm.graceful_shutdown()
-
-            try:
-                asyncio.run(run_with_shutdown())
-                logger.info(f"✓ Batch jobs created successfully for flow '{flow_name}'")
-            except Exception as e:
-                logger.error(f"✗ Batch job creation failed: {e}")
-                raise
-
-        case "batch_run":
-            # Batch run mode: Process jobs from the queue (worker mode)
-            # Each job gets a completely fresh orchestrator instance to ensure
-            # no state is shared between jobs, preventing cross-contamination
-            # This is critical for research integrity where old state might affect results
-            limit = conf.run.limit or 5  # Get limit from config or default to 5
-            ui = CLIUserAgent()
-
-            logger.info("Batch run mode: Processing jobs from queue")
-            logger.info(f"Maximum jobs to process: {limit}")
-
-            async def run_with_shutdown() -> None:
-                summary = await flow_runner.run_batch_job(
-                    max_jobs=limit,
-                    callback_to_ui=ui.make_callback(),
-                    wait_for_completion=True,
-                )
-                logger.info("\n" + summary.format_for_console())
-                await bm.graceful_shutdown()
-
-            try:
-                asyncio.run(run_with_shutdown())
-                logger.info("✓ Batch processing completed")
-            except Exception as e:
-                logger.error(f"✗ Batch processing failed: {e}")
-                raise
-
-        case "batch_all":
-            # Batch all mode: Create and process jobs in one command
-            flow_name = conf.run.flow
-            limit = conf.run.limit or 999
-            logger.info(
-                f"Batch all mode: Create and process jobs for flow '{flow_name}'"
-            )
-
-            async def run_with_shutdown() -> None:
-                # Enqueue phase
-                logger.info("Phase 1: Enqueueing batch jobs...")
-                storage_config = conf.run.storage_config or None
-                await flow_runner.create_batch(
-                    flow_name=flow_name,
-                    storage_config=storage_config,
-                    max_records=limit,
-                )
-                logger.info("✓ Batch jobs enqueued successfully")
-
-                # Process phase
-                ui = CLIUserAgent()
-                logger.info(f"Phase 2: Processing batch jobs (limit: {limit})...")
-                summary = await flow_runner.run_batch_job(
-                    max_jobs=limit,
-                    callback_to_ui=ui.make_callback(),
-                    wait_for_completion=True,
-                )
-                logger.info("\n" + summary.format_for_console())
-
-                await bm.graceful_shutdown()
-
-            try:
-                asyncio.run(run_with_shutdown())
-                logger.info("✓ Batch all mode completed successfully")
-            except Exception as e:
-                logger.error(f"✗ Batch all mode failed: {e}")
                 raise
 
         case "streamlit":
@@ -363,7 +267,7 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
             # This mode was previously delegated to batch_cli, which has been removed.
             # Pub/Sub integration should be implemented using the JobQueueClient with Pub/Sub backend.
             logger.error(
-                "Pub/Sub mode is not yet implemented. Use 'batch_run' mode with a Pub/Sub job queue backend instead."
+                "Pub/Sub mode is not yet implemented."
             )
             raise NotImplementedError(
                 "Pub/Sub mode requires implementation. See GitHub issues for status."
@@ -508,21 +412,21 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
             except Exception as e:
                 logger.error(f"✗ Pipeline failed: {e}")
                 raise
-        case "batch_simple":
-            # Simple batch mode: Pipeline-based processing without Pub/Sub
+        case "batch":
+            # Batch mode: Pipeline-based processing without Pub/Sub
             # Uses OrchestratorProcessor to wrap flows as pipeline processors
             flow_name = conf.run.flow
             limit = conf.run.limit
             concurrency = getattr(conf.run, "concurrency", 1) or 1
 
             logger.info(
-                f"Batch simple mode: Processing flow '{flow_name}' via pipeline"
+                f"Batch mode: Processing flow '{flow_name}' via pipeline"
             )
             if limit:
                 logger.info(f"Processing limit: {limit} records")
             logger.info(f"Concurrency: {concurrency}")
 
-            async def run_batch_simple() -> None:
+            async def run_batch() -> None:
                 from buttermilk.pipeline import PipelineOrchestrator
                 from buttermilk.processors.orchestrator_processor import (
                     OrchestratorProcessor,
@@ -575,10 +479,10 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
                 await bm.graceful_shutdown()
 
             try:
-                asyncio.run(run_batch_simple())
-                logger.info(f"✓ Batch simple mode completed for flow '{flow_name}'")
+                asyncio.run(run_batch())
+                logger.info(f"✓ Batch mode completed for flow '{flow_name}'")
             except Exception as e:
-                logger.error(f"✗ Batch simple mode failed: {e}")
+                logger.error(f"✗ Batch mode failed: {e}")
                 raise
 
         case _:
@@ -586,9 +490,6 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
             valid_modes = [
                 "console",
                 "batch",
-                "batch_run",
-                "batch_all",
-                "batch_simple",
                 "api",
                 "pipeline",
                 "streamlit",
