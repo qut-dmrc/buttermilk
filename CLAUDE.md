@@ -4,6 +4,7 @@
 
 ## Project-Specific Notes
 
+- **NO MOCKS, NO FAKES** - Never use `@patch` or `Mock()` in this project. Tests use real APIs and real data. If you can't test something with real calls, don't write the test.
 - so the point of an end2end test using our live config is that you should be able to safely load real data into our real stores. In this example, you shouldn't be mocking anything -- the pipeline endtoend test should query the real zotero api and update the real chromadb library and do everything in between properly.
 - no single use tests. that one should be saved for future investigations. make a new test dir called tests/investigations/ and put it in there.
 - when debugging, remember not just to prove the fail case -- you also need to prove a success case before you can reliably identify the failure
