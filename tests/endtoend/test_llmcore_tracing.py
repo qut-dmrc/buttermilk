@@ -11,6 +11,7 @@ This test validates the complete tracing pipeline:
 import asyncio
 import datetime
 import json
+import re
 from typing import Any
 
 import pytest
@@ -381,6 +382,29 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
         "Messages should contain the LLM's response mentioning Paris"
     )
 
+    # VERIFY: Template variables are filled - first message should have substantial content
+    # The "ra" template system prompt is typically 200+ characters when filled
+    first_content = parsed_messages[0].get("content", "")
+    assert len(first_content) > 100, (
+        f"First message (system prompt) content too short ({len(first_content)} chars). "
+        f"Template variables may not be filled properly. "
+        f"Content preview: {first_content[:200]}..."
+    )
+
+    # VERIFY: No unfilled Jinja2 template variables in any message
+    # Unfilled variables look like: {{variable_name}} or {{ variable_name }}
+    unfilled_pattern = re.compile(r"\{\{\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\}\}")
+
+    for i, msg in enumerate(parsed_messages):
+        msg_content = msg.get("content", "")
+        unfilled_vars = unfilled_pattern.findall(msg_content)
+        assert not unfilled_vars, (
+            f"Unfilled template variables found in message[{i}]: {unfilled_vars}. "
+            f"Content preview: {msg_content[:300]}..."
+        )
+
+    logger.info(f"✅ Template variables validated: no unfilled variables, system prompt {len(first_content)} chars")
+
     # Validate message ordering: template system prompt in messages[0], user content in messages[1]
     # The "ra" template has system prompt: "You are a careful research assistant..."
     assert len(parsed_messages) >= 3, f"Expected at least 3 messages (system + user + answer), got {len(parsed_messages)}"
@@ -466,6 +490,62 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
             logger.info(f"✅ Config 'api_version' logged correctly: {parameters['api_version']}")
 
     logger.info(f"✅ Parameters field validated: {list(parameters.keys())}")
+
+    # ==========================================================================
+    # RECORD FIELD VALIDATION: Verify trace.record is filled from BigQuery
+    # ==========================================================================
+
+    # Query for record field from BigQuery
+    query_with_record = f"""
+        SELECT
+            call_id,
+            record
+        FROM `{real_bm.bq.project}.testing.traces`
+        WHERE call_id = '{trace.call_id}'
+        LIMIT 1
+    """
+    df_record = real_bm.run_query(query_with_record)
+
+    assert df_record.shape[0] == 1, "Should retrieve the trace with record field"
+    trace_record = df_record.iloc[0].record
+
+    # FAIL-FAST: Record field must exist and contain essential data
+    assert trace_record is not None, (
+        "trace.record field should not be None - record context must be preserved"
+    )
+
+    # Parse if JSON string
+    if isinstance(trace_record, str):
+        trace_record = json.loads(trace_record)
+
+    assert isinstance(trace_record, dict), (
+        f"trace.record should be a dict, got {type(trace_record).__name__}"
+    )
+
+    # Validate essential record fields are present
+    assert "record_id" in trace_record, (
+        f"trace.record should contain 'record_id'. Got keys: {trace_record.keys()}"
+    )
+    assert trace_record["record_id"] is not None, "trace.record.record_id should not be None"
+    assert len(trace_record["record_id"]) > 0, "trace.record.record_id should not be empty"
+
+    # Validate record matches the input sample_record
+    assert trace_record["record_id"] == sample_record.record_id, (
+        f"trace.record.record_id should match input record.\n"
+        f"Trace: {trace_record['record_id']}\n"
+        f"Expected: {sample_record.record_id}"
+    )
+
+    # Validate dataset context is preserved
+    if "dataset_name" in trace_record:
+        assert trace_record["dataset_name"] == sample_record.dataset_name, (
+            f"trace.record.dataset_name should match input record"
+        )
+
+    logger.info(
+        f"✅ trace.record validated: record_id={trace_record['record_id']}, "
+        f"keys={list(trace_record.keys())}"
+    )
 
     # ==========================================================================
     # HASH VALIDATION: Verify hashes exist and match recomputed values
