@@ -66,30 +66,6 @@ class LoggingServiceConfig(BaseModel):
     verbose: bool = Field(default=False, description="Enable verbose logging")
 
 
-class PubSubServiceConfig(BaseModel):
-    """Configuration for pub/sub messaging service."""
-
-    # Base GCP fields needed by consumers
-    project_id: Optional[str] = Field(
-        default=None, description="GCP Project ID for Pub/Sub resources"
-    )
-    location: Optional[str] = Field(
-        default=None, description="GCP location/region for Pub/Sub resources"
-    )
-
-    # Service-specific fields
-    jobs_topic: str = Field(default="jobs", description="Topic name for job messages")
-    jobs_subscription: str = Field(
-        default="jobs-sub", description="Subscription name for job messages"
-    )
-    status_topic: str = Field(
-        default="flow", description="Topic name for status messages"
-    )
-    status_subscription: str = Field(
-        default="flow-sub", description="Subscription name for status messages"
-    )
-
-
 class TracingServiceConfig(BaseModel):
     """Configuration for OpenTelemetry tracing service."""
 
@@ -133,9 +109,6 @@ class GCPConfig(CloudProviderConfig):
     logging: Optional[LoggingServiceConfig] = Field(
         default=None, description="Cloud logging configuration"
     )
-    pubsub: Optional[PubSubServiceConfig] = Field(
-        default=None, description="Pub/Sub messaging configuration"
-    )
     tracing: Optional[TracingServiceConfig] = Field(
         default=None, description="OpenTelemetry tracing configuration"
     )
@@ -154,13 +127,6 @@ class GCPConfig(CloudProviderConfig):
 
         if not self.location:
             self.location = self.region
-
-        # Populate nested service configs with parent project_id and location
-        if self.pubsub:
-            if not self.pubsub.project_id:
-                self.pubsub.project_id = self.project_id
-            if not self.pubsub.location:
-                self.pubsub.location = self.location
 
         return self
 
@@ -181,10 +147,6 @@ class GCPConfig(CloudProviderConfig):
             "storage": {
                 **base_config,
                 "default_bucket": self.storage_bucket,
-            },
-            "pubsub": {
-                **base_config,
-                **(self.pubsub.model_dump() if self.pubsub else {}),
             },
             "logging": {
                 **base_config,
@@ -217,7 +179,6 @@ class GCPConfig(CloudProviderConfig):
         service_map = {
             "secrets": self.secrets,
             "logging": self.logging,
-            "pubsub": self.pubsub,
             "tracing": self.tracing,
             "vertex": self.vertex,
         }

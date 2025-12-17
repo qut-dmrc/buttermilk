@@ -295,15 +295,6 @@ class MessageService:
                         inputs=data,
                     )
                     return run_request
-                case "pull_task":
-                    from buttermilk.api.job_queue import JobQueueClient
-
-                    task, ack_id = await JobQueueClient().pull_single_task()
-                    return task
-                case "pull_tox":
-                    from buttermilk.api.job_queue import JobQueueClient
-
-                    return await JobQueueClient().pull_tox_example()
                 case "system_prompt":
                     return SystemPromptMessage(**data)
                 case "user_response":

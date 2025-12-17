@@ -782,26 +782,6 @@ class BM(BaseModel):
         """Provides access to the GenAI client."""
         return self.cloud_manager.genai
 
-    @property
-    def pubsub(self) -> Any:
-        """Provides access to complete Pub/Sub configuration including project_id."""
-        if self._cloud_manager is None:
-            raise RuntimeError(
-                "CloudManager not available. Ensure infrastructure is properly injected."
-            )
-
-        gcp_config = self._cloud_manager.gcp_cloud_cfg
-        if not gcp_config:
-            raise RuntimeError("No GCP cloud configuration found for Pub/Sub access.")
-
-        if not gcp_config.pubsub:
-            raise RuntimeError(
-                "No Pub/Sub configuration found in GCP cloud config. Ensure pubsub is configured in your cloud configuration."
-            )
-
-        # Return the actual PubSubServiceConfig object
-        return gcp_config.pubsub
-
     async def get_weave_client(self) -> None:
         """Legacy method - weave has been removed.
 
