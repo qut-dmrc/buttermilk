@@ -238,55 +238,46 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
     # Validate inputs contain our test data
     inputs = trace.inputs
     if isinstance(inputs, str):
-
         inputs = json.loads(inputs)
 
-    assert "record" in inputs, "Inputs should contain record"
-
-    # Validate record structure - ensure record_id, dataset_name, split_type are preserved
-    record_in_inputs = inputs["record"]
-    if isinstance(record_in_inputs, str):
-
-        record_in_inputs = json.loads(record_in_inputs)
-
-    assert isinstance(record_in_inputs, dict), (
-        f"Record should be a dict, got {type(record_in_inputs).__name__}"
-    )
-
-    # Validate prompt exists in template_vars (prompt is passed as kwarg, not as record field)
+    # Validate template_vars contains the prompt and record data
     template_vars = inputs.get("template_vars", {})
     if isinstance(template_vars, str):
         template_vars = json.loads(template_vars)
+
     assert "prompt" in template_vars, (
         f"template_vars should contain prompt field. template_vars keys: {template_vars.keys()}"
     )
 
-    assert "record_id" in record_in_inputs, "Record should have record_id field"
-    assert record_in_inputs["record_id"] is not None, (
-        "Record record_id should not be None"
+    # Record data is now stored in template_vars (flattened from record)
+    # Essential fields: record_id, dataset_name, split_type
+    assert "record_id" in template_vars, (
+        f"template_vars should have record_id field. Keys: {template_vars.keys()}"
     )
-    assert len(record_in_inputs["record_id"]) > 0, (
-        "Record record_id should not be empty"
+    assert template_vars["record_id"] is not None, (
+        "template_vars.record_id should not be None"
+    )
+    assert len(template_vars["record_id"]) > 0, (
+        "template_vars.record_id should not be empty"
     )
 
-    # Note: clean_empty_values drops None fields, so these should be present with actual values
-    assert "dataset_name" in record_in_inputs, (
-        f"Record should have dataset_name field. Record keys: {record_in_inputs.keys()}"
+    assert "dataset_name" in template_vars, (
+        f"template_vars should have dataset_name field. Keys: {template_vars.keys()}"
     )
-    assert "split_type" in record_in_inputs, (
-        f"Record should have split_type field. Record keys: {record_in_inputs.keys()}"
+    assert "split_type" in template_vars, (
+        f"template_vars should have split_type field. Keys: {template_vars.keys()}"
     )
-    assert record_in_inputs["dataset_name"] == "test_llmcore", (
-        "Record should preserve dataset_name value"
+    assert template_vars["dataset_name"] == "test_llmcore", (
+        "template_vars should preserve dataset_name value"
     )
-    assert record_in_inputs["split_type"] == "test", (
-        "Record should preserve split_type value"
+    assert template_vars["split_type"] == "test", (
+        "template_vars should preserve split_type value"
     )
 
     logger.info(
-        f"✅ Record structure validated: record_id={record_in_inputs['record_id']}, "
-        f"dataset_name={record_in_inputs['dataset_name']}, "
-        f"split_type={record_in_inputs['split_type']}"
+        f"✅ Record structure validated: record_id={template_vars['record_id']}, "
+        f"dataset_name={template_vars['dataset_name']}, "
+        f"split_type={template_vars['split_type']}"
     )
 
     # Validate outputs contain structured response with Paris
@@ -509,9 +500,12 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
     assert df_record.shape[0] == 1, "Should retrieve the trace with record field"
     trace_record = df_record.iloc[0].record
 
-    # FAIL-FAST: Record field must exist and contain essential data
+    # FAIL-FAST: trace.record MUST be populated with record context
+    # Record data should be in the dedicated record field, not just buried in template_vars
     assert trace_record is not None, (
-        "trace.record field should not be None - record context must be preserved"
+        "trace.record field should not be None - record context must be preserved. "
+        f"LLMCore must populate ExecutionTrace.record when processing a record. "
+        f"Record was passed (record_id={sample_record.record_id}) but trace.record is None."
     )
 
     # Parse if JSON string
@@ -582,24 +576,22 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
     )
     logger.info(f"✅ template_hash validated: {logged_template_hash[:16]}...")
 
-    # 2. Validate record exists in inputs and has record_id for hash verification
-    # The record_hash is computed from record.as_markdown()
-    record_in_trace = inputs.get("record")
-    assert record_in_trace is not None, "Inputs should contain record"
+    # 2. Validate record exists in template_vars and has record_id for hash verification
+    # Record data is flattened into template_vars
+    template_vars_for_hash = inputs.get("template_vars", {})
+    if isinstance(template_vars_for_hash, str):
+        template_vars_for_hash = json.loads(template_vars_for_hash)
 
-    if isinstance(record_in_trace, str):
-        record_in_trace = json.loads(record_in_trace)
-
-    assert "record_id" in record_in_trace, (
-        f"Record in trace should have record_id. Got keys: {record_in_trace.keys()}"
+    assert "record_id" in template_vars_for_hash, (
+        f"template_vars in trace should have record_id. Got keys: {template_vars_for_hash.keys()}"
     )
     # Verify the record_id matches our sample_record
-    assert record_in_trace["record_id"] == sample_record.record_id, (
+    assert template_vars_for_hash["record_id"] == sample_record.record_id, (
         f"Record ID in trace should match input record.\n"
-        f"Trace:    {record_in_trace['record_id']}\n"
+        f"Trace:    {template_vars_for_hash['record_id']}\n"
         f"Expected: {sample_record.record_id}"
     )
-    logger.info(f"✅ record_id validated: {record_in_trace['record_id']}")
+    logger.info(f"✅ record_id validated: {template_vars_for_hash['record_id']}")
 
     # Validate record_hash exists in metadata and matches recomputed hash
     assert "record" in metadata, (
@@ -645,6 +637,157 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
     logger.info("✅ ExecutionTrace uploaded to BigQuery")
     logger.info("✅ Trace structure validated")
     logger.info(f"Trace ID: {trace.call_id}")
+    logger.info("=" * 80)
+
+
+# =============================================================================
+# CRITERIA VARIANTS TEST - Verify template filling with multiple criteria
+# =============================================================================
+
+# Two distinct criteria for testing - each has unique identifying content
+CRITERIA_VARIANTS = [
+    ("cte", "National Center for Transgender Equality"),  # criteria name, identifying text
+    ("tja", "Trans Journalists Association"),
+]
+
+
+@pytest.mark.anyio
+@pytest.mark.endtoend
+async def test_template_filling_with_criteria_variants(real_bm, sample_record: BaseRecord):
+    """Test that template variables are correctly filled for each criteria variant.
+
+    This test validates:
+    1. Two different criteria (cte, tja) are correctly included in templates
+    2. Each criteria variant produces messages with the correct criteria content
+    3. No unfilled {{criteria}} template variables remain
+    4. Both traces are uploaded to BigQuery with correct template content
+
+    Bug being tested: Templates not filled properly when using variants.
+    """
+    # Use a cheap model for this test
+    model = "gemini-flash"
+    test_start_time = datetime.datetime.now(datetime.timezone.utc)
+    traces_by_criteria = {}
+
+    for criteria_name, identifying_text in CRITERIA_VARIANTS:
+        logger.info(f"Testing criteria variant: {criteria_name}")
+
+        # Create LLMCore with judge template that includes criteria
+        llm_core = LLMCore(
+            model=model,
+            template="judge",  # Template that uses {{ render_or_include(criteria) }}
+            fail_on_unfilled_parameters=True,  # FAIL if criteria not filled
+        )
+
+        # Process with the specific criteria
+        processor_stage = f"test_criteria_variant_{criteria_name}"
+
+        results = []
+        async for result in llm_core.process(
+            record=sample_record,
+            processor_stage=processor_stage,
+            component_name="test_criteria_variants",
+            criteria=criteria_name,  # Pass criteria as template variable
+        ):
+            results.append(result)
+
+        assert len(results) == 1, f"Expected one result for criteria {criteria_name}"
+        traces_by_criteria[criteria_name] = (processor_stage, identifying_text)
+
+    # Flush traces to BigQuery
+    logger.info("Flushing traces to BigQuery...")
+    await asyncio.sleep(1)  # Allow buffer to fill
+    trace_writer = get_trace_writer()
+    await trace_writer.flush()
+
+    # Wait for BigQuery to process
+    await asyncio.sleep(2)
+
+    # Query BigQuery for both traces and validate
+    for criteria_name, (processor_stage, identifying_text) in traces_by_criteria.items():
+        query = f"""
+            SELECT
+                call_id,
+                messages,
+                inputs
+            FROM `{real_bm.bq.project}.testing.traces`
+            WHERE timestamp >= TIMESTAMP('{test_start_time.isoformat()}')
+                AND JSON_VALUE(agent_info, '$.component_name') = 'test_criteria_variants'
+                AND JSON_VALUE(agent_info, '$.processor_stage') = '{processor_stage}'
+            ORDER BY timestamp DESC
+            LIMIT 1
+        """
+
+        logger.debug(f"Querying BigQuery for {criteria_name} trace...")
+        df = real_bm.run_query(query)
+
+        assert df.shape[0] == 1, (
+            f"Expected exactly one trace for criteria {criteria_name}. "
+            f"Got {df.shape[0]} rows."
+        )
+
+        trace_row = df.iloc[0]
+
+        # Parse messages
+        messages_raw = trace_row.messages
+        if isinstance(messages_raw, str):
+            messages = json.loads(messages_raw)
+        else:
+            messages = messages_raw
+
+        assert messages is not None, f"Messages should not be None for {criteria_name}"
+        assert len(messages) > 0, f"Should have at least one message for {criteria_name}"
+
+        # Combine all message content
+        all_content = ""
+        for msg in messages:
+            if isinstance(msg, str):
+                msg = json.loads(msg)
+            content = msg.get("content", "")
+            all_content += content + "\n"
+
+        # CRITICAL: Verify the correct criteria was included in the template
+        assert identifying_text in all_content, (
+            f"Criteria '{criteria_name}' not properly filled in template!\n"
+            f"Expected to find: '{identifying_text}'\n"
+            f"Content preview (first 1000 chars):\n{all_content[:1000]}..."
+        )
+
+        # CRITICAL: Verify no unfilled template variables
+        unfilled_pattern = re.compile(r"\{\{\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\}\}")
+        unfilled_vars = unfilled_pattern.findall(all_content)
+        assert not unfilled_vars, (
+            f"Unfilled template variables found for criteria {criteria_name}: {unfilled_vars}\n"
+            f"Content preview: {all_content[:500]}..."
+        )
+
+        # Verify criteria is in template_vars in inputs
+        inputs = trace_row.inputs
+        if isinstance(inputs, str):
+            inputs = json.loads(inputs)
+
+        template_vars = inputs.get("template_vars", {})
+        if isinstance(template_vars, str):
+            template_vars = json.loads(template_vars)
+
+        assert "criteria" in template_vars, (
+            f"template_vars should contain 'criteria' for {criteria_name}. "
+            f"Got keys: {template_vars.keys()}"
+        )
+        assert template_vars["criteria"] == criteria_name, (
+            f"template_vars.criteria should be '{criteria_name}', "
+            f"got '{template_vars.get('criteria')}'"
+        )
+
+        logger.info(f"✅ Criteria '{criteria_name}' correctly filled in template")
+        logger.info(f"   - Identifying text found: '{identifying_text[:50]}...'")
+        logger.info(f"   - No unfilled variables")
+        logger.info(f"   - template_vars.criteria = '{criteria_name}'")
+
+    logger.info("=" * 80)
+    logger.info("✅ CRITERIA VARIANTS TEST PASSED")
+    logger.info(f"✅ Tested {len(CRITERIA_VARIANTS)} criteria variants")
+    logger.info("✅ All templates correctly filled with criteria content")
     logger.info("=" * 80)
 
 
