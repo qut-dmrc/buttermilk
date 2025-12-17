@@ -188,8 +188,9 @@ class LLMCore(ProcessorCore):
             try:
                 # Build template_vars: if kwargs provided, merge with record fields
                 # Otherwise let process_with_llm derive from record
+                # Exclude computed hashes to prevent duplication in trace
                 template_vars = (
-                    {**(record.model_dump() if record and hasattr(record, "model_dump") else {}), **kwargs} if kwargs else None
+                    {**(record.model_dump(exclude={'record_hash', 'ground_truth_hash'}) if record and hasattr(record, "model_dump") else {}), **kwargs} if kwargs else None
                 )
 
                 result = await self.process_with_llm(
@@ -330,8 +331,9 @@ class LLMCore(ProcessorCore):
             try:
                 # === NORMALIZE INPUTS ===
                 # If template_vars not provided, derive from record
+                # Exclude computed hashes to prevent duplication in trace
                 if template_vars is None:
-                    template_vars = record.model_dump() if record else {}
+                    template_vars = record.model_dump(exclude={'record_hash', 'ground_truth_hash'}) if record else {}
 
                 # Ensure context is always a list
                 if context is None:
@@ -340,9 +342,11 @@ class LLMCore(ProcessorCore):
                     context = [context]
 
                 # Store resolved inputs for traceability
+                # Include full record context but exclude computed hashes to prevent duplication
+                # The canonical record_hash location is metadata.record.record_hash
                 result.resolved_inputs = {
                     "template_vars": template_vars,
-                    "record": record,
+                    "record": record.model_dump(exclude={'record_hash', 'ground_truth_hash'}) if record else None,
                     "context": context,
                 }
 
