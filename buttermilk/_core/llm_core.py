@@ -220,11 +220,10 @@ class LLMCore(ProcessorCore):
                 trace_parameters = {**self.parameters, **model_configs}
 
                 # Emit success trace using inherited helper
-                # Avoid record duplication: if template_vars was derived from record,
-                # don't pass record separately (it's already in inputs.template_vars)
-                template_vars_from_record = result.metadata.get("_template_vars_from_record", False)
+                # Always pass record for traceability - record field serves different purpose
+                # than template_vars (full context vs resolved variables)
                 await self._emit_success_trace(
-                    record=None if template_vars_from_record else record,
+                    record=record,
                     outputs=result.content,
                     processor_stage=processor_stage,
                     parent_trace_id=parent_trace_id,
@@ -262,11 +261,10 @@ class LLMCore(ProcessorCore):
                     error_model_configs = error_llm_config.configs.copy() if error_llm_config.configs else {}
 
                 # Emit error trace using inherited helper
-                # Avoid record duplication: if template_vars was derived from record,
-                # don't pass record separately (it's already in inputs.template_vars)
-                template_vars_from_record = result.metadata.get("_template_vars_from_record", False)
+                # Always pass record for traceability - record field serves different purpose
+                # than template_vars (full context vs resolved variables)
                 await self._emit_error_trace(
-                    record=None if template_vars_from_record else record,
+                    record=record,
                     error=e,
                     processor_stage=processor_stage,
                     parent_trace_id=parent_trace_id,
