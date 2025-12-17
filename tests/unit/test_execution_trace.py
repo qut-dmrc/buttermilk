@@ -695,3 +695,292 @@ class TestExecutionTraceJsonSerialization:
         assert json_parsed["agent_info"] == dict_dump["agent_info"]
         assert json_parsed["inputs"] == dict_dump["inputs"]
         assert json_parsed["outputs"] == dict_dump["outputs"]
+
+
+class TestExecutionTraceWithHashes:
+    """Test suite for ExecutionTrace serialization with computed hash fields.
+
+    These tests target potential infinite loops when serializing ExecutionTrace
+    objects that contain BaseRecord or Record instances with computed hash fields
+    (record_hash, ground_truth_hash).
+
+    Background:
+    - record_hash is a @computed_field on BaseRecord that calls as_markdown() then SHA256
+    - ground_truth_hash is a @computed_field on Record that hashes the ground_truth dict
+    - as_markdown() excludes HASH_METADATA_KEYS to avoid recursion
+    - Infinite loops could occur if hash computation triggers serialization loops
+    """
+
+    def test_execution_trace_with_base_record_serialization(self, real_bm):
+        """Test ExecutionTrace with BaseRecord in record field serializes without loops.
+
+        Creates an ExecutionTrace with a BaseRecord (which has record_hash computed field)
+        and verifies model_dump() completes without infinite loops.
+        Uses 5-second timeout to detect infinite loops.
+        """
+        import signal
+
+        from buttermilk._core.types import BaseRecord
+
+        def timeout_handler(signum, frame):
+            raise TimeoutError("model_dump() timed out - likely infinite loop")
+
+        # Create BaseRecord with record_hash computed field
+        base_record = BaseRecord(
+            record_id="test_record_001",
+            dataset_name="test_dataset",
+            split_type="train",
+        )
+
+        # Verify record_hash is computed
+        assert hasattr(base_record, "record_hash")
+        hash_value = base_record.record_hash
+        assert hash_value is not None
+        assert len(hash_value) == 64  # SHA256 hex digest
+
+        # Create trace with this record
+        trace = ExecutionTrace(
+            agent_info={"component_name": "HashTestComponent"},
+            record=base_record,
+            outputs="test output",
+        )
+
+        # Set 5-second timeout to detect infinite loops
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(5)
+
+        try:
+            # This should complete without infinite loop
+            dumped = trace.model_dump()
+
+            # Cancel alarm
+            signal.alarm(0)
+
+            # Verify serialization succeeded
+            assert "record" in dumped
+            assert dumped["agent_info"]["component_name"] == "HashTestComponent"
+
+        except TimeoutError:
+            signal.alarm(0)
+            pytest.fail(
+                "model_dump() infinite looped when serializing ExecutionTrace with BaseRecord"
+            )
+
+    def test_execution_trace_with_record_and_ground_truth_hash(self, real_bm):
+        """Test ExecutionTrace with Record containing ground_truth serializes correctly.
+
+        Creates a Record with ground_truth (which triggers ground_truth_hash computation)
+        inside an ExecutionTrace, and verifies both record_hash and ground_truth_hash
+        don't cause infinite loops during serialization.
+
+        Note: Record's model_config excludes computed fields (record_hash, ground_truth_hash)
+        from model_dump() output. This test verifies that accessing these computed fields
+        and then serializing doesn't cause infinite loops.
+        """
+        import signal
+
+        from buttermilk._core.types import Record
+
+        def timeout_handler(signum, frame):
+            raise TimeoutError("model_dump() timed out - likely infinite loop")
+
+        # Create Record with ground_truth
+        record = Record(
+            record_id="test_record_002",
+            dataset_name="test_dataset",
+            split_type="validation",
+            ground_truth={"label": "positive", "score": 0.95},
+        )
+
+        # Verify both computed hashes work
+        assert hasattr(record, "record_hash")
+        assert hasattr(record, "ground_truth_hash")
+        record_hash = record.record_hash
+        gt_hash = record.ground_truth_hash
+        assert record_hash is not None
+        assert gt_hash is not None
+
+        # Create trace with this record
+        trace = ExecutionTrace(
+            agent_info={"component_name": "GroundTruthHashTest"},
+            record=record,
+            inputs={"query": "test query"},
+            outputs="prediction result",
+        )
+
+        # Set 5-second timeout
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(5)
+
+        try:
+            # Should not infinite loop
+            dumped = trace.model_dump()
+
+            # Cancel alarm
+            signal.alarm(0)
+
+            # Verify serialization succeeded
+            assert "record" in dumped
+            assert dumped["record"]["record_id"] == "test_record_002"
+            # Note: ground_truth_hash and record_hash are excluded from model_dump
+            # but ground_truth itself should be present
+            # Check if ground_truth is in dumped record (it may be excluded too based on config)
+            if "ground_truth" in dumped["record"]:
+                assert dumped["record"]["ground_truth"]["label"] == "positive"
+
+        except TimeoutError:
+            signal.alarm(0)
+            pytest.fail(
+                "model_dump() infinite looped when serializing ExecutionTrace "
+                "with Record containing ground_truth_hash"
+            )
+
+    def test_record_hash_is_idempotent(self, real_bm):
+        """Test that record_hash computation is idempotent (same value on multiple calls).
+
+        Verifies that calling record.record_hash multiple times returns the same value
+        and doesn't mutate state in a way that could cause serialization loops.
+        """
+        from buttermilk._core.types import BaseRecord
+
+        record = BaseRecord(
+            record_id="idempotent_test",
+            dataset_name="test_dataset",
+            split_type="test",
+        )
+
+        # Compute hash multiple times
+        hash1 = record.record_hash
+        hash2 = record.record_hash
+        hash3 = record.record_hash
+
+        # All should be identical
+        assert hash1 == hash2 == hash3
+        assert len(hash1) == 64  # SHA256 hex
+
+        # Verify hash computation doesn't break serialization
+        # BaseRecord includes computed fields by default
+        dumped = record.model_dump()
+        # Check if record_hash is included (it should be for BaseRecord)
+        if "record_hash" in dumped:
+            assert dumped["record_hash"] == hash1
+
+    def test_execution_trace_model_dump_json_with_record(self, real_bm):
+        """Test JSON serialization of ExecutionTrace containing record with hashes.
+
+        Verifies that model_dump_json() (not just model_dump()) works correctly
+        when the trace contains a record with computed hash fields.
+
+        Note: Record's model_config excludes computed fields (record_hash, ground_truth_hash)
+        from serialization. This test verifies that accessing these fields before serialization
+        doesn't cause infinite loops in JSON serialization.
+        """
+        import json
+        import signal
+
+        from buttermilk._core.types import Record
+
+        def timeout_handler(signum, frame):
+            raise TimeoutError("model_dump_json() timed out - likely infinite loop")
+
+        # Create record with ground_truth
+        record = Record(
+            record_id="json_test_record",
+            dataset_name="test_dataset",
+            split_type="train",
+            ground_truth={"category": "A", "confidence": 0.88},
+        )
+
+        # Access the computed hash fields to trigger their computation
+        _ = record.record_hash
+        _ = record.ground_truth_hash
+
+        # Create trace
+        trace = ExecutionTrace(
+            agent_info={"component_name": "JsonHashTest"},
+            record=record,
+            outputs="classification result",
+        )
+
+        # Set timeout
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(5)
+
+        try:
+            # JSON serialization should work
+            json_str = trace.model_dump_json()
+
+            # Cancel alarm
+            signal.alarm(0)
+
+            # Verify valid JSON
+            parsed = json.loads(json_str)
+            assert "record" in parsed
+            assert parsed["record"]["record_id"] == "json_test_record"
+            # Computed fields are excluded from serialization by Record's model_config
+            # The important thing is that serialization completes without infinite loop
+
+        except TimeoutError:
+            signal.alarm(0)
+            pytest.fail(
+                "model_dump_json() infinite looped when serializing ExecutionTrace with Record"
+            )
+
+    def test_execution_trace_resolved_inputs_with_record(self, real_bm):
+        """Test trace where inputs contains a record (as would happen from LLMCore).
+
+        This simulates the scenario where LLMCore creates a trace and includes
+        a Record object in the inputs dict. Verifies no infinite loop occurs
+        when both trace.record and trace.inputs contain record-like data.
+        """
+        import signal
+
+        from buttermilk._core.types import Record
+
+        def timeout_handler(signum, frame):
+            raise TimeoutError("model_dump() timed out - likely infinite loop")
+
+        # Create a record
+        record = Record(
+            record_id="input_record_test",
+            dataset_name="test_dataset",
+            split_type="validation",
+            ground_truth={"answer": "yes"},
+        )
+
+        # Create trace where BOTH record field and inputs contain record data
+        # (This mimics LLMCore behavior where record might be in multiple places)
+        trace = ExecutionTrace(
+            agent_info={"component_name": "LLMCoreSimulation"},
+            record=record,  # Record in dedicated field
+            inputs={
+                "prompt": "test prompt",
+                "context_record": record,  # Record also in inputs
+            },
+            outputs="llm response",
+        )
+
+        # Set timeout
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(5)
+
+        try:
+            # Should not infinite loop even with record in multiple places
+            dumped = trace.model_dump()
+
+            # Cancel alarm
+            signal.alarm(0)
+
+            # Verify both records are present in serialized output
+            assert "record" in dumped
+            assert dumped["record"]["record_id"] == "input_record_test"
+            assert "inputs" in dumped
+            assert "context_record" in dumped["inputs"]
+            assert dumped["inputs"]["context_record"]["record_id"] == "input_record_test"
+
+        except TimeoutError:
+            signal.alarm(0)
+            pytest.fail(
+                "model_dump() infinite looped when ExecutionTrace has record "
+                "in both record field and inputs dict"
+            )
