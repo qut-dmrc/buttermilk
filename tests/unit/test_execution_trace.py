@@ -231,3 +231,467 @@ class TestTraceWriter:
 
             # After initialization, uploader should be None
             assert writer.uploader is None
+
+
+class TestExecutionTraceSerialization:
+    """Test suite for ExecutionTrace serialization edge cases."""
+
+    def test_model_dump_with_nested_execution_trace(self, real_bm):
+        """Test that model_dump() handles nested ExecutionTrace in outputs field.
+
+        Verifies that when an ExecutionTrace contains another ExecutionTrace
+        in its outputs field, model_dump() serializes it correctly without
+        infinite loops.
+        """
+        # Create inner trace
+        inner_trace = ExecutionTrace(
+            agent_info={"component_name": "InnerComponent"},
+            inputs={"inner_input": "value"},
+            outputs="inner result",
+        )
+
+        # Create outer trace with inner trace in outputs
+        outer_trace = ExecutionTrace(
+            agent_info={"component_name": "OuterComponent"},
+            inputs={"outer_input": "value"},
+            outputs=inner_trace,
+        )
+
+        # Should not infinite loop
+        dumped = outer_trace.model_dump()
+
+        # Verify structure
+        assert dumped["agent_info"]["component_name"] == "OuterComponent"
+        assert dumped["inputs"]["outer_input"] == "value"
+        assert isinstance(dumped["outputs"], dict)
+        assert dumped["outputs"]["agent_info"]["component_name"] == "InnerComponent"
+        assert dumped["outputs"]["outputs"] == "inner result"
+
+    def test_model_dump_with_circular_reference_in_outputs(self, real_bm):
+        """Test behavior when outputs contains a dict with circular reference.
+
+        Uses a 5-second timeout to detect infinite loops. Should either handle
+        gracefully or raise a clear error, NOT infinite loop.
+        """
+        import signal
+
+        def timeout_handler(signum, frame):
+            raise TimeoutError("model_dump() timed out - likely infinite loop")
+
+        # Create a circular reference
+        circular_dict = {"key": "value"}
+        circular_dict["self"] = circular_dict
+
+        trace = ExecutionTrace(
+            agent_info={"component_name": "CircularComponent"},
+            outputs=circular_dict,
+        )
+
+        # Set 5-second timeout
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(5)
+
+        try:
+            # This should either:
+            # 1. Complete successfully (handle circular refs gracefully)
+            # 2. Raise a clear error (ValueError, RecursionError, etc.)
+            # 3. NOT timeout (would indicate infinite loop)
+            dumped = trace.model_dump()
+
+            # If we get here, it handled the circular reference
+            # Cancel the alarm
+            signal.alarm(0)
+
+            # Verify at minimum the top-level fields are present
+            assert "agent_info" in dumped
+            assert dumped["agent_info"]["component_name"] == "CircularComponent"
+
+        except (ValueError, RecursionError, TypeError) as e:
+            # Cancel the alarm
+            signal.alarm(0)
+            # These are acceptable - model_dump raised a clear error
+            # instead of infinite looping
+            assert True, f"model_dump raised expected error: {type(e).__name__}"
+
+        except TimeoutError:
+            # This is a FAILURE - indicates infinite loop
+            signal.alarm(0)
+            pytest.fail("model_dump() infinite looped on circular reference")
+
+    def test_model_dump_deeply_nested_structure(self, real_bm):
+        """Test serialization with 100-level deeply nested dicts.
+
+        Ensures no stack overflow with deeply nested structures.
+        """
+        # Create 100-level deep nested dict
+        deep_dict = {"level": 0, "value": "innermost"}
+        for i in range(1, 100):
+            deep_dict = {"level": i, "nested": deep_dict}
+
+        trace = ExecutionTrace(
+            agent_info={"component_name": "DeepComponent"},
+            outputs=deep_dict,
+        )
+
+        # Should not cause stack overflow
+        dumped = trace.model_dump()
+
+        # Verify serialization succeeded
+        assert "outputs" in dumped
+        assert dumped["outputs"]["level"] == 99
+
+        # Verify deep nesting is preserved
+        current = dumped["outputs"]
+        for expected_level in range(99, -1, -1):
+            assert current["level"] == expected_level
+            if expected_level > 0:
+                current = current["nested"]
+            else:
+                assert current["value"] == "innermost"
+
+    def test_model_dump_json_with_execution_trace_list_in_outputs(self, real_bm):
+        """Test JSON serialization when outputs contains a list of ExecutionTrace objects.
+
+        Verifies that model_dump_json() properly handles lists of nested traces.
+        """
+        import json
+
+        # Create multiple inner traces
+        trace1 = ExecutionTrace(
+            agent_info={"component_name": "Trace1"},
+            outputs="result 1",
+        )
+        trace2 = ExecutionTrace(
+            agent_info={"component_name": "Trace2"},
+            outputs="result 2",
+        )
+
+        # Create outer trace with list of traces in outputs
+        outer_trace = ExecutionTrace(
+            agent_info={"component_name": "ListContainer"},
+            outputs=[trace1, trace2],
+        )
+
+        # Test model_dump with list of traces
+        dumped = outer_trace.model_dump()
+        assert isinstance(dumped["outputs"], list)
+        assert len(dumped["outputs"]) == 2
+        assert dumped["outputs"][0]["agent_info"]["component_name"] == "Trace1"
+        assert dumped["outputs"][1]["agent_info"]["component_name"] == "Trace2"
+
+        # Test JSON serialization
+        json_str = outer_trace.model_dump_json()
+        parsed = json.loads(json_str)
+
+        assert isinstance(parsed["outputs"], list)
+        assert len(parsed["outputs"]) == 2
+        assert parsed["outputs"][0]["agent_info"]["component_name"] == "Trace1"
+        assert parsed["outputs"][1]["agent_info"]["component_name"] == "Trace2"
+
+    def test_model_dump_includes_computed_fields(self, real_bm):
+        """Verify computed fields (is_error, object_type) are included in model_dump.
+
+        Pydantic computed fields are included in serialization by default unless
+        explicitly excluded. This test verifies that behavior.
+        """
+        # Create trace with error
+        trace_with_error = ExecutionTrace(
+            agent_info={"component_name": "ErrorComponent"},
+            error={"event": "test error", "details": {}},
+            outputs="some output",
+        )
+
+        # Verify computed fields work as expected
+        assert trace_with_error.is_error is True
+        assert trace_with_error.object_type == "str"
+
+        # Dump and verify computed fields are included
+        dumped = trace_with_error.model_dump()
+
+        # Computed fields SHOULD be in the dumped dict (Pydantic default behavior)
+        assert "is_error" in dumped
+        assert dumped["is_error"] is True
+        assert "object_type" in dumped
+        assert dumped["object_type"] == "str"
+
+        # Regular fields should be present
+        assert "error" in dumped
+        assert "outputs" in dumped
+        assert dumped["error"]["event"] == "test error"
+
+        # Test excluding computed fields explicitly
+        dumped_no_computed = trace_with_error.model_dump(exclude={"is_error", "object_type"})
+        assert "is_error" not in dumped_no_computed
+        assert "object_type" not in dumped_no_computed
+
+
+class TestExecutionTraceHashability:
+    """Test suite for ExecutionTrace hashability behavior.
+
+    ExecutionTrace is a Pydantic BaseModel without frozen=True, which means
+    it's unhashable by default in Pydantic v2. These tests document the
+    actual behavior and potential issues when trying to use ExecutionTrace
+    in sets or as dict keys.
+    """
+
+    def test_execution_trace_in_set_behavior(self, real_bm):
+        """Test that ExecutionTrace cannot be used in a set.
+
+        Since ExecutionTrace doesn't define __hash__, Pydantic models are
+        not hashable by default (unless frozen=True). This should raise TypeError.
+        """
+        trace1 = ExecutionTrace(
+            agent_info={"component_name": "TestComponent1"},
+            inputs={"test": "input1"},
+        )
+        trace2 = ExecutionTrace(
+            agent_info={"component_name": "TestComponent2"},
+            inputs={"test": "input2"},
+        )
+
+        # Attempting to create a set with ExecutionTrace should raise TypeError
+        with pytest.raises(TypeError, match="unhashable type"):
+            {trace1, trace2}
+
+    def test_execution_trace_as_dict_key_behavior(self, real_bm):
+        """Test that ExecutionTrace cannot be used as a dictionary key.
+
+        Should raise TypeError since it's unhashable.
+        """
+        trace = ExecutionTrace(
+            agent_info={"component_name": "TestComponent"},
+            inputs={"test": "input"},
+        )
+
+        # Attempting to use ExecutionTrace as dict key should raise TypeError
+        with pytest.raises(TypeError, match="unhashable type"):
+            {trace: "some_value"}
+
+    def test_execution_trace_equality(self, real_bm):
+        """Test that two ExecutionTrace objects with identical fields are NOT equal by default.
+
+        Pydantic uses identity (id()) by default for models without frozen=True.
+        Each instance is unique even if fields are identical.
+
+        Note: This could be problematic if we need to compare traces for deduplication.
+        If equality checking is needed, consider adding frozen=True to the model
+        or implementing custom __eq__ and __hash__ methods.
+        """
+        # Create two traces with identical data
+        trace1 = ExecutionTrace(
+            agent_info={"component_name": "TestComponent"},
+            inputs={"test": "input"},
+            outputs="output",
+        )
+        trace2 = ExecutionTrace(
+            agent_info={"component_name": "TestComponent"},
+            inputs={"test": "input"},
+            outputs="output",
+        )
+
+        # By default, Pydantic models ARE equal if their fields match
+        # (this changed in Pydantic v2)
+        # Let's verify the actual behavior
+        assert trace1 != trace2, (
+            "ExecutionTrace instances with identical fields should be unequal "
+            "due to different call_id and timestamp (auto-generated fields)"
+        )
+
+        # The reason they're unequal is because of auto-generated fields
+        assert trace1.call_id != trace2.call_id
+        assert trace1.timestamp != trace2.timestamp
+
+    def test_execution_trace_identity_hash(self, real_bm):
+        """Test workaround for using ExecutionTrace in collections.
+
+        If we need to use ExecutionTrace in sets or as dict keys, we can use:
+        1. id() of the object (Python identity)
+        2. call_id (unique identifier field)
+        3. Convert to tuple/dict for hashing
+
+        This test documents the recommended approaches.
+        """
+        trace1 = ExecutionTrace(
+            agent_info={"component_name": "TestComponent1"},
+            inputs={"test": "input1"},
+        )
+        trace2 = ExecutionTrace(
+            agent_info={"component_name": "TestComponent2"},
+            inputs={"test": "input2"},
+        )
+
+        # Workaround 1: Use id() for identity-based collections
+        trace_set = {id(trace1), id(trace2)}
+        assert len(trace_set) == 2
+
+        # Workaround 2: Use call_id (recommended for deduplication)
+        call_id_set = {trace1.call_id, trace2.call_id}
+        assert len(call_id_set) == 2
+
+        # Workaround 3: Use call_id as dict key (recommended)
+        trace_dict = {
+            trace1.call_id: trace1,
+            trace2.call_id: trace2,
+        }
+        assert len(trace_dict) == 2
+        assert trace_dict[trace1.call_id] is trace1
+        assert trace_dict[trace2.call_id] is trace2
+
+
+class TestExecutionTraceJsonSerialization:
+    """Test suite for ExecutionTrace JSON serialization via model_dump_json()."""
+
+    def test_model_dump_json_succeeds(self, real_bm):
+        """Test that model_dump_json() works for standard ExecutionTrace.
+
+        Verifies JSON serialization with typical fields including agent_info,
+        inputs, outputs, and metadata.
+        """
+        import json
+
+        trace = ExecutionTrace(
+            agent_info={
+                "component_name": "TestComponent",
+                "execution_type": "processor",
+                "config": {"model": "gpt-4"},
+            },
+            inputs={"input_key": "input_value"},
+            outputs="test output result",
+            metadata={
+                "token_usage": {"prompt_tokens": 10, "completion_tokens": 20},
+                "template_name": "test_template",
+            },
+        )
+
+        # Should serialize to JSON string without error
+        json_str = trace.model_dump_json()
+
+        # Verify it's valid JSON
+        parsed = json.loads(json_str)
+
+        # Verify structure
+        assert parsed["agent_info"]["component_name"] == "TestComponent"
+        assert parsed["agent_info"]["execution_type"] == "processor"
+        assert parsed["inputs"]["input_key"] == "input_value"
+        assert parsed["outputs"] == "test output result"
+        assert parsed["metadata"]["token_usage"]["prompt_tokens"] == 10
+
+    def test_model_dump_json_with_datetime(self, real_bm):
+        """Test that datetime fields serialize correctly to ISO format.
+
+        ExecutionTrace has a timestamp field that should serialize to ISO 8601 format.
+        """
+        import json
+        from datetime import datetime
+
+        trace = ExecutionTrace(
+            agent_info={"component_name": "DateTimeTest"},
+            outputs="result",
+        )
+
+        # timestamp is auto-generated as datetime
+        assert isinstance(trace.timestamp, datetime)
+
+        # Serialize to JSON
+        json_str = trace.model_dump_json()
+        parsed = json.loads(json_str)
+
+        # Verify timestamp is ISO format string in JSON
+        assert isinstance(parsed["timestamp"], str)
+        # Should be able to parse back to datetime
+        parsed_dt = datetime.fromisoformat(parsed["timestamp"].replace("Z", "+00:00"))
+        assert isinstance(parsed_dt, datetime)
+
+    def test_model_dump_json_with_non_serializable_outputs(self, real_bm):
+        """Test model_dump_json() behavior with non-JSON-serializable objects.
+
+        When outputs contains objects like asyncio.Lock that cannot be serialized,
+        model_dump_json() should raise a clear error (NOT hang).
+        """
+        import asyncio
+
+        # Create trace with non-serializable object in outputs
+        trace = ExecutionTrace(
+            agent_info={"component_name": "NonSerializable"},
+            outputs=asyncio.Lock(),  # Cannot be JSON serialized
+        )
+
+        # Should raise TypeError or ValueError, NOT hang
+        with pytest.raises((TypeError, ValueError)) as exc_info:
+            trace.model_dump_json()
+
+        # Verify error message is clear
+        error_msg = str(exc_info.value).lower()
+        assert "json" in error_msg or "serializ" in error_msg or "not supported" in error_msg
+
+    def test_model_dump_json_with_session_info(self, real_bm):
+        """Test that session_info field serializes correctly.
+
+        The session_info field is populated by _get_session_info() and contains
+        session_id and other session metadata.
+        """
+        import json
+
+        trace = ExecutionTrace(
+            agent_info={"component_name": "SessionTest"},
+            outputs="result",
+        )
+
+        # session_info should be populated (it's a Pydantic SessionInfo model)
+        assert trace.session_info is not None
+        assert hasattr(trace.session_info, "session_id")
+        session_id = trace.session_info.session_id
+
+        # Serialize to JSON
+        json_str = trace.model_dump_json()
+        parsed = json.loads(json_str)
+
+        # Verify session_info is in JSON output
+        assert "session_info" in parsed
+        assert isinstance(parsed["session_info"], dict)
+        assert "session_id" in parsed["session_info"]
+        assert parsed["session_info"]["session_id"] == session_id
+
+    def test_model_dump_json_roundtrip(self, real_bm):
+        """Test that model_dump_json() output can be parsed as valid JSON.
+
+        Verifies that JSON serialization produces valid JSON and key fields
+        are preserved correctly.
+        """
+        import json
+
+        trace = ExecutionTrace(
+            agent_info={
+                "component_name": "RoundTripTest",
+                "execution_type": "agent",
+            },
+            inputs={"key": "value"},
+            outputs="output data",
+            metadata={"test": "metadata"},
+        )
+
+        # Serialize to JSON
+        json_str = trace.model_dump_json()
+
+        # Should be valid JSON
+        json_parsed = json.loads(json_str)
+        assert isinstance(json_parsed, dict)
+
+        # Verify core fields are preserved in JSON
+        assert json_parsed["agent_info"]["component_name"] == "RoundTripTest"
+        assert json_parsed["agent_info"]["execution_type"] == "agent"
+        assert json_parsed["inputs"]["key"] == "value"
+        assert json_parsed["outputs"] == "output data"
+        assert json_parsed["metadata"]["test"] == "metadata"
+
+        # Verify auto-generated fields are present
+        assert "call_id" in json_parsed
+        assert "timestamp" in json_parsed
+        assert "session_info" in json_parsed
+
+        # Verify JSON parsed data matches model_dump for specified fields
+        dict_dump = trace.model_dump()
+        assert json_parsed["call_id"] == dict_dump["call_id"]
+        assert json_parsed["agent_info"] == dict_dump["agent_info"]
+        assert json_parsed["inputs"] == dict_dump["inputs"]
+        assert json_parsed["outputs"] == dict_dump["outputs"]
