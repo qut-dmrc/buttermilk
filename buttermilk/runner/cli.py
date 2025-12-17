@@ -527,6 +527,7 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
                 from buttermilk.processors.orchestrator_processor import (
                     OrchestratorProcessor,
                 )
+                from buttermilk.utils.utils import expand_dict
 
                 # Get flow configuration
                 flow = flow_runner.flows[flow_name]
@@ -544,26 +545,32 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
 
                 source = bm.get_storage(storage_cfg)
 
-                # Create OrchestratorProcessor to wrap the flow
-                processor = OrchestratorProcessor(
-                    flow_config=flow,
-                    flow_name=flow_name,
-                    bm=bm,  # Pass session-scoped BM for observability
-                )
+                # Expand flow parameters into variants
+                param_variants = expand_dict(flow.parameters) if hasattr(flow, 'parameters') and flow.parameters else [{}]
 
-                # Create pipeline with the orchestrator processor
-                pipeline = PipelineOrchestrator(
-                    pipeline_name=f"batch_{flow_name}",
-                    source=source,
-                    processors=[processor],
-                    limit=limit,
-                    concurrency=concurrency,
-                    enable_record_cache=False,  # Explicit: no caching for orchestrators
-                )
+                # Create and run a pipeline for each parameter variant
+                for params in param_variants:
+                    # Create OrchestratorProcessor to wrap the flow
+                    processor = OrchestratorProcessor(
+                        flow_config=flow,
+                        flow_name=flow_name,
+                        bm=bm,  # Pass session-scoped BM for observability
+                        parameters=params,
+                    )
 
-                logger.info("Starting pipeline-based batch processing...")
-                async for _ in pipeline():
-                    pass  # Results handled by orchestrator callbacks
+                    # Create pipeline with the orchestrator processor
+                    pipeline = PipelineOrchestrator(
+                        pipeline_name=f"batch_{flow_name}",
+                        source=source,
+                        processors=[processor],
+                        limit=limit,
+                        concurrency=concurrency,
+                        enable_record_cache=False,  # Explicit: no caching for orchestrators
+                    )
+
+                    logger.info(f"Starting pipeline-based batch processing with parameters: {params}")
+                    async for _ in pipeline():
+                        pass  # Results handled by orchestrator callbacks
 
                 await bm.graceful_shutdown()
 
