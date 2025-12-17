@@ -325,3 +325,49 @@ class TestOrchestratorProcessor:
                 pass
 
             assert set_bm_called
+
+    @pytest.mark.anyio
+    async def test_passes_parameters_to_run_request(
+        self, mock_flow_config, sample_record
+    ):
+        """Test that OrchestratorProcessor passes parameters field to RunRequest.
+
+        Acceptance criterion: OrchestratorProcessor should accept a parameters
+        field and pass it to the RunRequest when process() is called.
+
+        Expected failure: ValidationError or AttributeError because parameters
+        field doesn't exist on OrchestratorProcessor yet.
+        """
+        captured_request = None
+
+        async def mock_run(request: RunRequest):
+            nonlocal captured_request
+            captured_request = request
+
+        def mock_create_orchestrator(flow_config, flow_name):
+            mock_orch = MagicMock()
+            mock_orch.run = mock_run
+            mock_orch.set_bm = MagicMock()
+            return mock_orch
+
+        with patch(
+            "buttermilk.processors.orchestrator_processor.OrchestratorFactory.create_orchestrator",
+            side_effect=mock_create_orchestrator,
+        ):
+            # Create processor with parameters field
+            test_parameters = {"max_retries": 3, "timeout": 30}
+            processor = OrchestratorProcessor(
+                flow_config=mock_flow_config,
+                flow_name="test_flow",
+                parameters=test_parameters,
+            )
+
+            async for _ in processor.process(
+                sample_record, processor_stage="test_stage"
+            ):
+                pass
+
+            # Verify RunRequest received the parameters
+            assert captured_request is not None
+            assert hasattr(captured_request, "parameters")
+            assert captured_request.parameters == test_parameters

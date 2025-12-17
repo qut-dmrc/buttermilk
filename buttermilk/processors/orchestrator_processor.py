@@ -72,6 +72,12 @@ class OrchestratorProcessor(BaseModel):
         description="Name of the flow to execute",
     )
 
+    # Optional: parameters to pass to orchestrator
+    parameters: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Parameters to pass to orchestrator RunRequest",
+    )
+
     # Optional: collect ExecutionTrace outputs from orchestrator
     collect_traces: bool = Field(
         default=True,
@@ -141,6 +147,7 @@ class OrchestratorProcessor(BaseModel):
                 "record_id": record_id,
                 "record": record.model_dump() if hasattr(record, "model_dump") else record,
             },
+            parameters=self.parameters,
             callback_to_ui=collect_callback if self.collect_traces else None,
         )
 
