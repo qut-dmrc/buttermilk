@@ -366,9 +366,18 @@ class LLMCore(ProcessorCore):
                         )
 
                 # Store resolved inputs for traceability
-                # Avoid duplication: if template_vars was derived from record, don't store record again
+                # Avoid duplication: if template_vars was derived from record, strip BULKY
+                # content fields but keep lightweight identifiers (record_id, dataset_name, etc.)
+                # Full record is in trace.record
+                if _template_vars_derived_from_record and record:
+                    # Only strip bulky content fields - keep identifiers for quick reference
+                    bulky_fields = {'text', 'content', 'metadata', 'images', 'attachments', 'embedding'}
+                    template_vars_for_trace = {k: v for k, v in template_vars.items() if k not in bulky_fields}
+                else:
+                    template_vars_for_trace = template_vars
+
                 result.resolved_inputs = {
-                    "template_vars": template_vars,
+                    "template_vars": template_vars_for_trace,
                     "record": None if _template_vars_derived_from_record else (
                         record.model_dump(exclude={'record_hash', 'ground_truth_hash'}) if record else None
                     ),
