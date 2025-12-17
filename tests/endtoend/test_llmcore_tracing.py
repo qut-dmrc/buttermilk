@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 
 from buttermilk import logger
 from buttermilk._core.contract import ExecutionTrace
-from buttermilk._core.hashing import compute_record_hash, compute_template_hash, hash_dict
+from buttermilk._core.hashing import compute_record_hash, hash_dict
 from buttermilk._core.llm_core import LLMCore
 from buttermilk._core.types import BaseRecord
 from buttermilk.utils.templating import load_template
@@ -850,3 +850,149 @@ async def test_record_hash_stored_in_single_location(real_bm, sample_record: Bas
     )
 
     logger.info(f"✅ record_hash appears in exactly ONE location: {all_record_hash_paths[0]}")
+
+
+@pytest.mark.anyio
+async def test_template_hash_stored_in_single_location(real_bm, sample_record: BaseRecord, real_model_name_expensive: str, llm_wrapper_type):
+    """Test that template_hash appears in exactly ONE location in the serialized trace.
+
+    This test validates data integrity by ensuring template_hash is stored in a
+    single, predictable location rather than duplicated across multiple fields.
+
+    Currently, template_hash appears in multiple locations:
+    - metadata.template.template_hash (expected location)
+    - agent_info.template_hash (duplicate, should be removed)
+
+    This test should FAIL until template_hash storage is fixed to use a single location.
+    """
+    # Skip structured output test for models that don't support it
+    if real_model_name_expensive in MODELS_WITHOUT_STRUCTURED_OUTPUT:
+        pytest.skip(f"{real_model_name_expensive} doesn't reliably support structured JSON output")
+
+    # Step 1: Create LLMCore and process a request
+    llm_core = LLMCore(
+        model=real_model_name_expensive,
+        template="ra",  # Simple research assistant template
+        output_model=CapitalCityResponse,
+        fail_on_unfilled_parameters=False,
+    )
+
+    # Process the request
+    processor_stage = f"test_template_hash_location_{real_model_name_expensive}"
+    test_start_time = datetime.datetime.now(datetime.timezone.utc)
+
+    logger.info("Processing LLMCore request for template_hash location test...")
+    results = []
+    async for result in llm_core.process(
+        record=sample_record,
+        processor_stage=processor_stage,
+        component_name="test_template_hash_location",
+        prompt="What is the capital of France?",
+    ):
+        results.append(result)
+
+    assert len(results) == 1, "Expected exactly one result from process()"
+    result = results[0]
+
+    # Step 2: Force trace flush to BigQuery
+    trace_writer = get_trace_writer()
+    assert trace_writer is not None, "TraceWriter should be initialized"
+
+    await asyncio.sleep(1)
+    logger.info("Flushing traces to BigQuery...")
+    await trace_writer.flush()
+    await asyncio.sleep(2)
+
+    # Step 3: Query BigQuery for the trace
+    query = f"""
+        SELECT
+            call_id,
+            agent_info,
+            inputs,
+            outputs,
+            metadata,
+            parameters,
+            timestamp
+        FROM `{real_bm.bq.project}.testing.traces`
+        WHERE timestamp >= TIMESTAMP('{test_start_time.isoformat()}')
+            AND JSON_VALUE(agent_info, '$.component_name') = 'test_template_hash_location'
+            AND JSON_VALUE(agent_info, '$.processor_stage') = '{processor_stage}'
+        ORDER BY timestamp DESC
+        LIMIT 1
+    """
+
+    logger.debug(f"Querying BigQuery for uploaded trace:\n{query}")
+    df = real_bm.run_query(query)
+
+    assert df.shape[0] > 0, (
+        f"Expected at least one trace in BigQuery. Query returned {df.shape[0]} rows."
+    )
+
+    trace = df.iloc[0]
+    logger.info(f"Retrieved trace call_id: {trace.call_id}")
+
+    # Step 4: Serialize the trace to a dict (simulating what BigQuery stores)
+    # Parse JSON fields from BigQuery
+    trace_dict = {
+        "call_id": trace.call_id,
+        "agent_info": json.loads(trace.agent_info) if isinstance(trace.agent_info, str) else trace.agent_info,
+        "inputs": json.loads(trace.inputs) if isinstance(trace.inputs, str) else trace.inputs,
+        "outputs": json.loads(trace.outputs) if isinstance(trace.outputs, str) else trace.outputs,
+        "metadata": json.loads(trace.metadata) if isinstance(trace.metadata, str) else trace.metadata,
+        "parameters": json.loads(trace.parameters) if isinstance(trace.parameters, str) else trace.parameters,
+    }
+
+    # Step 5: Walk the entire structure and find ALL occurrences of template_hash
+    def find_template_hash_paths(obj: Any, path: str = "root") -> list[str]:
+        """Recursively find all paths where template_hash appears.
+
+        Args:
+            obj: The object to search (dict, list, or primitive)
+            path: Current path in dot notation
+
+        Returns:
+            List of paths where template_hash was found
+        """
+        paths = []
+
+        if isinstance(obj, dict):
+            # Check if this dict has a template_hash key
+            if "template_hash" in obj:
+                paths.append(f"{path}.template_hash")
+
+            # Recursively search all values
+            for key, value in obj.items():
+                child_paths = find_template_hash_paths(value, f"{path}.{key}")
+                paths.extend(child_paths)
+
+        elif isinstance(obj, list):
+            # Recursively search all list items
+            for idx, item in enumerate(obj):
+                child_paths = find_template_hash_paths(item, f"{path}[{idx}]")
+                paths.extend(child_paths)
+
+        # Primitives (str, int, bool, None) don't contain nested template_hash
+        return paths
+
+    all_template_hash_paths = find_template_hash_paths(trace_dict)
+
+    # Step 6: Assert template_hash appears exactly ONCE
+    logger.info(f"Found template_hash at {len(all_template_hash_paths)} locations:")
+    for path in all_template_hash_paths:
+        logger.info(f"  - {path}")
+
+    assert len(all_template_hash_paths) == 1, (
+        f"template_hash should appear in EXACTLY ONE location, but found {len(all_template_hash_paths)} locations:\n"
+        + "\n".join(f"  - {path}" for path in all_template_hash_paths)
+        + "\n\nThis indicates template_hash is being duplicated across multiple fields, "
+        + "which creates data integrity issues and confusion about the source of truth."
+    )
+
+    # Validate the single location is the expected one (metadata.template.template_hash)
+    expected_path = "root.metadata.template.template_hash"
+    assert all_template_hash_paths[0] == expected_path, (
+        f"template_hash should be stored at '{expected_path}', "
+        f"but found it at '{all_template_hash_paths[0]}'"
+    )
+
+    logger.info(f"✅ template_hash appears in exactly ONE location: {all_template_hash_paths[0]}")
