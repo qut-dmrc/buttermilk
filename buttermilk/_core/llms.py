@@ -100,7 +100,8 @@ class ClientType(Enum):
         OPENAI: OpenAI platform.
         GEMINI: Google Generative AI platform (e.g., Gemini API).
         GEMINI_VERTEX: Gemini client on vertex platform.
-        VERTEX_OPENAI: Google Vertex AI platform with OpenAI-compatible endpoint.
+        VERTEX_OPENAI: Google Vertex AI platform with OpenAI-compatible endpoint (legacy).
+        LLAMA_VERTEX: Llama models on Vertex AI via native LiteLLM support.
         ANTHROPIC: Anthropic platform (e.g., Claude models).
         ANTHROPIC_VERTEX: Anthropic models hosted on Google Vertex AI.
         llama: Llama models (often self-hosted or via specific providers).
@@ -114,7 +115,8 @@ class ClientType(Enum):
     ANTHROPIC_VERTEX = "anthropic_vertex"
     GEMINI = "gemini"
     GEMINI_VERTEX = "gemini_vertex"
-    VERTEX_OPENAI = "vertex_openai"  # OpenAI-compatible endpoint on Vertex
+    VERTEX_OPENAI = "vertex_openai"  # OpenAI-compatible endpoint on Vertex (legacy)
+    LLAMA_VERTEX = "llama_vertex"  # Llama models on Vertex AI via native LiteLLM
     HUGGINGFACE = "huggingface"  # HuggingFace Inference API (serverless or dedicated)
     ZENTROPI = "zentropi"  # Zentropi toxicity/content moderation API
 
@@ -1489,9 +1491,12 @@ class LiteLLMWrapper(BaseModel):
                 else schema.schema()
             )
 
-            # Azure models require $ref to be resolved inline
-            if self.litellm_model_name and self.litellm_model_name.startswith("azure/"):
-                logger.debug(f"LiteLLMWrapper: Resolving $ref in schema for Azure model {self.litellm_model_name}")
+            # Azure and Vertex AI models require $ref to be resolved inline
+            # Vertex AI (including Llama) may not fully support $defs in JSON schemas
+            is_azure = self.litellm_model_name and self.litellm_model_name.startswith("azure/")
+            is_vertex = self.litellm_model_name and "vertex" in self.litellm_model_name.lower()
+            if is_azure or is_vertex:
+                logger.debug(f"LiteLLMWrapper: Resolving $ref in schema for {self.litellm_model_name}")
                 schema_dict = resolve_json_schema_refs(schema_dict)
                 schema_dict = make_all_properties_required(schema_dict)
 
@@ -1976,6 +1981,7 @@ class LLMs(BaseModel):
             "gemini_vertex": "gemini",  # vertex-hosted Gemini still routes differently upstream
             "huggingface": "huggingface",
             "vertex_openai": "vertex_ai",  # For litellm pricing, Vertex models need vertex_ai prefix
+            "llama_vertex": "vertex_ai",  # Llama on Vertex via native LiteLLM support
             "anthropic_vertex": "vertex_ai",  # Anthropic-on-Vertex
             "anthropic": "anthropic",
             "zentropi": "zentropi",  # Zentropi custom API
@@ -2056,13 +2062,21 @@ class LLMs(BaseModel):
         """
         # Handle known model name patterns and client type combinations
 
-        # For vertex_openai, strip google/ prefix from Gemini models for litellm pricing
+        # For vertex_openai (legacy), strip google/ prefix from Gemini models for litellm pricing
         # e.g., "google/gemini-2.5-flash" -> "gemini-2.5-flash" (litellm expects vertex_ai/gemini-2.5-flash)
         # But preserve meta/ prefix for Llama models (litellm expects vertex_ai/meta/llama-*)
         if client_type == "vertex_openai":
             if model_name.startswith("google/"):
                 return model_name[len("google/") :]  # Strip google/ prefix
             return model_name  # Keep other prefixes (e.g., meta/llama-*)
+
+        # For llama_vertex, use the model name as-is for native LiteLLM support
+        # LiteLLM expects model names like "llama4-maverick-instruct-maas"
+        if client_type == "llama_vertex":
+            # Strip meta/ prefix if present - litellm uses bare model names
+            if model_name.startswith("meta/"):
+                return model_name[len("meta/") :]
+            return model_name
 
         # For anthropic_vertex clients with provider-specific models, preserve format
         if client_type == "anthropic_vertex" and "/" in model_name:
@@ -2256,11 +2270,15 @@ class LLMs(BaseModel):
 
         # Choose wrapper type based on configuration
         # Per-model use_litellm takes precedence over global default_wrapper
-        use_litellm = (
-            config.use_litellm
-            if config.use_litellm is not None
-            else (self.default_wrapper == "litellm")
-        )
+        # LLAMA_VERTEX always uses LiteLLM for native Vertex AI support
+        if config.client_type == ClientType.LLAMA_VERTEX:
+            use_litellm = True
+        else:
+            use_litellm = (
+                config.use_litellm
+                if config.use_litellm is not None
+                else (self.default_wrapper == "litellm")
+            )
 
         # Get merged parameters for this model
         merged_params = self.get_merged_parameters(name)
@@ -2276,6 +2294,8 @@ class LLMs(BaseModel):
             api_key = config.api_key
             vertex_project: str | None = None
             vertex_location: str | None = None
+            # Default to config base_url, but some providers override this
+            effective_base_url: str | None = config.base_url
 
             if config.client_type == ClientType.VERTEX_OPENAI:
                 # Vertex OpenAI-compatible endpoints require GCP auth
@@ -2300,9 +2320,24 @@ class LLMs(BaseModel):
                 vertex_project = config.configs.get("project_id")
                 vertex_location = config.configs.get("region")
 
+            elif config.client_type == ClientType.LLAMA_VERTEX:
+                # Llama on Vertex via native LiteLLM support
+                # LiteLLM handles auth and endpoint construction - no base_url needed
+                if not bm.gcp_credentials:
+                    raise ValueError("GCP credentials not available for Vertex AI.")
+                vertex_project = config.configs.get("project_id")
+                vertex_location = config.configs.get("region")
+                if not vertex_project or not vertex_location:
+                    raise ValueError(
+                        "project_id and region are required for Llama Vertex AI."
+                    )
+                # Don't pass base_url - let LiteLLM construct the correct endpoint
+                # LiteLLM will use vertex_project and vertex_location to build the URL
+                effective_base_url = None  # Override any config base_url
+
             # Determine if token_provider is needed for this provider
             token_provider = None
-            if config.client_type in (ClientType.VERTEX_OPENAI, ClientType.GEMINI_VERTEX):
+            if config.client_type in (ClientType.VERTEX_OPENAI, ClientType.GEMINI_VERTEX, ClientType.LLAMA_VERTEX):
                 # Vertex models need GCP token refresh
                 def get_vertex_token() -> str:
                     return bm.get_gcp_access_token()
@@ -2313,7 +2348,7 @@ class LLMs(BaseModel):
                 model_info=config.model_info,
                 litellm_model_name=resolved_litellm,
                 api_key=api_key,
-                base_url=config.base_url,
+                base_url=effective_base_url,
                 extra_headers=extra_headers,
                 vertex_project=vertex_project,
                 vertex_location=vertex_location,
