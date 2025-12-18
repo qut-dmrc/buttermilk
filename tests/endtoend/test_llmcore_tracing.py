@@ -68,14 +68,10 @@ def _validate_actual_model_name(logged_model: str, alias: str) -> None:
 
     # Verify logged model contains these components
     for component in alias_components:
-        assert component in logged_model.lower(), (
-            f"Model name '{logged_model}' should contain '{component}' from alias '{alias}'"
-        )
+        assert component in logged_model.lower(), f"Model name '{logged_model}' should contain '{component}' from alias '{alias}'"
 
     # Verify it's NOT exactly our alias (proving we got actual API model name)
-    assert logged_model != alias, (
-        f"Model should be actual API name (e.g., 'gemini-2.0-flash-exp'), not alias '{alias}'"
-    )
+    assert logged_model != alias, f"Model should be actual API name (e.g., 'gemini-2.0-flash-exp'), not alias '{alias}'"
 
 
 # Models that don't reliably support structured JSON output
@@ -83,7 +79,6 @@ def _validate_actual_model_name(logged_model: str, alias: str) -> None:
 # gpt-oss-safeguard models on HuggingFace don't support structured output or function calling
 # claude45haiku has function_calling=false so can't use either approach
 MODELS_WITHOUT_STRUCTURED_OUTPUT = {
-    "claude45haiku",  # No structured output AND no function calling
     "gpt-oss-safeguard-20b",
     "gpt-oss-safeguard-120b",
 }
@@ -210,21 +205,15 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
     # Validate agent_info
     agent_info = trace.agent_info
     if isinstance(agent_info, str):
-
         agent_info = json.loads(agent_info)
 
-    assert agent_info.get("component_name") == "test_llmcore", (
-        "Should have correct component_name"
-    )
-    assert agent_info.get("execution_type") == "llm_processing", (
-        "Should be llm_processing type"
-    )
+    assert agent_info.get("component_name") == "test_llmcore", "Should have correct component_name"
+    assert agent_info.get("execution_type") == "llm_processing", "Should be llm_processing type"
     assert agent_info.get("processor_stage") == processor_stage, "Should have correct processor_stage"
 
     # Validate metadata contains LLM info
     metadata = trace.metadata
     if isinstance(metadata, str):
-
         metadata = json.loads(metadata)
 
     assert "model" in metadata, "Metadata should contain model"
@@ -245,34 +234,18 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
     if isinstance(template_vars, str):
         template_vars = json.loads(template_vars)
 
-    assert "prompt" in template_vars, (
-        f"template_vars should contain prompt field. template_vars keys: {template_vars.keys()}"
-    )
+    assert "prompt" in template_vars, f"template_vars should contain prompt field. template_vars keys: {template_vars.keys()}"
 
     # Record data is now stored in template_vars (flattened from record)
     # Essential fields: record_id, dataset_name, split_type
-    assert "record_id" in template_vars, (
-        f"template_vars should have record_id field. Keys: {template_vars.keys()}"
-    )
-    assert template_vars["record_id"] is not None, (
-        "template_vars.record_id should not be None"
-    )
-    assert len(template_vars["record_id"]) > 0, (
-        "template_vars.record_id should not be empty"
-    )
+    assert "record_id" in template_vars, f"template_vars should have record_id field. Keys: {template_vars.keys()}"
+    assert template_vars["record_id"] is not None, "template_vars.record_id should not be None"
+    assert len(template_vars["record_id"]) > 0, "template_vars.record_id should not be empty"
 
-    assert "dataset_name" in template_vars, (
-        f"template_vars should have dataset_name field. Keys: {template_vars.keys()}"
-    )
-    assert "split_type" in template_vars, (
-        f"template_vars should have split_type field. Keys: {template_vars.keys()}"
-    )
-    assert template_vars["dataset_name"] == "test_llmcore", (
-        "template_vars should preserve dataset_name value"
-    )
-    assert template_vars["split_type"] == "test", (
-        "template_vars should preserve split_type value"
-    )
+    assert "dataset_name" in template_vars, f"template_vars should have dataset_name field. Keys: {template_vars.keys()}"
+    assert "split_type" in template_vars, f"template_vars should have split_type field. Keys: {template_vars.keys()}"
+    assert template_vars["dataset_name"] == "test_llmcore", "template_vars should preserve dataset_name value"
+    assert template_vars["split_type"] == "test", "template_vars should preserve split_type value"
 
     logger.info(
         f"✅ Record structure validated: record_id={template_vars['record_id']}, "
@@ -285,7 +258,6 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
     if isinstance(outputs, str):
         # Could be JSON string, try to parse
         try:
-
             outputs = json.loads(outputs)
         except (json.JSONDecodeError, TypeError):
             pass  # outputs is just a string
@@ -316,9 +288,7 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
 
     # FAIL-FAST: Messages must already be a list, not a string or other type
     assert messages is not None, "Messages field should not be None"
-    assert isinstance(messages, list), (
-        f"Messages should be a list, got {type(messages).__name__}. Data should be stored in correct format."
-    )
+    assert isinstance(messages, list), f"Messages should be a list, got {type(messages).__name__}. Data should be stored in correct format."
     assert len(messages) > 0, "Messages list should not be empty"
 
     # Parse JSON strings into dicts (BigQuery stores messages as JSON strings)
@@ -331,47 +301,29 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
             parsed_msg = json.loads(msg)
             parsed_messages.append(parsed_msg)
         except json.JSONDecodeError as e:
-            pytest.fail(
-                f"Message {i} is not valid JSON: {e}. Message content: {msg[:100]}..."
-            )
+            pytest.fail(f"Message {i} is not valid JSON: {e}. Message content: {msg[:100]}...")
 
     # FAIL-FAST: Each parsed message must be a dict with expected structure
     for i, msg in enumerate(parsed_messages):
-        assert isinstance(msg, dict), (
-            f"Parsed message {i} should be a dict, got {type(msg).__name__}."
-        )
-        assert "role" in msg or "type" in msg, (
-            f"Message {i} missing role/type field. Expected message structure with role or type."
-        )
-        assert "content" in msg, (
-            f"Message {i} missing content field. Expected message structure with content."
-        )
+        assert isinstance(msg, dict), f"Parsed message {i} should be a dict, got {type(msg).__name__}."
+        assert "role" in msg or "type" in msg, f"Message {i} missing role/type field. Expected message structure with role or type."
+        assert "content" in msg, f"Message {i} missing content field. Expected message structure with content."
 
     # Validate messages contain both user/system input and assistant response
     roles = [msg.get("role", msg.get("type", "")) for msg in parsed_messages]
 
     # Check for user or system message (input)
-    has_input = any(
-        "user" in str(role).lower() or "system" in str(role).lower() for role in roles
-    )
-    assert has_input, (
-        f"Messages should contain user or system message (input), got roles: {roles}"
-    )
+    has_input = any("user" in str(role).lower() or "system" in str(role).lower() for role in roles)
+    assert has_input, f"Messages should contain user or system message (input), got roles: {roles}"
 
     # Check for assistant message (response)
     has_assistant = any("assistant" in str(role).lower() for role in roles)
-    assert has_assistant, (
-        f"Messages should contain assistant message (response), got roles: {roles}"
-    )
+    assert has_assistant, f"Messages should contain assistant message (response), got roles: {roles}"
 
     # Validate message content includes expected terms
     all_content = " ".join(msg.get("content", "") for msg in parsed_messages)
-    assert "capital" in all_content.lower() or "france" in all_content.lower(), (
-        "Messages should contain the original prompt about France's capital"
-    )
-    assert "paris" in all_content.lower(), (
-        "Messages should contain the LLM's response mentioning Paris"
-    )
+    assert "capital" in all_content.lower() or "france" in all_content.lower(), "Messages should contain the original prompt about France's capital"
+    assert "paris" in all_content.lower(), "Messages should contain the LLM's response mentioning Paris"
 
     # VERIFY: Template variables are filled - first message should have substantial content
     # The "ra" template system prompt is typically 200+ characters when filled
@@ -389,10 +341,7 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
     for i, msg in enumerate(parsed_messages):
         msg_content = msg.get("content", "")
         unfilled_vars = unfilled_pattern.findall(msg_content)
-        assert not unfilled_vars, (
-            f"Unfilled template variables found in message[{i}]: {unfilled_vars}. "
-            f"Content preview: {msg_content[:300]}..."
-        )
+        assert not unfilled_vars, f"Unfilled template variables found in message[{i}]: {unfilled_vars}. Content preview: {msg_content[:300]}..."
 
     logger.info(f"✅ Template variables validated: no unfilled variables, system prompt {len(first_content)} chars")
 
@@ -418,9 +367,7 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
         f"Second message should contain user prompt about France's capital, got: {second_content[:200]}..."
     )
 
-    logger.info(
-        f"✅ Messages field validated: {len(messages)} messages with roles {roles}"
-    )
+    logger.info(f"✅ Messages field validated: {len(messages)} messages with roles {roles}")
 
     # Validate parameters field contains model hyperparameters
     # Query for parameters field from BigQuery
@@ -444,17 +391,11 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
     if isinstance(parameters, str):
         parameters = json.loads(parameters)
 
-    assert isinstance(parameters, dict), (
-        f"Parameters should be a dict, got {type(parameters).__name__}"
-    )
+    assert isinstance(parameters, dict), f"Parameters should be a dict, got {type(parameters).__name__}"
 
     # Validate core LLMCore parameters are present
-    assert "model" in parameters, (
-        f"Parameters should contain 'model'. Got keys: {parameters.keys()}"
-    )
-    assert "template" in parameters, (
-        f"Parameters should contain 'template'. Got keys: {parameters.keys()}"
-    )
+    assert "model" in parameters, f"Parameters should contain 'model'. Got keys: {parameters.keys()}"
+    assert "template" in parameters, f"Parameters should contain 'template'. Got keys: {parameters.keys()}"
 
     # Validate model configs are captured (temperature, api_version, etc. from models.json)
     # The configs dict is stored in LLMConfig.configs, NOT in ModelParameters
@@ -464,19 +405,16 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
 
         if "temperature" in model_configs:
             assert "temperature" in parameters, (
-                f"Parameters should contain 'temperature' from model configs. "
-                f"Model configs: {model_configs}, got parameters: {parameters}"
+                f"Parameters should contain 'temperature' from model configs. Model configs: {model_configs}, got parameters: {parameters}"
             )
             assert parameters["temperature"] == model_configs["temperature"], (
-                f"Temperature should match model config: expected {model_configs['temperature']}, "
-                f"got {parameters.get('temperature')}"
+                f"Temperature should match model config: expected {model_configs['temperature']}, got {parameters.get('temperature')}"
             )
             logger.info(f"✅ Hyperparameter 'temperature' logged correctly: {parameters['temperature']}")
 
         if "api_version" in model_configs:
             assert "api_version" in parameters, (
-                f"Parameters should contain 'api_version' from model configs. "
-                f"Model configs: {model_configs}, got parameters: {parameters}"
+                f"Parameters should contain 'api_version' from model configs. Model configs: {model_configs}, got parameters: {parameters}"
             )
             logger.info(f"✅ Config 'api_version' logged correctly: {parameters['api_version']}")
 
@@ -512,55 +450,38 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
     if isinstance(trace_record, str):
         trace_record = json.loads(trace_record)
 
-    assert isinstance(trace_record, dict), (
-        f"trace.record should be a dict, got {type(trace_record).__name__}"
-    )
+    assert isinstance(trace_record, dict), f"trace.record should be a dict, got {type(trace_record).__name__}"
 
     # Validate essential record fields are present
-    assert "record_id" in trace_record, (
-        f"trace.record should contain 'record_id'. Got keys: {trace_record.keys()}"
-    )
+    assert "record_id" in trace_record, f"trace.record should contain 'record_id'. Got keys: {trace_record.keys()}"
     assert trace_record["record_id"] is not None, "trace.record.record_id should not be None"
     assert len(trace_record["record_id"]) > 0, "trace.record.record_id should not be empty"
 
     # Validate record matches the input sample_record
     assert trace_record["record_id"] == sample_record.record_id, (
-        f"trace.record.record_id should match input record.\n"
-        f"Trace: {trace_record['record_id']}\n"
-        f"Expected: {sample_record.record_id}"
+        f"trace.record.record_id should match input record.\nTrace: {trace_record['record_id']}\nExpected: {sample_record.record_id}"
     )
 
     # Validate dataset context is preserved
     if "dataset_name" in trace_record:
-        assert trace_record["dataset_name"] == sample_record.dataset_name, (
-            f"trace.record.dataset_name should match input record"
-        )
+        assert trace_record["dataset_name"] == sample_record.dataset_name, "trace.record.dataset_name should match input record"
 
-    logger.info(
-        f"✅ trace.record validated: record_id={trace_record['record_id']}, "
-        f"keys={list(trace_record.keys())}"
-    )
+    logger.info(f"✅ trace.record validated: record_id={trace_record['record_id']}, keys={list(trace_record.keys())}")
 
     # ==========================================================================
     # HASH VALIDATION: Verify hashes exist and match recomputed values
     # ==========================================================================
 
     # 1. Validate template_hash exists in metadata and matches recomputed hash
-    assert "template" in metadata, (
-        f"Metadata should contain 'template' with template_hash. Got keys: {metadata.keys()}"
-    )
+    assert "template" in metadata, f"Metadata should contain 'template' with template_hash. Got keys: {metadata.keys()}"
     template_metadata = metadata["template"]
     if isinstance(template_metadata, str):
         template_metadata = json.loads(template_metadata)
 
-    assert "template_hash" in template_metadata, (
-        f"Template metadata should contain 'template_hash'. Got: {template_metadata.keys()}"
-    )
+    assert "template_hash" in template_metadata, f"Template metadata should contain 'template_hash'. Got: {template_metadata.keys()}"
     logged_template_hash = template_metadata["template_hash"]
     assert logged_template_hash is not None, "template_hash should not be None"
-    assert len(logged_template_hash) == 64, (
-        f"template_hash should be 64-char SHA256, got {len(logged_template_hash)} chars: {logged_template_hash}"
-    )
+    assert len(logged_template_hash) == 64, f"template_hash should be 64-char SHA256, got {len(logged_template_hash)} chars: {logged_template_hash}"
 
     # Recompute template hash and verify it matches
     # The test uses template="ra"
@@ -570,9 +491,7 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
         untrusted_inputs={},
     )
     assert logged_template_hash == expected_template_hash, (
-        f"Logged template_hash should match recomputed hash.\n"
-        f"Logged:   {logged_template_hash}\n"
-        f"Expected: {expected_template_hash}"
+        f"Logged template_hash should match recomputed hash.\nLogged:   {logged_template_hash}\nExpected: {expected_template_hash}"
     )
     logger.info(f"✅ template_hash validated: {logged_template_hash[:16]}...")
 
@@ -582,49 +501,35 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
     if isinstance(template_vars_for_hash, str):
         template_vars_for_hash = json.loads(template_vars_for_hash)
 
-    assert "record_id" in template_vars_for_hash, (
-        f"template_vars in trace should have record_id. Got keys: {template_vars_for_hash.keys()}"
-    )
+    assert "record_id" in template_vars_for_hash, f"template_vars in trace should have record_id. Got keys: {template_vars_for_hash.keys()}"
     # Verify the record_id matches our sample_record
     assert template_vars_for_hash["record_id"] == sample_record.record_id, (
-        f"Record ID in trace should match input record.\n"
-        f"Trace:    {template_vars_for_hash['record_id']}\n"
-        f"Expected: {sample_record.record_id}"
+        f"Record ID in trace should match input record.\nTrace:    {template_vars_for_hash['record_id']}\nExpected: {sample_record.record_id}"
     )
     logger.info(f"✅ record_id validated: {template_vars_for_hash['record_id']}")
 
     # Validate record_hash exists in metadata and matches recomputed hash
-    assert "record" in metadata, (
-        f"Metadata should contain 'record' with record_hash. Got keys: {metadata.keys()}"
-    )
+    assert "record" in metadata, f"Metadata should contain 'record' with record_hash. Got keys: {metadata.keys()}"
     record_metadata = metadata["record"]
     if isinstance(record_metadata, str):
         record_metadata = json.loads(record_metadata)
 
-    assert "record_hash" in record_metadata, (
-        f"Record metadata should contain 'record_hash'. Got: {record_metadata.keys()}"
-    )
+    assert "record_hash" in record_metadata, f"Record metadata should contain 'record_hash'. Got: {record_metadata.keys()}"
     logged_record_hash = record_metadata["record_hash"]
     assert logged_record_hash is not None, "record_hash should not be None"
-    assert len(logged_record_hash) == 64, (
-        f"record_hash should be 64-char SHA256, got {len(logged_record_hash)} chars: {logged_record_hash}"
-    )
+    assert len(logged_record_hash) == 64, f"record_hash should be 64-char SHA256, got {len(logged_record_hash)} chars: {logged_record_hash}"
 
     # Recompute record hash and verify it matches
     expected_record_hash = compute_record_hash(sample_record.as_markdown())
     assert logged_record_hash == expected_record_hash, (
-        f"Logged record_hash should match recomputed hash.\n"
-        f"Logged:   {logged_record_hash}\n"
-        f"Expected: {expected_record_hash}"
+        f"Logged record_hash should match recomputed hash.\nLogged:   {logged_record_hash}\nExpected: {expected_record_hash}"
     )
     logger.info(f"✅ record_hash validated: {logged_record_hash[:16]}...")
 
     # 3. Validate config hash can be computed from parameters
     # The parameters field contains the LLMCore config that should be hashable
     config_hash = hash_dict(parameters)
-    assert len(config_hash) == 64, (
-        f"config_hash should be 64-char SHA256, got {len(config_hash)} chars"
-    )
+    assert len(config_hash) == 64, f"config_hash should be 64-char SHA256, got {len(config_hash)} chars"
     logger.info(f"✅ config_hash computed from parameters: {config_hash[:16]}...")
 
     logger.info("✅ All hash validations passed")
@@ -722,10 +627,7 @@ async def test_template_filling_with_criteria_variants(real_bm, sample_record: B
         logger.debug(f"Querying BigQuery for {criteria_name} trace...")
         df = real_bm.run_query(query)
 
-        assert df.shape[0] == 1, (
-            f"Expected exactly one trace for criteria {criteria_name}. "
-            f"Got {df.shape[0]} rows."
-        )
+        assert df.shape[0] == 1, f"Expected exactly one trace for criteria {criteria_name}. Got {df.shape[0]} rows."
 
         trace_row = df.iloc[0]
 
@@ -758,8 +660,7 @@ async def test_template_filling_with_criteria_variants(real_bm, sample_record: B
         unfilled_pattern = re.compile(r"\{\{\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\}\}")
         unfilled_vars = unfilled_pattern.findall(all_content)
         assert not unfilled_vars, (
-            f"Unfilled template variables found for criteria {criteria_name}: {unfilled_vars}\n"
-            f"Content preview: {all_content[:500]}..."
+            f"Unfilled template variables found for criteria {criteria_name}: {unfilled_vars}\nContent preview: {all_content[:500]}..."
         )
 
         # Verify criteria is in template_vars in inputs
@@ -771,18 +672,14 @@ async def test_template_filling_with_criteria_variants(real_bm, sample_record: B
         if isinstance(template_vars, str):
             template_vars = json.loads(template_vars)
 
-        assert "criteria" in template_vars, (
-            f"template_vars should contain 'criteria' for {criteria_name}. "
-            f"Got keys: {template_vars.keys()}"
-        )
+        assert "criteria" in template_vars, f"template_vars should contain 'criteria' for {criteria_name}. Got keys: {template_vars.keys()}"
         assert template_vars["criteria"] == criteria_name, (
-            f"template_vars.criteria should be '{criteria_name}', "
-            f"got '{template_vars.get('criteria')}'"
+            f"template_vars.criteria should be '{criteria_name}', got '{template_vars.get('criteria')}'"
         )
 
         logger.info(f"✅ Criteria '{criteria_name}' correctly filled in template")
         logger.info(f"   - Identifying text found: '{identifying_text[:50]}...'")
-        logger.info(f"   - No unfilled variables")
+        logger.info("   - No unfilled variables")
         logger.info(f"   - template_vars.criteria = '{criteria_name}'")
 
     logger.info("=" * 80)
@@ -881,45 +778,33 @@ async def test_trace_writer_save(real_bm, llm_wrapper_type):
     logger.info(f"✅ Trace uploaded successfully: {trace.call_id}")
 
     # Validate trace structure
-    assert trace.call_id == test_call_id, (
-        f"Expected call_id={test_call_id}, got {trace.call_id}"
-    )
+    assert trace.call_id == test_call_id, f"Expected call_id={test_call_id}, got {trace.call_id}"
 
     # Validate agent_info
     agent_info = trace.agent_info
     if isinstance(agent_info, str):
-
         agent_info = json.loads(agent_info)
 
-    assert agent_info.get("component_name") == "test_trace_writer", (
-        "Should have correct component_name"
-    )
-    assert agent_info.get("processor_stage") == "save_test", (
-        "Should have correct processor_stage"
-    )
+    assert agent_info.get("component_name") == "test_trace_writer", "Should have correct component_name"
+    assert agent_info.get("processor_stage") == "save_test", "Should have correct processor_stage"
 
     # Validate metadata
     metadata = trace.metadata
     if isinstance(metadata, str):
-
         metadata = json.loads(metadata)
 
     assert metadata.get("test_key") == "test_value", "Metadata should contain test_key"
-    assert metadata.get("test_type") == "trace_writer_save", (
-        "Metadata should contain test_type"
-    )
+    assert metadata.get("test_type") == "trace_writer_save", "Metadata should contain test_type"
 
     # Validate inputs and outputs
     inputs = trace.inputs
     if isinstance(inputs, str):
-
         inputs = json.loads(inputs)
 
     assert inputs.get("prompt") == "Hello, world!", "Inputs should contain prompt"
 
     outputs = trace.outputs
     if isinstance(outputs, str):
-
         outputs = json.loads(outputs)
 
     assert outputs.get("response") == "Hi there!", "Outputs should contain response"
@@ -1002,9 +887,7 @@ async def test_record_hash_stored_in_single_location(real_bm, sample_record: Bas
     logger.debug(f"Querying BigQuery for uploaded trace:\n{query}")
     df = real_bm.run_query(query)
 
-    assert df.shape[0] > 0, (
-        f"Expected at least one trace in BigQuery. Query returned {df.shape[0]} rows."
-    )
+    assert df.shape[0] > 0, f"Expected at least one trace in BigQuery. Query returned {df.shape[0]} rows."
 
     trace = df.iloc[0]
     logger.info(f"Retrieved trace call_id: {trace.call_id}")
@@ -1069,8 +952,7 @@ async def test_record_hash_stored_in_single_location(real_bm, sample_record: Bas
     # Validate the single location is the expected one (metadata.record.record_hash)
     expected_path = "root.metadata.record.record_hash"
     assert all_record_hash_paths[0] == expected_path, (
-        f"record_hash should be stored at '{expected_path}', "
-        f"but found it at '{all_record_hash_paths[0]}'"
+        f"record_hash should be stored at '{expected_path}', but found it at '{all_record_hash_paths[0]}'"
     )
 
     logger.info(f"✅ record_hash appears in exactly ONE location: {all_record_hash_paths[0]}")
@@ -1148,9 +1030,7 @@ async def test_template_hash_stored_in_single_location(real_bm, sample_record: B
     logger.debug(f"Querying BigQuery for uploaded trace:\n{query}")
     df = real_bm.run_query(query)
 
-    assert df.shape[0] > 0, (
-        f"Expected at least one trace in BigQuery. Query returned {df.shape[0]} rows."
-    )
+    assert df.shape[0] > 0, f"Expected at least one trace in BigQuery. Query returned {df.shape[0]} rows."
 
     trace = df.iloc[0]
     logger.info(f"Retrieved trace call_id: {trace.call_id}")
@@ -1215,8 +1095,7 @@ async def test_template_hash_stored_in_single_location(real_bm, sample_record: B
     # Validate the single location is the expected one (metadata.template.template_hash)
     expected_path = "root.metadata.template.template_hash"
     assert all_template_hash_paths[0] == expected_path, (
-        f"template_hash should be stored at '{expected_path}', "
-        f"but found it at '{all_template_hash_paths[0]}'"
+        f"template_hash should be stored at '{expected_path}', but found it at '{all_template_hash_paths[0]}'"
     )
 
     logger.info(f"✅ template_hash appears in exactly ONE location: {all_template_hash_paths[0]}")
@@ -1252,9 +1131,7 @@ async def test_warning_raised_on_record_mismatch(real_bm, caplog):
 
     # Should have logged a warning about mismatch
     warning_messages = [r.message for r in caplog.records if r.levelno >= logging.WARNING]
-    assert any("mismatch" in msg.lower() for msg in warning_messages), (
-        f"Expected warning about record mismatch, got: {warning_messages}"
-    )
+    assert any("mismatch" in msg.lower() for msg in warning_messages), f"Expected warning about record mismatch, got: {warning_messages}"
 
 
 @pytest.mark.endtoend
@@ -1333,9 +1210,7 @@ async def test_no_duplicate_record_in_resolved_inputs(real_bm, sample_record: Ba
     logger.debug(f"Querying BigQuery for uploaded trace:\n{query}")
     df = real_bm.run_query(query)
 
-    assert df.shape[0] > 0, (
-        f"Expected at least one trace in BigQuery. Query returned {df.shape[0]} rows."
-    )
+    assert df.shape[0] > 0, f"Expected at least one trace in BigQuery. Query returned {df.shape[0]} rows."
 
     trace = df.iloc[0]
     logger.info(f"Retrieved trace call_id: {trace.call_id}")
@@ -1378,7 +1253,7 @@ async def test_no_duplicate_record_in_resolved_inputs(real_bm, sample_record: Ba
                 f"When template_vars is derived from record, inputs.record should NOT contain duplicate data."
             )
 
-            logger.info(f"✗ DUPLICATION DETECTED: text exists in both locations")
+            logger.info("✗ DUPLICATION DETECTED: text exists in both locations")
             logger.info(f"  template_vars.text length: {len(tv_text)}")
             logger.info(f"  inputs.record.text length: {len(record_text)}")
         else:
