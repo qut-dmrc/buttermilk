@@ -57,7 +57,20 @@
       {
         "name": "record_id",
         "type": "STRING",
-        "mode": "NULLABLE"
+        "mode": "NULLABLE",
+        "description": "Unique record identifier (required by application, nullable for BQ compatibility)"
+      },
+      {
+        "name": "record_hash",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": "SHA256 hash of record content (required by application, nullable for BQ compatibility)"
+      },
+      {
+        "name": "content",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": "Record content (required by application, nullable for BQ compatibility)"
       },
       {
         "name": "dataset_name",
@@ -67,6 +80,11 @@
       {
         "name": "split_type",
         "type": "STRING",
+        "mode": "NULLABLE"
+      },
+      {
+        "name": "metadata",
+        "type": "JSON",
         "mode": "NULLABLE"
       }
     ]

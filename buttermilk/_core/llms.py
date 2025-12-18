@@ -83,7 +83,7 @@ from buttermilk import bm, logger
 # ToolOutput import removed - using autogen's FunctionExecutionResult directly
 from buttermilk._core.constants import CONFIG_CACHE_FILENAME, cache, get_base_cache_dir  # Models cache constants
 from buttermilk._core.exceptions import ContentBlockedError, ProcessingError  # Custom Buttermilk exceptions
-from buttermilk._core.json_schema import resolve_json_schema_refs, make_all_properties_required  # Schema $ref resolution for Azure compatibility
+from buttermilk._core.json_schema import make_all_properties_required, resolve_json_schema_refs  # Schema $ref resolution for Azure compatibility
 from buttermilk.utils.pricing import calculate_token_cost  # Token cost calculation
 
 from .retry import RetryWrapper  # Retry logic wrapper
@@ -363,8 +363,8 @@ CHAT_MODELS = [
 
 """A predefined list of identifiers for cost-effective chat models."""
 CHEAP_CHAT_MODELS = [
-    "gemini-flash",
     "gemini-flash-lite",
+    "llama4maverick",
     "gpt5nano",
     "claude45haiku",
 ]

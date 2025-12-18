@@ -101,7 +101,6 @@ class TestPromptStyles:
             real_llm: Real LLM instance (CHEAP_CHAT_MODELS parameterized)
             llm_wrapper_type: Wrapper type fixture (autogen/litellm)
         """
-        from pathlib import Path
 
         from buttermilk.utils.templating import load_template
 
@@ -127,7 +126,7 @@ class TestPromptStyles:
         messages = [
             SystemMessage(content=system),
             UserMessage(
-                content="The transgender activist was born male but now identifies as female.",
+                content="The trans activist is biologically male but identifies as female.",
                 source="user",
             ),
         ]

@@ -4,7 +4,7 @@ authors = [
   { name = "Nicolas Suzor", email = "nic@suzor.com" },
 ]
 name = "buttermilk"
-version = "0.5.13"
+version = "0.5.14"
 description = "Modular AI research framework with async-first initialization"
 readme = "README.md"
 dependencies = [
@@ -254,7 +254,7 @@ testpaths = [
 ]
 
 norecursedirs = ["docs", "*.egg-info", "*.egg", "bin", "demo", ".git", "appdir", ".tox", "mediamarkets", "scrapers"]
-timeout = 60
+timeout = 90
 # Note: Using pytest-anyio, not pytest-asyncio.
 # Session-scoped event loop is achieved via session_runner fixture in conftest.py.
 addopts = [

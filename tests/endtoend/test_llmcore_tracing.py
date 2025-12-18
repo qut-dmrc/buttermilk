@@ -466,7 +466,31 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
     if "dataset_name" in trace_record:
         assert trace_record["dataset_name"] == sample_record.dataset_name, "trace.record.dataset_name should match input record"
 
-    logger.info(f"✅ trace.record validated: record_id={trace_record['record_id']}, keys={list(trace_record.keys())}")
+    # Validate NEW REQUIRED fields per BQ schema (traces.schema.json)
+    # record_hash is REQUIRED - must exist and be valid SHA256
+    assert "record_hash" in trace_record, (
+        f"trace.record should contain 'record_hash' (REQUIRED per BQ schema). Got keys: {trace_record.keys()}"
+    )
+    assert trace_record["record_hash"] is not None, "trace.record.record_hash should not be None"
+    assert len(trace_record["record_hash"]) == 64, (
+        f"trace.record.record_hash should be 64-char SHA256, got {len(trace_record['record_hash'])} chars"
+    )
+
+    # content is REQUIRED - must exist and match input record
+    assert "content" in trace_record, (
+        f"trace.record should contain 'content' (REQUIRED per BQ schema). Got keys: {trace_record.keys()}"
+    )
+    assert trace_record["content"] is not None, "trace.record.content should not be None"
+
+    # Verify record_hash matches recomputed hash from sample_record
+    expected_record_hash = compute_record_hash(sample_record.as_markdown())
+    assert trace_record["record_hash"] == expected_record_hash, (
+        f"trace.record.record_hash should match recomputed hash.\n"
+        f"Trace:    {trace_record['record_hash']}\n"
+        f"Expected: {expected_record_hash}"
+    )
+
+    logger.info(f"✅ trace.record validated: record_id={trace_record['record_id']}, record_hash={trace_record['record_hash'][:16]}..., keys={list(trace_record.keys())}")
 
     # ==========================================================================
     # HASH VALIDATION: Verify hashes exist and match recomputed values

@@ -697,6 +697,168 @@ class TestExecutionTraceJsonSerialization:
         assert json_parsed["outputs"] == dict_dump["outputs"]
 
 
+class TestExecutionTraceRecordSchema:
+    """Test suite for ExecutionTrace record field schema compliance.
+
+    These tests verify that:
+    1. Record field contains required fields (record_id, record_hash, content) when present
+    2. Record is NOT duplicated in inputs['record'] or inputs['template_vars']['record']
+
+    This ensures traces match the BigQuery schema in traces.schema.json.
+    """
+
+    def test_record_has_required_fields_when_present(self, real_bm):
+        """Test that trace.record contains required fields per BQ schema.
+
+        When trace.record is populated, it MUST contain:
+        - record_id (REQUIRED)
+        - record_hash (REQUIRED)
+        - content (REQUIRED)
+        """
+        from buttermilk._core.types import Record
+
+        record = Record(
+            record_id="test_required_fields",
+            dataset_name="test_dataset",
+            split_type="train",
+            content="Test content for required fields validation",
+        )
+
+        trace = ExecutionTrace(
+            agent_info={"component_name": "RequiredFieldsTest"},
+            record=record,
+            outputs="test output",
+        )
+
+        dumped = trace.model_dump()
+
+        # Record must have all required fields
+        assert "record" in dumped
+        assert dumped["record"] is not None
+
+        # Required fields per BQ schema
+        assert "record_id" in dumped["record"], "record_id is REQUIRED"
+        assert dumped["record"]["record_id"] == "test_required_fields"
+
+        assert "record_hash" in dumped["record"], "record_hash is REQUIRED"
+        assert dumped["record"]["record_hash"] is not None
+        assert len(dumped["record"]["record_hash"]) == 64  # SHA256 hex
+
+        assert "content" in dumped["record"], "content is REQUIRED"
+        assert dumped["record"]["content"] == "Test content for required fields validation"
+
+    def test_record_not_in_inputs_record(self, real_bm):
+        """Test that record is NOT duplicated in inputs['record'].
+
+        The trace.record field should be the ONLY location for record data.
+        inputs['record'] should be None or absent to avoid duplication.
+        """
+        from buttermilk._core.types import Record
+
+        record = Record(
+            record_id="test_no_duplicate",
+            dataset_name="test_dataset",
+            content="Content should not be duplicated",
+        )
+
+        # Simulate what should happen: record passed separately, not in inputs
+        trace = ExecutionTrace(
+            agent_info={"component_name": "NoDuplicateTest"},
+            record=record,
+            inputs={"prompt": "test prompt", "other_var": "value"},
+            outputs="test output",
+        )
+
+        dumped = trace.model_dump()
+
+        # inputs should NOT contain 'record' key
+        if "inputs" in dumped and dumped["inputs"]:
+            assert "record" not in dumped["inputs"], (
+                "Record should NOT be in inputs['record'] - use trace.record instead"
+            )
+
+    def test_record_not_in_inputs_template_vars_record(self, real_bm):
+        """Test that record is NOT in inputs['template_vars']['record'].
+
+        When LLMCore creates traces, template_vars should not contain the record.
+        """
+        from buttermilk._core.types import Record
+
+        record = Record(
+            record_id="test_no_template_var_record",
+            dataset_name="test_dataset",
+            content="Content should not be in template_vars",
+        )
+
+        # Simulate LLMCore resolved_inputs structure
+        trace = ExecutionTrace(
+            agent_info={"component_name": "NoTemplateVarRecordTest"},
+            record=record,
+            inputs={
+                "template_vars": {"prompt": "test", "criteria": "some criteria"},
+                "context": [],
+            },
+            outputs="test output",
+        )
+
+        dumped = trace.model_dump()
+
+        # template_vars should NOT contain 'record' key
+        if "inputs" in dumped and dumped["inputs"]:
+            template_vars = dumped["inputs"].get("template_vars", {})
+            if template_vars:
+                assert "record" not in template_vars, (
+                    "Record should NOT be in inputs['template_vars']['record'] - "
+                    "use trace.record instead"
+                )
+
+    def test_trace_record_field_serialization_for_bq(self, real_bm):
+        """Test that record field serializes correctly for BigQuery schema.
+
+        Verifies the serialized record matches expected BQ structure with
+        all BaseRecord fields plus record_hash.
+        """
+        from buttermilk._core.types import Record
+
+        record = Record(
+            record_id="bq_schema_test",
+            dataset_name="production_dataset",
+            split_type="validation",
+            content="Content for BigQuery schema validation test",
+            metadata={"source": "test", "version": 1},
+        )
+
+        trace = ExecutionTrace(
+            agent_info={"component_name": "BQSchemaTest"},
+            record=record,
+            outputs="test output",
+        )
+
+        dumped = trace.model_dump()
+        record_data = dumped["record"]
+
+        # Verify BQ schema fields
+        expected_fields = {
+            "record_id",
+            "record_hash",
+            "content",
+            "dataset_name",
+            "split_type",
+            "metadata",
+        }
+
+        for field in expected_fields:
+            assert field in record_data, f"Missing BQ schema field: {field}"
+
+        # Verify field values
+        assert record_data["record_id"] == "bq_schema_test"
+        assert record_data["dataset_name"] == "production_dataset"
+        assert record_data["split_type"] == "validation"
+        assert record_data["content"] == "Content for BigQuery schema validation test"
+        assert record_data["metadata"] == {"source": "test", "version": 1}
+        assert len(record_data["record_hash"]) == 64
+
+
 class TestExecutionTraceWithHashes:
     """Test suite for ExecutionTrace serialization with computed hash fields.
 
