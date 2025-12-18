@@ -645,9 +645,10 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
 # =============================================================================
 
 # Two distinct criteria for testing - each has unique identifying content
+# NOTE: identifying_text must be in the RENDERED output (not Jinja2 comments)
 CRITERIA_VARIANTS = [
-    ("cte", "National Center for Transgender Equality"),  # criteria name, identifying text
-    ("tja", "Trans Journalists Association"),
+    ("cte", "US Transgender Survey"),  # criteria name, identifying text in body (not header comment)
+    ("tja", "Trans Journalists Association"),  # appears in body, not just header comment
 ]
 
 
