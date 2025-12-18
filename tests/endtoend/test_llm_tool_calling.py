@@ -10,13 +10,6 @@ from pydantic import BaseModel, Field, ConfigDict
 
 from buttermilk._core.llms import ModelOutput
 
-# Models known to not support tool calling
-MODELS_WITHOUT_TOOL_SUPPORT = {"llama32_90b"}
-
-# Models that have quirks with tool calling (e.g., may not follow instructions perfectly)
-MODELS_WITH_TOOL_QUIRKS = {"llama4maverick", "llama33_70b", "o4mini"}
-
-
 class StructuredTestAgentOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -122,10 +115,6 @@ async def test_single_tool_call(real_llm_expensive, llm_wrapper_type):
     """Test that each LLM can make a single tool call."""
     llm = real_llm_expensive
 
-    model_name = getattr(llm, "_model_name", None)
-    if model_name and model_name in MODELS_WITHOUT_TOOL_SUPPORT:
-        pytest.xfail(f"{model_name} doesn't support tool calling")
-
     # Create a simple weather tool
     weather_tool = FunctionTool(
         get_weather,
@@ -182,11 +171,6 @@ async def test_single_tool_call(real_llm_expensive, llm_wrapper_type):
 @pytest.mark.anyio
 async def test_multiple_tool_calls(real_llm, llm_wrapper_type):
     """Test that LLMs can handle multiple tools and select the right one."""
-    # Skip if model doesn't support tools
-    model_name = getattr(real_llm, "_model_name", None)
-    if model_name and model_name in MODELS_WITHOUT_TOOL_SUPPORT:
-        pytest.skip(f"{model_name} doesn't support tool calling")
-
     # Create multiple tools
     weather_tool = FunctionTool(
         get_weather,
@@ -222,18 +206,10 @@ async def test_multiple_tool_calls(real_llm, llm_wrapper_type):
         assert response.content
         assert isinstance(response.content, str)
 
-        # For models with tool quirks, be more lenient
-        if model_name in MODELS_WITH_TOOL_QUIRKS:
-            # Just check if they attempted to do math or mentioned the numbers
-            assert any(
-                term in response.content.lower()
-                for term in ["8", "eight", "5", "3", "calculate", "sum"]
-            ), f"Response should relate to the calculation, got: {response.content}"
-        else:
-            # Check for both digit "8" and word "eight"
-            assert any(term in response.content.lower() for term in ["8", "eight"]), (
-                f"Response should contain the sum 8, got: {response.content}"
-            )
+        # Check for both digit "8" and word "eight"
+        assert any(term in response.content.lower() for term in ["8", "eight"]), (
+            f"Response should contain the sum 8, got: {response.content}"
+        )
     except Exception as e:
         if "does not support function calling" in str(e):
             pytest.skip(f"Model doesn't support tool calling: {e}")
@@ -243,11 +219,6 @@ async def test_multiple_tool_calls(real_llm, llm_wrapper_type):
 @pytest.mark.anyio
 async def test_no_tool_needed(real_llm, llm_wrapper_type):
     """Test that LLMs don't use tools when not needed."""
-    # Skip if model doesn't support tools
-    model_name = getattr(real_llm, "_model_name", None)
-    if model_name and model_name in MODELS_WITHOUT_TOOL_SUPPORT:
-        pytest.skip(f"{model_name} doesn't support tool calling")
-
     # Create tools that shouldn't be used
     weather_tool = FunctionTool(
         get_weather,
@@ -283,23 +254,9 @@ async def test_no_tool_needed(real_llm, llm_wrapper_type):
         assert response.content
         assert isinstance(response.content, str)
 
-        # For models with tool quirks, they might refuse to answer without tools
-        if model_name in MODELS_WITH_TOOL_QUIRKS:
-            # These models might refuse entirely when tools are present but not relevant
-            # Just verify they got a response at all
-            assert len(response.content) > 0, "Should have some response"
-            # Log for debugging but don't fail if they refuse
-            if not any(
-                term in response.content.lower()
-                for term in ["paris", "france", "capital"]
-            ):
-                print(
-                    f"Note: {model_name} refused to answer without relevant tools: {response.content}"
-                )
-        else:
-            assert "paris" in response.content.lower(), (
-                f"Response should mention Paris, got: {response.content}"
-            )
+        assert "paris" in response.content.lower(), (
+            f"Response should mention Paris, got: {response.content}"
+        )
     except Exception as e:
         if "does not support function calling" in str(e):
             pytest.skip(f"Model doesn't support tool calling: {e}")
@@ -309,11 +266,6 @@ async def test_no_tool_needed(real_llm, llm_wrapper_type):
 @pytest.mark.anyio
 async def test_call_chat_intercept_tools_returns_function_calls(real_llm, llm_wrapper_type):
     """Verify that call_chat(intercept_tools=True) returns FunctionCall objects without executing."""
-    # Skip if model doesn't support tools
-    model_name = getattr(real_llm, "_model_name", None)
-    if model_name and model_name in MODELS_WITHOUT_TOOL_SUPPORT:
-        pytest.skip(f"{model_name} doesn't support tool calling")
-
     calc_tool = FunctionTool(
         calculate_sum,
         name="calculate_sum",

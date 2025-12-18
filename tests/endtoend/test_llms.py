@@ -1,20 +1,12 @@
+"""Test LLM functionality across all models."""
+
 import pytest
 from autogen_core.models import SystemMessage, UserMessage
 from pydantic import BaseModel, Field
 
 from buttermilk._core.types import Record
 
-"""Test tool calling functionality across all LLM models."""
 
-
-# Models known to not support tool calling
-MODELS_WITHOUT_TOOL_SUPPORT = {}
-
-# Models that have quirks with tool calling (e.g., may not follow instructions perfectly)
-MODELS_WITH_TOOL_QUIRKS = {}
-
-
-# @pytest.mark.integration
 @pytest.mark.anyio
 async def test_all_llm(real_llm_expensive, llm_wrapper_type):
     assert real_llm_expensive
