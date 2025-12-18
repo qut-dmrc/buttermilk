@@ -151,8 +151,8 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
 
         This allows the StructuredLLMHostAgent to handle tool routing specially.
         """
-        # Get the appropriate AutoGenWrapper instance
-        model_client = bm.llms.get_autogen_chat_client(self.parameters["model"])
+        # Get the appropriate LLM client
+        model_client = bm.llms.get_client(self.parameters["model"])
 
         # Deduplicate tools by name (handle both Tool objects and ToolSchema dicts)
         def get_tool_name(tool):

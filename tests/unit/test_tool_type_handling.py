@@ -20,7 +20,7 @@ import pytest
 from autogen_core.models import CreateResult
 from autogen_core.tools import ToolSchema
 
-from buttermilk._core.llms import AutoGenWrapper
+from buttermilk._core.llms import LiteLLMWrapper
 from buttermilk._core.tool_definition import AgentToolDefinition
 from buttermilk.agents.flowcontrol.structured_llmhost import StructuredLLMHostAgent
 
@@ -90,10 +90,10 @@ class TestToolTypeHandling:
     def test_tool_schema_can_be_passed_to_llms(self, sample_tool_schema: ToolSchema):
         """Test that ToolSchema objects can be passed to llms.py type hints without errors."""
         # This test validates the type hints allow Tool | ToolSchema
-        from buttermilk._core.llms import AutoGenWrapper
+        from buttermilk._core.llms import LiteLLMWrapper
 
-        # Create a mock AutoGenWrapper instance
-        wrapper = Mock(spec=AutoGenWrapper)
+        # Create a mock LiteLLMWrapper instance
+        wrapper = Mock(spec=LiteLLMWrapper)
 
         # Mock the create method with the correct signature
         async def mock_create(
@@ -188,7 +188,7 @@ class TestToolTypeHandling:
         )
 
         # Mock the LLM client
-        mock_client = AsyncMock(spec=AutoGenWrapper)
+        mock_client = AsyncMock(spec=LiteLLMWrapper)
         from autogen_core.models import RequestUsage
 
         mock_client.call_chat = AsyncMock(
@@ -273,10 +273,10 @@ class TestToolTypeHandling:
         import inspect
         from typing import get_args, get_origin
 
-        from buttermilk._core.llms import AutoGenWrapper
+        from buttermilk._core.llms import LiteLLMWrapper
 
         # Get the create method signature
-        sig = inspect.signature(AutoGenWrapper.create)
+        sig = inspect.signature(LiteLLMWrapper.create)
         tools_param = sig.parameters["tools"]
 
         # Check that the annotation includes both Tool and ToolSchema
