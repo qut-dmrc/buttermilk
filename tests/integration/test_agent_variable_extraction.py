@@ -98,13 +98,13 @@ class TestAgentVariableExtraction:
         """Verify we can load the real scorer configuration."""
         assert real_scorer_config is not None
         assert "inputs" in real_scorer_config
-        assert "record" in real_scorer_config["inputs"]
+        assert "source" in real_scorer_config["inputs"]
         assert "expected" in real_scorer_config["inputs"]
 
         # Verify the ACTUAL JMESPath expressions from the real config
-        record_expr = real_scorer_config["inputs"]["record"]
-        assert "[FETCH.outputs]" in record_expr
-        assert "*.record" in record_expr
+        source_expr = real_scorer_config["inputs"]["source"]
+        assert "[FETCH.outputs]" in source_expr
+        assert "*.record" in source_expr
 
         expected_expr = real_scorer_config["inputs"]["expected"]
         assert "ground_truth" in expected_expr
@@ -114,11 +114,9 @@ class TestAgentVariableExtraction:
         inputs = real_scorer_config["inputs"]
 
         # These are the ACTUAL mappings from conf/agents/scorer.yaml
-        assert inputs["model"] == "*.agent_info.parameters.model|[0]"
-        assert inputs["criteria"] == "*.agent_info.parameters.criteria|[0]"
-        assert inputs["template"] == "*.agent_info.parameters.template|[0]"
-        assert inputs["record"] == "[FETCH.outputs]||*.record||*.inputs.record"
-        # Note: The template now uses record.ground_truth, not a separate 'expected' field
+        assert inputs["instructions"] == "JUDGE.messages[0].content || SYNTHESISER.messages[0].content"
+        assert inputs["source"] == "[FETCH.outputs]||*.record||*.inputs.record"
+        assert inputs["expected"] == "[FETCH.outputs].ground_truth||*.record.ground_truth||*.inputs.record.ground_truth"
         assert "answers" in inputs
 
     def test_extract_record_from_real_fetch_output(
@@ -126,8 +124,8 @@ class TestAgentVariableExtraction:
     ):
         """Test extraction using REAL JMESPath expressions from scorer config.
 
-        The current config extracts 'record' (which contains ground_truth inside it).
-        The template then accesses record.ground_truth.
+        The current config extracts 'source' (which contains ground_truth inside it).
+        The template then accesses source.ground_truth.
         """
         # Create a realistic FETCH agent output
         fetch_output = AgentOutput(
@@ -150,45 +148,45 @@ class TestAgentVariableExtraction:
         )
 
         print("\n=== FETCH Output Extraction ===")
-        print(f"JMESPath expression: {real_inputs['record']}")
+        print(f"JMESPath expression: {real_inputs['source']}")
         print(f"Extracted keys: {list(extracted_data.keys())}")
 
-        # Check if record was extracted
-        if "record" not in extracted_data:
+        # Check if source was extracted
+        if "source" not in extracted_data:
             pytest.fail(
-                f"BUG: The 'record' field was not extracted from FETCH output.\n"
-                f"JMESPath expression: {real_inputs['record']}\n"
+                f"BUG: The 'source' field was not extracted from FETCH output.\n"
+                f"JMESPath expression: {real_inputs['source']}\n"
                 f"Extracted keys: {list(extracted_data.keys())}\n"
-                f"This causes the scorer template to fail with 'record' is undefined."
+                f"This causes the scorer template to fail with 'source' is undefined."
             )
 
-        # Verify the record was extracted as a list (JMESPath returns lists)
-        record_data = extracted_data["record"]
-        print(f"Record type: {type(record_data)}")
-        print(f"Record data (first 200 chars): {str(record_data)[:200]}")
+        # Verify the source was extracted as a list (JMESPath returns lists)
+        source_data = extracted_data["source"]
+        print(f"Source type: {type(source_data)}")
+        print(f"Source data (first 200 chars): {str(source_data)[:200]}")
 
         # If it's a list, get the first element
-        if isinstance(record_data, list):
-            assert len(record_data) > 0, "Record list is empty"
-            record_dict = record_data[0]
+        if isinstance(source_data, list):
+            assert len(source_data) > 0, "Source list is empty"
+            source_dict = source_data[0]
         else:
-            record_dict = record_data
+            source_dict = source_data
 
         # Verify ground_truth is accessible
-        assert "ground_truth" in record_dict, (
-            f"ground_truth not found in extracted record. Keys: {record_dict.keys()}"
+        assert "ground_truth" in source_dict, (
+            f"ground_truth not found in extracted source. Keys: {source_dict.keys()}"
         )
-        assert "reasons" in record_dict["ground_truth"]
-        assert len(record_dict["ground_truth"]["reasons"]) == 4
+        assert "reasons" in source_dict["ground_truth"]
+        assert len(source_dict["ground_truth"]["reasons"]) == 4
 
     def test_jmespath_record_extraction_patterns(
         self, real_scorer_config, sample_record_with_ground_truth: Record
     ):
-        """Test the JMESPath expression for record extraction with different message structures.
+        """Test the JMESPath expression for source extraction with different message structures.
 
         The config uses: "[FETCH.outputs]||*.record||*.inputs.record"
 
-        This should extract record from:
+        This should extract source from:
         - FETCH.outputs (when message is from FETCH)
         - *.record (when message has record at top level)
         - *.inputs.record (when message has record in inputs)
@@ -197,9 +195,9 @@ class TestAgentVariableExtraction:
 
         from buttermilk.utils import scrub_serializable
 
-        record_expr = real_scorer_config["inputs"]["record"]
+        source_expr = real_scorer_config["inputs"]["source"]
         print("\n=== Testing JMESPath Expression ===")
-        print(f"Expression: {record_expr}")
+        print(f"Expression: {source_expr}")
 
         # Test 1: FETCH message structure
         print("\n[Test 1] FETCH message: {FETCH: {outputs: <record>}}")
@@ -210,7 +208,7 @@ class TestAgentVariableExtraction:
                 )
             }
         }
-        result1 = jmespath.search(record_expr, fetch_data)
+        result1 = jmespath.search(source_expr, fetch_data)
         print(f"  Result: {type(result1)} with {len(result1) if result1 else 0} items")
         assert result1 is not None, "FETCH.outputs pattern failed"
 
@@ -223,7 +221,7 @@ class TestAgentVariableExtraction:
                 )
             }
         }
-        result2 = jmespath.search(record_expr, judge_data_toplevel)
+        result2 = jmespath.search(source_expr, judge_data_toplevel)
         print(f"  Result: {type(result2)} with {len(result2) if result2 else 0} items")
         assert result2 is not None, "*.record pattern failed"
 
@@ -240,7 +238,7 @@ class TestAgentVariableExtraction:
                 }
             }
         }
-        result3 = jmespath.search(record_expr, judge_data_inputs)
+        result3 = jmespath.search(source_expr, judge_data_inputs)
         print(f"  Result: {type(result3)} with {len(result3) if result3 else 0} items")
 
         # THIS IS WHERE THE BUG IS!
@@ -258,10 +256,10 @@ class TestAgentVariableExtraction:
             )
 
             pytest.fail(
-                "BUG: The JMESPath expression fails to extract record from JUDGE/SYNTH outputs!\n"
-                f"Expression: {record_expr}\n"
+                "BUG: The JMESPath expression fails to extract source from JUDGE/SYNTH outputs!\n"
+                f"Expression: {source_expr}\n"
                 "Pattern '*.inputs.record' does not match structure {{JUDGE: {{inputs: {{record: ...}}}}}}\n"
-                "This causes the scorer template to fail with 'record' is undefined."
+                "This causes the scorer template to fail with 'source' is undefined."
             )
 
         assert result3 is not None, "*.inputs.record pattern failed for JUDGE structure"
