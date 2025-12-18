@@ -106,7 +106,7 @@ class TestPromptStyles:
         from buttermilk.utils.templating import load_template
 
         # Load the TJA criteria template (83KB)
-        criteria_text, unfilled_vars, template_hash = load_template(
+        criteria_text, _, _ = load_template(
             template="criteria/tja",
             parameters={},
             untrusted_inputs={},
