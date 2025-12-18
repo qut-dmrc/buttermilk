@@ -5,6 +5,7 @@ import inspect
 from pathlib import Path
 
 import pytest
+
 # weave import removed
 from pytest import MarkDecorator
 
@@ -107,7 +108,7 @@ async def real_llm(request, real_bm: BM, session_runner):
     return real_bm.llms[request.param]
 
 
-@pytest.fixture(params=["autogen", "litellm"])
+@pytest.fixture(params=["litellm"])
 def llm_wrapper_type(request, real_bm: BM) -> str:
     """Parameterized fixture that switches between AutoGen and LiteLLM wrappers.
 

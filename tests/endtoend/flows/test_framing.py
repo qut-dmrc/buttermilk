@@ -28,7 +28,7 @@ def param_model_cheap(request):
 def framer():
     agent = LC(
         agent_id="testframer",
-        parameters={"template": "frames", "model": "claude45haiku"},
+        parameters={"template": "frames", "model": "claude-haiku"},
     )
     return agent
 

@@ -336,20 +336,20 @@ CHAT_MODELS = [
     "gemini-pro",
     "gemini-flash",
     "gemini-flash-lite",
-    "gpt5mini",
-    "gpt5nano",
+    "gpt-mini",
+    "gpt-nano",
     "gpt-4o",
-    "llama4maverick",
-    "claude45sonnet",
+    "llama-maverick",
+    "claude-sonnet",
     "gpt-oss-safeguard-20b",
 ]
 
 """A predefined list of identifiers for cost-effective chat models."""
 CHEAP_CHAT_MODELS = [
     "gemini-flash-lite",
-    "llama4maverick",
-    "gpt5nano",
-    "claude45haiku",
+    "llama-maverick",
+    "gpt-nano",
+    "claude-haiku",
 ]
 
 
@@ -1481,12 +1481,11 @@ class LLMs(BaseModel):
                 return model_name[len("google/") :]  # Strip google/ prefix
             return model_name  # Keep other prefixes (e.g., meta/llama-*)
 
-        # For llama_vertex, use the model name as-is for native LiteLLM support
-        # LiteLLM expects model names like "llama4-maverick-instruct-maas"
+        # For llama_vertex, preserve the meta/ prefix for native LiteLLM support
+        # LiteLLM expects model names like "meta/llama-4-maverick-17b-128e-instruct-maas"
+        # and will construct the full model name as "vertex_ai/meta/llama-..."
         if client_type == "llama_vertex":
-            # Strip meta/ prefix if present - litellm uses bare model names
-            if model_name.startswith("meta/"):
-                return model_name[len("meta/") :]
+            # Keep meta/ prefix - litellm needs it for proper routing
             return model_name
 
         # For anthropic_vertex clients with provider-specific models, preserve format

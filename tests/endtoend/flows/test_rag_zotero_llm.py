@@ -142,8 +142,8 @@ async def test_rag_zotero_with_structured_output(model_name, real_bm):
 
 @pytest.mark.anyio
 async def test_rag_zotero_llama4_specific(real_bm):
-    """Specific test for llama4maverick to debug the 500 error."""
-    model_name = "llama4maverick"
+    """Specific test for llama-maverick to debug the 500 error."""
+    model_name = "llama-maverick"
 
     if model_name not in real_bm.llms.connections:
         pytest.skip(f"Model {model_name} not configured")
@@ -262,7 +262,7 @@ async def test_rag_zotero_llama4_specific(real_bm):
         print(f"❌ Structured output WITH tools failed: {e}")
         if "Error code: 500" in str(e):
             print(
-                "   This is the core issue - llama4maverick fails with tools + structured output!"
+                "   This is the core issue - llama-maverick fails with tools + structured output!"
             )
 
     # Sixth test: Complex structured output WITH tools (like the real agent)
@@ -285,5 +285,5 @@ async def test_rag_zotero_llama4_specific(real_bm):
         print(f"❌ Complex structured output WITH tools failed: {e}")
         if "Error code: 500" in str(e):
             print(
-                "   Confirmed: llama4maverick cannot handle tools + complex structured output together"
+                "   Confirmed: llama-maverick cannot handle tools + complex structured output together"
             )

@@ -112,9 +112,9 @@ processors:
         processor_obj: buttermilk._core.llm_core.LLMCore
         variants:
           model:
-            - llama4maverick
-            - gpt5mini
-            - claude45haiku
+            - llama-maverick
+            - gpt-mini
+            - claude-haiku
             - gemini-pro
             - gemini-flash
             - gpt-4o

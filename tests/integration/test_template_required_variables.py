@@ -342,7 +342,7 @@ TEMPLATE_PASSING_TEST_CASES = [
         {
             "answers": [
                 {
-                    "agent_id": "synth_claude45sonnet",
+                    "agent_id": "synth_claude-sonnet",
                     "result": "This is a synthesized answer",
                     "answer_id": "call_456",
                 }
@@ -353,7 +353,7 @@ TEMPLATE_PASSING_TEST_CASES = [
             "source": "Original question text that needs answering",
         },
         [
-            "synth_claude45sonnet",
+            "synth_claude-sonnet",
             "This is a synthesized answer",
             "key points X, Y, and Z",
         ],
@@ -707,7 +707,7 @@ def test_score_template_comprehensive_passing():
                 "answer_id": "call_abc123",
             },
             {
-                "agent_id": "judge_claude45sonnet",
+                "agent_id": "judge_claude-sonnet",
                 "result": {
                     "prediction": "yes",
                     "reasoning": "Clear violation of community standards regarding respectful discourse.",
@@ -751,7 +751,7 @@ def test_score_template_comprehensive_passing():
 
     # Validate output contains all key elements
     assert "judge_gemini25pro" in rendered, "Should contain first judge's agent_id"
-    assert "judge_claude45sonnet" in rendered, "Should contain second judge's agent_id"
+    assert "judge_claude-sonnet" in rendered, "Should contain second judge's agent_id"
     assert "hate speech" in rendered.lower(), (
         "Should reference hate speech from reasoning"
     )

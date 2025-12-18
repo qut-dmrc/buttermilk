@@ -94,7 +94,7 @@ class TestPromptStyles:
         """Test structured output with long criteria template (TJA 83KB).
 
         This test verifies that models can handle structured output when given
-        a large criteria template (~20,000 tokens). Some models like llama4maverick
+        a large criteria template (~20,000 tokens). Some models like llama-maverick
         produce garbage output with long prompts, and this test catches that.
 
         Args:
@@ -162,7 +162,7 @@ class TestAzureStructuredOutput:
 
     @pytest.mark.anyio
     async def test_qualscore_schema_with_azure_model(self, real_bm, session_runner):
-        """Test that Azure-hosted gpt5nano can use structured output with QualScore.
+        """Test that Azure-hosted gpt-nano can use structured output with QualScore.
 
         QualScore uses StrEnum fields with Field descriptions, which previously
         caused issues with Azure OpenAI structured output.
@@ -177,8 +177,8 @@ class TestAzureStructuredOutput:
         real_bm.llms.default_wrapper = "litellm"
         real_bm.llms.autogen_models.clear()
 
-        # Get Azure model (gpt5nano is hosted on Azure)
-        llm = real_bm.llms["gpt5nano"]
+        # Get Azure model (gpt-nano is hosted on Azure)
+        llm = real_bm.llms["gpt-nano"]
 
         # Create messages asking to evaluate content
         messages = [

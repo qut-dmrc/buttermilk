@@ -2,17 +2,17 @@ host: gemini-flash
 
 general:
   - gemini-flash
-  - claude45sonnet
+  - claude-sonnet
 
 judgers:
   - gemini-pro
   - gemini-flash
-  - claude45sonnet
+  - claude-sonnet
 
 synthesisers:
   - gemini-pro
   - gemini-flash
-  - claude45sonnet
+  - claude-sonnet
 
 # Model-specific parameter overrides
 # These override the defaults from models.json for this llms config
@@ -23,6 +23,6 @@ model_parameters:
   gemini-pro:
     temperature: 0.3
     max_tokens: 8192
-  claude45sonnet:
+  claude-sonnet:
     temperature: 0.5
     max_tokens: 4096

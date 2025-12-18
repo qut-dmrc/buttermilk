@@ -40,7 +40,7 @@ class CapitalCityResponse(BaseModel):
 def sample_record() -> BaseRecord:
     """Create a simple test record with all key fields populated."""
     return BaseRecord(
-        text="What is the capital of France?",
+        content="What is the capital of France?",
         dataset_name="test_llmcore",
         split_type="test",
         metadata={"test": "llmcore_tracing"},
@@ -77,7 +77,7 @@ def _validate_actual_model_name(logged_model: str, alias: str) -> None:
 # Models that don't reliably support structured JSON output
 # Note: Models with function_calling=true can use the fake tool fallback for structured output
 # gpt-oss-safeguard models on HuggingFace don't support structured output or function calling
-# claude45haiku has function_calling=false so can't use either approach
+# claude-haiku has function_calling=false so can't use either approach
 MODELS_WITHOUT_STRUCTURED_OUTPUT = {
     "gpt-oss-safeguard-20b",
     "gpt-oss-safeguard-120b",
@@ -1136,7 +1136,7 @@ async def test_warning_raised_on_record_mismatch(real_bm, caplog):
     import logging
 
     # Create record with one text
-    record = BaseRecord(text="Content A", dataset_name="test", record_id="test-1")
+    record = BaseRecord(content="Content A", dataset_name="test", record_id="test-1")
 
     # Create template_vars with DIFFERENT text
     template_vars = {"text": "Content B"}

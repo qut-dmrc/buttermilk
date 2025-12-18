@@ -13,7 +13,6 @@ defaults:
   # Observer agents
   - /agents@observers:
       - scorer
-      - spy
       - owl
       - host/sequence_host
   # Data source configuration
