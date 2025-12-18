@@ -85,6 +85,78 @@ class TestPromptStyles:
         )
         assert isinstance(parsed_response, TestPromptStyles.StructuredTestAgentOutput)
 
+    @pytest.mark.anyio
+    async def test_structured_output_with_long_criteria(
+        self,
+        real_llm,
+        llm_wrapper_type,
+    ):
+        """Test structured output with long criteria template (TJA 83KB).
+
+        This test verifies that models can handle structured output when given
+        a large criteria template (~20,000 tokens). Some models like llama4maverick
+        produce garbage output with long prompts, and this test catches that.
+
+        Args:
+            real_llm: Real LLM instance (CHEAP_CHAT_MODELS parameterized)
+            llm_wrapper_type: Wrapper type fixture (autogen/litellm)
+        """
+        from pathlib import Path
+
+        from buttermilk.utils.templating import load_template
+
+        # Load the TJA criteria template (83KB)
+        criteria_text, unfilled_vars, template_hash = load_template(
+            template="criteria/tja",
+            parameters={},
+            untrusted_inputs={},
+        )
+
+        # Verify we loaded a substantial criteria template
+        assert len(criteria_text) > 50000, (
+            f"TJA template should be large (>50KB), got {len(criteria_text)} bytes"
+        )
+
+        # Create prompt with the long criteria
+        system = f"""You are a content moderator. You will be provided with a set of criteria to apply to a sample of user content.
+        <CRITERIA>
+        {criteria_text}
+        </CRITERIA>
+        """
+
+        messages = [
+            SystemMessage(content=system),
+            UserMessage(
+                content="The transgender activist was born male but now identifies as female.",
+                source="user",
+            ),
+        ]
+
+        # Call with structured output schema
+        response = await real_llm.create(
+            messages=messages,
+            schema=TestPromptStyles.StructuredTestAgentOutput,
+        )
+
+        # This is the critical assertion - model must return valid JSON
+        # that can be parsed into our schema. If the model produces garbage,
+        # this will fail with ValidationError or JSONDecodeError.
+        parsed_response = TestPromptStyles.StructuredTestAgentOutput.model_validate_json(
+            response.content
+        )
+
+        # Verify the response is valid and has expected fields
+        assert isinstance(parsed_response, TestPromptStyles.StructuredTestAgentOutput)
+        assert isinstance(parsed_response.assessment, str)
+        assert isinstance(parsed_response.is_harmful, bool)
+        assert isinstance(parsed_response.reasoning, str)
+        assert len(parsed_response.assessment) > 0, (
+            "Assessment should not be empty"
+        )
+        assert len(parsed_response.reasoning) > 0, (
+            "Reasoning should not be empty"
+        )
+
 
 class TestAzureStructuredOutput:
     """Tests for Azure-hosted models with structured output."""
