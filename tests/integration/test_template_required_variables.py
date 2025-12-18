@@ -644,41 +644,45 @@ async def test_llmcore_raises_error_on_empty_expected():
     )
 
     # Test Case 1: Empty string expected
-    with pytest.raises(FatalError, match="unfilled parameters.*expected"):
+    with pytest.raises(ProcessingError, match="unfilled parameters.*expected"):
         await llm_core._fill_template(
             {
                 "answers": [{"agent_id": "test", "result": "test"}],
-                "criteria": ["test"],
+                "instructions": "Test instructions",
+                "source": "Test source content",
                 "expected": "",  # Empty string - should be cleaned and marked unfilled
             }
         )
 
     # Test Case 2: Empty dict expected
-    with pytest.raises(FatalError, match="unfilled parameters.*expected"):
+    with pytest.raises(ProcessingError, match="unfilled parameters.*expected"):
         await llm_core._fill_template(
             {
                 "answers": [{"agent_id": "test", "result": "test"}],
-                "criteria": ["test"],
+                "instructions": "Test instructions",
+                "source": "Test source content",
                 "expected": {},  # Empty dict - should be cleaned and marked unfilled
             }
         )
 
     # Test Case 3: Dict with empty reasons list
-    with pytest.raises(FatalError, match="unfilled parameters.*expected"):
+    with pytest.raises(ProcessingError, match="unfilled parameters.*expected"):
         await llm_core._fill_template(
             {
                 "answers": [{"agent_id": "test", "result": "test"}],
-                "criteria": ["test"],
+                "instructions": "Test instructions",
+                "source": "Test source content",
                 "expected": {"reasons": []},  # Empty nested value - should be cleaned
             }
         )
 
     # Test Case 4: Whitespace-only expected
-    with pytest.raises(FatalError, match="unfilled parameters.*expected"):
+    with pytest.raises(ProcessingError, match="unfilled parameters.*expected"):
         await llm_core._fill_template(
             {
                 "answers": [{"agent_id": "test", "result": "test"}],
-                "criteria": ["test"],
+                "instructions": "Test instructions",
+                "source": "Test source content",
                 "expected": "   ",  # Whitespace only - should be cleaned
             }
         )
