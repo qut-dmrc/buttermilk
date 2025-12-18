@@ -2,7 +2,7 @@
 
 import pytest
 
-from buttermilk._core.json_schema import resolve_json_schema_refs
+from buttermilk._core.json_schema import make_all_properties_required, resolve_json_schema_refs
 
 
 class TestResolveJsonSchemaRefs:
@@ -47,3 +47,30 @@ class TestResolveJsonSchemaRefs:
 
         # Assert $defs is removed
         assert "$defs" not in result
+
+    def test_make_all_properties_required(self):
+        """Test that make_all_properties_required adds all properties to required array.
+
+        Azure strict mode requires ALL properties to be in the required array,
+        even those with defaults. Pydantic doesn't include fields with defaults
+        in required, so this transformation ensures compatibility.
+        """
+        schema = {
+            "properties": {
+                "name": {"type": "string"},
+                "count": {"type": "integer", "default": 0},
+                "tags": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["name"],  # count and tags missing because they have defaults
+            "type": "object",
+        }
+
+        result = make_all_properties_required(schema)
+
+        # All properties should now be in required array
+        assert set(result["required"]) == {"name", "count", "tags"}
+
+        # Original properties should be unchanged
+        assert result["properties"]["name"] == {"type": "string"}
+        assert result["properties"]["count"] == {"type": "integer", "default": 0}
+        assert result["properties"]["tags"] == {"type": "array", "items": {"type": "string"}}

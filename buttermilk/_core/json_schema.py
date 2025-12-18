@@ -84,3 +84,48 @@ def _resolve_refs_recursive(node: Any, defs: dict[str, Any]) -> None:
         elif isinstance(value, list):
             for item in value:
                 _resolve_refs_recursive(item, defs)
+
+
+def make_all_properties_required(schema: dict) -> dict:
+    """Make all properties in a JSON schema required.
+
+    Azure OpenAI strict mode requires ALL properties to be in the required array,
+    even those with defaults. This function recursively finds all objects with
+    properties and ensures their required array contains all property names.
+
+    Args:
+        schema: JSON schema dictionary
+
+    Returns:
+        New schema with all properties marked as required
+    """
+    # Deep copy to avoid mutating input
+    result = copy.deepcopy(schema)
+
+    # Recursively make all properties required
+    _make_properties_required_recursive(result)
+
+    return result
+
+
+def _make_properties_required_recursive(node: Any) -> None:
+    """Recursively find objects with properties and make all properties required.
+
+    Args:
+        node: Current node in the schema tree
+    """
+    if not isinstance(node, dict):
+        return
+
+    # If this node has properties, set required to all property names
+    if "properties" in node:
+        property_names = list(node["properties"].keys())
+        node["required"] = property_names
+
+    # Recurse into child nodes
+    for value in node.values():
+        if isinstance(value, dict):
+            _make_properties_required_recursive(value)
+        elif isinstance(value, list):
+            for item in value:
+                _make_properties_required_recursive(item)

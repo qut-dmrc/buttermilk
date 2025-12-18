@@ -92,3 +92,57 @@ class TestPromptStyles:
             )
         )
         assert isinstance(parsed_response, TestPromptStyles.StructuredTestAgentOutput)
+
+
+class TestAzureStructuredOutput:
+    """Tests for Azure-hosted models with structured output."""
+
+    @pytest.mark.anyio
+    async def test_qualscore_schema_with_azure_model(self, real_bm, session_runner):
+        """Test that Azure-hosted gpt5nano can use structured output with QualScore.
+
+        QualScore uses StrEnum fields with Field descriptions, which previously
+        caused issues with Azure OpenAI structured output.
+
+        Args:
+            real_bm: Real BM instance from testing configuration
+            session_runner: Session-scoped async fixture for single event loop
+        """
+        from buttermilk.agents.evaluators.scorer import QualScore
+
+        # Force litellm wrapper for Azure model
+        real_bm.llms.default_wrapper = "litellm"
+        real_bm.llms.autogen_models.clear()
+
+        # Get Azure model (gpt5nano is hosted on Azure)
+        llm = real_bm.llms["gpt5nano"]
+
+        # Create messages asking to evaluate content
+        messages = [
+            SystemMessage(
+                content="""You are evaluating an analyst's reasoning. Provide a structured assessment.
+                For this test, assume:
+                - No critical errors were found
+                - The analyst correctly identified the key point
+                - High confidence in the assessment"""
+            ),
+            UserMessage(
+                content="Analyst concluded the content violates policy X based on criterion Y.",
+                source="user",
+            ),
+        ]
+
+        # Call with QualScore schema
+        response = await llm.create(messages=messages, schema=QualScore)
+
+        # Parse and validate response
+        parsed_response = QualScore.model_validate_json(response.content)
+
+        # Assert response is valid and contains expected fields
+        assert isinstance(parsed_response, QualScore)
+        assert hasattr(parsed_response, "critical_errors")
+        assert hasattr(parsed_response, "ground_truth_alignment")
+        assert hasattr(parsed_response, "confidence")
+        assert hasattr(parsed_response, "summary")
+        assert isinstance(parsed_response.summary, str)
+        assert len(parsed_response.summary) > 0
