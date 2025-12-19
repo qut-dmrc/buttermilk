@@ -1,5 +1,5 @@
 defaults:
-  - llms: debug
+  - llms: lite
   - flows:
       - trans
   - _self_

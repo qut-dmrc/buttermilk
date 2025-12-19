@@ -444,6 +444,39 @@ def _validate_schema_constraints(schema: type[BaseModel], model_info: Any) -> No
             )
 
 
+def _convert_xml_params_to_json(xml_text: str) -> str:
+    """Convert Claude's XML-like parameter format to JSON.
+
+    Claude sometimes returns tool arguments in XML format like:
+        <parameter name="field1">value1</parameter>
+        <parameter name="field2">["item1", "item2"]</parameter>
+
+    This converts it to proper JSON:
+        {"field1": "value1", "field2": ["item1", "item2"]}
+    """
+    import json
+    import re
+
+    result = {}
+    # Match <parameter name="key">value</parameter>
+    pattern = r'<parameter\s+name="([^"]+)">(.*?)</parameter>'
+
+    for match in re.finditer(pattern, xml_text, re.DOTALL):
+        key = match.group(1)
+        value_str = match.group(2).strip()
+
+        # Try to parse the value as JSON (for lists, dicts, bools, numbers)
+        try:
+            value = json.loads(value_str)
+        except json.JSONDecodeError:
+            # If not valid JSON, use as string
+            value = value_str
+
+        result[key] = value
+
+    return json.dumps(result)
+
+
 async def _parse_structured_output(  # noqa: PLR0912
     content: str | dict | BaseModel,
     schema: type[BaseModel],
@@ -1050,6 +1083,14 @@ class LiteLLMWrapper(BaseModel):
                         # Extract the arguments as the structured content
                         arguments_json = tool_call.function.arguments
                         logger.debug(f"LiteLLMWrapper: Extracted fake tool arguments: {arguments_json[:200]}...")
+
+                        # Handle Claude's XML-like parameter format
+                        # Claude sometimes returns: <parameter name="field">value</parameter>
+                        # instead of proper JSON
+                        if "<parameter" in arguments_json:
+                            arguments_json = _convert_xml_params_to_json(arguments_json)
+                            logger.debug(f"LiteLLMWrapper: Converted XML params to JSON: {arguments_json[:200]}...")
+
                         # Replace the message content with the tool arguments
                         # and clear tool_calls so litellm_to_autogen_result treats it as text
                         message.content = arguments_json
@@ -1278,7 +1319,7 @@ class LLMs(BaseModel):
         connections (dict[str, LLMConfig]): A dictionary where keys are
             connection names (e.g., "azure_prod_gpt4") and values are
             `LLMConfig` objects detailing the configuration for that LLM.
-        _cached_clients (dict[str, LiteLLMWrapper]): A cache for instantiated
+        cached_clients (dict[str, LiteLLMWrapper]): A cache for instantiated
             `LiteLLMWrapper` clients. This is populated on-demand when a client
             is first requested. Not meant to be set directly by users.
         model_config (ConfigDict): Pydantic model configuration.
@@ -1294,7 +1335,7 @@ class LLMs(BaseModel):
         default_factory=dict,
         description="Per-model parameter overrides from YAML config (model_name -> parameters)",
     )
-    _cached_clients: dict[str, LiteLLMWrapper] = Field(
+    cached_clients: dict[str, LiteLLMWrapper] = Field(
         default_factory=dict,
         description="Cache for instantiated LiteLLMWrapper clients. Populated on demand.",
         exclude=True,
@@ -1528,8 +1569,8 @@ class LLMs(BaseModel):
 
         """
         # Check cache first
-        if name in self._cached_clients:
-            return self._cached_clients[name]
+        if name in self.cached_clients:
+            return self.cached_clients[name]
 
         if name not in self.connections:
             raise AttributeError(
@@ -1624,7 +1665,7 @@ class LLMs(BaseModel):
             token_provider=token_provider,
         )
 
-        self._cached_clients[name] = wrapped_client
+        self.cached_clients[name] = wrapped_client
         return wrapped_client
 
     # Alias for backwards compatibility

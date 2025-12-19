@@ -173,11 +173,8 @@ class TestAzureStructuredOutput:
         """
         from buttermilk.agents.evaluators.scorer import QualScore
 
-        # Force litellm wrapper for Azure model
-        real_bm.llms.default_wrapper = "litellm"
-        real_bm.llms.autogen_models.clear()
-
         # Get Azure model (gpt-nano is hosted on Azure)
+        # Note: After autogen removal, litellm is the only wrapper
         llm = real_bm.llms["gpt-nano"]
 
         # Create messages asking to evaluate content

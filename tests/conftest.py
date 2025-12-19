@@ -110,38 +110,19 @@ async def real_llm(request, real_bm: BM, session_runner):
 
 @pytest.fixture(params=["litellm"])
 def llm_wrapper_type(request, real_bm: BM) -> str:
-    """Parameterized fixture that switches between AutoGen and LiteLLM wrappers.
+    """Fixture that provides the LLM wrapper type.
 
-    This fixture enables tests to run with both wrapper types by:
-    1. Setting real_bm.llms.default_wrapper to the requested type
-    2. Clearing the autogen_models cache to force fresh wrapper creation
+    After removing autogen wrapper support, this is always "litellm".
+    Kept for test parameterization compatibility.
 
     Args:
-        request: Pytest request object with param ("autogen" or "litellm")
+        request: Pytest request object with param
         real_bm: Real BM instance from testing configuration
 
     Yields:
-        str: The wrapper type ("autogen" or "litellm")
-
-    Note:
-        Uses function scope so each test gets a fresh wrapper configuration.
-        The cache clear ensures that subsequent calls to real_llms[model_name]
-        will create new wrappers based on the updated default_wrapper setting.
+        str: The wrapper type ("litellm")
     """
-    wrapper_type = request.param
-
-    # Store original values for restoration
-    original_default = real_bm.llms.default_wrapper
-
-    # Set new default wrapper and clear cache
-    real_bm.llms.default_wrapper = wrapper_type
-    real_bm.llms.autogen_models.clear()
-
-    yield wrapper_type
-
-    # Restore original state
-    real_bm.llms.default_wrapper = original_default
-    real_bm.llms.autogen_models.clear()
+    yield request.param
 
 
 @pytest.fixture(params=CHAT_MODELS)
