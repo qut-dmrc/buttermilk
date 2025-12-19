@@ -1139,3 +1139,159 @@ class TestExecutionTraceWithHashes:
                 "model_dump() infinite looped when ExecutionTrace has record "
                 "in both record field and inputs dict"
             )
+
+
+class TestExecutionTraceSchemaContracts:
+    """Test schema contracts for ExecutionTrace cleanup (Dec 2024).
+
+    These tests validate the cleaned-up schema structure:
+    - Phase 1: agent_info has agent_class, no config dump
+    - Phase 2: hashes consolidated to metadata.hashes
+    - Phase 3: inputs flattened (no template_vars wrapper)
+    - Phase 4: strict contracts (record only in trace.record)
+    """
+
+    def test_metadata_hashes_structure(self, real_bm):
+        """Test that hashes are consolidated in metadata.hashes dict.
+
+        Schema contract: All hashes (record_hash, template_hash, ground_truth_hash)
+        should be stored in metadata.hashes for consistency and extensibility.
+        """
+        trace = ExecutionTrace(
+            agent_info={"component_name": "TestAgent"},
+            metadata={
+                "hashes": {
+                    "record_hash": "abc123",
+                    "template_hash": "def456",
+                    "ground_truth_hash": "ghi789",
+                },
+                "other_data": "preserved",
+            },
+        )
+
+        # Verify hashes are accessible in consolidated location
+        assert "hashes" in trace.metadata
+        assert trace.metadata["hashes"]["record_hash"] == "abc123"
+        assert trace.metadata["hashes"]["template_hash"] == "def456"
+        assert trace.metadata["hashes"]["ground_truth_hash"] == "ghi789"
+        # Other metadata preserved
+        assert trace.metadata["other_data"] == "preserved"
+
+    def test_inputs_flat_structure(self, real_bm):
+        """Test that inputs uses flat structure without template_vars wrapper.
+
+        Schema contract: Template variables should be flattened directly into
+        the inputs dict, not wrapped in a 'template_vars' key.
+        """
+        trace = ExecutionTrace(
+            agent_info={"component_name": "TestAgent"},
+            inputs={
+                "var1": "value1",
+                "var2": "value2",
+                "context": [{"role": "user", "content": "test"}],
+            },
+        )
+
+        # Verify flat structure - variables at top level
+        assert trace.inputs["var1"] == "value1"
+        assert trace.inputs["var2"] == "value2"
+        assert "context" in trace.inputs
+        # No nested template_vars wrapper
+        assert "template_vars" not in trace.inputs
+
+    def test_record_separation(self, real_bm):
+        """Test that record lives only in trace.record, not duplicated in inputs.
+
+        Schema contract: Record data should be in trace.record only.
+        Inputs should contain template variables and context, not record.
+        """
+        from buttermilk._core.types import BaseRecord
+
+        record = BaseRecord(
+            record_id="test_rec",
+            dataset_name="test_dataset",
+            split_type="train",
+        )
+
+        trace = ExecutionTrace(
+            agent_info={"component_name": "TestAgent"},
+            record=record.model_dump(),
+            inputs={
+                "var1": "derived_from_record",
+                "context": [],
+            },
+        )
+
+        # Record is in trace.record
+        assert trace.record["record_id"] == "test_rec"
+        # Inputs has derived data but not raw record
+        assert trace.inputs["var1"] == "derived_from_record"
+        assert "record" not in trace.inputs
+        assert "record_id" not in trace.inputs  # Not leaked to inputs
+
+    def test_agent_info_with_agent_class(self, real_bm):
+        """Test that agent_info includes agent_class, not full config dump.
+
+        Schema contract: agent_info should have agent_class for identification,
+        but NOT a full config dump (config is saved separately via config_uri).
+        """
+        trace = ExecutionTrace(
+            agent_info={
+                "component_name": "MyTestAgent",
+                "agent_class": "LLMAgent",
+                "agent_id": "agent_123",
+                "role": "scorer",
+                # NO config key - full config saved separately
+            },
+        )
+
+        # Agent class is present
+        assert trace.agent_info["agent_class"] == "LLMAgent"
+        assert trace.agent_info["component_name"] == "MyTestAgent"
+        # No config dump
+        assert "config" not in trace.agent_info
+
+    def test_from_output_preserves_schema_contracts(self, real_bm):
+        """Test that from_output() produces traces following schema contracts."""
+        from buttermilk._core.types import BaseRecord
+
+        output = AgentOutput(
+            agent_id="test_agent",
+            outputs="Result",
+        )
+
+        record = BaseRecord(
+            record_id="rec_schema_test",
+            dataset_name="dataset",
+            split_type="test",
+        )
+
+        trace = ExecutionTrace.from_output(
+            output,
+            agent_info={
+                "component_name": "TestAgent",
+                "agent_class": "LLMCore",
+            },
+            inputs={
+                "prompt_var": "test value",
+                "context": [],
+            },
+            record=record,
+            metadata={
+                "hashes": {
+                    "record_hash": record.record_hash,
+                    "template_hash": "tmpl_hash_123",
+                },
+            },
+        )
+
+        # Verify all schema contracts
+        assert trace.agent_info["agent_class"] == "LLMCore"
+        assert "config" not in trace.agent_info
+        assert trace.record is not None
+        # Record may be dict or BaseRecord - access appropriately
+        record_id = trace.record["record_id"] if isinstance(trace.record, dict) else trace.record.record_id
+        assert record_id == "rec_schema_test"
+        assert "record" not in trace.inputs
+        assert trace.inputs["prompt_var"] == "test value"
+        assert trace.metadata["hashes"]["template_hash"] == "tmpl_hash_123"
