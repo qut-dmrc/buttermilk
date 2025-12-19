@@ -103,21 +103,14 @@ class TestExecutionTrace:
         assert trace.record["dataset_name"] == "test_dataset"
         assert trace.record["split_type"] == "train"
 
-    def test_execution_trace_from_output_loses_record_with_dict_inputs(self, real_bm):
-        """Test that from_output() loses record when inputs is a dict without .record attribute.
+    def test_execution_trace_from_output_requires_explicit_record(self, real_bm):
+        """Test that from_output() requires explicit record parameter.
 
-        This tests the bug where agent.py at line 645 calls from_output() with dict inputs,
-        and from_output() only extracts record from inputs.record (line 745-748 of contract.py).
-        When inputs is a dict, it has no .record attribute, so the record is lost.
+        Strict contract: record must be passed explicitly to from_output().
+        No fallback extraction from inputs.record - caller is responsible.
 
-        Expected behavior: trace.record should contain the record data from message.record.
-        Current bug: trace.record is None because:
-          1. agent.py passes inputs as dict (no .record attribute)
-          2. agent.py doesn't pass record parameter to from_output()
-          3. from_output() only looks for inputs.record, doesn't accept record parameter
-
-        Fix requires: Add record parameter to from_output() signature and use it when
-        inputs doesn't have .record attribute.
+        This test verifies that when record is passed explicitly, it is preserved
+        correctly in the trace, regardless of the inputs structure.
         """
         from buttermilk._core.types import BaseRecord
 
@@ -146,8 +139,8 @@ class TestExecutionTrace:
         trace = ExecutionTrace.from_output(
             output,
             agent_info={"component_name": "TestAgent", "execution_type": "agent"},
-            inputs={"input_text": "test data"},  # Dict has no .record attribute
-            record=message.record,  # Pass record explicitly so it's not lost
+            inputs={"input_text": "test data"},  # Inputs is a plain dict
+            record=message.record,  # Strict contract: record must be explicit
         )
 
         # Verify that trace.record was populated from the explicit record parameter

@@ -953,18 +953,9 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             )
             # Decide handling: continue without history or raise? For now, log and continue.
 
-        # 5. Use most recent record from data if not provided in input
-        if not updated_inputs.record:
-            record_list = self._data.get("record", [])
-            if record_list:
-                record_data = record_list[-1]  # Get most recent
-
-                # Reconstruct as proper BaseRecord subclass if it's a dict
-                if isinstance(record_data, dict):
-                    updated_inputs.record = BaseRecord.from_dict(record_data)
-                else:
-                    # Already an object
-                    updated_inputs.record = record_data
+        # 5. Strict contract: record must come from input message or explicit JMESPath mapping
+        # No fallback to _data["record"] - if record is needed, map it explicitly in agent config
+        # This eliminates guessing patterns and makes data flow explicit
 
         # TODO: @nicsuzor decide if we need to remove inputs that are not in the Agent's input schema.
 

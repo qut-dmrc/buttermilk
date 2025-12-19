@@ -742,12 +742,9 @@ class ExecutionTrace(BaseModel):
         if metadata:
             combined_metadata.update(metadata)
 
-        # Use provided record or extract from inputs if available
+        # Strict contract: record must be provided explicitly
+        # No fallback extraction from inputs - caller is responsible for providing record
         record_obj = record
-        if record_obj is None and inputs and hasattr(inputs, "record") and inputs.record:
-            record_obj = inputs.record
-            inputs = dict(inputs)
-            _ = inputs.pop("record", None)
 
         return cls(
             call_id=call_id or output.call_id,
