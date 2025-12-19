@@ -1,0 +1,20 @@
+# Test-safe LLM config that avoids Azure models with rate limits
+# Uses only Gemini and Claude which have higher limits
+
+host: gemini-flash-lite
+
+cheap:
+  - claude-haiku
+  - gemini-flash-lite
+
+general:
+  - gemini-flash-lite
+  - claude-haiku
+
+judgers:
+  - claude-haiku
+  - gemini-flash-lite
+
+synthesisers:
+  - gemini-flash-lite
+  - claude-haiku
