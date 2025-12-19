@@ -107,27 +107,21 @@ class ProcessorCore(ABC, BaseModel):
         self,
         processor_stage: str,
         execution_type: str = "processing",
-        extra_config: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
         """Build standardized agent_info dict for ExecutionTrace.
 
         Args:
             processor_stage: Pipeline stage identifier
             execution_type: Type of execution (e.g., "classification", "llm_processing")
-            extra_config: Additional config to include
 
         Returns:
             Standardized agent_info dictionary
         """
-        config = {**self.parameters}
-        if extra_config:
-            config.update(extra_config)
-
         return {
             "component_name": self.__class__.__name__,
+            "processor_class": self.__class__.__name__,
             "execution_type": execution_type,
             "processor_stage": processor_stage,
-            "config": config,
         }
 
     def _build_trace_metadata(
@@ -171,7 +165,6 @@ class ProcessorCore(ABC, BaseModel):
         trace_id: Optional[str] = None,
         parameters: Optional[dict[str, Any]] = None,
         component_name: Optional[str] = None,
-        extra_agent_config: Optional[dict[str, Any]] = None,
     ) -> str:
         """Emit a success execution trace.
 
@@ -188,7 +181,6 @@ class ProcessorCore(ABC, BaseModel):
             trace_id: Optional trace ID (generated if not provided)
             parameters: Optional parameters override (defaults to self.parameters)
             component_name: Optional component name (defaults to class name)
-            extra_agent_config: Additional config for agent_info
 
         Returns:
             trace_id: The trace ID used
@@ -198,10 +190,8 @@ class ProcessorCore(ABC, BaseModel):
         if trace_id is None:
             trace_id = str(uuid.uuid4())
 
-        # Build agent_info with optional overrides
-        agent_info = self._build_agent_info(
-            processor_stage, execution_type, extra_config=extra_agent_config
-        )
+        # Build agent_info
+        agent_info = self._build_agent_info(processor_stage, execution_type)
         if component_name:
             agent_info["component_name"] = component_name
 
@@ -231,7 +221,6 @@ class ProcessorCore(ABC, BaseModel):
         execution_type: str = "processing",
         parameters: Optional[dict[str, Any]] = None,
         component_name: Optional[str] = None,
-        extra_agent_config: Optional[dict[str, Any]] = None,
     ) -> None:
         """Emit an error execution trace.
 
@@ -245,12 +234,9 @@ class ProcessorCore(ABC, BaseModel):
             execution_type: Type of execution
             parameters: Optional parameters override (defaults to self.parameters)
             component_name: Optional component name (defaults to class name)
-            extra_agent_config: Additional config for agent_info
         """
-        # Build agent_info with optional overrides
-        agent_info = self._build_agent_info(
-            processor_stage, execution_type, extra_config=extra_agent_config
-        )
+        # Build agent_info
+        agent_info = self._build_agent_info(processor_stage, execution_type)
         if component_name:
             agent_info["component_name"] = component_name
 

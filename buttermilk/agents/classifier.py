@@ -226,7 +226,6 @@ class ClassifierCore(ProcessorCore):
                     execution_type="classification",
                     trace_id=result.trace_id,
                     parameters={"template": self.template, **self.parameters},
-                    extra_agent_config={"template": self.template},
                 )
 
                 yield enriched_record
@@ -242,7 +241,6 @@ class ClassifierCore(ProcessorCore):
                     inputs=kwargs if kwargs else None,
                     execution_type="classification",
                     parameters={"template": self.template, **self.parameters},
-                    extra_agent_config={"template": self.template},
                 )
 
                 span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))

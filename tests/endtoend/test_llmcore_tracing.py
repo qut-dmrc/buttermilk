@@ -229,28 +229,25 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
     if isinstance(inputs, str):
         inputs = json.loads(inputs)
 
-    # Validate template_vars contains the prompt and record data
-    template_vars = inputs.get("template_vars", {})
-    if isinstance(template_vars, str):
-        template_vars = json.loads(template_vars)
+    # Validate inputs contains the prompt and record data (flattened structure)
+    # Template variables are now directly in inputs, not nested under "template_vars"
+    assert "prompt" in inputs, f"inputs should contain prompt field. inputs keys: {inputs.keys()}"
 
-    assert "prompt" in template_vars, f"template_vars should contain prompt field. template_vars keys: {template_vars.keys()}"
-
-    # Record data is now stored in template_vars (flattened from record)
+    # Record data is flattened into inputs
     # Essential fields: record_id, dataset_name, split_type
-    assert "record_id" in template_vars, f"template_vars should have record_id field. Keys: {template_vars.keys()}"
-    assert template_vars["record_id"] is not None, "template_vars.record_id should not be None"
-    assert len(template_vars["record_id"]) > 0, "template_vars.record_id should not be empty"
+    assert "record_id" in inputs, f"inputs should have record_id field. Keys: {inputs.keys()}"
+    assert inputs["record_id"] is not None, "inputs.record_id should not be None"
+    assert len(inputs["record_id"]) > 0, "inputs.record_id should not be empty"
 
-    assert "dataset_name" in template_vars, f"template_vars should have dataset_name field. Keys: {template_vars.keys()}"
-    assert "split_type" in template_vars, f"template_vars should have split_type field. Keys: {template_vars.keys()}"
-    assert template_vars["dataset_name"] == "test_llmcore", "template_vars should preserve dataset_name value"
-    assert template_vars["split_type"] == "test", "template_vars should preserve split_type value"
+    assert "dataset_name" in inputs, f"inputs should have dataset_name field. Keys: {inputs.keys()}"
+    assert "split_type" in inputs, f"inputs should have split_type field. Keys: {inputs.keys()}"
+    assert inputs["dataset_name"] == "test_llmcore", "inputs should preserve dataset_name value"
+    assert inputs["split_type"] == "test", "inputs should preserve split_type value"
 
     logger.info(
-        f"✅ Record structure validated: record_id={template_vars['record_id']}, "
-        f"dataset_name={template_vars['dataset_name']}, "
-        f"split_type={template_vars['split_type']}"
+        f"✅ Record structure validated: record_id={inputs['record_id']}, "
+        f"dataset_name={inputs['dataset_name']}, "
+        f"split_type={inputs['split_type']}"
     )
 
     # Validate outputs contain structured response with Paris
@@ -496,14 +493,14 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
     # HASH VALIDATION: Verify hashes exist and match recomputed values
     # ==========================================================================
 
-    # 1. Validate template_hash exists in metadata and matches recomputed hash
-    assert "template" in metadata, f"Metadata should contain 'template' with template_hash. Got keys: {metadata.keys()}"
-    template_metadata = metadata["template"]
-    if isinstance(template_metadata, str):
-        template_metadata = json.loads(template_metadata)
+    # 1. Validate template_hash exists in metadata.hashes and matches recomputed hash
+    assert "hashes" in metadata, f"Metadata should contain 'hashes' dict. Got keys: {metadata.keys()}"
+    hashes_metadata = metadata["hashes"]
+    if isinstance(hashes_metadata, str):
+        hashes_metadata = json.loads(hashes_metadata)
 
-    assert "template_hash" in template_metadata, f"Template metadata should contain 'template_hash'. Got: {template_metadata.keys()}"
-    logged_template_hash = template_metadata["template_hash"]
+    assert "template_hash" in hashes_metadata, f"Hashes metadata should contain 'template_hash'. Got: {hashes_metadata.keys()}"
+    logged_template_hash = hashes_metadata["template_hash"]
     assert logged_template_hash is not None, "template_hash should not be None"
     assert len(logged_template_hash) == 64, f"template_hash should be 64-char SHA256, got {len(logged_template_hash)} chars: {logged_template_hash}"
 
@@ -519,27 +516,23 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
     )
     logger.info(f"✅ template_hash validated: {logged_template_hash[:16]}...")
 
-    # 2. Validate record exists in template_vars and has record_id for hash verification
-    # Record data is flattened into template_vars
-    template_vars_for_hash = inputs.get("template_vars", {})
-    if isinstance(template_vars_for_hash, str):
-        template_vars_for_hash = json.loads(template_vars_for_hash)
-
-    assert "record_id" in template_vars_for_hash, f"template_vars in trace should have record_id. Got keys: {template_vars_for_hash.keys()}"
+    # 2. Validate record_id exists in inputs (flattened structure)
+    # Record data is flattened directly into inputs
+    assert "record_id" in inputs, f"inputs should have record_id. Got keys: {inputs.keys()}"
     # Verify the record_id matches our sample_record
-    assert template_vars_for_hash["record_id"] == sample_record.record_id, (
-        f"Record ID in trace should match input record.\nTrace:    {template_vars_for_hash['record_id']}\nExpected: {sample_record.record_id}"
+    assert inputs["record_id"] == sample_record.record_id, (
+        f"Record ID in trace should match input record.\nTrace:    {inputs['record_id']}\nExpected: {sample_record.record_id}"
     )
-    logger.info(f"✅ record_id validated: {template_vars_for_hash['record_id']}")
+    logger.info(f"✅ record_id validated: {inputs['record_id']}")
 
-    # Validate record_hash exists in metadata and matches recomputed hash
-    assert "record" in metadata, f"Metadata should contain 'record' with record_hash. Got keys: {metadata.keys()}"
-    record_metadata = metadata["record"]
-    if isinstance(record_metadata, str):
-        record_metadata = json.loads(record_metadata)
+    # Validate record_hash exists in metadata.hashes and matches recomputed hash
+    assert "hashes" in metadata, f"Metadata should contain 'hashes' dict. Got keys: {metadata.keys()}"
+    hashes_metadata = metadata["hashes"]
+    if isinstance(hashes_metadata, str):
+        hashes_metadata = json.loads(hashes_metadata)
 
-    assert "record_hash" in record_metadata, f"Record metadata should contain 'record_hash'. Got: {record_metadata.keys()}"
-    logged_record_hash = record_metadata["record_hash"]
+    assert "record_hash" in hashes_metadata, f"Hashes metadata should contain 'record_hash'. Got: {hashes_metadata.keys()}"
+    logged_record_hash = hashes_metadata["record_hash"]
     assert logged_record_hash is not None, "record_hash should not be None"
     assert len(logged_record_hash) == 64, f"record_hash should be 64-char SHA256, got {len(logged_record_hash)} chars: {logged_record_hash}"
 
@@ -692,19 +685,16 @@ async def test_template_filling_with_criteria_variants(real_bm, sample_record: B
         if isinstance(inputs, str):
             inputs = json.loads(inputs)
 
-        template_vars = inputs.get("template_vars", {})
-        if isinstance(template_vars, str):
-            template_vars = json.loads(template_vars)
-
-        assert "criteria" in template_vars, f"template_vars should contain 'criteria' for {criteria_name}. Got keys: {template_vars.keys()}"
-        assert template_vars["criteria"] == criteria_name, (
-            f"template_vars.criteria should be '{criteria_name}', got '{template_vars.get('criteria')}'"
+        # Inputs are now flattened (no template_vars wrapper)
+        assert "criteria" in inputs, f"inputs should contain 'criteria' for {criteria_name}. Got keys: {inputs.keys()}"
+        assert inputs["criteria"] == criteria_name, (
+            f"inputs.criteria should be '{criteria_name}', got '{inputs.get('criteria')}'"
         )
 
         logger.info(f"✅ Criteria '{criteria_name}' correctly filled in template")
         logger.info(f"   - Identifying text found: '{identifying_text[:50]}...'")
         logger.info("   - No unfilled variables")
-        logger.info(f"   - template_vars.criteria = '{criteria_name}'")
+        logger.info(f"   - inputs.criteria = '{criteria_name}'")
 
     logger.info("=" * 80)
     logger.info("✅ CRITERIA VARIANTS TEST PASSED")
@@ -844,13 +834,10 @@ async def test_record_hash_stored_in_single_location(real_bm, sample_record: Bas
     This test validates data integrity by ensuring record_hash is stored in a
     single, predictable location rather than duplicated across multiple fields.
 
-    Currently, record_hash appears in multiple locations:
-    - metadata.record.record_hash
-    - inputs.record.record_hash (if record serialized in inputs)
-    - metadata.resolved_inputs.record.record_hash
-    - metadata.resolved_inputs.template_vars.record[*].record_hash
-
-    This test should FAIL until record_hash storage is fixed to use a single location.
+    All hashes are consolidated in metadata.hashes dict:
+    - metadata.hashes.record_hash (expected location)
+    - metadata.hashes.template_hash
+    - metadata.hashes.ground_truth_hash (optional)
     """
     # Skip structured output test for models that don't support it
     if real_model_name_expensive in MODELS_WITHOUT_STRUCTURED_OUTPUT:
@@ -973,8 +960,8 @@ async def test_record_hash_stored_in_single_location(real_bm, sample_record: Bas
         + "which creates data integrity issues and confusion about the source of truth."
     )
 
-    # Validate the single location is the expected one (metadata.record.record_hash)
-    expected_path = "root.metadata.record.record_hash"
+    # Validate the single location is the expected one (metadata.hashes.record_hash)
+    expected_path = "root.metadata.hashes.record_hash"
     assert all_record_hash_paths[0] == expected_path, (
         f"record_hash should be stored at '{expected_path}', but found it at '{all_record_hash_paths[0]}'"
     )
@@ -989,11 +976,10 @@ async def test_template_hash_stored_in_single_location(real_bm, sample_record: B
     This test validates data integrity by ensuring template_hash is stored in a
     single, predictable location rather than duplicated across multiple fields.
 
-    Currently, template_hash appears in multiple locations:
-    - metadata.template.template_hash (expected location)
-    - agent_info.template_hash (duplicate, should be removed)
-
-    This test should FAIL until template_hash storage is fixed to use a single location.
+    All hashes are consolidated in metadata.hashes dict:
+    - metadata.hashes.template_hash (expected location)
+    - metadata.hashes.record_hash
+    - metadata.hashes.ground_truth_hash (optional)
     """
     # Skip structured output test for models that don't support it
     if real_model_name_expensive in MODELS_WITHOUT_STRUCTURED_OUTPUT:
@@ -1116,8 +1102,8 @@ async def test_template_hash_stored_in_single_location(real_bm, sample_record: B
         + "which creates data integrity issues and confusion about the source of truth."
     )
 
-    # Validate the single location is the expected one (metadata.template.template_hash)
-    expected_path = "root.metadata.template.template_hash"
+    # Validate the single location is the expected one (metadata.hashes.template_hash)
+    expected_path = "root.metadata.hashes.template_hash"
     assert all_template_hash_paths[0] == expected_path, (
         f"template_hash should be stored at '{expected_path}', but found it at '{all_template_hash_paths[0]}'"
     )
@@ -1127,10 +1113,10 @@ async def test_template_hash_stored_in_single_location(real_bm, sample_record: B
 
 @pytest.mark.anyio
 async def test_warning_raised_on_record_mismatch(real_bm, caplog):
-    """Test that a warning is raised when record data mismatches template_vars.
+    """Test that a warning is raised when record.text mismatches template_vars.text.
 
     This validates issue #305 acceptance criterion:
-    If inputs.record is filled AND inputs.template_vars.record != inputs.record,
+    If both record AND template_vars are provided, and their text content differs,
     raise a warning about data inconsistency.
     """
     import logging
@@ -1161,17 +1147,15 @@ async def test_warning_raised_on_record_mismatch(real_bm, caplog):
 @pytest.mark.endtoend
 @pytest.mark.anyio
 async def test_no_duplicate_record_in_resolved_inputs(real_bm, sample_record: BaseRecord, real_model_name_expensive: str, llm_wrapper_type):
-    """Test that record data is NOT duplicated in both inputs.record and inputs.template_vars.
+    """Test that record data is NOT duplicated between inputs and trace.record.
 
-    When template_vars=None is passed to LLMCore, it derives template_vars from record.
-    This test verifies that the resolved_inputs does NOT duplicate record data between:
-    - inputs.template_vars (containing record fields)
-    - inputs.record (also containing full record data)
+    With the new flattened inputs structure:
+    - Template variables are flattened directly into inputs (no wrapper)
+    - Record is stored ONLY in trace.record, not in inputs
+    - Bulky content fields (text, content, metadata) are stripped from inputs when derived from record
 
-    Expected failure: Currently both contain the full record data (duplication exists).
-
-    Acceptance criterion: If template_vars contains record fields (text, dataset_name, etc.),
-    then inputs.record should NOT contain the same full content.
+    Acceptance criterion: inputs should NOT contain duplicate record content.
+    Record data lives in trace.record only.
     """
     # Skip structured output test for models that don't support it
     if real_model_name_expensive in MODELS_WITHOUT_STRUCTURED_OUTPUT:
@@ -1244,43 +1228,36 @@ async def test_no_duplicate_record_in_resolved_inputs(real_bm, sample_record: Ba
     if isinstance(inputs, str):
         inputs = json.loads(inputs)
 
-    # Step 5: Check for duplication
-    template_vars = inputs.get("template_vars", {})
-    record_in_inputs = inputs.get("record")
+    # Step 5: Verify flat structure and no duplication
+    # With new schema:
+    # - Template vars are flattened directly into inputs (no "template_vars" key)
+    # - Record is ONLY in trace.record (no "record" key in inputs)
+    # - Bulky fields (text, content, metadata) are stripped when derived from record
 
-    if isinstance(template_vars, str):
-        template_vars = json.loads(template_vars)
-    if isinstance(record_in_inputs, str):
-        record_in_inputs = json.loads(record_in_inputs)
+    # Verify no nested template_vars wrapper
+    assert "template_vars" not in inputs, (
+        f"inputs should NOT have nested 'template_vars' key. Structure should be flat. Got keys: {inputs.keys()}"
+    )
 
-    logger.info(f"template_vars keys: {template_vars.keys() if template_vars else 'None'}")
-    logger.info(f"record keys: {record_in_inputs.keys() if record_in_inputs else 'None'}")
+    # Verify no record key in inputs (record is only in trace.record)
+    assert "record" not in inputs, (
+        f"inputs should NOT have 'record' key. Record lives only in trace.record. Got keys: {inputs.keys()}"
+    )
 
-    # Check if template_vars contains record-like fields
-    record_fields = {"text", "dataset_name", "split_type", "metadata", "record_id"}
-    tv_has_record_data = bool(record_fields & set(template_vars.keys() if template_vars else []))
+    logger.info(f"inputs keys: {inputs.keys()}")
 
-    if tv_has_record_data:
-        logger.info("✓ template_vars contains record fields (expected when derived from record)")
+    # Verify bulky content fields are stripped
+    bulky_fields = {"text", "content", "metadata"}
+    bulky_in_inputs = bulky_fields & set(inputs.keys())
+    assert not bulky_in_inputs, (
+        f"Bulky content fields should be stripped from inputs when derived from record. "
+        f"Found: {bulky_in_inputs}. These should only be in trace.record."
+    )
 
-        # CRITICAL: If template_vars has record data, inputs.record should NOT duplicate it
-        if record_in_inputs and "text" in record_in_inputs:
-            # Check if the text content is duplicated
-            tv_text = template_vars.get("text", "")
-            record_text = record_in_inputs.get("text", "")
+    # Verify identifiers are preserved in inputs
+    assert "record_id" in inputs, f"record_id should be in inputs. Got keys: {inputs.keys()}"
+    assert "dataset_name" in inputs, f"dataset_name should be in inputs. Got keys: {inputs.keys()}"
 
-            # This should FAIL - proving duplication exists
-            assert tv_text != record_text or record_text == "", (
-                f"Record content duplicated: 'text' appears in both template_vars and inputs.record.\n"
-                f"template_vars.text: {tv_text[:100]}...\n"
-                f"inputs.record.text: {record_text[:100]}...\n"
-                f"When template_vars is derived from record, inputs.record should NOT contain duplicate data."
-            )
-
-            logger.info("✗ DUPLICATION DETECTED: text exists in both locations")
-            logger.info(f"  template_vars.text length: {len(tv_text)}")
-            logger.info(f"  inputs.record.text length: {len(record_text)}")
-        else:
-            logger.info("✓ No duplication - inputs.record does not contain text field")
-    else:
-        logger.info("✓ template_vars does not contain record fields (no duplication possible)")
+    logger.info("✓ Flat structure verified - no nesting, no duplication")
+    logger.info(f"  Input keys: {list(inputs.keys())}")
+    logger.info(f"  record_id: {inputs.get('record_id')}")

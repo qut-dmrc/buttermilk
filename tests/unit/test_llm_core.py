@@ -299,10 +299,14 @@ class TestLLMCore:
 
     @pytest.mark.anyio
     async def test_template_metadata_preserved_in_result(self):
-        """Test that template metadata (including template_hash) is preserved in LLMResult.
+        """Test that template metadata is preserved in LLMResult.
 
         Regression test for bug where template_hash was calculated but then
         overwritten when metadata dict was replaced instead of updated.
+
+        Template info is stored at:
+        - metadata["template"]["template_name"] and ["unfilled_vars"]
+        - metadata["hashes"]["template_hash"]
 
         This test uses REAL template loading to verify the actual bug is fixed.
         """
@@ -328,11 +332,14 @@ class TestLLMCore:
                 "Template metadata should be present in result"
             )
             assert result.metadata["template"]["template_name"] == "test/simple"
-            assert "template_hash" in result.metadata["template"]
-            assert (
-                result.metadata["template"]["template_hash"] != ""
-            )  # Should have a hash
             assert result.metadata["template"]["unfilled_vars"] == []
+
+            # Template hash is consolidated in metadata.hashes
+            assert "hashes" in result.metadata, (
+                "Hashes should be present in result metadata"
+            )
+            assert "template_hash" in result.metadata["hashes"]
+            assert result.metadata["hashes"]["template_hash"] != ""  # Should have a hash
 
             # Also verify other metadata is still there (wasn't overwritten)
             assert result.metadata["model"] == "gpt-4"
@@ -343,8 +350,9 @@ class TestLLMCore:
         """Test that record metadata (including record_hash) is stored in LLMResult.
 
         Similar to template_metadata test, this verifies that when a record is
-        provided, its metadata (record_id and record_hash) is preserved in the
-        result.metadata["record"] dictionary.
+        provided, its metadata is preserved:
+        - record_id at result.metadata["record_id"]
+        - record_hash at result.metadata["hashes"]["record_hash"]
         """
         core = LLMCore(model="gpt-4", template="test/simple")
 
@@ -372,16 +380,21 @@ class TestLLMCore:
             )
 
             # Verify record metadata is present in result.metadata
-            assert "record" in result.metadata, (
-                "Record metadata should be present in result"
+            assert "record_id" in result.metadata, (
+                "Record ID should be present in result metadata"
             )
-            assert result.metadata["record"]["record_id"] == "test_record_123"
-            assert "record_hash" in result.metadata["record"]
-            assert result.metadata["record"]["record_hash"] != ""  # Should have a hash
-            assert len(result.metadata["record"]["record_hash"]) == 64  # SHA256 length
+            assert result.metadata["record_id"] == "test_record_123"
+
+            # Verify hashes are consolidated in metadata.hashes
+            assert "hashes" in result.metadata, (
+                "Hashes should be present in result metadata"
+            )
+            assert "record_hash" in result.metadata["hashes"]
+            assert result.metadata["hashes"]["record_hash"] != ""  # Should have a hash
+            assert len(result.metadata["hashes"]["record_hash"]) == 64  # SHA256 length
 
             # Verify the hash matches the record's computed hash
-            assert result.metadata["record"]["record_hash"] == record.record_hash
+            assert result.metadata["hashes"]["record_hash"] == record.record_hash
 
             # Also verify other metadata is still there (wasn't overwritten)
             assert result.metadata["model"] == "gpt-4"
@@ -534,10 +547,10 @@ class TestLLMCore:
             )
 
             assert result.content == "Success"
-            # Verify record fields were used as template vars
-            assert result.resolved_inputs["template_vars"]["var"] == "test value from record"
-            assert result.resolved_inputs["template_vars"]["record_id"] == "test"
-            assert result.resolved_inputs["template_vars"]["dataset_name"] == "test_dataset"
+            # Verify record fields were used as template vars (flattened structure)
+            assert result.resolved_inputs["var"] == "test value from record"
+            assert result.resolved_inputs["record_id"] == "test"
+            assert result.resolved_inputs["dataset_name"] == "test_dataset"
 
     @pytest.mark.anyio
     async def test_process_with_llm_none_vars_none_record(self):
@@ -569,6 +582,7 @@ class TestLLMCore:
                 record=None,
             )
 
-            # Should have empty template_vars
-            assert result.resolved_inputs["template_vars"] == {}
-            assert result.resolved_inputs["record"] is None
+            # Should have only context key (no template vars, no record)
+            # With flat structure, empty template_vars means only "context" key is present
+            assert "context" in result.resolved_inputs
+            assert "record" not in result.resolved_inputs  # record is only in trace.record

@@ -651,12 +651,9 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             inputs=trace_inputs,
             agent_info={
                 "component_name": self.agent_name,
-                "execution_type": "agent",
+                "agent_class": self.__class__.__name__,
                 "agent_id": self.agent_id,
                 "role": self.role,
-                "config": self._config.model_dump()
-                if hasattr(self._config, "model_dump")
-                else self._config,
             },
             parameters=message.parameters if hasattr(message, "parameters") else None,
             tracing={"tracing_link": tracing_link} if tracing_link else None,

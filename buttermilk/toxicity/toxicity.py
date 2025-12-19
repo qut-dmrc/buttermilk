@@ -392,11 +392,6 @@ class ToxicityClassifierCore(ProcessorCore):
                 "process_chain": self.process_chain,
                 "standard": self.standard,
             },
-            extra_agent_config={
-                "model": self.model,
-                "process_chain": self.process_chain,
-                "standard": self.standard,
-            },
         )
 
         # Build output dict with prediction and optional labels

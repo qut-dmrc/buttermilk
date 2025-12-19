@@ -376,12 +376,11 @@ class LLMCore(ProcessorCore):
                 else:
                     template_vars_for_trace = template_vars
 
+                # Flatten template_vars directly into inputs (no wrapper)
+                # Record data lives ONLY in trace.record, not duplicated in inputs
                 result.resolved_inputs = {
-                    "template_vars": template_vars_for_trace,
-                    "record": None if _template_vars_derived_from_record else (
-                        record.model_dump(exclude={'record_hash', 'ground_truth_hash'}) if record else None
-                    ),
-                    "context": context,
+                    **template_vars_for_trace,  # Flattened template variables
+                    "context": context,  # Conversation history (reserved key)
                 }
 
                 # Store this for later use in trace emission
@@ -392,15 +391,22 @@ class LLMCore(ProcessorCore):
                     template_vars, record=record, context=context
                 )
 
-                # Store template metadata
-                result.metadata["template"] = self._template_metadata
+                # Store template metadata (without hash - hash goes to hashes dict)
+                result.metadata["template"] = {
+                    "template_name": self._template_metadata.get("template_name"),
+                    "unfilled_vars": self._template_metadata.get("unfilled_vars", []),
+                }
 
-                # Store record metadata if record is present
+                # Consolidate all hashes in metadata.hashes
+                result.metadata["hashes"] = {
+                    "template_hash": self._template_metadata.get("template_hash"),
+                }
                 if record is not None:
-                    result.metadata["record"] = {
-                        "record_id": record.record_id,
-                        "record_hash": record.record_hash,
-                    }
+                    result.metadata["hashes"]["record_hash"] = record.record_hash
+                    if hasattr(record, "ground_truth_hash") and record.ground_truth_hash:
+                        result.metadata["hashes"]["ground_truth_hash"] = record.ground_truth_hash
+                    # Store record_id separately (not a hash)
+                    result.metadata["record_id"] = record.record_id
 
                 # Call LLM
                 llm_result = await self._call_llm_with_trace(
