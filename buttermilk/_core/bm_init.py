@@ -112,6 +112,7 @@ class SessionInfo(BaseModel):
         # Configuration tracking
         agent_configs (dict): Agent configurations used in this session.
         flow_config (dict): Flow configuration for this session.
+        config_uri (str | None): URI to saved initial configuration file for trace reproducibility.
 
     """
 
@@ -185,6 +186,9 @@ class SessionInfo(BaseModel):
     )
     flow_hash: str | None = Field(
         default=None, description="Hash of flow configuration for A/B testing."
+    )
+    config_uri: str | None = Field(
+        default=None, description="URI to saved initial configuration file."
     )
     template_paths: list[str] = Field(
         default_factory=list, description="Paths to search for templates."
@@ -707,12 +711,15 @@ class BM(BaseModel):
             "session_info": self.session_info.model_dump(exclude_none=True),
         }
 
-        self.save(
+        config_uri = self.save(
             data=config_data_to_save,
             basename="initial_bm_config",
             extension=".json",
         )
-        logger.debug("Initial BM config saved successfully")
+        # Store config URI for trace reproducibility
+        if config_uri:
+            self.session_info.config_uri = config_uri
+        logger.debug("Initial BM config saved successfully", config_uri=config_uri)
 
     # Permit overriding/attaching attributes (e.g., monkeypatching methods) in tests
     def __setattr__(self, name: str, value: Any) -> None:  # type: ignore[override]
