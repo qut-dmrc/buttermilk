@@ -448,7 +448,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
         """
         await self._publish(
-            TaskProcessingStarted(agent_id=self.agent_id, role=self.role, task_index=0),
+            TaskProcessingStarted(agent_id=self.agent_id, role=self.role),
             topic_id=self._topic_id,
         )
 
@@ -515,8 +515,6 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             TaskProcessingComplete(
                 agent_id=self.agent_id,
                 role=self.role,
-                task_index=0,
-                more_tasks_remain=False,
                 is_error=trace_object.is_error,
             ),
             topic_id=self._topic_id,

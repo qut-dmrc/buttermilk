@@ -189,30 +189,6 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
                 logger.error(f"✗ Flow '{run_request.flow}' failed: {e}")
                 raise
 
-        case "streamlit":
-            # Starts the Streamlit web interface.
-            logger.info("Starting Streamlit interface...")
-            try:
-                from buttermilk.web.streamlit_frontend.app import create_dashboard_app
-
-                # create_dashboard_app is expected to configure and run the Streamlit app.
-                # It might need access to flow_runner or specific flow configurations.
-                streamlit_app_manager = create_dashboard_app(
-                    flow_runner=flow_runner
-                )  # Pass FlowRunner
-                asyncio.run(
-                    streamlit_app_manager.run()
-                )  # Assuming create_dashboard_app returns an object with a run method
-            except ImportError as e_streamlit:
-                logger.error(
-                    f"Failed to import Streamlit components: {e_streamlit!s}. Is Streamlit installed?"
-                )
-            except Exception as e_streamlit_start:
-                logger.error(
-                    f"Error starting Streamlit interface: {e_streamlit_start!s}",
-                    exc_info=True,
-                )
-
         case "api":
             # API mode: Start FastAPI web server for HTTP API access
             host = str(conf.run.host or "0.0.0.0")
@@ -260,91 +236,6 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
                 logger.info("Shutting down gracefully (Ctrl+C received)...")
             finally:
                 logger.info("API server stopped.")
-
-        case "pub/sub":
-            # Starts a Google Cloud Pub/Sub listener.
-            # TODO: Implement Pub/Sub listener functionality
-            # This mode was previously delegated to batch_cli, which has been removed.
-            # Pub/Sub integration should be implemented using the JobQueueClient with Pub/Sub backend.
-            logger.error(
-                "Pub/Sub mode is not yet implemented."
-            )
-            raise NotImplementedError(
-                "Pub/Sub mode requires implementation. See GitHub issues for status."
-            )
-
-        case "slackbot":
-            # Starts a Slack bot integration.
-            logger.info("Starting Slackbot mode...")
-
-            # Retrieve Slack tokens securely from bm.credentials
-            slack_creds = bm.credentials
-            if not isinstance(slack_creds, dict):
-                raise TypeError(
-                    f"Expected bm.credentials to be a dict, got {type(slack_creds)}"
-                )
-
-            slack_bot_token = slack_creds.get("MODBOT_TOKEN")  # Standard bot token
-            slack_app_token = slack_creds.get(
-                "SLACK_APP_TOKEN"
-            )  # Socket Mode app-level token
-
-            if not slack_bot_token or not slack_app_token:
-                raise ValueError(
-                    "Missing MODBOT_TOKEN or SLACK_APP_TOKEN in credentials. Check secrets configuration."
-                )
-
-            # Set environment variables for Slack Bolt library, if it relies on them.
-            # Alternatively, pass tokens directly to initialize_slack_bot if supported.
-            os.environ["SLACK_BOT_TOKEN"] = slack_bot_token
-            os.environ["SLACK_APP_TOKEN"] = slack_app_token
-
-            from buttermilk.runner.slackbot import (
-                initialize_slack_bot,
-            )  # Slack bot initialization utility
-
-            event_loop = asyncio.get_event_loop()
-
-            # General functoins might take a few more seconds
-            event_loop.slow_callback_duration = 10
-
-            # Queue for managing asyncio tasks created by Slack event handlers
-            orchestrator_tasks = asyncio.Queue()  # type: ignore
-
-            slack_bolt_app, slack_bolt_handler = initialize_slack_bot(
-                bot_token=slack_bot_token,
-                app_token=slack_app_token,
-                loop=event_loop,
-            )
-
-            # Start the Slack Bolt handler in a background task
-            _ = event_loop.create_task(slack_bolt_handler.start_async())
-
-            async def runloop() -> None:
-                """Registers handlers and keeps the main loop running for the Slack bot."""
-                # Register the specific Buttermilk command/event handlers with the Bolt app.
-                # This connects Slack events (like slash commands) to Buttermilk flow execution.
-                from buttermilk.runner.slackbot import register_handlers
-
-                await register_handlers(
-                    slack_app=slack_bolt_app,
-                    flows=flow_runner.flows,
-                    orchestrator_tasks=orchestrator_tasks,
-                )
-                logger.info("Slack handlers registered. Buttermilk Slackbot is ready.")
-                # Keep the event loop running; Slack events will drive operations.
-                while True:
-                    await asyncio.sleep(3600)  # Wake up periodically or rely on events
-
-            try:
-                event_loop.run_until_complete(runloop())
-            except KeyboardInterrupt:
-                logger.info("Slackbot received KeyboardInterrupt. Shutting down...")
-            finally:
-                # TODO: Implement graceful shutdown for Slackbot (e.g., stop handler, wait for tasks)
-                if not event_loop.is_closed():
-                    event_loop.close()
-                logger.info("Slackbot event loop closed.")
 
         case "pipeline":
             # Pipeline mode: Run data processing pipeline
