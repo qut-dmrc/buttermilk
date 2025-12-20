@@ -73,7 +73,16 @@ class TransformProcessorConfig(ProcessorConfig):
     output_field: str = Field(default="transformed", description="Field to store result in metadata.")
 
 
+class BatchProcessorConfig(ProcessorConfig):
+    """Base config for batch processors.
+
+    Batch processors accumulate records and process them in batches for efficiency.
+    Used for operations like GPU inference, bulk API calls, etc.
+    """
+    batch_size: int = Field(default=32, description="Number of records to batch together.")
+
+
 # Discriminated Union for type-safe parsing
 # Add new processor config types here
-ProcessorConfigUnion = LLMProcessorConfig | FilterProcessorConfig | ShellProcessorConfig | GroupchatProcessorConfig | ExpanderProcessorConfig | TransformProcessorConfig
+ProcessorConfigUnion = LLMProcessorConfig | FilterProcessorConfig | ShellProcessorConfig | GroupchatProcessorConfig | ExpanderProcessorConfig | TransformProcessorConfig | BatchProcessorConfig
 

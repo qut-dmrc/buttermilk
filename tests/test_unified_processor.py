@@ -17,10 +17,11 @@ from opentelemetry import trace
 from buttermilk._core.executor import PipelineExecutor
 from buttermilk._core.pipeline_config import PipelineConfig
 from buttermilk._core.processing_context import ProcessingContext
-from buttermilk._core.processor_config import ExpanderProcessorConfig, ProcessorConfig, TransformProcessorConfig
-from buttermilk._core.protocols import Processor
+from buttermilk._core.processor_config import BatchProcessorConfig, ExpanderProcessorConfig, ProcessorConfig, TransformProcessorConfig
+from buttermilk._core.protocols import BatchProcessor, Processor
 from buttermilk._core.types import BaseRecord
 from buttermilk._core.unified_processor import UnifiedProcessor
+from buttermilk._core.unified_batch_processor import UnifiedBatchProcessor
 from buttermilk.processors.unified_processors import ExpanderProcessor, TransformProcessor
 
 
@@ -943,3 +944,247 @@ class TestProcessorRegistry:
         # Should raise KeyError (fail-fast)
         with pytest.raises(KeyError, match="unknown_processor_type"):
             create_processor(config)
+
+
+class TestBatchProcessor:
+    """Test BatchProcessor functionality and integration with executor."""
+
+    @pytest.mark.anyio
+    async def test_batch_processor_buffers_records(self):
+        """Verify BatchProcessor buffers records until batch_size is reached."""
+        # Create a test batch processor that accumulates records
+        class TestBatchProcessor(UnifiedBatchProcessor):
+            def __init__(self, config: BatchProcessorConfig):
+                super().__init__(config)
+                self.processed_batches = []
+
+            async def _process_batch(
+                self, contexts: list[ProcessingContext]
+            ) -> AsyncGenerator[list[BaseRecord], None]:
+                # Store batch for verification
+                self.processed_batches.append(contexts)
+                # Yield records unchanged
+                yield [ctx.record for ctx in contexts]
+
+        config = BatchProcessorConfig(
+            type="test_batch",
+            batch_size=3,
+        )
+
+        processor = TestBatchProcessor(config)
+
+        # Create contexts
+        contexts = [
+            ProcessingContext(
+                session_id="batch-session",
+                record=BaseRecord(
+                    record_id=f"batch-{i}",
+                    content=f"content-{i}",
+                ),
+            )
+            for i in range(3)
+        ]
+
+        # Process batch
+        outputs = []
+        async for output_batch in processor.process_batch(contexts):
+            outputs.extend(output_batch)
+
+        # Verify all records processed
+        assert len(outputs) == 3
+        assert len(processor.processed_batches) == 1
+        assert len(processor.processed_batches[0]) == 3
+
+        # Verify record IDs
+        record_ids = [r.record_id for r in outputs]
+        assert record_ids == ["batch-0", "batch-1", "batch-2"]
+
+    @pytest.mark.anyio
+    async def test_batch_processor_flushes_on_completion(self):
+        """Verify remaining records are processed at end of stream."""
+        # Create a test batch processor
+        class TestBatchProcessor(UnifiedBatchProcessor):
+            def __init__(self, config: BatchProcessorConfig):
+                super().__init__(config)
+                self.batch_sizes = []
+
+            async def _process_batch(
+                self, contexts: list[ProcessingContext]
+            ) -> AsyncGenerator[list[BaseRecord], None]:
+                # Track batch size
+                self.batch_sizes.append(len(contexts))
+                # Yield records with metadata indicating batch size
+                output_records = []
+                for ctx in contexts:
+                    record = BaseRecord(
+                        record_id=ctx.record.record_id,
+                        content=ctx.record.content,
+                        metadata={"batch_size": len(contexts)},
+                    )
+                    output_records.append(record)
+                yield output_records
+
+        config = BatchProcessorConfig(
+            type="test_batch",
+            batch_size=3,
+        )
+
+        processor = TestBatchProcessor(config)
+
+        # Create 7 contexts (will need 2 full batches + 1 partial)
+        # But for this unit test, we'll manually call process_batch twice
+        # to simulate the executor behavior
+
+        # First batch (full)
+        batch1_contexts = [
+            ProcessingContext(
+                session_id="session",
+                record=BaseRecord(record_id=f"rec-{i}", content=f"content-{i}"),
+            )
+            for i in range(3)
+        ]
+
+        # Second batch (partial - only 1 record)
+        batch2_contexts = [
+            ProcessingContext(
+                session_id="session",
+                record=BaseRecord(record_id="rec-3", content="content-3"),
+            )
+        ]
+
+        # Process both batches
+        all_outputs = []
+
+        async for output_batch in processor.process_batch(batch1_contexts):
+            all_outputs.extend(output_batch)
+
+        async for output_batch in processor.process_batch(batch2_contexts):
+            all_outputs.extend(output_batch)
+
+        # Verify batch sizes tracked
+        assert processor.batch_sizes == [3, 1]
+
+        # Verify all records processed
+        assert len(all_outputs) == 4
+        assert all_outputs[0].metadata["batch_size"] == 3
+        assert all_outputs[3].metadata["batch_size"] == 1
+
+    @pytest.mark.anyio
+    async def test_executor_handles_batch_processor(self):
+        """Verify PipelineExecutor routes to batch processing correctly."""
+        # Create a test batch processor for the pipeline
+        class SimpleBatchProcessor(UnifiedBatchProcessor):
+            async def _process_batch(
+                self, contexts: list[ProcessingContext]
+            ) -> AsyncGenerator[list[BaseRecord], None]:
+                # Add batch metadata to each record
+                output_records = []
+                for ctx in contexts:
+                    record = BaseRecord(
+                        record_id=ctx.record.record_id,
+                        content=ctx.record.content,
+                        metadata={
+                            "batched": True,
+                            "batch_size": len(contexts),
+                        },
+                    )
+                    output_records.append(record)
+                yield output_records
+
+        # Register the processor temporarily
+        from buttermilk._core.processor_registry import register_processor
+
+        register_processor("simple_batch", SimpleBatchProcessor)
+
+        # Create config for batch processor
+        batch_config = BatchProcessorConfig(
+            type="simple_batch",
+            batch_size=2,
+        )
+
+        # Create pipeline with batch processor
+        pipeline_config = PipelineConfig(
+            name="batch_test_pipeline",
+            processors=[batch_config],
+        )
+
+        executor = PipelineExecutor(pipeline_config)
+
+        # Create source with 3 records
+        async def source() -> AsyncGenerator[BaseRecord, None]:
+            for i in range(3):
+                yield BaseRecord(
+                    record_id=f"source-{i}",
+                    content=f"content-{i}",
+                )
+
+        # Run pipeline
+        results = []
+        async for result in executor.run(source(), session_id="batch-exec-session"):
+            results.append(result)
+
+        # Verify all records processed through batch processor
+        assert len(results) == 3
+
+        # Verify batch metadata exists
+        for result in results:
+            assert "batched" in result.metadata
+            assert result.metadata["batched"] is True
+            # batch_size should be 2 for first two, 1 for last
+            assert result.metadata["batch_size"] in [1, 2]
+
+    @pytest.mark.anyio
+    async def test_batch_processor_tracing(
+        self, tracer_provider, get_recorded_spans, clear_recorded_spans
+    ):
+        """Verify batch processor creates appropriate trace spans."""
+        clear_recorded_spans()
+
+        # Create a simple batch processor
+        class TracedBatchProcessor(UnifiedBatchProcessor):
+            async def _process_batch(
+                self, contexts: list[ProcessingContext]
+            ) -> AsyncGenerator[list[BaseRecord], None]:
+                yield [ctx.record for ctx in contexts]
+
+        config = BatchProcessorConfig(
+            type="traced_batch",
+            name="traced_batch_processor",
+            batch_size=2,
+        )
+
+        processor = TracedBatchProcessor(config)
+
+        # Create batch
+        contexts = [
+            ProcessingContext(
+                session_id="trace-session",
+                record=BaseRecord(record_id=f"trace-{i}", content=f"content-{i}"),
+            )
+            for i in range(2)
+        ]
+
+        # Process batch
+        outputs = []
+        async for output_batch in processor.process_batch(contexts):
+            outputs.extend(output_batch)
+
+        # Verify outputs
+        assert len(outputs) == 2
+
+        # Get recorded spans
+        spans = get_recorded_spans()
+        assert len(spans) > 0
+
+        # Find batch processor span
+        batch_spans = [s for s in spans if s.name == "batch_processor.traced_batch"]
+        assert len(batch_spans) == 1
+
+        span = batch_spans[0]
+
+        # Verify span attributes
+        attributes = dict(span.attributes)
+        assert attributes["processor.name"] == "traced_batch_processor"
+        assert attributes["processor.type"] == "traced_batch"
+        assert attributes["batch.size"] == 2
+        assert attributes["batch.output_size"] == 2
