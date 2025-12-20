@@ -221,7 +221,7 @@ def test_hash_fields_are_pure_properties():
     assert record.metadata["existing"] == "data"
 
 
-def test_hash_fields_excluded_from_dump():
+def test_record_hash_included_ground_truth_hash_excluded_from_dump():
     """Test that computed hash fields follow BigQuery schema requirements.
 
     - record_hash: INCLUDED (required by traces.schema.json for BigQuery)
