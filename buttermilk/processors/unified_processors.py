@@ -5,6 +5,7 @@ This module contains concrete implementations of standard processors:
 - ExpanderProcessor: Expands a record into multiple records (1:N).
 - TransformProcessor: Applies JMESPath transformations to records.
 - ShellProcessor: Executes shell commands with placeholder substitution.
+- FilterProcessor: Filters records based on JMESPath criteria.
 
 Processors are automatically registered on import.
 """
@@ -16,7 +17,7 @@ import jmespath
 from jmespath.exceptions import JMESPathError
 
 from buttermilk._core.processing_context import ProcessingContext
-from buttermilk._core.processor_config import ExpanderProcessorConfig, GroupchatProcessorConfig, ShellProcessorConfig, TransformProcessorConfig
+from buttermilk._core.processor_config import ExpanderProcessorConfig, FilterProcessorConfig, GroupchatProcessorConfig, ShellProcessorConfig, TransformProcessorConfig
 from buttermilk._core.processor_registry import register_processor
 from buttermilk._core.types import BaseRecord
 from buttermilk._core.unified_processor import UnifiedProcessor
@@ -294,8 +295,101 @@ class ShellProcessor(UnifiedProcessor):
         yield context.record
 
 
+class FilterProcessor(UnifiedProcessor):
+    """Filters records based on JMESPath criteria.
+
+    Evaluates a JMESPath expression against each record and yields the record
+    only if the expression evaluates to a truthy value. Records that don't match
+    are filtered out (nothing is yielded).
+
+    Features:
+    - Compiles JMESPath expression once during initialization for performance
+    - Yields record if criteria evaluates to truthy (True, non-zero, non-empty)
+    - Yields nothing if criteria evaluates to falsy (False, 0, None, empty)
+    - Fail-fast on invalid JMESPath expressions
+
+    Example criteria:
+        - "metadata.status == 'active'" - Filter by equality
+        - "length(metadata.tags) > `2`" - Filter by list length
+        - "metadata.score >= `80`" - Filter by numeric threshold
+    """
+
+    def __init__(self, config: FilterProcessorConfig):
+        super().__init__(config)
+        self.config: FilterProcessorConfig = config
+
+        # Compile JMESPath expression once during initialization
+        try:
+            self._compiled_criteria = jmespath.compile(config.criteria)
+        except JMESPathError as e:
+            logger.error(
+                "Invalid JMESPath criteria expression",
+                criteria=config.criteria,
+                error=str(e),
+            )
+            raise ValueError(
+                f"Invalid JMESPath criteria: {config.criteria}"
+            ) from e
+
+    async def _process_record(
+        self,
+        context: ProcessingContext,
+    ) -> AsyncGenerator[BaseRecord, None]:
+        """Filter record based on JMESPath criteria.
+
+        Args:
+            context: Processing context containing the record to filter
+
+        Yields:
+            The record if criteria evaluates to truthy, nothing otherwise
+
+        Raises:
+            ValueError: If JMESPath criteria evaluation fails
+        """
+        logger.debug(
+            "Evaluating filter criteria",
+            record_id=context.record.record_id,
+            criteria=self.config.criteria,
+        )
+
+        # Convert record to dict for JMESPath processing
+        record_dict = context.record.model_dump()
+
+        try:
+            # Evaluate JMESPath criteria
+            result = self._compiled_criteria.search(record_dict)
+
+            # Yield record only if criteria is truthy
+            if result:
+                logger.debug(
+                    "Record passed filter criteria",
+                    record_id=context.record.record_id,
+                    criteria_result=result,
+                )
+                yield context.record
+            else:
+                logger.debug(
+                    "Record filtered out by criteria",
+                    record_id=context.record.record_id,
+                    criteria_result=result,
+                )
+                # Yield nothing - record is filtered out
+
+        except Exception as e:
+            logger.error(
+                "Error evaluating filter criteria",
+                record_id=context.record.record_id,
+                criteria=self.config.criteria,
+                error=str(e),
+            )
+            raise ValueError(
+                f"Error evaluating filter criteria '{self.config.criteria}': {str(e)}"
+            ) from e
+
+
 # Register processors on module import
 register_processor("groupchat", GroupchatProcessor)
 register_processor("expander", ExpanderProcessor)
 register_processor("transform", TransformProcessor)
 register_processor("shell", ShellProcessor)
+register_processor("filter", FilterProcessor)

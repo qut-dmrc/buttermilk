@@ -786,6 +786,132 @@ class TestShellProcessor:
                 pass
 
 
+class TestFilterProcessor:
+    """Test FilterProcessor for record filtering based on JMESPath criteria."""
+
+    @pytest.mark.anyio
+    async def test_filter_processor_passes_matching_record(self):
+        """Verify FilterProcessor yields records that match criteria."""
+        from buttermilk._core.processor_config import FilterProcessorConfig
+        from buttermilk.processors.unified_processors import FilterProcessor
+
+        # Create config with criteria that will match
+        config = FilterProcessorConfig(
+            type="filter",
+            criteria="metadata.status == 'active'",
+        )
+
+        processor = FilterProcessor(config)
+
+        # Create a record that matches the criteria
+        record = BaseRecord(
+            record_id="filter-001",
+            content="test content",
+            metadata={"status": "active", "category": "test"},
+        )
+
+        context = ProcessingContext(
+            session_id="session-filter",
+            record=record,
+        )
+
+        # Process the record
+        outputs = []
+        async for output in processor.process(context):
+            outputs.append(output)
+
+        # Should yield the record since it matches criteria
+        assert len(outputs) == 1
+        assert outputs[0].record_id == "filter-001"
+        assert outputs[0].metadata["status"] == "active"
+
+    @pytest.mark.anyio
+    async def test_filter_processor_filters_non_matching_record(self):
+        """Verify FilterProcessor yields nothing for non-matching records."""
+        from buttermilk._core.processor_config import FilterProcessorConfig
+        from buttermilk.processors.unified_processors import FilterProcessor
+
+        # Create config with criteria that won't match
+        config = FilterProcessorConfig(
+            type="filter",
+            criteria="metadata.status == 'active'",
+        )
+
+        processor = FilterProcessor(config)
+
+        # Create a record that does NOT match the criteria
+        record = BaseRecord(
+            record_id="filter-002",
+            content="test content",
+            metadata={"status": "inactive", "category": "test"},
+        )
+
+        context = ProcessingContext(
+            session_id="session-filter-no-match",
+            record=record,
+        )
+
+        # Process the record
+        outputs = []
+        async for output in processor.process(context):
+            outputs.append(output)
+
+        # Should yield nothing since record doesn't match criteria
+        assert len(outputs) == 0
+
+    @pytest.mark.anyio
+    async def test_filter_processor_uses_jmespath_criteria(self):
+        """Verify FilterProcessor evaluates JMESPath expression correctly."""
+        from buttermilk._core.processor_config import FilterProcessorConfig
+        from buttermilk.processors.unified_processors import FilterProcessor
+
+        # Create config with complex JMESPath criteria
+        config = FilterProcessorConfig(
+            type="filter",
+            criteria="length(metadata.tags) > `2`",
+        )
+
+        processor = FilterProcessor(config)
+
+        # Create record with tags list
+        record_match = BaseRecord(
+            record_id="filter-003",
+            content="content",
+            metadata={"tags": ["python", "testing", "async"]},  # length = 3
+        )
+
+        record_no_match = BaseRecord(
+            record_id="filter-004",
+            content="content",
+            metadata={"tags": ["python"]},  # length = 1
+        )
+
+        # Test matching record
+        context_match = ProcessingContext(
+            session_id="session-jmespath-match",
+            record=record_match,
+        )
+
+        outputs_match = []
+        async for output in processor.process(context_match):
+            outputs_match.append(output)
+
+        assert len(outputs_match) == 1
+        assert outputs_match[0].record_id == "filter-003"
+
+        # Test non-matching record
+        context_no_match = ProcessingContext(
+            session_id="session-jmespath-no-match",
+            record=record_no_match,
+        )
+
+        outputs_no_match = []
+        async for output in processor.process(context_no_match):
+            outputs_no_match.append(output)
+
+        assert len(outputs_no_match) == 0
+
+
 class TestProcessorRegistry:
     """Test processor registry for dynamic processor instantiation."""
 
