@@ -17,11 +17,11 @@ from opentelemetry import trace
 from buttermilk._core.executor import PipelineExecutor
 from buttermilk._core.pipeline_config import PipelineConfig
 from buttermilk._core.processing_context import ProcessingContext
-from buttermilk._core.processor_config import ExpanderProcessorConfig, ProcessorConfig
+from buttermilk._core.processor_config import ExpanderProcessorConfig, ProcessorConfig, TransformProcessorConfig
 from buttermilk._core.protocols import Processor
 from buttermilk._core.types import BaseRecord
 from buttermilk._core.unified_processor import UnifiedProcessor
-from buttermilk.processors.unified_processors import ExpanderProcessor
+from buttermilk.processors.unified_processors import ExpanderProcessor, TransformProcessor
 
 
 class TestProcessingContext:
@@ -233,6 +233,167 @@ class TestExpanderProcessor:
         # Should passthrough when field is missing
         assert len(outputs) == 1
         assert outputs[0].record_id == "no-field-001"
+
+
+class TestTransformProcessor:
+    """Test TransformProcessor for JMESPath transformations."""
+
+    @pytest.mark.anyio
+    async def test_transform_processor_applies_jmespath_expression(self):
+        """Verify TransformProcessor evaluates JMESPath expression and stores result."""
+        # Create config with a simple JMESPath expression
+        config = TransformProcessorConfig(
+            type="transform",
+            expression="metadata.tags[0]",
+            output_field="first_tag",
+        )
+
+        processor = TransformProcessor(config)
+
+        # Create a record with nested data
+        record = BaseRecord(
+            record_id="transform-001",
+            content="test content",
+            metadata={
+                "tags": ["python", "testing", "async"],
+                "source": "test",
+            },
+        )
+
+        context = ProcessingContext(
+            session_id="session-transform",
+            record=record,
+        )
+
+        # Process the record
+        outputs = []
+        async for output in processor.process(context):
+            outputs.append(output)
+
+        # Should yield exactly 1 record (the original)
+        assert len(outputs) == 1
+        assert outputs[0].record_id == "transform-001"
+
+        # Result should be stored in context metadata
+        assert context.metadata["first_tag"] == "python"
+
+    @pytest.mark.anyio
+    async def test_transform_processor_stores_in_output_field(self):
+        """Verify TransformProcessor uses custom output_field for storing result."""
+        # Create config with custom output field
+        config = TransformProcessorConfig(
+            type="transform",
+            expression="content",
+            output_field="extracted_content",
+        )
+
+        processor = TransformProcessor(config)
+
+        record = BaseRecord(
+            record_id="transform-002",
+            content="Hello, World!",
+            metadata={},
+        )
+
+        context = ProcessingContext(
+            session_id="session-custom-field",
+            record=record,
+        )
+
+        # Process the record
+        outputs = []
+        async for output in processor.process(context):
+            outputs.append(output)
+
+        assert len(outputs) == 1
+
+        # Check custom output field
+        assert context.metadata["extracted_content"] == "Hello, World!"
+        # Default field should not exist
+        assert "transformed" not in context.metadata
+
+    @pytest.mark.anyio
+    async def test_transform_processor_complex_expression(self):
+        """Verify TransformProcessor handles complex JMESPath expressions."""
+        # Create config with complex expression
+        config = TransformProcessorConfig(
+            type="transform",
+            expression="metadata.{name: author, tag_count: length(tags)}",
+            output_field="summary",
+        )
+
+        processor = TransformProcessor(config)
+
+        record = BaseRecord(
+            record_id="transform-003",
+            content="content",
+            metadata={
+                "author": "Alice",
+                "tags": ["a", "b", "c"],
+            },
+        )
+
+        context = ProcessingContext(
+            session_id="session-complex",
+            record=record,
+        )
+
+        outputs = []
+        async for output in processor.process(context):
+            outputs.append(output)
+
+        assert len(outputs) == 1
+
+        # Verify complex object result
+        assert context.metadata["summary"] == {
+            "name": "Alice",
+            "tag_count": 3,
+        }
+
+    @pytest.mark.anyio
+    async def test_transform_processor_expression_returns_none(self):
+        """Verify processor handles None result gracefully (no metadata stored)."""
+        config = TransformProcessorConfig(
+            type="transform",
+            expression="metadata.nonexistent_field",
+            output_field="result",
+        )
+
+        processor = TransformProcessor(config)
+
+        record = BaseRecord(
+            record_id="transform-004",
+            content="content",
+            metadata={"other": "data"},
+        )
+
+        context = ProcessingContext(
+            session_id="session-none",
+            record=record,
+        )
+
+        outputs = []
+        async for output in processor.process(context):
+            outputs.append(output)
+
+        assert len(outputs) == 1
+
+        # No metadata should be stored when expression returns None
+        assert "result" not in context.metadata
+
+    @pytest.mark.anyio
+    async def test_transform_processor_invalid_expression_raises(self):
+        """Verify processor fails fast on invalid JMESPath expression."""
+        # Invalid JMESPath syntax should raise during processor initialization
+        config = TransformProcessorConfig(
+            type="transform",
+            expression="metadata..invalid[[syntax",
+            output_field="result",
+        )
+
+        # Creating the processor should fail fast on invalid expression
+        with pytest.raises(ValueError, match="Invalid JMESPath expression"):
+            processor = TransformProcessor(config)
 
 
 class TestPipelineExecutor:

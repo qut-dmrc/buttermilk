@@ -3,14 +3,18 @@
 This module contains concrete implementations of standard processors:
 - GroupchatProcessor: Runs a group chat session.
 - ExpanderProcessor: Expands a record into multiple records (1:N).
+- TransformProcessor: Applies JMESPath transformations to records.
 
 Processors are automatically registered on import.
 """
 
 from typing import AsyncGenerator
 
+import jmespath
+from jmespath.exceptions import JMESPathError
+
 from buttermilk._core.processing_context import ProcessingContext
-from buttermilk._core.processor_config import ExpanderProcessorConfig, GroupchatProcessorConfig
+from buttermilk._core.processor_config import ExpanderProcessorConfig, GroupchatProcessorConfig, TransformProcessorConfig
 from buttermilk._core.processor_registry import register_processor
 from buttermilk._core.types import BaseRecord
 from buttermilk._core.unified_processor import UnifiedProcessor
@@ -88,6 +92,99 @@ class ExpanderProcessor(UnifiedProcessor):
             yield expanded_record
 
 
+class TransformProcessor(UnifiedProcessor):
+    """Applies JMESPath expressions to transform records.
+
+    Evaluates a JMESPath expression against the record and stores the result
+    in context.metadata. This enables declarative data extraction and transformation
+    without custom Python code.
+
+    Features:
+    - Compiles JMESPath expression once during initialization for performance
+    - Stores transformation result in context metadata
+    - Fail-fast on invalid JMESPath expressions
+    - Graceful handling when expression returns None
+    """
+
+    def __init__(self, config: TransformProcessorConfig):
+        super().__init__(config)
+        self.config: TransformProcessorConfig = config
+
+        # Compile JMESPath expression once during initialization
+        try:
+            self._compiled_expression = jmespath.compile(config.expression)
+        except JMESPathError as e:
+            logger.error(
+                "Invalid JMESPath expression",
+                expression=config.expression,
+                error=str(e),
+            )
+            raise ValueError(
+                f"Invalid JMESPath expression: {config.expression}"
+            ) from e
+
+    async def _process_record(
+        self,
+        context: ProcessingContext,
+    ) -> AsyncGenerator[BaseRecord, None]:
+        """Apply JMESPath transformation and store result in context metadata.
+
+        Args:
+            context: Processing context containing the record to transform
+
+        Yields:
+            The original record (transformation result is stored in context.metadata)
+
+        Raises:
+            ValueError: If JMESPath expression evaluation fails
+        """
+        logger.debug(
+            "Applying JMESPath transformation",
+            record_id=context.record.record_id,
+            expression=self.config.expression,
+            output_field=self.config.output_field,
+        )
+
+        # Convert record to dict for JMESPath processing
+        record_dict = context.record.model_dump()
+
+        try:
+            # Apply JMESPath expression
+            result = self._compiled_expression.search(record_dict)
+
+            if result is not None:
+                # Store result in context metadata
+                context.update_metadata(self.config.output_field, result)
+
+                logger.debug(
+                    "JMESPath transformation complete",
+                    record_id=context.record.record_id,
+                    output_field=self.config.output_field,
+                    result_type=type(result).__name__,
+                )
+            else:
+                logger.debug(
+                    "JMESPath expression returned None, no metadata stored",
+                    record_id=context.record.record_id,
+                    expression=self.config.expression,
+                )
+
+        except Exception as e:
+            logger.error(
+                "Error applying JMESPath expression",
+                record_id=context.record.record_id,
+                expression=self.config.expression,
+                error=str(e),
+            )
+            raise ValueError(
+                f"Error applying JMESPath expression '{self.config.expression}': {str(e)}"
+            ) from e
+
+        # Yield the original record (metadata is stored in context)
+        yield context.record
+
+
 # Register processors on module import
 register_processor("groupchat", GroupchatProcessor)
 register_processor("expander", ExpanderProcessor)
+register_processor("transform", TransformProcessor)
