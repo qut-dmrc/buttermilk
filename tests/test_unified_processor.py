@@ -112,8 +112,9 @@ class TestProcessingContext:
         assert context.get_resource("db") == "connection"
         assert context.get_resource("api") == "client"
 
-        # Get non-existent resource returns None
-        assert context.get_resource("nonexistent") is None
+        # Get non-existent resource raises KeyError (fail-fast)
+        with pytest.raises(KeyError, match="nonexistent"):
+            context.get_resource("nonexistent")
 
 
 class TestExpanderProcessor:
