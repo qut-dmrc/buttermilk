@@ -4,17 +4,19 @@ This module contains concrete implementations of standard processors:
 - GroupchatProcessor: Runs a group chat session.
 - ExpanderProcessor: Expands a record into multiple records (1:N).
 - TransformProcessor: Applies JMESPath transformations to records.
+- ShellProcessor: Executes shell commands with placeholder substitution.
 
 Processors are automatically registered on import.
 """
 
+import asyncio
 from typing import AsyncGenerator
 
 import jmespath
 from jmespath.exceptions import JMESPathError
 
 from buttermilk._core.processing_context import ProcessingContext
-from buttermilk._core.processor_config import ExpanderProcessorConfig, GroupchatProcessorConfig, TransformProcessorConfig
+from buttermilk._core.processor_config import ExpanderProcessorConfig, GroupchatProcessorConfig, ShellProcessorConfig, TransformProcessorConfig
 from buttermilk._core.processor_registry import register_processor
 from buttermilk._core.types import BaseRecord
 from buttermilk._core.unified_processor import UnifiedProcessor
@@ -184,7 +186,116 @@ class TransformProcessor(UnifiedProcessor):
         yield context.record
 
 
+class ShellProcessor(UnifiedProcessor):
+    """Executes shell commands with placeholder substitution.
+
+    Features:
+    - Executes shell commands with timeout protection
+    - Replaces {record_id} placeholder with actual record ID
+    - Stores stdout and stderr in context metadata
+    - Fail-fast on non-zero exit codes
+    - Respects timeout_seconds from config
+    """
+
+    def __init__(self, config: ShellProcessorConfig):
+        super().__init__(config)
+        self.config: ShellProcessorConfig = config
+
+    async def _process_record(
+        self,
+        context: ProcessingContext,
+    ) -> AsyncGenerator[BaseRecord, None]:
+        """Execute shell command and store output in context metadata.
+
+        Args:
+            context: Processing context containing the record to process
+
+        Yields:
+            The original record (output is stored in context.metadata)
+
+        Raises:
+            ValueError: If shell command fails (non-zero exit code)
+            asyncio.TimeoutError: If command exceeds timeout_seconds
+        """
+        # Replace placeholders in command
+        command = self.config.command.replace("{record_id}", context.record.record_id)
+
+        logger.debug(
+            "Executing shell command",
+            record_id=context.record.record_id,
+            command=command,
+            timeout=self.config.timeout_seconds,
+        )
+
+        try:
+            # Execute command with timeout
+            process = await asyncio.create_subprocess_shell(
+                command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+
+            # Wait for completion with timeout
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                process.communicate(),
+                timeout=self.config.timeout_seconds,
+            )
+
+            # Decode output
+            stdout = stdout_bytes.decode("utf-8", errors="replace").strip()
+            stderr = stderr_bytes.decode("utf-8", errors="replace").strip()
+
+            # Store output in context metadata
+            context.update_metadata("stdout", stdout)
+            context.update_metadata("stderr", stderr)
+            context.update_metadata("exit_code", process.returncode)
+
+            # Fail-fast on non-zero exit code
+            if process.returncode != 0:
+                logger.error(
+                    "Shell command failed",
+                    record_id=context.record.record_id,
+                    command=command,
+                    exit_code=process.returncode,
+                    stderr=stderr,
+                )
+                raise ValueError(
+                    f"Shell command failed with exit code {process.returncode}: {command}\n"
+                    f"stderr: {stderr}"
+                )
+
+            logger.debug(
+                "Shell command completed successfully",
+                record_id=context.record.record_id,
+                stdout_length=len(stdout),
+                stderr_length=len(stderr),
+            )
+
+        except asyncio.TimeoutError:
+            logger.error(
+                "Shell command timed out",
+                record_id=context.record.record_id,
+                command=command,
+                timeout=self.config.timeout_seconds,
+            )
+            raise asyncio.TimeoutError(
+                f"Shell command timed out after {self.config.timeout_seconds}s: {command}"
+            )
+        except Exception as e:
+            logger.error(
+                "Error executing shell command",
+                record_id=context.record.record_id,
+                command=command,
+                error=str(e),
+            )
+            raise
+
+        # Yield the original record (output is stored in context metadata)
+        yield context.record
+
+
 # Register processors on module import
 register_processor("groupchat", GroupchatProcessor)
 register_processor("expander", ExpanderProcessor)
 register_processor("transform", TransformProcessor)
+register_processor("shell", ShellProcessor)

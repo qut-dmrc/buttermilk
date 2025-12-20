@@ -651,6 +651,141 @@ class TestProcessorIntegration:
             assert result.metadata["expansion_source_id"] == "meta-001"
 
 
+class TestShellProcessor:
+    """Test ShellProcessor for shell command execution."""
+
+    @pytest.mark.anyio
+    async def test_shell_processor_executes_command(self):
+        """Verify basic command execution."""
+        from buttermilk._core.processor_config import ShellProcessorConfig
+        from buttermilk.processors.unified_processors import ShellProcessor
+
+        # Create config for a simple echo command
+        config = ShellProcessorConfig(
+            type="shell",
+            command="echo 'Hello, World!'",
+            timeout_seconds=5,
+        )
+
+        processor = ShellProcessor(config)
+
+        record = BaseRecord(
+            record_id="shell-001",
+            content="test content",
+        )
+
+        context = ProcessingContext(
+            session_id="session-shell",
+            record=record,
+        )
+
+        # Process the record
+        outputs = []
+        async for output in processor.process(context):
+            outputs.append(output)
+
+        # Should yield exactly 1 record (the original)
+        assert len(outputs) == 1
+        assert outputs[0].record_id == "shell-001"
+
+        # Verify stdout is stored in context metadata
+        assert "stdout" in context.metadata
+        assert context.metadata["stdout"] == "Hello, World!"
+
+    @pytest.mark.anyio
+    async def test_shell_processor_stores_stdout_in_metadata(self):
+        """Verify output capture in context metadata."""
+        from buttermilk._core.processor_config import ShellProcessorConfig
+        from buttermilk.processors.unified_processors import ShellProcessor
+
+        config = ShellProcessorConfig(
+            type="shell",
+            command="echo 'test output'",
+        )
+
+        processor = ShellProcessor(config)
+
+        record = BaseRecord(
+            record_id="shell-002",
+            content="content",
+        )
+
+        context = ProcessingContext(
+            session_id="session-metadata",
+            record=record,
+        )
+
+        outputs = []
+        async for output in processor.process(context):
+            outputs.append(output)
+
+        # Verify metadata contains both stdout and stderr
+        assert "stdout" in context.metadata
+        assert "stderr" in context.metadata
+        assert context.metadata["stdout"] == "test output"
+        assert context.metadata["stderr"] == ""
+
+    @pytest.mark.anyio
+    async def test_shell_processor_replaces_placeholders(self):
+        """Verify {record_id} placeholder replacement."""
+        from buttermilk._core.processor_config import ShellProcessorConfig
+        from buttermilk.processors.unified_processors import ShellProcessor
+
+        config = ShellProcessorConfig(
+            type="shell",
+            command="echo 'Processing: {record_id}'",
+        )
+
+        processor = ShellProcessor(config)
+
+        record = BaseRecord(
+            record_id="test-123",
+            content="content",
+        )
+
+        context = ProcessingContext(
+            session_id="session-placeholder",
+            record=record,
+        )
+
+        outputs = []
+        async for output in processor.process(context):
+            outputs.append(output)
+
+        # Verify placeholder was replaced
+        assert context.metadata["stdout"] == "Processing: test-123"
+
+    @pytest.mark.anyio
+    async def test_shell_processor_raises_on_failure(self):
+        """Verify fail-fast on command failure (non-zero exit code)."""
+        from buttermilk._core.processor_config import ShellProcessorConfig
+        from buttermilk.processors.unified_processors import ShellProcessor
+
+        # Use a command that will fail
+        config = ShellProcessorConfig(
+            type="shell",
+            command="exit 1",
+            timeout_seconds=5,
+        )
+
+        processor = ShellProcessor(config)
+
+        record = BaseRecord(
+            record_id="shell-fail",
+            content="content",
+        )
+
+        context = ProcessingContext(
+            session_id="session-fail",
+            record=record,
+        )
+
+        # Should raise an error on non-zero exit code
+        with pytest.raises(ValueError, match="Shell command failed"):
+            async for _ in processor.process(context):
+                pass
+
+
 class TestProcessorRegistry:
     """Test processor registry for dynamic processor instantiation."""
 
