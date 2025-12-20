@@ -488,3 +488,36 @@ class TestProcessorIntegration:
             # Expansion metadata should be added
             assert "expansion_source_id" in result.metadata
             assert result.metadata["expansion_source_id"] == "meta-001"
+
+
+class TestProcessorRegistry:
+    """Test processor registry for dynamic processor instantiation."""
+
+    def test_registry_creates_processor_from_config(self):
+        """Verify registry creates correct processor type from config."""
+        from buttermilk._core.processor_registry import create_processor
+        from buttermilk.processors.unified_processors import ExpanderProcessor
+
+        # Processors are already registered on module import
+        config = ExpanderProcessorConfig(
+            type="expander",
+            field_to_expand="test_field",
+        )
+
+        # Create processor using registry
+        processor = create_processor(config)
+
+        # Verify correct type created
+        assert isinstance(processor, ExpanderProcessor)
+        assert processor.config.field_to_expand == "test_field"
+
+    def test_registry_raises_on_unknown_type(self):
+        """Verify KeyError raised for unknown processor types."""
+        from buttermilk._core.processor_registry import create_processor
+
+        # Create config with unknown type
+        config = ProcessorConfig(type="unknown_processor_type")
+
+        # Should raise KeyError (fail-fast)
+        with pytest.raises(KeyError, match="unknown_processor_type"):
+            create_processor(config)
