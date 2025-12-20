@@ -353,6 +353,17 @@ class AgentConfig(BaseModel):
         description="Defines mappings for how the agent's results should be structured or transformed. (Usage may be evolving).",
         alias="mapping_outputs",
     )
+    record: str | None = Field(
+        default=None,
+        description="JMESPath expression for extracting record from flow state. "
+                    "Maps directly to AgentInput.record field. "
+                    "Example: '[FETCH.outputs]||*.record' (tries FETCH first, falls back to other sources)",
+    )
+    context: str | None = Field(
+        default=None,
+        description="JMESPath expression for extracting conversation context from flow state. "
+                    "Maps directly to AgentInput.context field.",
+    )
 
     name_components: list[str] = Field(
         default=["role", "agent_id"],
@@ -499,6 +510,24 @@ class AgentConfig(BaseModel):
             self, "_agent_name", name or self.agent_id
         )  # Fallback to the canonical agent_id
 
+        return self
+
+    @model_validator(mode="after")
+    def _validate_no_record_context_in_inputs(self) -> Self:
+        """Ensure record/context aren't specified in both top-level AND inputs dict."""
+        if self.inputs:
+            if "record" in self.inputs and self.record is not None:
+                raise ValueError(
+                    "Configuration error: 'record' field is ambiguous. "
+                    "Cannot specify 'record' in both top-level field AND inputs dict. "
+                    "Use only the top-level 'record:' field."
+                )
+            if "context" in self.inputs and self.context is not None:
+                raise ValueError(
+                    "Configuration error: 'context' field is ambiguous. "
+                    "Cannot specify 'context' in both top-level field AND inputs dict. "
+                    "Use only the top-level 'context:' field."
+                )
         return self
 
 
