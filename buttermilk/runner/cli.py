@@ -305,7 +305,14 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
                 raise
         case "batch":
             # Batch mode: Pipeline-based processing without Pub/Sub
-            # Uses OrchestratorProcessor to wrap flows as pipeline processors
+            # DEPRECATED: Use 'pipeline' mode instead for new projects
+            # Uses GroupchatProcessor to wrap flows as pipeline processors
+            logger.warning(
+                "⚠️  DEPRECATION WARNING: 'batch' mode is deprecated. "
+                "Please migrate to 'pipeline' mode for new projects. "
+                "See RFC #311 for migration guide."
+            )
+
             flow_name = conf.run.flow
             limit = conf.run.limit
             concurrency = getattr(conf.run, "concurrency", 1) or 1
@@ -319,9 +326,8 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
 
             async def run_batch() -> None:
                 from buttermilk.pipeline import PipelineOrchestrator
-                from buttermilk.processors.orchestrator_processor import (
-                    OrchestratorProcessor,
-                )
+                from buttermilk.processors.unified_processors import GroupchatProcessor
+                from buttermilk._core.processor_config import GroupchatProcessorConfig
                 from buttermilk.utils.utils import expand_dict
 
                 # Get flow configuration
@@ -345,15 +351,17 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
 
                 # Create and run a pipeline for each parameter variant
                 for params in param_variants:
-                    # Create OrchestratorProcessor to wrap the flow
-                    processor = OrchestratorProcessor(
+                    # Create GroupchatProcessor to wrap the flow
+                    processor_config = GroupchatProcessorConfig(
+                        type="groupchat",
                         flow_config=flow,
                         flow_name=flow_name,
-                        bm=bm,  # Pass session-scoped BM for observability
                         parameters=params,
+                        collect_traces=True,
                     )
+                    processor = GroupchatProcessor(config=processor_config)
 
-                    # Create pipeline with the orchestrator processor
+                    # Create pipeline with the groupchat processor
                     pipeline = PipelineOrchestrator(
                         pipeline_name=f"batch_{flow_name}",
                         source=source,
