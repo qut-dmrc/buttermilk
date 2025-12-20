@@ -35,11 +35,13 @@ async def test_no_pdf_download_when_fulltext_exists():
 
     with tempfile.TemporaryDirectory() as tmpdir:
         # Mock the BM singleton that ZoteroDownloadProcessor needs
-        with patch("buttermilk.libs.zotero.bm") as mock_bm:
-            # Mock the cache directory call
+        with patch("buttermilk._core.dmrc.get_bm") as mock_get_bm:
+            # Create mock BM instance
+            mock_bm = MagicMock()
             cache_dir = Path(tmpdir) / "cache"
             cache_dir.mkdir(exist_ok=True)
             mock_bm.session_info.get_cache_subdir.return_value = cache_dir
+            mock_get_bm.return_value = mock_bm
 
             with patch("buttermilk.libs.zotero.zotero.Zotero") as MockZotero:
                 mock_zot = MagicMock()
@@ -123,10 +125,12 @@ async def test_pdf_downloads_when_no_fulltext():
 
     with tempfile.TemporaryDirectory() as tmpdir:
         # Mock the BM singleton
-        with patch("buttermilk.libs.zotero.bm") as mock_bm:
+        with patch("buttermilk._core.dmrc.get_bm") as mock_get_bm:
+            mock_bm = MagicMock()
             cache_dir = Path(tmpdir) / "cache"
             cache_dir.mkdir(exist_ok=True)
             mock_bm.session_info.get_cache_subdir.return_value = cache_dir
+            mock_get_bm.return_value = mock_bm
 
             with patch("buttermilk.libs.zotero.zotero.Zotero") as MockZotero:
                 mock_zot = MagicMock()
