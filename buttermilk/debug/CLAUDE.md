@@ -1,21 +1,21 @@
 # Buttermilk Debug Module
 
-Tools for debugging buttermilk flow executions.
+Tools for debugging `ExecutionTrace` objects.
 
-## Debugging Execution Traces
+**⚠️ IMPORTANT DISTINCTION**
+- **/tmp/bm_*.jsonl files are LOGS**. Do **NOT** use this module for them. Use `ws_debug_cli` (see `docs/bots/DEBUGGING.md`).
+- **Trace files** are specialized exports of `ExecutionTrace` objects (if available).
 
-When asked to debug a trace file (`/tmp/bm_*_exec-*.jsonl`), use the trace analysis tools:
+## Trace Analysis Tools (For ExecutionTrace exports only)
+
+If you have a valid trace file (NOT a standard log file), use:
 
 ```python
 from pathlib import Path
 from buttermilk.debug.trace_analysis import load_trace_file, get_errors, get_timeline
 
-tf = load_trace_file(Path("/path/to/trace.jsonl"))
-print(tf.summary)  # High-level overview
-
-errors = get_errors(tf.traces)
-for e in errors:
-    print(f"{e.agent_name}: {e.error_message}")
+# tf = load_trace_file(Path("/path/to/valid_trace_export.json"))
+# print(tf.summary)
 ```
 
 ## Available Functions

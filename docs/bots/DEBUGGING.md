@@ -169,8 +169,13 @@ cat /tmp/bm_*.jsonl | jq -r '[.timestamp, .level, .event] | @tsv'
 
 ## Post-Hoc Log Analysis
 
-**For diagnosing errors from completed runs** (not live debugging).
+### Log Analysis Tips
 
+**Note on Logs vs. Traces**:
+- **Logs** (`/tmp/bm_*.jsonl`) contain structured application events (debug, info, error). Use `ws_debug_cli` to analyze these.
+- **Execution Traces** are specialized objects (`ExecutionTrace`) often stored in BigQuery or exported separately. Do not attempt to use `trace_analysis` tools on standard log files.
+
+**Problem**: Log outputs are too verbose for analysis. **Solution**:
 ### Step 1: Analyze (always start here)
 
 ```bash
