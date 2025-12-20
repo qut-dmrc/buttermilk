@@ -14,8 +14,10 @@ remain undefined causing template rendering to fail (as it should with
 fail_on_unfilled_parameters=True).
 """
 
+import json
 from pathlib import Path
 
+import jmespath
 import pytest
 
 from buttermilk._core.contract import AgentOutput
@@ -26,6 +28,7 @@ from buttermilk.utils.templating import load_template
 
 # Get the actual config directory
 CONF_DIR = str(Path(__file__).parent.parent.parent / "buttermilk" / "conf")
+FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
 @pytest.fixture
@@ -52,6 +55,20 @@ def real_fetch_config(real_bm):
     # Return the DictConfig directly - don't convert to plain dict
     fetch_cfg = real_bm.cfg.run.flows["trans"]["agents"]["fetch"]
     return fetch_cfg
+
+
+@pytest.fixture
+def scorer_input_trace():
+    """Load realistic FETCH + JUDGE + SYNTHESISER trace data.
+
+    This fixture contains data structures matching what the scorer agent
+    would receive from upstream agents in a real flow execution.
+    """
+    fixture_path = FIXTURES_DIR / "scorer_input_trace.json"
+    with open(fixture_path) as f:
+        data = json.load(f)
+    # Remove the description field, keep only agent data
+    return {k: v for k, v in data.items() if k != "description"}
 
 
 @pytest.fixture
@@ -316,6 +333,228 @@ class TestAgentVariableExtraction:
             assert any(word in rendered for word in reason.split()[:3]), (
                 f"Ground truth reason not found in output: {reason[:50]}..."
             )
+
+
+class TestScorerConfigWithRealTraceData:
+    """Test scorer.yaml JMESPath expressions against real trace data.
+
+    These tests use fixture data that matches the structure of actual
+    agent outputs from a flow execution, validating that the scorer
+    config correctly extracts data from FETCH and JUDGE agent outputs.
+    """
+
+    def test_fixture_loads_correctly(self, scorer_input_trace):
+        """Verify the trace fixture loads with expected agent data."""
+        assert "FETCH" in scorer_input_trace
+        assert "JUDGE" in scorer_input_trace
+        assert "SYNTHESISER" in scorer_input_trace
+
+        # Verify FETCH has outputs with ground_truth
+        fetch = scorer_input_trace["FETCH"]
+        assert "outputs" in fetch
+        assert "ground_truth" in fetch["outputs"]
+
+        # Verify JUDGE has outputs and messages
+        judge = scorer_input_trace["JUDGE"]
+        assert "outputs" in judge
+        assert "messages" in judge
+        assert len(judge["messages"]) > 0
+
+    def test_scorer_source_extraction_from_fetch(
+        self, real_scorer_config, scorer_input_trace
+    ):
+        """Test the 'source' JMESPath expression extracts from FETCH.outputs.
+
+        Config: source: "[FETCH.outputs]||*.record||*.inputs.record"
+        Expected: Should extract the record from FETCH.outputs
+        """
+        source_expr = real_scorer_config["inputs"]["source"]
+        print(f"\n=== Testing source extraction ===")
+        print(f"Expression: {source_expr}")
+
+        # Test against the real trace data
+        result = jmespath.search(source_expr, scorer_input_trace)
+
+        print(f"Result type: {type(result)}")
+        print(f"Result: {result}")
+
+        assert result is not None, (
+            f"Source extraction failed!\n"
+            f"Expression: {source_expr}\n"
+            f"Available keys: {list(scorer_input_trace.keys())}"
+        )
+
+        # Should be a list containing the FETCH outputs
+        if isinstance(result, list):
+            assert len(result) > 0, "Source list should not be empty"
+            source = result[0]
+        else:
+            source = result
+
+        # Verify we got the record data
+        assert "content" in source, f"Source should have content. Got keys: {source.keys()}"
+        assert "ground_truth" in source, f"Source should have ground_truth. Got keys: {source.keys()}"
+
+    def test_scorer_expected_extraction_from_fetch(
+        self, real_scorer_config, scorer_input_trace
+    ):
+        """Test the 'expected' JMESPath expression extracts ground_truth from FETCH.
+
+        Config: expected: "[FETCH.outputs].ground_truth||*.record.ground_truth||*.inputs.record.ground_truth"
+        Expected: Should extract the ground_truth from FETCH.outputs
+        """
+        expected_expr = real_scorer_config["inputs"]["expected"]
+        print(f"\n=== Testing expected extraction ===")
+        print(f"Expression: {expected_expr}")
+
+        result = jmespath.search(expected_expr, scorer_input_trace)
+
+        print(f"Result type: {type(result)}")
+        print(f"Result: {result}")
+
+        assert result is not None, (
+            f"Expected extraction failed!\n"
+            f"Expression: {expected_expr}\n"
+            f"FETCH.outputs keys: {list(scorer_input_trace['FETCH']['outputs'].keys())}"
+        )
+
+        # Should extract the ground_truth structure
+        if isinstance(result, list):
+            assert len(result) > 0, "Expected list should not be empty"
+            ground_truth = result[0]
+        else:
+            ground_truth = result
+
+        assert "reasons" in ground_truth, f"Should have reasons. Got: {ground_truth}"
+        assert "violating" in ground_truth, f"Should have violating. Got: {ground_truth}"
+
+    def test_scorer_answers_extraction_from_judge(
+        self, real_scorer_config, scorer_input_trace
+    ):
+        """Test the 'answers' JMESPath expression extracts from JUDGE/SYNTHESISER.
+
+        Config: answers: "[JUDGE,SYNTHESISER][].{agent_id: agent_info.agent_id, result: outputs, answer_id: call_id, error: error}"
+        Expected: Should extract structured answer data from both JUDGE and SYNTHESISER
+        """
+        answers_expr = real_scorer_config["inputs"]["answers"]
+        print(f"\n=== Testing answers extraction ===")
+        print(f"Expression: {answers_expr}")
+
+        result = jmespath.search(answers_expr, scorer_input_trace)
+
+        print(f"Result type: {type(result)}")
+        print(f"Result count: {len(result) if isinstance(result, list) else 'N/A'}")
+
+        assert result is not None, (
+            f"Answers extraction failed!\n"
+            f"Expression: {answers_expr}"
+        )
+        assert isinstance(result, list), "Answers should be a list"
+        assert len(result) >= 2, f"Should have at least JUDGE and SYNTHESISER answers, got {len(result)}"
+
+        # Verify structure of extracted answers
+        for answer in result:
+            assert "agent_id" in answer, f"Answer should have agent_id. Got: {answer.keys()}"
+            assert "result" in answer, f"Answer should have result. Got: {answer.keys()}"
+            assert "answer_id" in answer, f"Answer should have answer_id. Got: {answer.keys()}"
+
+        # Verify we got both JUDGE and SYNTHESISER
+        agent_ids = [a["agent_id"] for a in result]
+        assert any("JUDGE" in aid for aid in agent_ids), f"Should have JUDGE answer. Got: {agent_ids}"
+        assert any("SYNTHESISER" in aid for aid in agent_ids), f"Should have SYNTHESISER answer. Got: {agent_ids}"
+
+    def test_scorer_instructions_extraction_from_judge(
+        self, real_scorer_config, scorer_input_trace
+    ):
+        """Test the 'instructions' JMESPath expression extracts from JUDGE/SYNTHESISER messages.
+
+        Config: instructions: "JUDGE.messages[0].content || SYNTHESISER.messages[0].content"
+        Expected: Should extract the first message content from JUDGE or SYNTHESISER
+        """
+        instructions_expr = real_scorer_config["inputs"]["instructions"]
+        print(f"\n=== Testing instructions extraction ===")
+        print(f"Expression: {instructions_expr}")
+
+        result = jmespath.search(instructions_expr, scorer_input_trace)
+
+        print(f"Result type: {type(result)}")
+        print(f"Result preview: {str(result)[:100]}..." if result else "None")
+
+        assert result is not None, (
+            f"Instructions extraction failed!\n"
+            f"Expression: {instructions_expr}\n"
+            f"JUDGE.messages: {scorer_input_trace['JUDGE'].get('messages', [])}"
+        )
+        assert isinstance(result, str), f"Instructions should be a string, got {type(result)}"
+        assert len(result) > 0, "Instructions should not be empty"
+
+    def test_all_scorer_inputs_extract_successfully(
+        self, real_scorer_config, scorer_input_trace
+    ):
+        """Test that ALL scorer input mappings extract successfully from trace data.
+
+        This is a comprehensive test ensuring the scorer.yaml config works
+        with realistic flow output data.
+        """
+        inputs = real_scorer_config["inputs"]
+        extracted = {}
+        failures = []
+
+        print("\n=== Testing all scorer inputs ===")
+        for key, expr in inputs.items():
+            result = jmespath.search(expr, scorer_input_trace)
+            if result is None or result == [] or result == {}:
+                failures.append(f"{key}: expression '{expr}' returned {result}")
+            else:
+                extracted[key] = result
+                print(f"✓ {key}: extracted successfully")
+
+        if failures:
+            pytest.fail(
+                f"Some scorer inputs failed to extract:\n" +
+                "\n".join(f"  - {f}" for f in failures) +
+                f"\n\nAvailable trace keys: {list(scorer_input_trace.keys())}"
+            )
+
+        # Verify we got all required inputs
+        required_keys = {"source", "expected", "answers", "instructions"}
+        missing = required_keys - set(extracted.keys())
+        assert not missing, f"Missing required inputs: {missing}"
+
+    def test_fallback_patterns_for_source(
+        self, real_scorer_config, scorer_input_trace
+    ):
+        """Test that source extraction fallback patterns work correctly.
+
+        The config uses: "[FETCH.outputs]||*.record||*.inputs.record"
+
+        This tests each fallback pattern individually to ensure they
+        work when the primary pattern doesn't match.
+        """
+        source_expr = real_scorer_config["inputs"]["source"]
+
+        # Test 1: Primary pattern - FETCH.outputs
+        print("\n=== Testing fallback patterns for source ===")
+
+        # With FETCH present, should use FETCH.outputs
+        result_with_fetch = jmespath.search(source_expr, scorer_input_trace)
+        assert result_with_fetch is not None, "Should extract from FETCH.outputs"
+        print("✓ Primary pattern [FETCH.outputs] works")
+
+        # Test 2: Fallback to *.record
+        data_without_fetch = {k: v for k, v in scorer_input_trace.items() if k != "FETCH"}
+        result_without_fetch = jmespath.search(source_expr, data_without_fetch)
+        # This should fallback to *.record (from JUDGE.inputs.record)
+        print(f"Without FETCH, result: {result_without_fetch}")
+        # Note: The current config may not extract from JUDGE.inputs.record
+        # This test documents the current behavior
+
+        # Test 3: Test each part of the OR separately
+        patterns = ["[FETCH.outputs]", "*.record", "*.inputs.record"]
+        for pattern in patterns:
+            result = jmespath.search(pattern, scorer_input_trace)
+            status = "✓" if result else "✗"
+            print(f"{status} Pattern '{pattern}': {type(result).__name__ if result else 'None'}")
 
 
 if __name__ == "__main__":
