@@ -16,6 +16,7 @@ def test_client_type_enum():
         "gemini",
         "gemini_vertex",
         "vertex_openai",
+        "llama_vertex",
         "huggingface",
         "zentropi",
     ]

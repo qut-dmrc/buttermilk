@@ -70,8 +70,12 @@ class TestProjectNameCapture:
     def test_project_name_fallback_when_bm_unavailable(
         self, tracer_provider, get_recorded_spans
     ):
-        """Verify graceful handling when BM not available."""
-        # Act: Create span without BM context (session_id but no BM)
+        """Verify graceful handling when BM not available.
+
+        When span_with_session is called with a session_id but BM is not available,
+        the project name should default to "unknown" as a graceful fallback.
+        """
+        # Act: Create span without BM context (session_id provided but BM not initialized)
         with span_with_session(
             session_id="test-session-123",
             name="test.operation",
@@ -82,11 +86,11 @@ class TestProjectNameCapture:
         spans = get_recorded_spans()
         assert len(spans) == 1
 
-        # Should either have "unknown" or omit the attribute
-        # (implementation decision - using "unknown" as fallback)
+        # When session_id is provided, project_name is always set
+        # Falls back to "unknown" when BM is not available
         project_name = spans[0].attributes.get("buttermilk.project.name")
-        assert project_name in ["unknown", None], (
-            f"Unexpected project name: {project_name}"
+        assert project_name == "unknown", (
+            f"Expected project name to be 'unknown' when BM not available, got: {project_name}"
         )
 
 

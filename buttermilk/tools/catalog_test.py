@@ -473,58 +473,62 @@ class TMDBTool:
             year: Optional release year to filter by
 
         Returns:
-            Title object with movie metadata, or None if not found
+            Title object with movie metadata, or None if not found or on error
         """
+        try:
+            # Search for movies using TMDB API
+            async def do_search():
+                result = await self._tmdb_client.search().movies(query=title, year=year)
+                return result
 
-        # Search for movies using TMDB API
-        async def do_search():
-            result = await self._tmdb_client.search().movies(query=title, year=year)
-            return result
+            search_raw = await self._retry._execute_with_retry(do_search)
+            search_results = self._as_list(search_raw)
 
-        search_raw = await self._retry._execute_with_retry(do_search)
-        search_results = self._as_list(search_raw)
+            if not search_results:
+                return None
 
-        if not search_results:
+            # Get the first/best match
+            movie = search_results[0]
+            movie_id = str(self._get_value(movie, "id"))
+            movie_title = self._extract_title(movie)
+            if not movie_title:
+                raise ValueError("TMDB search result missing title")
+
+            # Extract year from release_date if not provided
+            release_date = self._get_value(movie, "release_date", "first_air_date")
+            if year is None and release_date:
+                try:
+                    # release_date can be a string like "YYYY-MM-DD" or a datetime/date object
+                    if isinstance(release_date, (datetime.date, datetime.datetime)):
+                        year = release_date.year
+                    else:
+                        year = int(str(release_date).split("-")[0])
+                except (ValueError, IndexError, TypeError):
+                    pass
+
+            # Build metadata from the movie result
+            metadata = {
+                "original_title": self._get_value(movie, "original_title", "original_name"),
+                "overview": self._get_value(movie, "overview"),
+                "release_date": release_date,
+                "popularity": self._get_value(movie, "popularity"),
+                "vote_average": self._get_value(movie, "vote_average"),
+                "vote_count": self._get_value(movie, "vote_count"),
+                "poster_path": self._get_value(movie, "poster_path"),
+                "backdrop_path": self._get_value(movie, "backdrop_path"),
+                "genre_ids": self._get_value(movie, "genre_ids"),
+            }
+
+            # Remove None values from metadata
+            metadata = {k: v for k, v in metadata.items() if v is not None}
+
+            return Title(
+                record_id=movie_id, title=movie_title, year=year, metadata=metadata
+            )
+        except Exception as e:
+            # Log error and return None for graceful degradation in agent use
+            logger.error(f"Error searching for movie '{title}': {e}")
             return None
-
-        # Get the first/best match
-        movie = search_results[0]
-        movie_id = str(self._get_value(movie, "id"))
-        movie_title = self._extract_title(movie)
-        if not movie_title:
-            raise ValueError("TMDB search result missing title")
-
-        # Extract year from release_date if not provided
-        release_date = self._get_value(movie, "release_date", "first_air_date")
-        if year is None and release_date:
-            try:
-                # release_date can be a string like "YYYY-MM-DD" or a datetime/date object
-                if isinstance(release_date, (datetime.date, datetime.datetime)):
-                    year = release_date.year
-                else:
-                    year = int(str(release_date).split("-")[0])
-            except (ValueError, IndexError, TypeError):
-                pass
-
-        # Build metadata from the movie result
-        metadata = {
-            "original_title": self._get_value(movie, "original_title", "original_name"),
-            "overview": self._get_value(movie, "overview"),
-            "release_date": release_date,
-            "popularity": self._get_value(movie, "popularity"),
-            "vote_average": self._get_value(movie, "vote_average"),
-            "vote_count": self._get_value(movie, "vote_count"),
-            "poster_path": self._get_value(movie, "poster_path"),
-            "backdrop_path": self._get_value(movie, "backdrop_path"),
-            "genre_ids": self._get_value(movie, "genre_ids"),
-        }
-
-        # Remove None values from metadata
-        metadata = {k: v for k, v in metadata.items() if v is not None}
-
-        return Title(
-            record_id=movie_id, title=movie_title, year=year, metadata=metadata
-        )
 
     async def get_availability(self, title: Title) -> AsyncGenerator[Observation, None]:
         """Get availability observations for a movie across all available regions.

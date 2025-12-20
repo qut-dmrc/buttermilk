@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 from buttermilk import bm, logger
 from buttermilk._core.contract import ErrorEvent, ExecutionTrace
-from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk._core.llms import CreateResult, ModelOutput
 from buttermilk._core.processor_core import ProcessorCore
 from buttermilk._core.types import BaseRecord

@@ -188,7 +188,7 @@ class TestToolTypeHandling:
         )
 
         # Mock the LLM client
-        mock_client = AsyncMock(spec=LiteLLMWrapper)
+        mock_client = Mock(spec=LiteLLMWrapper)
         from autogen_core.models import RequestUsage
 
         mock_client.call_chat = AsyncMock(
@@ -199,9 +199,9 @@ class TestToolTypeHandling:
                 cached=False,
             )
         )
-        # Mock bm.llms.get_autogen_chat_client directly (used in _call_llm)
+        # Mock bm.llms.get_client directly (used in _call_llm)
         with patch("buttermilk.agents.flowcontrol.structured_llmhost.bm") as mock_bm:
-            mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+            mock_bm.llms.get_client.return_value = mock_client
 
             # Call _call_llm with mixed tools
             await host._call_llm(

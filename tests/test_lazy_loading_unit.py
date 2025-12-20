@@ -195,13 +195,13 @@ class TestLLMManagerLazyLoadingReal:
         model_name = CHEAP_CHAT_MODELS[0]
 
         # VERIFY: Cache empty before access
-        assert model_name not in llms.autogen_models
+        assert model_name not in llms.cached_clients
 
         # ACT: First access
         client1 = llms[model_name]
 
         # VERIFY: Now cached
-        assert model_name in llms.autogen_models
+        assert model_name in llms.cached_clients
 
         # VERIFY: Same instance returned
         client2 = llms[model_name]

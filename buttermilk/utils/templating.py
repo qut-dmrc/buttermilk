@@ -528,11 +528,6 @@ def load_template(
 
     rendered_string = jinja_template.render(**rendering_context)
 
-    # Note: fail_on_unfilled_parameters check is NOT done here.
-    # This allows make_messages() to process placeholder roles (e.g., record, context)
-    # before the final unfilled check happens in LLMCore._fill_template().
-    # The unfilled_vars are returned to the caller for downstream validation.
-
     # Calculate template hash for version tracking
     try:
         template_hash, _ = calculate_template_hash(template)
@@ -542,6 +537,14 @@ def load_template(
             f"Could not calculate hash for template '{template}' - this may indicate a template loading issue"
         )
         raise
+
+    # Check for unfilled parameters if requested (fail-fast)
+    # Note: placeholder roles like 'record' and 'context' are excluded from rendering_context
+    # so they won't appear in collected_undefined_vars
+    if parameters.get("fail_on_unfilled_parameters") and collected_undefined_vars:
+        raise FatalError(
+            f"Template '{template}' has unfilled parameters: {', '.join(sorted(collected_undefined_vars))}"
+        )
 
     return rendered_string, set(collected_undefined_vars), template_hash
 
