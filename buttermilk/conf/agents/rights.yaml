@@ -8,5 +8,5 @@ rights:
     template: rights
   variants:
     model: ${llms.general}
-  inputs:
-    record: "[FETCH.outputs]||*.record"
+  # Record mapping: tries FETCH first, falls back to other sources (e.g., injected records)
+  record: "[FETCH.outputs]||*.record"
