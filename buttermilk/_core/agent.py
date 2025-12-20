@@ -800,12 +800,20 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         """
         source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
 
+        # Build complete input mappings including record and context
+        # Start with regular inputs, then add record/context if configured
+        all_mappings: dict[str, str] = dict(self.inputs) if self.inputs else {}
+        if self.record_mapping:
+            all_mappings["record"] = self.record_mapping
+        if self.context_mapping:
+            all_mappings["context"] = self.context_mapping
+
         # Extract data based on input mappings
-        if self.inputs:  # Only extract if input mappings are defined
+        if all_mappings:  # Only extract if any mappings are defined
             extracted = extract_message_data(
                 message=message,
                 source=source,
-                input_mappings=self.inputs,
+                input_mappings=all_mappings,
             )
             # Add extracted data to self._data
             found_keys = []
