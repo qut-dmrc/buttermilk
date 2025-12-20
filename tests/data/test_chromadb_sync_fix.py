@@ -43,7 +43,8 @@ class TestChromaDBSyncFix:
         import inspect
 
         init_source = inspect.getsource(ChromaDBEmbeddings.ensure_cache_initialized)
-        assert "_original_remote_path = self.persist_directory" in init_source
+        assert "self._original_remote_path" in init_source
+        assert "self.persist_directory" in init_source
 
     # NOTE: Removed test_path_preservation_logic - it was testing implementation details
     # by mocking internal model loading. The path preservation logic is already
