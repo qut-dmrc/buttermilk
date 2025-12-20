@@ -222,16 +222,26 @@ def test_hash_fields_are_pure_properties():
 
 
 def test_hash_fields_excluded_from_dump():
-    """Test that computed hash fields are excluded from model_dump by default."""
+    """Test that computed hash fields follow BigQuery schema requirements.
+
+    - record_hash: INCLUDED (required by traces.schema.json for BigQuery)
+    - ground_truth_hash: EXCLUDED (not needed in BQ schema)
+    - Hash values are NOT stored in metadata (pure properties)
+    """
     record = Record(content="Test content", ground_truth={"test": "data"})
 
     # Trigger hash computation
     _ = record.record_hash
     _ = record.ground_truth_hash
 
-    # Dump should exclude computed fields
+    # Dump behavior per BQ requirements
     dumped = record.model_dump()
-    assert "record_hash" not in dumped
+
+    # record_hash MUST be included for BigQuery tracing
+    assert "record_hash" in dumped, "record_hash is required by traces.schema.json"
+    assert len(dumped["record_hash"]) == 64, "record_hash should be valid SHA256"
+
+    # ground_truth_hash should be excluded (not in BQ schema)
     assert "ground_truth_hash" not in dumped
 
     # Metadata should NOT contain hash values (properties are pure)
