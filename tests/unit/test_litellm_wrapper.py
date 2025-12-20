@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from autogen_core.models import SystemMessage, UserMessage
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llms import (
@@ -231,6 +231,8 @@ class TestLiteLLMWrapperStructuredOutput:
         """Test structured output with Pydantic schema."""
 
         class TestSchema(BaseModel):
+            model_config = ConfigDict(extra='forbid')
+
             summary: str
             sentiment: str
 
