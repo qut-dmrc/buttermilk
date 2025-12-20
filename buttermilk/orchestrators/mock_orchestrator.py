@@ -566,25 +566,19 @@ class MockOrchestrator(Orchestrator):
             event_class = random.choice(event_types)
 
             if event_class == TaskProcessingStarted:
-                # TaskProcessingStarted requires agent_id, role, task_index
+                # TaskProcessingStarted requires agent_id, role
                 return TaskProcessingStarted(
                     agent_id=source
                     or random.choice(self._agent_ids),  # Use agent_ids list
                     role=role or random.choice(["ASSISTANT", "RESEARCHER", "ANALYST"]),
-                    task_index=random.randint(0, 5),  # Mock task index
-                    # task_id and flow_id are not part of TaskProcessingStarted based on contract.py
-                    # inputs and timestamp are not part of TaskProcessingStarted based on contract.py
                 )
             if event_class == TaskProcessingComplete:
-                # TaskProcessingComplete requires agent_id, role, task_index, more_tasks_remain, is_error
+                # TaskProcessingComplete requires agent_id, role, is_error
                 return TaskProcessingComplete(
                     agent_id=source
                     or random.choice(self._agent_ids),  # Use agent_ids list
                     role=role or random.choice(["ASSISTANT", "RESEARCHER", "ANALYST"]),
-                    task_index=random.randint(0, 5),  # Mock task index
-                    more_tasks_remain=random.choice([True, False]),
                     is_error=random.choice([True, False]),
-                    # task_id, flow_id, result, and timestamp are not part of TaskProcessingComplete based on contract.py
                 )
             # FlowEvent
             # FlowEvent requires source and content

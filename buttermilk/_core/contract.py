@@ -1022,36 +1022,25 @@ class TaskProcessingStarted(BaseModel):
     Attributes:
         agent_id (str): The unique identifier of the agent that has started the task.
         role (str): The role of the agent starting the task.
-        task_index (int): An optional index for the task, particularly if an agent
-            is performing multiple sequential tasks for a single input. Defaults to -1.
 
     """
 
     agent_id: str = Field(..., description="ID of the agent that has started the task.")
     role: str = Field(..., description="Role of the agent starting the task.")
-    task_index: int = Field(
-        default=-1,
-        description="Index of the task being started (for multi-task steps by a single agent).",
-    )
 
 
 class TaskProcessingComplete(TaskProcessingStarted):
     """A signal message indicating that an agent has completed processing a task.
 
-    Inherits `agent_id`, `role`, and `task_index` from `TaskProcessingStarted`.
+    Inherits `agent_id` and `role` from `TaskProcessingStarted`.
 
     Attributes:
-        more_tasks_remain (bool): If `True`, indicates that the agent has more
-            sequential tasks to perform for the current input/context. Defaults to `False`.
         is_error (bool): If `True`, indicates that the task ended with an error.
             Defaults to `False`.
+        error (str): Error message if the task ended with an error.
 
     """
 
-    more_tasks_remain: bool = Field(
-        default=False,
-        description="True if the agent has more sequential tasks for the current input.",
-    )
     is_error: bool = Field(
         default=False,
         description="True if the task completed with an error.",
@@ -1059,28 +1048,6 @@ class TaskProcessingComplete(TaskProcessingStarted):
     error: str = Field(
         default="", description="Error message if the task ended with an error."
     )
-
-
-class ProceedToNextTaskSignal(BaseModel):
-    """A control signal, typically from a controller or orchestrator.
-
-    Instructs an agent to proceed with its next internal task or step.
-
-    The exact usage context for this signal might depend on specific orchestrator
-    implementations.
-
-    Attributes:
-        target_agent_id (str): The unique identifier of the agent that should
-            proceed to its next task.
-        model_config (dict): Pydantic model configuration allowing extra fields.
-
-    """
-
-    # TODO: Clarify usage context if this is actively used.
-    target_agent_id: str = Field(
-        ..., description="ID of the agent that should proceed to its next task."
-    )
-    model_config = {"extra": "allow"}  # Allows extra fields if needed
 
 
 class HeartBeat(BaseModel):
@@ -1176,7 +1143,6 @@ OOBMessages = Union[
     ConductorRequest,
     ErrorEvent,
     StepRequest,
-    ProceedToNextTaskSignal,
     HeartBeat,
     AgentAnnouncement,
     FlowEvent,

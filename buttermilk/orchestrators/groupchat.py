@@ -502,7 +502,6 @@ class AutogenOrchestrator(Orchestrator):
                             TaskProcessingComplete(
                                 agent_id="orchestrator",
                                 role="orchestrator",
-                                more_tasks_remain=False,
                             ),
                             topic_id=DefaultTopicId(type=MANAGER),
                         )

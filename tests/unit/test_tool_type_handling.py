@@ -188,7 +188,7 @@ class TestToolTypeHandling:
         )
 
         # Mock the LLM client
-        mock_client = AsyncMock(spec=LiteLLMWrapper)
+        mock_client = Mock(spec=LiteLLMWrapper)
         from autogen_core.models import RequestUsage
 
         mock_client.call_chat = AsyncMock(

@@ -22,7 +22,6 @@ from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Any, Self
 
-# weave import removed
 from opentelemetry import trace
 from pydantic import (
     BaseModel,
@@ -304,7 +303,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
     async def run(self, request: RunRequest) -> None:
         """Public entry point to start the orchestrator's flow execution.
 
-        This method sets up the Weave tracing context for the entire run and then
+        This method sets up the tracing context for the entire run and then
         calls the internal `_run` method, which contains the core execution logic.
         It ensures that tracing is properly initialized and finalized around the
         actual flow execution.
@@ -328,25 +327,10 @@ class Orchestrator(OrchestratorProtocol, ABC):
 
         bm = self.get_effective_bm()
         orchestrator_trace = None
-        op = None
-        _weave_mod = None  # Holds the lazily imported weave module if available
 
         # Get OTEL tracer for business logic spans
         tracer = trace.get_tracer("buttermilk.orchestrator")
 
-        # Weave has been removed
-        weave_client = None
-        if False:  # Disabled weave code
-            try:
-                pass
-            except Exception as e:
-                # Disable Weave for this run if anything goes wrong
-                logger.warning(
-                    f"Weave initialization disabled for this run due to error: {e!s}"
-                )
-                _weave_mod = None
-                orchestrator_trace = None
-                op = None
 
         # Create OTEL span for orchestrator execution
         with tracer.start_as_current_span(
@@ -389,19 +373,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
             finally:
                 # Finish trace if it was created and a finisher is available
                 if orchestrator_trace is not None:
-                    try:
-                        bm = self.get_effective_bm()
-                        weave_client = await bm.get_weave_client()
-                        if weave_client is not None and orchestrator_trace is not None:
-                            weave_client.finish_call(orchestrator_trace, op=op)
-                        elif _weave_mod is not None and hasattr(
-                            _weave_mod, "finish_call"
-                        ):
-                            _weave_mod.finish_call(orchestrator_trace, op=op)
-                    except Exception as e:
-                        logger.debug(
-                            f"Weave finish_call failed or is unavailable: {e!s}"
-                        )
+                    pass
 
     @abstractmethod
     async def _setup(self, request: RunRequest) -> None:
@@ -427,7 +399,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
     async def _run(self, request: RunRequest) -> None:
         """Abstract method containing the main execution logic or control loop for the flow.
 
-        This method is called by the public `run` method after Weave tracing has
+        This method is called by the public `run` method after tracing has
         been set up. Subclasses **MUST** implement this to define the core
         orchestration logic. This includes:
         - Potentially loading initial data if not handled in `_setup` (though

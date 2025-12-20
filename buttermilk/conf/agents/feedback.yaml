@@ -8,5 +8,5 @@ feedback:
     model: ${llms.general}
   parameters:
     template: feedback
-  inputs:
-    context: context
+  # Context mapping: conversation history from flow state
+  context: context

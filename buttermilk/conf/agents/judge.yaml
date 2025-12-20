@@ -9,5 +9,4 @@ judge:
   variants:
     model: ${llms.judgers}
     criteria: ${....parameters.criteria}
-  inputs:
-    record: "[FETCH.outputs]||*.record"
+  record: "FETCH.outputs"

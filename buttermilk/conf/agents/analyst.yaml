@@ -8,6 +8,7 @@ analyst:
     template: analyst
   variants:
     model: ${llms.general}
+  # Context mapping: conversation history from flow state
+  context: context
   inputs:
-    context: context
     prompt: user.content

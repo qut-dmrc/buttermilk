@@ -1,6 +1,6 @@
 # Buttermilk Project Instructions
 
-@bots/agents/\_CORE.md @bots/agents/INSTRUCTIONS.md @bots/docs/\_CHUNKS/DEBUGGING.md @bots/docs/\_CHUNKS/E2E-TESTING.md
+@bots/agents/_CORE.md @bots/agents/INSTRUCTIONS.md @docs/bots/DEBUGGING.md @bots/docs/_CHUNKS/E2E-TESTING.md
 
 ## Project-Specific Notes
 
@@ -12,5 +12,9 @@
 - in tests/endtoend: "run these tests with `uv run pytest -m endtoend` DEPENDENCIES: `uv sync --extra dev --extra research --extra azure --upgrade`
 - You are working on the 'buttermilk' project. Use the 'bmem' skill to search for and update context in `$ACA_DATA/projects/buttermilk/`
 - use '-m ""' to run all tests (alternatively, either/or '-m "slow"' or '-m "endtoend"'?)
-- When asked to analyze log buttermilk log files: Use `ws_debug_cli analyze --file <path>` for buttermilk logs. Do NOT manually grep/read JSONL files.
+- **Debugging and Log Analysis**: Use `ws_debug_cli` for all log analysis. See `docs/bots/DEBUGGING.md` for the authoritative Golden Path.
+  - **Analyze logs**: `uv run python -m buttermilk.debug.ws_debug_cli analyze --file <path>`
+  - **View logs**: `uv run python -m buttermilk.debug.ws_debug_cli logs -n 50 --file <path>`
+  - **Live debugging**: Use `ws_debug_cli start ...` (see Golden Path guide).
+  - Note: `/tmp/bm_*` files are **LOG** files, not execution traces. Do not use `trace_analysis` on them.
 - our framework goal is success first time, every time, with just-in-time information, that doesn't cause unecessary cost or delay.
