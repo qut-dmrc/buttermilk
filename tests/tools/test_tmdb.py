@@ -310,7 +310,7 @@ class TestTMDBDiscoverMovies:
             async def mock_movie_func(**kwargs):
                 page = kwargs.get("page", 1)
                 # Only return movies on page 1, simulate month-based fetching
-                if page == 1 and "primary_release_date.gte" in kwargs:
+                if page == 1 and "primary_release_date__gte" in kwargs:
                     return mock_movies
                 else:
                     return []  # No more results
@@ -358,7 +358,7 @@ class TestTMDBDiscoverMovies:
             # Mock discover().movie() method with date range parameters
             async def mock_movie_func(**kwargs):
                 page = kwargs.get("page", 1)
-                if page == 1 and "primary_release_date.gte" in kwargs:
+                if page == 1 and "primary_release_date__gte" in kwargs:
                     return [mock_movie]
                 else:
                     return []  # No more results
@@ -441,7 +441,7 @@ class TestTMDBDiscoverMovies:
                     return []  # Only page 1 has results
 
                 # Determine period from date range
-                gte_date = kwargs.get("primary_release_date.gte", "")
+                gte_date = kwargs.get("primary_release_date__gte", "")
                 if "2020-01" in gte_date:
                     return period_responses["2020-01"]
                 elif "2020-02" in gte_date:
@@ -485,7 +485,7 @@ class TestTMDBDiscoverMovies:
             # Mock discover().movie() method
             async def mock_movie_func(**kwargs):
                 page = kwargs.get("page", 1)
-                if page == 1 and "primary_release_date.gte" in kwargs:
+                if page == 1 and "primary_release_date__gte" in kwargs:
                     return mock_movies
                 else:
                     return []  # No more results
@@ -513,7 +513,7 @@ class TestTMDBDiscoverMovies:
             # Mock discover().movie() method
             async def mock_movie_func(**kwargs):
                 page = kwargs.get("page", 1)
-                if page == 1 and "primary_release_date.gte" in kwargs:
+                if page == 1 and "primary_release_date__gte" in kwargs:
                     return mock_movies
                 else:
                     return []
