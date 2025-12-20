@@ -13,9 +13,8 @@ synthesiser:
 
   variants:
     model: ${llms.synthesisers}
-    criteria: [] #${..parameters.criteria}
+    criteria: ${....parameters.criteria}
   # Record mapping: tries FETCH first, falls back to other sources (e.g., injected records)
-  record: "[FETCH.outputs]||*.record"
+  record: "FETCH.outputs"
   inputs:
     answers: "[JUDGE][].{agent_id: agent_info.agent_id, result: outputs, answer_id: call_id, error: error }"
-    feedback: feedback.outputs

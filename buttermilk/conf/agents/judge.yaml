@@ -9,5 +9,4 @@ judge:
   variants:
     model: ${llms.judgers}
     criteria: ${....parameters.criteria}
-  # Record mapping: tries FETCH first, falls back to other sources (e.g., injected records)
-  record: "[FETCH.outputs]||*.record"
+  record: "FETCH.outputs"

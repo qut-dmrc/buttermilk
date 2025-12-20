@@ -29,8 +29,8 @@ parameters:
   criteria:
     - tja
     - glaad
-    - trans_simplified
-    - apc
+#    - trans_simplified
+#    - apc
 
 storage: {}
 

@@ -9,6 +9,6 @@ differentiator:
   parameters:
     template: differences
   # Record mapping: tries FETCH first, falls back to other sources (e.g., injected records)
-  record: "[FETCH.outputs]||*.record"
+  record: "FETCH.outputs||*.record"
   inputs:
     answers: "[JUDGE,SYNTHESISER][].{agent_id: agent_info.agent_id, agent_name: agent_info.agent_name, result: outputs, answer_id: call_id, error: error }"
