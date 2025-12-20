@@ -56,8 +56,10 @@ class ShellProcessorConfig(ProcessorConfig):
 class GroupchatProcessorConfig(ProcessorConfig):
     """Configuration for groupchat processors."""
     type: Literal["groupchat"] = "groupchat"
-    participants: list[str] = Field(..., description="List of agent roles/names.")
-    max_rounds: int = Field(default=10, description="Maximum number of chat rounds.")
+    flow_name: str = Field(..., description="Name of the flow to execute.")
+    flow_config: Any = Field(..., description="Flow configuration (OrchestratorProtocol).")
+    parameters: dict[str, Any] = Field(default_factory=dict, description="Parameters for orchestrator.")
+    collect_traces: bool = Field(default=True, description="Collect ExecutionTrace outputs.")
 
 
 class ExpanderProcessorConfig(ProcessorConfig):

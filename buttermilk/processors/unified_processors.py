@@ -11,22 +11,31 @@ Processors are automatically registered on import.
 """
 
 import asyncio
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 
 import jmespath
 from jmespath.exceptions import JMESPathError
 
+from buttermilk._core.contract import ExecutionTrace
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.processor_config import ExpanderProcessorConfig, FilterProcessorConfig, GroupchatProcessorConfig, ShellProcessorConfig, TransformProcessorConfig
 from buttermilk._core.processor_registry import register_processor
-from buttermilk._core.types import BaseRecord
+from buttermilk._core.types import BaseRecord, RunRequest
 from buttermilk._core.unified_processor import UnifiedProcessor
+from buttermilk.runner.flowrunner import OrchestratorFactory
 from buttermilk import logger
 
 
 class GroupchatProcessor(UnifiedProcessor):
-    """Executes a group chat session for each record."""
-    
+    """Wraps an Orchestrator to run multi-agent conversations as a unified processor.
+
+    Creates a fresh orchestrator instance per record to ensure state isolation.
+    Collects ExecutionTrace outputs via callback and enriches record metadata with results.
+
+    This processor enables complex multi-agent flows to be used within the unified
+    processor architecture while maintaining proper isolation and observability.
+    """
+
     def __init__(self, config: GroupchatProcessorConfig):
         super().__init__(config)
         self.config: GroupchatProcessorConfig = config
@@ -35,13 +44,107 @@ class GroupchatProcessor(UnifiedProcessor):
         self,
         context: ProcessingContext,
     ) -> AsyncGenerator[BaseRecord, None]:
-        logger.info(
-            f"Starting groupchat with {self.config.participants}",
-            record_id=context.record.record_id
+        """Execute orchestrator on a record and enrich with results.
+
+        Creates a fresh orchestrator instance for state isolation, builds RunRequest
+        from record, collects traces via callback, and enriches record metadata.
+
+        Args:
+            context: Processing context containing the record to process
+
+        Yields:
+            The input record enriched with orchestrator outputs in metadata
+
+        Raises:
+            Exception: Re-raises any orchestrator errors for pipeline error handling
+        """
+        record_id = context.record.record_id
+
+        logger.debug(
+            "GroupchatProcessor starting",
+            record_id=record_id,
+            flow_name=self.config.flow_name,
         )
-        # TODO: Implement actual groupchat execution logic here
-        # For now, just pass through the record
-        yield context.record
+
+        # Create fresh orchestrator for each record (state isolation)
+        orchestrator = OrchestratorFactory.create_orchestrator(
+            self.config.flow_config, self.config.flow_name
+        )
+
+        # Collect ExecutionTrace outputs via callback
+        traces: list[ExecutionTrace] = []
+
+        async def collect_callback(message: Any) -> None:
+            """Callback to collect ExecutionTrace outputs from orchestrator."""
+            if isinstance(message, ExecutionTrace):
+                traces.append(message)
+
+        # Use ui_callback from context if available, otherwise use collect_callback
+        callback = context.ui_callback if context.ui_callback else collect_callback
+
+        # If context has ui_callback but we need to collect traces, chain callbacks
+        if context.ui_callback and self.config.collect_traces:
+            async def chained_callback(message: Any) -> None:
+                """Chain both callbacks."""
+                await context.ui_callback(message)
+                await collect_callback(message)
+            callback = chained_callback
+        elif self.config.collect_traces:
+            callback = collect_callback
+        else:
+            callback = context.ui_callback
+
+        # Create RunRequest from record
+        run_request = RunRequest(
+            flow=self.config.flow_name,
+            inputs={
+                "record_id": record_id,
+                "record": context.record.model_dump() if hasattr(context.record, "model_dump") else context.record,
+            },
+            parameters=self.config.parameters,
+            callback_to_ui=callback,
+        )
+
+        try:
+            # Run orchestrator (returns None, results flow through callback)
+            await orchestrator.run(request=run_request)
+
+            # Build outputs from collected traces
+            outputs = []
+            for trace in traces:
+                if trace.outputs is not None:
+                    outputs.append(trace.outputs)
+
+            # Enrich record metadata with orchestrator results
+            enriched_metadata = {
+                **(context.record.metadata if context.record.metadata else {}),
+                "groupchat": {
+                    "status": "processed",
+                    "flow_name": self.config.flow_name,
+                    "trace_count": len(traces),
+                    "outputs": outputs,
+                },
+            }
+
+            logger.debug(
+                "GroupchatProcessor completed",
+                record_id=record_id,
+                flow_name=self.config.flow_name,
+                trace_count=len(traces),
+                output_count=len(outputs),
+            )
+
+            yield context.record.model_copy(update={"metadata": enriched_metadata})
+
+        except Exception as e:
+            logger.error(
+                "GroupchatProcessor failed",
+                record_id=record_id,
+                flow_name=self.config.flow_name,
+                error=str(e),
+            )
+            # Re-raise to let pipeline handle the error
+            raise
 
 
 class ExpanderProcessor(UnifiedProcessor):

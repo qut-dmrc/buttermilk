@@ -913,6 +913,155 @@ class TestFilterProcessor:
         assert len(outputs_no_match) == 0
 
 
+class TestGroupchatProcessor:
+    """Test GroupchatProcessor for orchestrator integration."""
+
+    @pytest.mark.anyio
+    async def test_groupchat_processor_creates_orchestrator(self):
+        """Verify GroupchatProcessor creates orchestrator and runs it."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from buttermilk._core.processor_config import GroupchatProcessorConfig
+        from buttermilk.processors.unified_processors import GroupchatProcessor
+
+        # Create mock flow config
+        mock_flow_config = MagicMock()
+
+        # Create config
+        config = GroupchatProcessorConfig(
+            type="groupchat",
+            flow_name="test_flow",
+            flow_config=mock_flow_config,
+            parameters={"param1": "value1"},
+        )
+
+        # Create processor
+        processor = GroupchatProcessor(config)
+
+        # Create test record
+        record = BaseRecord(
+            record_id="groupchat-001",
+            content="test content",
+            metadata={"source": "test"},
+        )
+
+        context = ProcessingContext(
+            session_id="session-groupchat",
+            record=record,
+        )
+
+        # Mock OrchestratorFactory.create_orchestrator
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.run = AsyncMock()
+
+        with patch(
+            "buttermilk.processors.unified_processors.OrchestratorFactory.create_orchestrator",
+            return_value=mock_orchestrator,
+        ) as mock_factory:
+            # Process the record
+            outputs = []
+            async for output in processor.process(context):
+                outputs.append(output)
+
+            # Verify orchestrator was created
+            mock_factory.assert_called_once_with(mock_flow_config, "test_flow")
+
+            # Verify orchestrator.run was called
+            assert mock_orchestrator.run.call_count == 1
+
+            # Verify RunRequest was created correctly
+            call_args = mock_orchestrator.run.call_args
+            run_request = call_args.kwargs["request"]
+            assert run_request.flow == "test_flow"
+            assert run_request.inputs["record_id"] == "groupchat-001"
+            assert run_request.parameters == {"param1": "value1"}
+
+    @pytest.mark.anyio
+    async def test_groupchat_processor_enriches_metadata(self):
+        """Verify GroupchatProcessor enriches record metadata with results."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from buttermilk._core.contract import ExecutionTrace
+        from buttermilk._core.processor_config import GroupchatProcessorConfig
+        from buttermilk.processors.unified_processors import GroupchatProcessor
+
+        # Create mock flow config
+        mock_flow_config = MagicMock()
+
+        # Create config
+        config = GroupchatProcessorConfig(
+            type="groupchat",
+            flow_name="test_flow",
+            flow_config=mock_flow_config,
+            collect_traces=True,
+        )
+
+        processor = GroupchatProcessor(config)
+
+        # Create test record
+        record = BaseRecord(
+            record_id="groupchat-002",
+            content="test content",
+            metadata={"original": "data"},
+        )
+
+        context = ProcessingContext(
+            session_id="session-metadata",
+            record=record,
+        )
+
+        # Create mock orchestrator that sends ExecutionTrace via callback
+        mock_orchestrator = MagicMock()
+
+        async def mock_run(request):
+            """Simulate orchestrator sending traces via callback."""
+            if request.callback_to_ui:
+                # Send some mock ExecutionTrace objects
+                # Must provide session_id and session_info to avoid BM singleton access
+                # agent_info is required by ExecutionTrace
+                trace1 = ExecutionTrace(
+                    session_id="test-session",
+                    session_info=None,
+                    agent_info={"agent_name": "agent1", "task_name": "task1"},
+                    outputs={"result": "output1"},
+                )
+                trace2 = ExecutionTrace(
+                    session_id="test-session",
+                    session_info=None,
+                    agent_info={"agent_name": "agent2", "task_name": "task2"},
+                    outputs={"result": "output2"},
+                )
+                await request.callback_to_ui(trace1)
+                await request.callback_to_ui(trace2)
+
+        mock_orchestrator.run = mock_run
+
+        with patch(
+            "buttermilk.processors.unified_processors.OrchestratorFactory.create_orchestrator",
+            return_value=mock_orchestrator,
+        ):
+            # Process the record
+            outputs = []
+            async for output in processor.process(context):
+                outputs.append(output)
+
+            # Verify one record was yielded
+            assert len(outputs) == 1
+            output_record = outputs[0]
+
+            # Verify original metadata is preserved
+            assert output_record.metadata["original"] == "data"
+
+            # Verify groupchat metadata was added
+            assert "groupchat" in output_record.metadata
+            groupchat_meta = output_record.metadata["groupchat"]
+
+            assert groupchat_meta["status"] == "processed"
+            assert groupchat_meta["flow_name"] == "test_flow"
+            assert groupchat_meta["trace_count"] == 2
+            assert len(groupchat_meta["outputs"]) == 2
+            assert groupchat_meta["outputs"][0] == {"result": "output1"}
+            assert groupchat_meta["outputs"][1] == {"result": "output2"}
+
+
 class TestProcessorRegistry:
     """Test processor registry for dynamic processor instantiation."""
 
