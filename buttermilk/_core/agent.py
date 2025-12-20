@@ -205,6 +205,16 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         return self._config.inputs
 
     @property
+    def record_mapping(self) -> str | None:
+        """Get the record JMESPath mapping from config."""
+        return self._config.record
+
+    @property
+    def context_mapping(self) -> str | None:
+        """Get the context JMESPath mapping from config."""
+        return self._config.context
+
+    @property
     def session_id(self) -> str:
         """Get session_id from config if available."""
         return getattr(self._config, "session_id", "")
@@ -880,13 +890,16 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             (`self.parameters`) are used as a base.
         2.  **Message Parameters**: Parameters from the incoming `inputs.parameters`
             override any defaults.
-        3.  **Resolved Input Mappings**: Data from `self._data` (which is populated
+        3.  **Record Mapping**: If `self.record_mapping` is configured (via config.record),
+            extract record from `self._data` and set `updated_inputs.record`.
+        4.  **Context Mapping**: If `self.context_mapping` is configured (via config.context),
+            extract context from `self._data` (currently handled via _model_context).
+        5.  **Resolved Input Mappings**: Data from `self._data` (which is populated
             by `_listen` based on `self.inputs` mappings) is resolved and added to
             `updated_inputs.inputs`. Incoming `inputs.inputs` can override these.
-        4.  **Conversation History**: Messages from `self._model_context` are prepended
+            Note: 'record' and 'context' keys in inputs are skipped (handled explicitly above).
+        6.  **Conversation History**: Messages from `self._model_context` are prepended
             to `updated_inputs.context`.
-        5.  **Records**: If `updated_inputs.record` is empty, the most recent record(s)
-            from `self._records` are used.
 
         Args:
             inputs: The original `AgentInput` message.
@@ -909,7 +922,32 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         merged_params = {**(self.parameters or {}), **updated_inputs.parameters}
         updated_inputs.parameters = merged_params
 
-        # 2. Resolve input mappings using data stored in self._data.
+        # 2. Handle record mapping explicitly using config.record field
+        # This happens BEFORE processing regular inputs to avoid special-case logic in the loop
+        if self.record_mapping and not updated_inputs.record:
+            try:
+                # Extract record from self._data using the configured mapping key
+                # The mapping value (JMESPath expression) was already used by _listen to populate _data
+                # Here we just need to check if the key exists in _data and extract the value
+                # For backward compatibility: if config.record is set, we look for 'record' in _data
+                record_values = self._data.get("record", [])
+                if record_values:
+                    record_data = record_values[-1]  # Get most recent
+                    if isinstance(record_data, dict):
+                        updated_inputs.record = BaseRecord.from_dict(record_data)
+                    else:
+                        updated_inputs.record = record_data
+            except Exception as e:
+                raise ProcessingError(
+                    f"Error resolving record mapping for agent {self.agent_id}: {e!s}"
+                ) from e
+
+        # 3. Handle context mapping explicitly using config.context field
+        # Note: Currently context comes from _model_context.get_messages(), but if explicit
+        # context mapping is configured, we should handle it here
+        # For now, keeping existing behavior (context handled in step 5 below)
+
+        # 4. Resolve regular input mappings using data stored in self._data.
         if updated_inputs.inputs is None:
             updated_inputs.inputs = {}
         if self.inputs:  # self.inputs is the mapping configuration from AgentConfig
@@ -918,19 +956,16 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 for (
                     key
                 ) in self.inputs.keys():  # Iterate over configured input mapping keys
-                    # Retrieve data from self._data; note that KeyValueCollector stores values in lists
-                    data_values = self._data.get(key, [])
-
-                    # Special handling for 'record': extract most recent and reconstruct as BaseRecord
-                    if key == "record" and data_values and not updated_inputs.record:
-                        record_data = data_values[-1]  # Get most recent
-                        if isinstance(record_data, dict):
-                            updated_inputs.record = BaseRecord.from_dict(record_data)
-                        else:
-                            updated_inputs.record = record_data
-                        # Don't add to inputs dict - record goes in the record field
+                    # Skip 'record' - handled explicitly above via self.record_mapping
+                    if key == "record":
                         continue
 
+                    # Skip 'context' - handled separately below
+                    if key == "context":
+                        continue
+
+                    # Retrieve data from self._data; note that KeyValueCollector stores values in lists
+                    data_values = self._data.get(key, [])
                     extracted_data[key] = data_values
 
                 # Merge resolved mappings, letting original message inputs override
@@ -941,7 +976,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                     f"Error resolving input mappings for agent {self.agent_id}: {e!s}"
                 ) from e
 
-        # 4. Prepend conversation history from agent's context.
+        # 5. Prepend conversation history from agent's context.
         if updated_inputs.context is None:
             updated_inputs.context = []
         try:
@@ -953,10 +988,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             )
             # Decide handling: continue without history or raise? For now, log and continue.
 
-        # 5. Strict contract: record must come from input message or explicit JMESPath mapping
-        # No fallback to _data["record"] - if record is needed, map it explicitly in agent config
-        # This eliminates guessing patterns and makes data flow explicit
-
+        # 6. Cleanup and validation
         # TODO: @nicsuzor decide if we need to remove inputs that are not in the Agent's input schema.
 
         # Remove empty lists from inputs (JMESPath returns [] when no match)
