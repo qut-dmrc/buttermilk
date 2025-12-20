@@ -540,7 +540,7 @@ def load_template(
 
     # Check for unfilled parameters if requested (fail-fast)
     # Note: placeholder roles like 'record' and 'context' are excluded from rendering_context
-    # (see lines 526-527) so they won't appear in collected_undefined_vars
+    # so they won't appear in collected_undefined_vars
     if parameters.get("fail_on_unfilled_parameters") and collected_undefined_vars:
         raise FatalError(
             f"Template '{template}' has unfilled parameters: {', '.join(sorted(collected_undefined_vars))}"

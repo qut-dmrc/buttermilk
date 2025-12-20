@@ -535,7 +535,7 @@ class LLMCore(ProcessorCore):
 
         # Check for missing variables
         if unfilled_vars and self.fail_on_unfilled_parameters:
-            raise FatalError(
+            raise ProcessingError(
                 f"Template '{template_name}' has unfilled parameters: {', '.join(sorted(unfilled_vars))}"
             )
         elif unfilled_vars:
