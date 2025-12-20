@@ -237,6 +237,7 @@ line-length = 150
 
 [project.scripts]
 bm = "buttermilk.runner.cli:main"
+bm-debug = "buttermilk.debug.cli:debug"
 
 [project.entry-points."hydra_plugins"]
 buttermilk_search_path_plugin = "hydra_plugins.buttermilk_search_path_plugin:ButtermilkSearchPathPlugin"
