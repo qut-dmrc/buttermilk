@@ -1,5 +1,9 @@
 """Orchestrator processor for pipeline integration.
 
+.. deprecated::
+    OrchestratorProcessor is deprecated. Use GroupchatProcessor from
+    buttermilk.processors.unified_processors instead. See RFC #311.
+
 This module provides a processor that wraps Buttermilk orchestrators (complex
 multi-agent flows) as pipeline processors, enabling them to be used within
 the PipelineOrchestrator framework.
@@ -9,6 +13,7 @@ orchestrators are inherently non-deterministic (LLM calls, multi-agent
 conversations produce different results each time).
 """
 
+import warnings
 from typing import Any, AsyncGenerator
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -22,6 +27,10 @@ from buttermilk.runner.flowrunner import OrchestratorFactory
 
 class OrchestratorProcessor(BaseModel):
     """Wraps an Orchestrator as a Pipeline Processor.
+
+    .. deprecated::
+        OrchestratorProcessor is deprecated. Use GroupchatProcessor from
+        buttermilk.processors.unified_processors instead. See RFC #311.
 
     Allows complex multi-agent flows to be used as pipeline processing steps.
     Each input record is processed by a fresh orchestrator instance to ensure
@@ -90,6 +99,20 @@ class OrchestratorProcessor(BaseModel):
         exclude=True,
         description="Optional session-scoped BM instance for observability isolation",
     )
+
+    def __init__(self, **data: Any) -> None:
+        """Initialize OrchestratorProcessor with deprecation warning.
+
+        Raises:
+            DeprecationWarning: OrchestratorProcessor is deprecated
+        """
+        warnings.warn(
+            "OrchestratorProcessor is deprecated. Use GroupchatProcessor from "
+            "buttermilk.processors.unified_processors instead. See RFC #311.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(**data)
 
     async def process(
         self,
