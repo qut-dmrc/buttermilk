@@ -341,8 +341,20 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
             # Instantiate processors (shared path for both batch and pipeline modes)
             logger.info(f"Loading {len(pipeline_conf['processors'])} processor(s)...")
             processors = []
+
+            # Import processor registry and config for type checking
+            from buttermilk._core.processor_config import ProcessorConfig
+            from buttermilk._core.processor_registry import create_processor
+            # Ensure unified processors are registered
+            import buttermilk.processors.unified_processors  # noqa: F401
+
             for proc_conf in pipeline_conf["processors"]:
-                processors.append(hydra.utils.instantiate(proc_conf))
+                if isinstance(proc_conf, ProcessorConfig):
+                    # Already a ProcessorConfig (e.g., from batch mode) - use registry
+                    processors.append(create_processor(proc_conf))
+                else:
+                    # DictConfig from pipeline mode - use Hydra instantiate
+                    processors.append(hydra.utils.instantiate(proc_conf))
             pipeline_conf["processors"] = processors
 
             # Instantiate pipeline orchestrator (shared for both modes)
