@@ -1,6 +1,6 @@
 #@package _global_
 # Batch mode: Pipeline-based processing
-# Uses OrchestratorProcessor to wrap flows as pipeline processors
+# Uses GroupchatProcessor to wrap flows as pipeline processors
 #
 # Usage:
 #   python -m buttermilk.runner.cli run=batch run.flow=<flow_name>

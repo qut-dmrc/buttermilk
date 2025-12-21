@@ -8,7 +8,6 @@ containing 'record' and other fields, yielding transformed dict outputs.
 from .chromadb_uploader import ChromaDBUploader
 from .embeddings import EmbeddingGenerator
 from .jmespath_transform import JMESPathTransform
-from .orchestrator_processor import OrchestratorProcessor  # Deprecated, kept for backward compatibility
 from .parallel import ParallelProcessor
 from .unified_processors import GroupchatProcessor
 from .variants import VariantProcessor
@@ -16,9 +15,8 @@ from .variants import VariantProcessor
 __all__ = [
     "ChromaDBUploader",
     "EmbeddingGenerator",
-    "GroupchatProcessor",  # Preferred for multi-agent flows
+    "GroupchatProcessor",
     "JMESPathTransform",
-    "OrchestratorProcessor",  # Deprecated: Use GroupchatProcessor instead
     "ParallelProcessor",
     "VariantProcessor",
 ]
