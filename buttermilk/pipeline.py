@@ -76,6 +76,8 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from buttermilk import bm, logger
 from buttermilk._core.hashing import compute_processor_config_hash
+from buttermilk._core.processing_context import ProcessingContext
+from buttermilk._core.protocols import Processor as UnifiedProcessor
 from buttermilk._core.types import BaseRecord
 
 
@@ -519,12 +521,26 @@ class PipelineOrchestrator(BaseModel):
                                     current_record, "parent_call_id", None
                                 )
 
-                                async for output_record in processor.process(
-                                    current_record,
-                                    processor_stage=processor_stage_name,
-                                    parent_trace_id=parent_trace_id,
-                                ):
-                                    outputs.append(output_record)
+                                # Check if processor uses new unified interface (ProcessingContext)
+                                # vs old interface (record + kwargs)
+                                if isinstance(processor, UnifiedProcessor):
+                                    # New unified processor interface
+                                    context = ProcessingContext(
+                                        session_id=parent_trace_id or processor_stage_name,
+                                        record=current_record,
+                                        batch_id=self.pipeline_name,
+                                        span=processor_span,
+                                    )
+                                    async for output_record in processor.process(context):
+                                        outputs.append(output_record)
+                                else:
+                                    # Legacy processor interface
+                                    async for output_record in processor.process(
+                                        current_record,
+                                        processor_stage=processor_stage_name,
+                                        parent_trace_id=parent_trace_id,
+                                    ):
+                                        outputs.append(output_record)
                             except Exception as e:
                                 # Don't log here - let the task wrapper handle error logging
                                 # to avoid duplicate error messages
