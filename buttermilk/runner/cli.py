@@ -237,48 +237,115 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
             finally:
                 logger.info("API server stopped.")
 
-        case "pipeline":
+        case "batch" | "pipeline":
             # Pipeline mode: Run data processing pipeline
-            logger.info("Pipeline mode: Starting data processing pipeline")
+            # Batch mode: Generate pipeline config and delegate to pipeline execution
+            is_batch_mode = mode == "batch"
 
-            if not hasattr(conf.run, "pipeline"):
-                raise ValueError(
-                    "Pipeline configuration missing. Ensure 'run.pipeline' is configured.\n"
-                    "Check your pipeline configurations in buttermilk/conf/"
+            if is_batch_mode:
+                # DEPRECATED: Use 'pipeline' mode instead for new projects
+                logger.warning(
+                    "⚠️  DEPRECATION WARNING: 'batch' mode is deprecated. "
+                    "Please migrate to 'pipeline' mode for new projects. "
+                    "See RFC #311 for migration guide."
                 )
 
-            pipeline_conf = conf.run.pipeline
+                # Generate pipeline configuration from batch mode parameters
+                from buttermilk._core.processor_config import GroupchatProcessorConfig
+                from buttermilk.utils.utils import expand_dict
 
-            # Instantiate source (either via _target_ or as storage config)
-            logger.info("Initializing source...")
-            source = hydra.utils.instantiate(pipeline_conf["source"])
-            # If instantiate didn't create an object (no _target_), treat as storage config
-            if isinstance(source, (dict, DictConfig)):
-                source = bm.get_storage(source)
-            pipeline_conf["source"] = source
+                flow_name = conf.run.flow
+                flow = flow_runner.flows[flow_name]
 
-            if output_cfg := pipeline_conf.get("output", None):
-                # Instantiate output (either via _target_ or as storage config)
-                logger.info("Initializing output...")
-                output = hydra.utils.instantiate(output_cfg)
+                # Get source storage from flow configuration
+                if hasattr(flow, "storage") and flow.storage:
+                    if "initial" in flow.storage:
+                        storage_cfg = flow.storage["initial"]
+                    else:
+                        storage_cfg = next(iter(flow.storage.values()))
+                else:
+                    raise ValueError(
+                        f"Flow '{flow_name}' has no storage configuration"
+                    )
+
+                # Create source storage instance
+                source = bm.get_storage(storage_cfg)
+
+                # Expand flow parameters into variants
+                param_variants = expand_dict(flow.parameters) if hasattr(flow, 'parameters') and flow.parameters else [{}]
+
+                # Build processor configs for each parameter variant
+                processor_configs = []
+                for params in param_variants:
+                    processor_configs.append(
+                        GroupchatProcessorConfig(
+                            type="groupchat",
+                            flow_config=flow,
+                            flow_name=flow_name,
+                            parameters=params,
+                            collect_traces=True,
+                        )
+                    )
+
+                # Create generated pipeline configuration
+                pipeline_conf = {
+                    "pipeline_name": f"batch_{flow_name}",
+                    "source": source,
+                    "processors": processor_configs,
+                    "limit": conf.run.limit,
+                    "concurrency": getattr(conf.run, "concurrency", 1) or 1,
+                    "enable_record_cache": False,  # Explicit: no caching for orchestrators
+                }
+
+                logger.info(
+                    f"Batch mode: Generated pipeline config for flow '{flow_name}'"
+                )
+                if conf.run.limit:
+                    logger.info(f"Processing limit: {conf.run.limit} records")
+                logger.info(f"Concurrency: {pipeline_conf['concurrency']}")
+
+            else:
+                # Pure pipeline mode: load from configuration
+                logger.info("Pipeline mode: Starting data processing pipeline")
+
+                if not hasattr(conf.run, "pipeline"):
+                    raise ValueError(
+                        "Pipeline configuration missing. Ensure 'run.pipeline' is configured.\n"
+                        "Check your pipeline configurations in buttermilk/conf/"
+                    )
+
+                pipeline_conf = conf.run.pipeline
+
+                # Instantiate source (either via _target_ or as storage config)
+                logger.info("Initializing source...")
+                source = hydra.utils.instantiate(pipeline_conf["source"])
                 # If instantiate didn't create an object (no _target_), treat as storage config
-                if isinstance(output, (dict, DictConfig)):
-                    output = bm.get_storage(output)
-                pipeline_conf["output"] = output
+                if isinstance(source, (dict, DictConfig)):
+                    source = bm.get_storage(source)
+                pipeline_conf["source"] = source
 
-            # Instantiate processors
+                if output_cfg := pipeline_conf.get("output", None):
+                    # Instantiate output (either via _target_ or as storage config)
+                    logger.info("Initializing output...")
+                    output = hydra.utils.instantiate(output_cfg)
+                    # If instantiate didn't create an object (no _target_), treat as storage config
+                    if isinstance(output, (dict, DictConfig)):
+                        output = bm.get_storage(output)
+                    pipeline_conf["output"] = output
+
+                # Use run.limit instead of pipeline.max_records for consistency
+                if conf.run.limit is not None:
+                    pipeline_conf["limit"] = conf.run.limit
+                    logger.info(f"Processing limit: {conf.run.limit} records")
+
+            # Instantiate processors (shared path for both batch and pipeline modes)
             logger.info(f"Loading {len(pipeline_conf['processors'])} processor(s)...")
             processors = []
             for proc_conf in pipeline_conf["processors"]:
                 processors.append(hydra.utils.instantiate(proc_conf))
             pipeline_conf["processors"] = processors
 
-            # Use run.limit instead of pipeline.max_records for consistency with batch modes
-            if conf.run.limit is not None:
-                pipeline_conf["limit"] = conf.run.limit
-                logger.info(f"Processing limit: {conf.run.limit} records")
-
-            # Instantiate pipeline orchestrator
+            # Instantiate pipeline orchestrator (shared for both modes)
             from buttermilk.pipeline import PipelineOrchestrator
 
             orchestrator = PipelineOrchestrator(**pipeline_conf)
@@ -299,89 +366,11 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
 
             try:
                 asyncio.run(run_pipeline())
-                logger.info("✓ Pipeline completed successfully")
+                mode_name = "Batch mode" if is_batch_mode else "Pipeline"
+                logger.info(f"✓ {mode_name} completed successfully")
             except Exception as e:
-                logger.error(f"✗ Pipeline failed: {e}")
-                raise
-        case "batch":
-            # Batch mode: Pipeline-based processing without Pub/Sub
-            # DEPRECATED: Use 'pipeline' mode instead for new projects
-            # Uses GroupchatProcessor to wrap flows as pipeline processors
-            logger.warning(
-                "⚠️  DEPRECATION WARNING: 'batch' mode is deprecated. "
-                "Please migrate to 'pipeline' mode for new projects. "
-                "See RFC #311 for migration guide."
-            )
-
-            flow_name = conf.run.flow
-            limit = conf.run.limit
-            concurrency = getattr(conf.run, "concurrency", 1) or 1
-
-            logger.info(
-                f"Batch mode: Processing flow '{flow_name}' via pipeline"
-            )
-            if limit:
-                logger.info(f"Processing limit: {limit} records")
-            logger.info(f"Concurrency: {concurrency}")
-
-            async def run_batch() -> None:
-                from buttermilk.pipeline import PipelineOrchestrator
-                from buttermilk.processors.unified_processors import GroupchatProcessor
-                from buttermilk._core.processor_config import GroupchatProcessorConfig
-                from buttermilk.utils.utils import expand_dict
-
-                # Get flow configuration
-                flow = flow_runner.flows[flow_name]
-
-                # Get source storage (same logic as create_batch)
-                if hasattr(flow, "storage") and flow.storage:
-                    if "initial" in flow.storage:
-                        storage_cfg = flow.storage["initial"]
-                    else:
-                        storage_cfg = next(iter(flow.storage.values()))
-                else:
-                    raise ValueError(
-                        f"Flow '{flow_name}' has no storage configuration"
-                    )
-
-                source = bm.get_storage(storage_cfg)
-
-                # Expand flow parameters into variants
-                param_variants = expand_dict(flow.parameters) if hasattr(flow, 'parameters') and flow.parameters else [{}]
-
-                # Create and run a pipeline for each parameter variant
-                for params in param_variants:
-                    # Create GroupchatProcessor to wrap the flow
-                    processor_config = GroupchatProcessorConfig(
-                        type="groupchat",
-                        flow_config=flow,
-                        flow_name=flow_name,
-                        parameters=params,
-                        collect_traces=True,
-                    )
-                    processor = GroupchatProcessor(config=processor_config)
-
-                    # Create pipeline with the groupchat processor
-                    pipeline = PipelineOrchestrator(
-                        pipeline_name=f"batch_{flow_name}",
-                        source=source,
-                        processors=[processor],
-                        limit=limit,
-                        concurrency=concurrency,
-                        enable_record_cache=False,  # Explicit: no caching for orchestrators
-                    )
-
-                    logger.info(f"Starting pipeline-based batch processing with parameters: {params}")
-                    async for _ in pipeline():
-                        pass  # Results handled by orchestrator callbacks
-
-                await bm.graceful_shutdown()
-
-            try:
-                asyncio.run(run_batch())
-                logger.info(f"✓ Batch mode completed for flow '{flow_name}'")
-            except Exception as e:
-                logger.error(f"✗ Batch mode failed: {e}")
+                mode_name = "Batch mode" if is_batch_mode else "Pipeline"
+                logger.error(f"✗ {mode_name} failed: {e}")
                 raise
 
         case _:
