@@ -84,7 +84,19 @@ class BatchProcessorConfig(ProcessorConfig):
     batch_size: int = Field(default=32, description="Number of records to batch together.")
 
 
+class EmbeddingProcessorConfig(BatchProcessorConfig):
+    """Configuration for embedding processors."""
+    type: Literal["embedding"] = "embedding"
+    embedding_model: str = Field(..., description="Embedding model identifier (e.g., 'gemini-embedding-001').")
+    dimensionality: int = Field(default=3072, description="Embedding vector dimensionality.")
+    task: str = Field(default="RETRIEVAL_DOCUMENT", description="Task type for embeddings.")
+    embedding_max_retries: int = Field(default=5, description="Max retries for embedding API calls.")
+    embedding_min_wait_seconds: float = Field(default=1.0, description="Min wait between embedding retries.")
+    embedding_max_wait_seconds: float = Field(default=120.0, description="Max wait between embedding retries.")
+    embedding_cooldown_seconds: float = Field(default=0.1, description="Cooldown between successful embedding calls.")
+
+
 # Discriminated Union for type-safe parsing
 # Add new processor config types here
-ProcessorConfigUnion = LLMProcessorConfig | FilterProcessorConfig | ShellProcessorConfig | GroupchatProcessorConfig | ExpanderProcessorConfig | TransformProcessorConfig | BatchProcessorConfig
+ProcessorConfigUnion = LLMProcessorConfig | FilterProcessorConfig | ShellProcessorConfig | GroupchatProcessorConfig | ExpanderProcessorConfig | TransformProcessorConfig | EmbeddingProcessorConfig | BatchProcessorConfig
 
