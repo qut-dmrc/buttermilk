@@ -23,7 +23,8 @@ from jmespath.exceptions import JMESPathError
 from google import genai
 from pydantic import Field, PrivateAttr
 
-from buttermilk._core.contract import ExecutionTrace
+from buttermilk._core.contract import ExecutionTrace, TaskProcessingComplete
+from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llm_core import LLMCore
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord, RunRequest
@@ -182,13 +183,16 @@ class GroupchatProcessor(UnifiedProcessor):
             self.flow_config, self.flow_name
         )
 
-        # Collect ExecutionTrace outputs via callback
+        # Collect ExecutionTrace outputs and TaskProcessingComplete errors via callback
         traces: list[ExecutionTrace] = []
+        task_errors: list[TaskProcessingComplete] = []
 
         async def collect_callback(message: Any) -> None:
-            """Callback to collect ExecutionTrace outputs from orchestrator."""
+            """Callback to collect ExecutionTrace and error signals from orchestrator."""
             if isinstance(message, ExecutionTrace):
                 traces.append(message)
+            elif isinstance(message, TaskProcessingComplete) and message.is_error:
+                task_errors.append(message)
 
         # Use ui_callback from context if available, otherwise use collect_callback
         callback = context.ui_callback if context.ui_callback else collect_callback
@@ -220,11 +224,27 @@ class GroupchatProcessor(UnifiedProcessor):
             # Run orchestrator (returns None, results flow through callback)
             await orchestrator.run(request=run_request)
 
+            # Check for errors from TaskProcessingComplete signals (reliable source)
+            # These are always published, even when exceptions prevent ExecutionTrace creation
+            if task_errors:
+                error_details = [
+                    f"{t.agent_id}: {t.error or 'unknown error'}" for t in task_errors
+                ]
+                raise ProcessingError(
+                    f"Orchestrator had {len(task_errors)} agent error(s): {'; '.join(error_details)}"
+                )
+
             # Build outputs from collected traces
             outputs = []
             for trace in traces:
                 if trace.outputs is not None:
                     outputs.append(trace.outputs)
+
+            # Check if we got any meaningful outputs - no outputs likely means early termination
+            if not outputs:
+                raise ProcessingError(
+                    f"Orchestrator completed but produced no outputs (early termination or all agents failed)"
+                )
 
             # Enrich record metadata with orchestrator results
             enriched_metadata = {
