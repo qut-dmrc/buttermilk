@@ -539,14 +539,14 @@ def load_template(
         raise
 
     # Check for unfilled parameters if requested (fail-fast)
-    # Note: placeholder roles like 'record' and 'context' are excluded from rendering_context
-    # so they won't appear in collected_undefined_vars
-    if parameters.get("fail_on_unfilled_parameters") and collected_undefined_vars:
+    # Exclude placeholder keys (record, context) - these are handled by make_messages, not Jinja2
+    unfilled_vars = set(collected_undefined_vars) - placeholder_keys
+    if parameters.get("fail_on_unfilled_parameters") and unfilled_vars:
         raise FatalError(
-            f"Template '{template}' has unfilled parameters: {', '.join(sorted(collected_undefined_vars))}"
+            f"Template '{template}' has unfilled parameters: {', '.join(sorted(unfilled_vars))}"
         )
 
-    return rendered_string, set(collected_undefined_vars), template_hash
+    return rendered_string, unfilled_vars, template_hash
 
 
 def _deduplicate_messages(messages: list[LLMMessage]) -> list[LLMMessage]:

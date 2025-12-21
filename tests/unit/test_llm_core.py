@@ -513,44 +513,34 @@ class TestLLMCore:
         assert core.parameters["max_tokens"] == 1000
 
     @pytest.mark.anyio
-    async def test_process_with_llm_derives_vars_from_record(self):
-        """Test that template_vars=None derives variables from record.
+    async def test_template_vars_not_derived_from_record(self):
+        """Test that template_vars=None does NOT derive variables from record.
 
-        When template_vars is None, process_with_llm should use record.model_dump()
-        to derive template variables. This is the processor mode pattern.
+        When template_vars is None, it should become an empty dict {}.
+        Record content is handled separately via {{record}} placeholder in
+        make_messages, not by deriving template vars from record.model_dump().
         """
-        core = LLMCore(model="gpt-4", template="test/simple")
+        core = LLMCore(model="gpt-4", template="test/record_placeholder")
 
-        # Create a record with a field that matches the template variable
         record = BaseRecord(
             record_id="test",
             dataset_name="test_dataset",
             split_type="train",
-            var="test value from record",  # This should be used as template var
+            content="Test content from record",
         )
 
-        # Mock ONLY the external LLM boundary
-        mock_bm = MagicMock()
-        mock_client = AsyncMock()
-        mock_client.call_chat.return_value = CreateResult(
-            content="Success",
-            finish_reason="stop",
-            usage=RequestUsage(prompt_tokens=10, completion_tokens=10),
-            cached=False,
+        # Test that _fill_template works with empty template_vars and a record
+        # The {{record}} placeholder should NOT cause an unfilled parameter error
+        messages = await core._fill_template(
+            template_vars={},  # Empty - record handled via placeholder, not template vars
+            record=record,
         )
-        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
 
-        with patch("buttermilk._core.llm_core.bm", mock_bm):
-            result = await core.process_with_llm(
-                template_vars=None,  # Should derive from record
-                record=record,
-            )
-
-            assert result.content == "Success"
-            # Verify record fields were used as template vars (flattened structure)
-            assert result.resolved_inputs["var"] == "test value from record"
-            assert result.resolved_inputs["record_id"] == "test"
-            assert result.resolved_inputs["dataset_name"] == "test_dataset"
+        # Verify messages were generated (record was inserted at placeholder)
+        assert len(messages) > 0
+        # The record content should appear in one of the messages
+        record_found = any("Test content from record" in str(m.content) for m in messages)
+        assert record_found, "Record content should be inserted at {{record}} placeholder"
 
     @pytest.mark.anyio
     async def test_process_with_llm_none_vars_none_record(self):
