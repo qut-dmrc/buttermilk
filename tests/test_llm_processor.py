@@ -16,11 +16,10 @@ from pydantic import BaseModel
 from buttermilk._core.llm_core import LLMCore
 from buttermilk._core.llms import CreateResult
 from buttermilk._core.processing_context import ProcessingContext
-from buttermilk._core.processor_config import LLMProcessorConfig
-from buttermilk._core.processor_registry import create_processor, get_registered_types
 from buttermilk._core.protocols import Processor
 from buttermilk._core.types import BaseRecord
 from buttermilk._core.unified_processor import UnifiedProcessor
+from buttermilk.processors.unified_processors import LLMProcessor
 
 
 class OutputModelForTesting(BaseModel):
@@ -31,73 +30,56 @@ class OutputModelForTesting(BaseModel):
 
 
 class TestLLMProcessorConfig:
-    """Test LLMProcessorConfig creation and validation."""
+    """Test LLMProcessor Pydantic model creation and validation."""
 
-    def test_llm_processor_config_creation(self):
-        """Verify LLMProcessorConfig can be created with required fields."""
-        config = LLMProcessorConfig(
-            type="llm",
+    def test_llm_processor_creation(self):
+        """Verify LLMProcessor can be created with required fields."""
+        processor = LLMProcessor(
             model="gpt-4",
             prompt_template="test/simple",
         )
 
-        assert config.type == "llm"
-        assert config.model == "gpt-4"
-        assert config.prompt_template == "test/simple"
-        assert config.temperature == 0.0  # Default value
-        assert config.max_tokens is None
-        assert config.input_variables == {}
+        assert processor.model == "gpt-4"
+        assert processor.prompt_template == "test/simple"
+        assert processor.temperature == 0.7  # Default value
+        assert processor.max_tokens == 1024  # Default value
+        assert processor.input_variables == {}
 
-    def test_llm_processor_config_with_optional_fields(self):
-        """Verify LLMProcessorConfig can be created with optional fields."""
-        config = LLMProcessorConfig(
-            type="llm",
+    def test_llm_processor_with_optional_fields(self):
+        """Verify LLMProcessor can be created with optional fields."""
+        processor = LLMProcessor(
             model="gpt-4",
             prompt_template="test/simple",
-            temperature=0.7,
-            max_tokens=1000,
-            input_variables={"criteria": "Be concise", "language": "English"},
+            temperature=0.0,
+            max_tokens=2000,
+            input_variables={"criteria": "test", "language": "en"},
         )
 
-        assert config.temperature == 0.7
-        assert config.max_tokens == 1000
-        assert config.input_variables == {"criteria": "Be concise", "language": "English"}
+        assert processor.temperature == 0.0
+        assert processor.max_tokens == 2000
+        assert processor.input_variables == {"criteria": "test", "language": "en"}
 
-    def test_llm_processor_config_validates_type(self):
-        """Verify type field is constrained to 'llm' literal."""
-        config = LLMProcessorConfig(
-            type="llm",
-            model="gpt-4",
-            prompt_template="test/simple",
-        )
-
-        # Type should be the literal "llm"
-        assert config.type == "llm"
-
-    def test_llm_processor_config_forbids_extra_fields(self):
+    def test_llm_processor_forbids_extra_fields(self):
         """Verify strict config validation (extra='forbid')."""
         with pytest.raises(ValueError, match="Extra inputs are not permitted"):
-            LLMProcessorConfig(
-                type="llm",
+            LLMProcessor(
                 model="gpt-4",
                 prompt_template="test/simple",
                 unknown_field="value",  # This should raise an error
             )
 
-    def test_llm_processor_config_requires_model(self):
+    def test_llm_processor_requires_model(self):
         """Verify model field is required."""
         with pytest.raises(ValueError, match="Field required"):
-            LLMProcessorConfig(
-                type="llm",
+            LLMProcessor(
                 prompt_template="test/simple",
                 # model is missing
             )
 
-    def test_llm_processor_config_requires_prompt_template(self):
+    def test_llm_processor_requires_prompt_template(self):
         """Verify prompt_template field is required."""
         with pytest.raises(ValueError, match="Field required"):
-            LLMProcessorConfig(
-                type="llm",
+            LLMProcessor(
                 model="gpt-4",
                 # prompt_template is missing
             )
@@ -108,44 +90,31 @@ class TestLLMProcessorProtocol:
 
     def test_llm_processor_exists(self):
         """Verify LLMProcessor class can be imported."""
-        # This will fail until LLMProcessor is implemented
-        from buttermilk.processors.unified_processors import LLMProcessor
-
         assert LLMProcessor is not None
 
     def test_llm_processor_inherits_from_unified_processor(self):
         """Verify LLMProcessor inherits from UnifiedProcessor."""
-        from buttermilk.processors.unified_processors import LLMProcessor
-
         # LLMProcessor should inherit from UnifiedProcessor
         assert issubclass(LLMProcessor, UnifiedProcessor)
 
     def test_llm_processor_implements_processor_protocol(self):
         """Verify LLMProcessor implements the Processor protocol."""
-        from buttermilk.processors.unified_processors import LLMProcessor
-
-        # Use isinstance with the protocol
-        config = LLMProcessorConfig(
-            type="llm",
+        processor = LLMProcessor(
             model="gpt-4",
             prompt_template="test/simple",
         )
-        processor = LLMProcessor(config)
 
         # Should satisfy the Processor protocol
         assert isinstance(processor, Processor)
 
     def test_llm_processor_has_process_method(self):
         """Verify LLMProcessor has async process method with correct signature."""
-        from buttermilk.processors.unified_processors import LLMProcessor
         import inspect
 
-        config = LLMProcessorConfig(
-            type="llm",
+        processor = LLMProcessor(
             model="gpt-4",
             prompt_template="test/simple",
         )
-        processor = LLMProcessor(config)
 
         # Should have process method
         assert hasattr(processor, "process")
@@ -154,51 +123,17 @@ class TestLLMProcessorProtocol:
         assert inspect.isasyncgenfunction(processor.process)
 
 
-class TestLLMProcessorRegistry:
-    """Test LLMProcessor registration with processor registry."""
-
-    def test_llm_processor_registered_as_llm_type(self):
-        """Verify 'llm' type is registered in processor registry."""
-        registered_types = get_registered_types()
-
-        # 'llm' should be registered
-        assert "llm" in registered_types
-
-    def test_registry_creates_llm_processor_from_config(self):
-        """Verify registry creates LLMProcessor from LLMProcessorConfig."""
-        from buttermilk.processors.unified_processors import LLMProcessor
-
-        config = LLMProcessorConfig(
-            type="llm",
-            model="gpt-4",
-            prompt_template="test/simple",
-        )
-
-        # Create processor using registry
-        processor = create_processor(config)
-
-        # Should create an LLMProcessor instance
-        assert isinstance(processor, LLMProcessor)
-        assert processor.config.model == "gpt-4"
-        assert processor.config.prompt_template == "test/simple"
-
-
 class TestLLMProcessorProcessing:
     """Test LLMProcessor processing logic."""
 
     @pytest.mark.anyio
     async def test_llm_processor_processes_single_record(self):
         """Verify LLMProcessor processes a single record and outputs to configured field."""
-        from buttermilk.processors.unified_processors import LLMProcessor
-
-        config = LLMProcessorConfig(
-            type="llm",
+        processor = LLMProcessor(
             model="gpt-4",
             prompt_template="test/simple",
             temperature=0.0,
         )
-
-        processor = LLMProcessor(config)
 
         # Create test record
         record = BaseRecord(
@@ -236,21 +171,16 @@ class TestLLMProcessorProcessing:
             # Verify record ID is preserved
             assert output_record.record_id == "llm-001"
 
-            # Verify LLM output is in the configured output column (default "output")
-            assert "output" in output_record.metadata or hasattr(output_record, "output")
+            # Verify LLM output is in the configured output column (default "llm_output")
+            assert hasattr(output_record, "llm_output") or "llm_output" in output_record.metadata
 
     @pytest.mark.anyio
     async def test_llm_processor_uses_template(self):
         """Verify LLMProcessor uses the configured template for LLM calls."""
-        from buttermilk.processors.unified_processors import LLMProcessor
-
-        config = LLMProcessorConfig(
-            type="llm",
+        processor = LLMProcessor(
             model="gpt-4",
             prompt_template="test/simple",
         )
-
-        processor = LLMProcessor(config)
 
         # Create test record with template variable
         record = BaseRecord(
@@ -293,15 +223,10 @@ class TestLLMProcessorProcessing:
     @pytest.mark.anyio
     async def test_llm_processor_enriches_record_metadata(self):
         """Verify LLMProcessor enriches record with LLM metadata (usage, model, etc)."""
-        from buttermilk.processors.unified_processors import LLMProcessor
-
-        config = LLMProcessorConfig(
-            type="llm",
+        processor = LLMProcessor(
             model="gpt-4",
             prompt_template="test/simple",
         )
-
-        processor = LLMProcessor(config)
 
         record = BaseRecord(
             record_id="llm-003",
@@ -341,16 +266,11 @@ class TestLLMProcessorProcessing:
     @pytest.mark.anyio
     async def test_llm_processor_with_input_variables(self):
         """Verify LLMProcessor merges input_variables into template context."""
-        from buttermilk.processors.unified_processors import LLMProcessor
-
-        config = LLMProcessorConfig(
-            type="llm",
+        processor = LLMProcessor(
             model="gpt-4",
             prompt_template="test/simple",
-            input_variables={"static_var": "static value", "criteria": "be precise"},
+            input_variables={"static_var": "static_value", "criteria": "test criteria"},
         )
-
-        processor = LLMProcessor(config)
 
         record = BaseRecord(
             record_id="llm-004",
@@ -394,16 +314,11 @@ class TestLLMProcessorIntegration:
     @pytest.mark.anyio
     async def test_llm_processor_end_to_end(self):
         """Verify end-to-end processing: record -> template -> LLM -> enriched record."""
-        from buttermilk.processors.unified_processors import LLMProcessor
-
-        config = LLMProcessorConfig(
-            type="llm",
+        processor = LLMProcessor(
             model="gpt-4",
             prompt_template="test/simple",
             temperature=0.0,
         )
-
-        processor = LLMProcessor(config)
 
         # Create a realistic record
         record = BaseRecord(
@@ -452,21 +367,17 @@ class TestLLMProcessorIntegration:
     @pytest.mark.anyio
     async def test_llm_processor_with_structured_output(self):
         """Verify LLMProcessor handles structured output models."""
-        from buttermilk.processors.unified_processors import LLMProcessor
         from buttermilk._core.llms import ModelOutput
 
         # Note: This test will need to be updated once we know how
         # LLMProcessor handles output_model configuration
         # For now, we're testing the basic structure
 
-        config = LLMProcessorConfig(
-            type="llm",
+        processor = LLMProcessor(
             model="gpt-4",
             prompt_template="test/structured_output",
             temperature=0.0,
         )
-
-        processor = LLMProcessor(config)
 
         record = BaseRecord(
             record_id="structured-001",

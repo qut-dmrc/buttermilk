@@ -13,16 +13,22 @@ from typing import AsyncGenerator
 
 import pytest
 from opentelemetry import trace
+from pydantic import Field
 
 from buttermilk._core.executor import PipelineExecutor
 from buttermilk._core.pipeline_config import PipelineConfig
 from buttermilk._core.processing_context import ProcessingContext
-from buttermilk._core.processor_config import BatchProcessorConfig, ExpanderProcessorConfig, ProcessorConfig, TransformProcessorConfig
 from buttermilk._core.protocols import BatchProcessor, Processor
 from buttermilk._core.types import BaseRecord
 from buttermilk._core.unified_processor import UnifiedProcessor
 from buttermilk._core.unified_batch_processor import UnifiedBatchProcessor
-from buttermilk.processors.unified_processors import ExpanderProcessor, TransformProcessor
+from buttermilk.processors.unified_processors import (
+    ExpanderProcessor,
+    FilterProcessor,
+    GroupchatProcessor,
+    ShellProcessor,
+    TransformProcessor,
+)
 
 
 class TestProcessingContext:
@@ -124,13 +130,10 @@ class TestExpanderProcessor:
     @pytest.mark.anyio
     async def test_expander_processor_expands_list_field(self):
         """Verify ExpanderProcessor yields multiple records from a list field."""
-        # Create config to expand a list field in metadata
-        config = ExpanderProcessorConfig(
-            type="expander",
+        # Create processor directly as Pydantic model
+        processor = ExpanderProcessor(
             field_to_expand="items",
         )
-
-        processor = ExpanderProcessor(config)
 
         # Create a record with a list in metadata
         record = BaseRecord(
@@ -173,12 +176,9 @@ class TestExpanderProcessor:
     @pytest.mark.anyio
     async def test_expander_processor_passthrough_non_list(self):
         """Verify non-list field passes through unchanged."""
-        config = ExpanderProcessorConfig(
-            type="expander",
+        processor = ExpanderProcessor(
             field_to_expand="not_a_list",
         )
-
-        processor = ExpanderProcessor(config)
 
         # Create record where field is not a list
         record = BaseRecord(
@@ -209,12 +209,9 @@ class TestExpanderProcessor:
     @pytest.mark.anyio
     async def test_expander_processor_missing_field(self):
         """Verify processor handles missing field gracefully."""
-        config = ExpanderProcessorConfig(
-            type="expander",
+        processor = ExpanderProcessor(
             field_to_expand="missing_field",
         )
-
-        processor = ExpanderProcessor(config)
 
         record = BaseRecord(
             record_id="no-field-001",
@@ -242,14 +239,11 @@ class TestTransformProcessor:
     @pytest.mark.anyio
     async def test_transform_processor_applies_jmespath_expression(self):
         """Verify TransformProcessor evaluates JMESPath expression and stores result."""
-        # Create config with a simple JMESPath expression
-        config = TransformProcessorConfig(
-            type="transform",
+        # Create processor directly as Pydantic model
+        processor = TransformProcessor(
             expression="metadata.tags[0]",
             output_field="first_tag",
         )
-
-        processor = TransformProcessor(config)
 
         # Create a record with nested data
         record = BaseRecord(
@@ -281,14 +275,11 @@ class TestTransformProcessor:
     @pytest.mark.anyio
     async def test_transform_processor_stores_in_output_field(self):
         """Verify TransformProcessor uses custom output_field for storing result."""
-        # Create config with custom output field
-        config = TransformProcessorConfig(
-            type="transform",
+        # Create processor with custom output field
+        processor = TransformProcessor(
             expression="content",
             output_field="extracted_content",
         )
-
-        processor = TransformProcessor(config)
 
         record = BaseRecord(
             record_id="transform-002",
@@ -316,14 +307,11 @@ class TestTransformProcessor:
     @pytest.mark.anyio
     async def test_transform_processor_complex_expression(self):
         """Verify TransformProcessor handles complex JMESPath expressions."""
-        # Create config with complex expression
-        config = TransformProcessorConfig(
-            type="transform",
+        # Create processor with complex expression
+        processor = TransformProcessor(
             expression="metadata.{name: author, tag_count: length(tags)}",
             output_field="summary",
         )
-
-        processor = TransformProcessor(config)
 
         record = BaseRecord(
             record_id="transform-003",
@@ -354,13 +342,10 @@ class TestTransformProcessor:
     @pytest.mark.anyio
     async def test_transform_processor_expression_returns_none(self):
         """Verify processor handles None result gracefully (no metadata stored)."""
-        config = TransformProcessorConfig(
-            type="transform",
+        processor = TransformProcessor(
             expression="metadata.nonexistent_field",
             output_field="result",
         )
-
-        processor = TransformProcessor(config)
 
         record = BaseRecord(
             record_id="transform-004",
@@ -385,16 +370,12 @@ class TestTransformProcessor:
     @pytest.mark.anyio
     async def test_transform_processor_invalid_expression_raises(self):
         """Verify processor fails fast on invalid JMESPath expression."""
-        # Invalid JMESPath syntax should raise during processor initialization
-        config = TransformProcessorConfig(
-            type="transform",
-            expression="metadata..invalid[[syntax",
-            output_field="result",
-        )
-
         # Creating the processor should fail fast on invalid expression
         with pytest.raises(ValueError, match="Invalid JMESPath expression"):
-            processor = TransformProcessor(config)
+            processor = TransformProcessor(
+                expression="metadata..invalid[[syntax",
+                output_field="result",
+            )
 
 
 class TestPipelineExecutor:
@@ -407,8 +388,7 @@ class TestPipelineExecutor:
         pipeline_config = PipelineConfig(
             name="test_pipeline",
             processors=[
-                ExpanderProcessorConfig(
-                    type="expander",
+                ExpanderProcessor(
                     field_to_expand="tags",
                 )
             ],
@@ -444,8 +424,7 @@ class TestPipelineExecutor:
         pipeline_config = PipelineConfig(
             name="multi_source_pipeline",
             processors=[
-                ExpanderProcessorConfig(
-                    type="expander",
+                ExpanderProcessor(
                     field_to_expand="items",
                 )
             ],
@@ -487,8 +466,7 @@ class TestPipelineExecutor:
         pipeline_config = PipelineConfig(
             name="empty_pipeline",
             processors=[
-                ExpanderProcessorConfig(
-                    type="expander",
+                ExpanderProcessor(
                     field_to_expand="items",
                 )
             ],
@@ -528,8 +506,7 @@ class TestUnifiedProcessorTracing:
                 # Just pass through
                 yield context.record
 
-        config = ProcessorConfig(type="test", name="test_processor")
-        processor = TestProcessor(config)
+        processor = TestProcessor(name="test_processor")
 
         record = BaseRecord(record_id="trace-001", content="content")
         context = ProcessingContext(session_id="trace-session", record=record)
@@ -549,7 +526,7 @@ class TestUnifiedProcessorTracing:
         assert len(spans) > 0
 
         # Find our processor span
-        processor_spans = [s for s in spans if s.name == "processor.test"]
+        processor_spans = [s for s in spans if s.name == "processor.TestProcessor"]
         assert len(processor_spans) == 1
 
         span = processor_spans[0]
@@ -557,7 +534,7 @@ class TestUnifiedProcessorTracing:
         # Verify span attributes
         attributes = dict(span.attributes)
         assert attributes["processor.name"] == "test_processor"
-        assert attributes["processor.type"] == "test"
+        assert attributes["processor.type"] == "TestProcessor"
         assert attributes["record.id"] == "trace-001"
 
     @pytest.mark.skip(reason="OTEL global TracerProvider cannot be overridden in tests")
@@ -576,8 +553,7 @@ class TestUnifiedProcessorTracing:
                 raise ValueError("Intentional test error")
                 yield  # Make it a generator
 
-        config = ProcessorConfig(type="error_test", name="error_processor")
-        processor = ErrorProcessor(config)
+        processor = ErrorProcessor(name="error_processor")
 
         record = BaseRecord(record_id="error-001", content="content")
         context = ProcessingContext(session_id="error-session", record=record)
@@ -592,7 +568,7 @@ class TestUnifiedProcessorTracing:
         assert len(spans) > 0
 
         # Find error span
-        error_spans = [s for s in spans if s.name == "processor.error_test"]
+        error_spans = [s for s in spans if s.name == "processor.ErrorProcessor"]
         assert len(error_spans) == 1
 
         span = error_spans[0]
@@ -621,8 +597,7 @@ class TestProcessorIntegration:
         pipeline_config = PipelineConfig(
             name="metadata_flow_pipeline",
             processors=[
-                ExpanderProcessorConfig(
-                    type="expander",
+                ExpanderProcessor(
                     field_to_expand="items",
                 )
             ],
@@ -659,17 +634,11 @@ class TestShellProcessor:
     @pytest.mark.anyio
     async def test_shell_processor_executes_command(self):
         """Verify basic command execution."""
-        from buttermilk._core.processor_config import ShellProcessorConfig
-        from buttermilk.processors.unified_processors import ShellProcessor
-
-        # Create config for a simple echo command
-        config = ShellProcessorConfig(
-            type="shell",
+        # Create processor for a simple echo command
+        processor = ShellProcessor(
             command="echo 'Hello, World!'",
             timeout_seconds=5,
         )
-
-        processor = ShellProcessor(config)
 
         record = BaseRecord(
             record_id="shell-001",
@@ -697,15 +666,9 @@ class TestShellProcessor:
     @pytest.mark.anyio
     async def test_shell_processor_stores_stdout_in_metadata(self):
         """Verify output capture in context metadata."""
-        from buttermilk._core.processor_config import ShellProcessorConfig
-        from buttermilk.processors.unified_processors import ShellProcessor
-
-        config = ShellProcessorConfig(
-            type="shell",
+        processor = ShellProcessor(
             command="echo 'test output'",
         )
-
-        processor = ShellProcessor(config)
 
         record = BaseRecord(
             record_id="shell-002",
@@ -730,15 +693,9 @@ class TestShellProcessor:
     @pytest.mark.anyio
     async def test_shell_processor_replaces_placeholders(self):
         """Verify {record_id} placeholder replacement."""
-        from buttermilk._core.processor_config import ShellProcessorConfig
-        from buttermilk.processors.unified_processors import ShellProcessor
-
-        config = ShellProcessorConfig(
-            type="shell",
+        processor = ShellProcessor(
             command="echo 'Processing: {record_id}'",
         )
-
-        processor = ShellProcessor(config)
 
         record = BaseRecord(
             record_id="test-123",
@@ -760,17 +717,11 @@ class TestShellProcessor:
     @pytest.mark.anyio
     async def test_shell_processor_raises_on_failure(self):
         """Verify fail-fast on command failure (non-zero exit code)."""
-        from buttermilk._core.processor_config import ShellProcessorConfig
-        from buttermilk.processors.unified_processors import ShellProcessor
-
         # Use a command that will fail
-        config = ShellProcessorConfig(
-            type="shell",
+        processor = ShellProcessor(
             command="exit 1",
             timeout_seconds=5,
         )
-
-        processor = ShellProcessor(config)
 
         record = BaseRecord(
             record_id="shell-fail",
@@ -794,16 +745,10 @@ class TestFilterProcessor:
     @pytest.mark.anyio
     async def test_filter_processor_passes_matching_record(self):
         """Verify FilterProcessor yields records that match criteria."""
-        from buttermilk._core.processor_config import FilterProcessorConfig
-        from buttermilk.processors.unified_processors import FilterProcessor
-
-        # Create config with criteria that will match
-        config = FilterProcessorConfig(
-            type="filter",
+        # Create processor with criteria that will match
+        processor = FilterProcessor(
             criteria="metadata.status == 'active'",
         )
-
-        processor = FilterProcessor(config)
 
         # Create a record that matches the criteria
         record = BaseRecord(
@@ -830,16 +775,10 @@ class TestFilterProcessor:
     @pytest.mark.anyio
     async def test_filter_processor_filters_non_matching_record(self):
         """Verify FilterProcessor yields nothing for non-matching records."""
-        from buttermilk._core.processor_config import FilterProcessorConfig
-        from buttermilk.processors.unified_processors import FilterProcessor
-
-        # Create config with criteria that won't match
-        config = FilterProcessorConfig(
-            type="filter",
+        # Create processor with criteria that won't match
+        processor = FilterProcessor(
             criteria="metadata.status == 'active'",
         )
-
-        processor = FilterProcessor(config)
 
         # Create a record that does NOT match the criteria
         record = BaseRecord(
@@ -864,16 +803,10 @@ class TestFilterProcessor:
     @pytest.mark.anyio
     async def test_filter_processor_uses_jmespath_criteria(self):
         """Verify FilterProcessor evaluates JMESPath expression correctly."""
-        from buttermilk._core.processor_config import FilterProcessorConfig
-        from buttermilk.processors.unified_processors import FilterProcessor
-
-        # Create config with complex JMESPath criteria
-        config = FilterProcessorConfig(
-            type="filter",
+        # Create processor with complex JMESPath criteria
+        processor = FilterProcessor(
             criteria="length(metadata.tags) > `2`",
         )
-
-        processor = FilterProcessor(config)
 
         # Create record with tags list
         record_match = BaseRecord(
@@ -921,22 +854,16 @@ class TestGroupchatProcessor:
     async def test_groupchat_processor_creates_orchestrator(self):
         """Verify GroupchatProcessor creates orchestrator and runs it."""
         from unittest.mock import AsyncMock, MagicMock, patch
-        from buttermilk._core.processor_config import GroupchatProcessorConfig
-        from buttermilk.processors.unified_processors import GroupchatProcessor
 
         # Create mock flow config
         mock_flow_config = MagicMock()
 
-        # Create config
-        config = GroupchatProcessorConfig(
-            type="groupchat",
+        # Create processor directly as Pydantic model
+        processor = GroupchatProcessor(
             flow_name="test_flow",
             flow_config=mock_flow_config,
             parameters={"param1": "value1"},
         )
-
-        # Create processor
-        processor = GroupchatProcessor(config)
 
         # Create test record
         record = BaseRecord(
@@ -981,21 +908,16 @@ class TestGroupchatProcessor:
         """Verify GroupchatProcessor enriches record metadata with results."""
         from unittest.mock import AsyncMock, MagicMock, patch
         from buttermilk._core.contract import ExecutionTrace
-        from buttermilk._core.processor_config import GroupchatProcessorConfig
-        from buttermilk.processors.unified_processors import GroupchatProcessor
 
         # Create mock flow config
         mock_flow_config = MagicMock()
 
-        # Create config
-        config = GroupchatProcessorConfig(
-            type="groupchat",
+        # Create processor
+        processor = GroupchatProcessor(
             flow_name="test_flow",
             flow_config=mock_flow_config,
             collect_traces=True,
         )
-
-        processor = GroupchatProcessor(config)
 
         # Create test record
         record = BaseRecord(
@@ -1063,39 +985,6 @@ class TestGroupchatProcessor:
             assert groupchat_meta["outputs"][1] == {"result": "output2"}
 
 
-class TestProcessorRegistry:
-    """Test processor registry for dynamic processor instantiation."""
-
-    def test_registry_creates_processor_from_config(self):
-        """Verify registry creates correct processor type from config."""
-        from buttermilk._core.processor_registry import create_processor
-        from buttermilk.processors.unified_processors import ExpanderProcessor
-
-        # Processors are already registered on module import
-        config = ExpanderProcessorConfig(
-            type="expander",
-            field_to_expand="test_field",
-        )
-
-        # Create processor using registry
-        processor = create_processor(config)
-
-        # Verify correct type created
-        assert isinstance(processor, ExpanderProcessor)
-        assert processor.config.field_to_expand == "test_field"
-
-    def test_registry_raises_on_unknown_type(self):
-        """Verify KeyError raised for unknown processor types."""
-        from buttermilk._core.processor_registry import create_processor
-
-        # Create config with unknown type
-        config = ProcessorConfig(type="unknown_processor_type")
-
-        # Should raise KeyError (fail-fast)
-        with pytest.raises(KeyError, match="unknown_processor_type"):
-            create_processor(config)
-
-
 class TestBatchProcessor:
     """Test BatchProcessor functionality and integration with executor."""
 
@@ -1104,9 +993,7 @@ class TestBatchProcessor:
         """Verify BatchProcessor buffers records until batch_size is reached."""
         # Create a test batch processor that accumulates records
         class TestBatchProcessor(UnifiedBatchProcessor):
-            def __init__(self, config: BatchProcessorConfig):
-                super().__init__(config)
-                self.processed_batches = []
+            processed_batches: list = Field(default_factory=list)
 
             async def _process_batch(
                 self, contexts: list[ProcessingContext]
@@ -1116,12 +1003,7 @@ class TestBatchProcessor:
                 # Yield records unchanged
                 yield [ctx.record for ctx in contexts]
 
-        config = BatchProcessorConfig(
-            type="test_batch",
-            batch_size=3,
-        )
-
-        processor = TestBatchProcessor(config)
+        processor = TestBatchProcessor(batch_size=3)
 
         # Create contexts
         contexts = [
@@ -1154,9 +1036,7 @@ class TestBatchProcessor:
         """Verify remaining records are processed at end of stream."""
         # Create a test batch processor
         class TestBatchProcessor(UnifiedBatchProcessor):
-            def __init__(self, config: BatchProcessorConfig):
-                super().__init__(config)
-                self.batch_sizes = []
+            batch_sizes: list = Field(default_factory=list)
 
             async def _process_batch(
                 self, contexts: list[ProcessingContext]
@@ -1174,12 +1054,7 @@ class TestBatchProcessor:
                     output_records.append(record)
                 yield output_records
 
-        config = BatchProcessorConfig(
-            type="test_batch",
-            batch_size=3,
-        )
-
-        processor = TestBatchProcessor(config)
+        processor = TestBatchProcessor(batch_size=3)
 
         # Create 7 contexts (will need 2 full batches + 1 partial)
         # But for this unit test, we'll manually call process_batch twice
@@ -1241,21 +1116,10 @@ class TestBatchProcessor:
                     output_records.append(record)
                 yield output_records
 
-        # Register the processor temporarily
-        from buttermilk._core.processor_registry import register_processor
-
-        register_processor("simple_batch", SimpleBatchProcessor)
-
-        # Create config for batch processor
-        batch_config = BatchProcessorConfig(
-            type="simple_batch",
-            batch_size=2,
-        )
-
-        # Create pipeline with batch processor
+        # Create pipeline with batch processor instance
         pipeline_config = PipelineConfig(
             name="batch_test_pipeline",
-            processors=[batch_config],
+            processors=[SimpleBatchProcessor(batch_size=2)],
         )
 
         executor = PipelineExecutor(pipeline_config)
@@ -1298,13 +1162,10 @@ class TestBatchProcessor:
             ) -> AsyncGenerator[list[BaseRecord], None]:
                 yield [ctx.record for ctx in contexts]
 
-        config = BatchProcessorConfig(
-            type="traced_batch",
+        processor = TracedBatchProcessor(
             name="traced_batch_processor",
             batch_size=2,
         )
-
-        processor = TracedBatchProcessor(config)
 
         # Create batch
         contexts = [
@@ -1328,7 +1189,7 @@ class TestBatchProcessor:
         assert len(spans) > 0
 
         # Find batch processor span
-        batch_spans = [s for s in spans if s.name == "batch_processor.traced_batch"]
+        batch_spans = [s for s in spans if s.name == "batch_processor.TracedBatchProcessor"]
         assert len(batch_spans) == 1
 
         span = batch_spans[0]
@@ -1336,6 +1197,6 @@ class TestBatchProcessor:
         # Verify span attributes
         attributes = dict(span.attributes)
         assert attributes["processor.name"] == "traced_batch_processor"
-        assert attributes["processor.type"] == "traced_batch"
+        assert attributes["processor.type"] == "TracedBatchProcessor"
         assert attributes["batch.size"] == 2
         assert attributes["batch.output_size"] == 2

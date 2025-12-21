@@ -19,57 +19,33 @@ import pytest
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.protocols import Processor
 from buttermilk._core.types import BaseRecord
+from buttermilk.processors.unified_processors import ChromaDBProcessor
 
 
-class TestChromaDBProcessorConfig:
-    """Test ChromaDBProcessorConfig exists and validates correctly."""
+class TestChromaDBProcessorPydanticModel:
+    """Test ChromaDBProcessor Pydantic model structure and validation."""
 
-    def test_chromadb_processor_config_class_exists(self):
-        """Verify ChromaDBProcessorConfig class is defined."""
-        from buttermilk._core.processor_config import ChromaDBProcessorConfig
-
+    def test_chromadb_processor_is_pydantic_model(self):
+        """Verify ChromaDBProcessor is a Pydantic model."""
         # Verify it's a Pydantic model
-        assert hasattr(ChromaDBProcessorConfig, "model_validate")
+        assert hasattr(ChromaDBProcessor, "model_validate")
 
-    def test_chromadb_processor_config_has_required_fields(self):
-        """Verify ChromaDBProcessorConfig has necessary fields."""
-        from buttermilk._core.processor_config import ChromaDBProcessorConfig
-
-        # Create a minimal config
-        config = ChromaDBProcessorConfig(
-            type="chromadb",
+    def test_chromadb_processor_has_required_fields(self):
+        """Verify ChromaDBProcessor has necessary fields."""
+        # Create a minimal processor
+        processor = ChromaDBProcessor(
             collection_name="test_collection",
             persist_directory="/tmp/chromadb_test",
         )
 
         # Verify required fields
-        assert config.type == "chromadb"
-        assert config.collection_name == "test_collection"
-        assert config.persist_directory == "/tmp/chromadb_test"
+        assert processor.collection_name == "test_collection"
+        assert processor.persist_directory == "/tmp/chromadb_test"
 
-    def test_chromadb_processor_config_inherits_from_processor_config(self):
-        """Verify ChromaDBProcessorConfig inherits from ProcessorConfig."""
-        from buttermilk._core.processor_config import (
-            ChromaDBProcessorConfig,
-            ProcessorConfig,
-        )
-
-        config = ChromaDBProcessorConfig(
-            type="chromadb",
-            collection_name="test_collection",
-            persist_directory="/tmp/chromadb_test",
-        )
-
-        # Should inherit from ProcessorConfig
-        assert isinstance(config, ProcessorConfig)
-
-    def test_chromadb_processor_config_has_optional_fields(self):
-        """Verify ChromaDBProcessorConfig has optional configuration fields."""
-        from buttermilk._core.processor_config import ChromaDBProcessorConfig
-
-        # Create config with optional fields
-        config = ChromaDBProcessorConfig(
-            type="chromadb",
+    def test_chromadb_processor_has_optional_fields(self):
+        """Verify ChromaDBProcessor has optional configuration fields."""
+        # Create processor with optional fields
+        processor = ChromaDBProcessor(
             collection_name="test_collection",
             persist_directory="/tmp/chromadb_test",
             sync_batch_size=100,
@@ -79,30 +55,23 @@ class TestChromaDBProcessorConfig:
         )
 
         # Verify optional fields
-        assert config.sync_batch_size == 100
-        assert config.sync_interval_minutes == 5
-        assert config.disable_auto_sync is True
-        assert config.upsert_batch_size == 500
+        assert processor.sync_batch_size == 100
+        assert processor.sync_interval_minutes == 5
+        assert processor.disable_auto_sync is True
+        assert processor.upsert_batch_size == 500
 
-    def test_chromadb_processor_config_validates_type_literal(self):
-        """Verify config type field is enforced as literal 'chromadb'."""
-        from buttermilk._core.processor_config import ChromaDBProcessorConfig
-
-        # Valid type
-        config = ChromaDBProcessorConfig(
-            type="chromadb",
+    def test_chromadb_processor_has_default_values(self):
+        """Verify ChromaDBProcessor has correct default values for optional fields."""
+        processor = ChromaDBProcessor(
             collection_name="test_collection",
             persist_directory="/tmp/chromadb_test",
         )
-        assert config.type == "chromadb"
 
-        # Invalid type should fail validation (fail-fast)
-        with pytest.raises(Exception):  # Pydantic ValidationError
-            ChromaDBProcessorConfig(
-                type="wrong_type",
-                collection_name="test_collection",
-                persist_directory="/tmp/chromadb_test",
-            )
+        # Verify defaults
+        assert processor.sync_batch_size == 50
+        assert processor.sync_interval_minutes == 10
+        assert processor.disable_auto_sync is False
+        assert processor.upsert_batch_size == 1000
 
 
 class TestChromaDBProcessorProtocol:
@@ -110,31 +79,23 @@ class TestChromaDBProcessorProtocol:
 
     def test_chromadb_processor_class_exists(self):
         """Verify ChromaDBProcessor class is defined."""
-        from buttermilk.processors.unified_processors import ChromaDBProcessor
-
         # Verify class exists
         assert ChromaDBProcessor is not None
 
     def test_chromadb_processor_inherits_from_unified_processor(self):
         """Verify ChromaDBProcessor inherits from UnifiedProcessor."""
         from buttermilk._core.unified_processor import UnifiedProcessor
-        from buttermilk.processors.unified_processors import ChromaDBProcessor
 
         # Verify inheritance
         assert issubclass(ChromaDBProcessor, UnifiedProcessor)
 
     def test_chromadb_processor_implements_processor_protocol(self):
         """Verify ChromaDBProcessor satisfies Processor protocol."""
-        from buttermilk._core.processor_config import ChromaDBProcessorConfig
-        from buttermilk.processors.unified_processors import ChromaDBProcessor
-
-        # Create instance
-        config = ChromaDBProcessorConfig(
-            type="chromadb",
+        # Create instance directly as Pydantic model
+        processor = ChromaDBProcessor(
             collection_name="test_collection",
             persist_directory="/tmp/chromadb_test",
         )
-        processor = ChromaDBProcessor(config)
 
         # Verify protocol methods exist
         assert hasattr(processor, "process")
@@ -143,58 +104,18 @@ class TestChromaDBProcessorProtocol:
         # Verify it's recognized as Processor
         assert isinstance(processor, Processor)
 
-    def test_chromadb_processor_has_config_attribute(self):
-        """Verify processor stores config correctly."""
-        from buttermilk._core.processor_config import ChromaDBProcessorConfig
-        from buttermilk.processors.unified_processors import ChromaDBProcessor
-
-        config = ChromaDBProcessorConfig(
-            type="chromadb",
+    def test_chromadb_processor_stores_fields_correctly(self):
+        """Verify processor stores fields correctly."""
+        processor = ChromaDBProcessor(
             collection_name="test_collection",
             persist_directory="/tmp/chromadb_test",
             sync_batch_size=100,
         )
-        processor = ChromaDBProcessor(config)
 
-        # Verify config is stored
-        assert processor.config == config
-        assert processor.config.collection_name == "test_collection"
-        assert processor.config.sync_batch_size == 100
-
-
-class TestChromaDBProcessorRegistry:
-    """Test ChromaDBProcessor registers with processor registry."""
-
-    def test_chromadb_processor_registered_as_chromadb_type(self):
-        """Verify ChromaDBProcessor is registered with type 'chromadb'."""
-        from buttermilk._core.processor_registry import get_registered_types
-
-        # Import processors module to trigger registration
-        import buttermilk.processors.unified_processors  # noqa: F401
-
-        # Verify 'chromadb' type is registered
-        registered_types = get_registered_types()
-        assert "chromadb" in registered_types
-
-    def test_create_processor_returns_chromadb_processor(self):
-        """Verify registry creates ChromaDBProcessor from config."""
-        from buttermilk._core.processor_config import ChromaDBProcessorConfig
-        from buttermilk._core.processor_registry import create_processor
-        from buttermilk.processors.unified_processors import ChromaDBProcessor
-
-        # Create config
-        config = ChromaDBProcessorConfig(
-            type="chromadb",
-            collection_name="test_collection",
-            persist_directory="/tmp/chromadb_test",
-        )
-
-        # Create processor via registry
-        processor = create_processor(config)
-
-        # Verify correct type created
-        assert isinstance(processor, ChromaDBProcessor)
-        assert processor.config.type == "chromadb"
+        # Verify fields are stored
+        assert processor.collection_name == "test_collection"
+        assert processor.persist_directory == "/tmp/chromadb_test"
+        assert processor.sync_batch_size == 100
 
 
 class TestChromaDBProcessorSingleRecordProcessing:
@@ -203,17 +124,11 @@ class TestChromaDBProcessorSingleRecordProcessing:
     @pytest.mark.anyio
     async def test_chromadb_processor_processes_record_with_embedded_chunks(self):
         """Verify ChromaDBProcessor uploads record chunks to ChromaDB."""
-        from buttermilk._core.processor_config import ChromaDBProcessorConfig
-        from buttermilk.processors.unified_processors import ChromaDBProcessor
-
-        # Create config
-        config = ChromaDBProcessorConfig(
-            type="chromadb",
+        # Create processor directly as Pydantic model
+        processor = ChromaDBProcessor(
             collection_name="test_collection",
             persist_directory="/tmp/chromadb_test",
         )
-
-        processor = ChromaDBProcessor(config)
 
         # Create test record with embedded chunks
         context = ProcessingContext(
@@ -277,16 +192,11 @@ class TestChromaDBProcessorSingleRecordProcessing:
     @pytest.mark.anyio
     async def test_chromadb_processor_handles_records_without_chunks(self):
         """Verify processor handles records without chunks gracefully."""
-        from buttermilk._core.processor_config import ChromaDBProcessorConfig
-        from buttermilk.processors.unified_processors import ChromaDBProcessor
-
-        config = ChromaDBProcessorConfig(
-            type="chromadb",
+        # Create processor directly as Pydantic model
+        processor = ChromaDBProcessor(
             collection_name="test_collection",
             persist_directory="/tmp/chromadb_test",
         )
-
-        processor = ChromaDBProcessor(config)
 
         # Create record without chunks
         context = ProcessingContext(
@@ -309,16 +219,11 @@ class TestChromaDBProcessorSingleRecordProcessing:
     @pytest.mark.anyio
     async def test_chromadb_processor_handles_chunks_without_embeddings(self):
         """Verify processor handles chunks without embeddings gracefully."""
-        from buttermilk._core.processor_config import ChromaDBProcessorConfig
-        from buttermilk.processors.unified_processors import ChromaDBProcessor
-
-        config = ChromaDBProcessorConfig(
-            type="chromadb",
+        # Create processor directly as Pydantic model
+        processor = ChromaDBProcessor(
             collection_name="test_collection",
             persist_directory="/tmp/chromadb_test",
         )
-
-        processor = ChromaDBProcessor(config)
 
         # Create record with chunks but no embeddings
         context = ProcessingContext(
@@ -345,16 +250,11 @@ class TestChromaDBProcessorSingleRecordProcessing:
     @pytest.mark.anyio
     async def test_chromadb_processor_enriches_context_metadata(self):
         """Verify processor adds upload metadata to context."""
-        from buttermilk._core.processor_config import ChromaDBProcessorConfig
-        from buttermilk.processors.unified_processors import ChromaDBProcessor
-
-        config = ChromaDBProcessorConfig(
-            type="chromadb",
+        # Create processor directly as Pydantic model
+        processor = ChromaDBProcessor(
             collection_name="test_collection",
             persist_directory="/tmp/chromadb_test",
         )
-
-        processor = ChromaDBProcessor(config)
 
         # Create record with embedded chunks
         context = ProcessingContext(
@@ -407,16 +307,11 @@ class TestChromaDBProcessorRemoteStorage:
     @pytest.mark.anyio
     async def test_chromadb_processor_handles_remote_storage_path(self):
         """Verify processor handles remote storage paths (gs://, s3://, etc)."""
-        from buttermilk._core.processor_config import ChromaDBProcessorConfig
-        from buttermilk.processors.unified_processors import ChromaDBProcessor
-
-        config = ChromaDBProcessorConfig(
-            type="chromadb",
+        # Create processor directly as Pydantic model
+        processor = ChromaDBProcessor(
             collection_name="test_collection",
             persist_directory="gs://my-bucket/chromadb",
         )
-
-        processor = ChromaDBProcessor(config)
 
         # Create test record
         context = ProcessingContext(
@@ -473,16 +368,11 @@ class TestChromaDBProcessorFinalization:
     @pytest.mark.anyio
     async def test_chromadb_processor_finalize_processing_method_exists(self):
         """Verify finalize_processing method exists and can be called."""
-        from buttermilk._core.processor_config import ChromaDBProcessorConfig
-        from buttermilk.processors.unified_processors import ChromaDBProcessor
-
-        config = ChromaDBProcessorConfig(
-            type="chromadb",
+        # Create processor directly as Pydantic model
+        processor = ChromaDBProcessor(
             collection_name="test_collection",
             persist_directory="/tmp/chromadb_test",
         )
-
-        processor = ChromaDBProcessor(config)
 
         # Finalize should not raise
         result = await processor.finalize_processing()
@@ -494,16 +384,11 @@ class TestChromaDBProcessorFinalization:
     @pytest.mark.anyio
     async def test_chromadb_processor_finalize_syncs_to_remote(self):
         """Verify finalize_processing syncs to remote storage."""
-        from buttermilk._core.processor_config import ChromaDBProcessorConfig
-        from buttermilk.processors.unified_processors import ChromaDBProcessor
-
-        config = ChromaDBProcessorConfig(
-            type="chromadb",
+        # Create processor directly as Pydantic model
+        processor = ChromaDBProcessor(
             collection_name="test_collection",
             persist_directory="gs://my-bucket/chromadb",
         )
-
-        processor = ChromaDBProcessor(config)
 
         # Mock upload utility
         with patch(

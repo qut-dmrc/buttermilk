@@ -19,7 +19,7 @@ from buttermilk._core.types import BaseRecord
 from buttermilk import logger
 
 
-class UnifiedProcessor(BaseModel, Processor):
+class UnifiedProcessor(BaseModel):
     """Base class for all unified processors.
 
     Processors are Pydantic models with field-based configuration.

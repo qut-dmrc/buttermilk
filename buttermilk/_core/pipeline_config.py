@@ -8,7 +8,6 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from buttermilk._core.processor_config import ProcessorConfigUnion
 from buttermilk.utils.validators import import_class_from_path
 
 
@@ -127,11 +126,11 @@ class PipelineConfig(BaseModel):
 
     Attributes:
         name: Unique name for the pipeline.
-        processors: Ordered list of processor configurations.
+        processors: Ordered list of processor configurations (Pydantic models).
         version: Version of the pipeline configuration.
     """
     name: str = Field(..., description="Name of the pipeline.")
-    processors: list[ProcessorConfigUnion] = Field(..., description="Sequence of processors.")
+    processors: list[Any] = Field(..., description="Sequence of processors (Pydantic models).")
     version: str = Field(default="1.0", description="Config version.")
 
     model_config = ConfigDict(

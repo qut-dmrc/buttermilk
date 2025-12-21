@@ -2,10 +2,12 @@
 
 This module implements the PipelineExecutor, responsible for orchestrating the execution
 of a unified processing pipeline. It handles:
-- Instantiating processors from configuration.
 - Routing records through the processor chain.
 - Managing batching for BatchProcessors.
 - Handling lifecycle events (setup, teardown).
+
+Processors are expected to be already instantiated as Pydantic models before being
+passed to the PipelineConfig.
 """
 
 import asyncio
@@ -13,13 +15,10 @@ from typing import AsyncGenerator, Any
 
 from buttermilk._core.pipeline_config import PipelineConfig
 from buttermilk._core.processing_context import ProcessingContext
-from buttermilk._core.processor_config import ProcessorConfig
-from buttermilk._core.processor_registry import create_processor
 from buttermilk._core.protocols import Processor, BatchProcessor
 from buttermilk._core.types import BaseRecord
-from buttermilk._core.unified_processor import UnifiedProcessor
-from buttermilk.processors import unified_processors  # Import to trigger registration
 from buttermilk import logger
+
 
 class PipelineExecutor:
     """Executes a pipeline of unified processors."""
@@ -31,30 +30,13 @@ class PipelineExecutor:
         self._build_pipeline()
 
     def _build_pipeline(self) -> None:
-        """Instantiate processors based on configuration."""
-        for proc_config in self.config.processors:
-            processor = self._create_processor(proc_config)
+        """Build pipeline from already-instantiated processors."""
+        for processor in self.config.processors:
             self.processors.append(processor)
 
             # Initialize batch buffer for BatchProcessors
             if isinstance(processor, BatchProcessor):
                 self._batch_buffers[len(self.processors) - 1] = []
-
-    def _create_processor(self, config: ProcessorConfig) -> Processor | BatchProcessor:
-        """Factory method to create processor instances.
-
-        Uses the processor registry for dynamic loading.
-
-        Args:
-            config: Processor configuration
-
-        Returns:
-            Instantiated processor
-
-        Raises:
-            KeyError: If processor type is not registered
-        """
-        return create_processor(config)
 
     async def run(
         self,
@@ -121,7 +103,7 @@ class PipelineExecutor:
             self._batch_buffers[processor_index].append(context)
 
             # Check if we've reached batch_size
-            if len(self._batch_buffers[processor_index]) >= processor.config.batch_size:
+            if len(self._batch_buffers[processor_index]) >= processor.batch_size:
                 # Process the buffered batch
                 async for result in self._flush_batch(processor_index):
                     yield result

@@ -1,6 +1,7 @@
 """Standard Unified Processors implementations.
 
 This module contains concrete implementations of standard processors:
+- LLMProcessor: Runs LLM-based transformations on records.
 - GroupchatProcessor: Runs a group chat session.
 - ExpanderProcessor: Expands a record into multiple records (1:N).
 - TransformProcessor: Applies JMESPath transformations to records.
@@ -8,8 +9,6 @@ This module contains concrete implementations of standard processors:
 - FilterProcessor: Filters records based on JMESPath criteria.
 - EmbeddingProcessor: Generates embeddings for chunks in batch.
 - ChromaDBProcessor: Uploads records with embeddings to ChromaDB.
-
-Processors are automatically registered on import.
 """
 
 import asyncio
@@ -22,21 +21,11 @@ import jmespath
 from chromadb.api import ClientAPI
 from jmespath.exceptions import JMESPathError
 from google import genai
+from pydantic import Field, PrivateAttr
 
 from buttermilk._core.contract import ExecutionTrace
 from buttermilk._core.llm_core import LLMCore
 from buttermilk._core.processing_context import ProcessingContext
-from buttermilk._core.processor_config import (
-    ChromaDBProcessorConfig,
-    EmbeddingProcessorConfig,
-    ExpanderProcessorConfig,
-    FilterProcessorConfig,
-    GroupchatProcessorConfig,
-    LLMProcessorConfig,
-    ShellProcessorConfig,
-    TransformProcessorConfig,
-)
-from buttermilk._core.processor_registry import register_processor
 from buttermilk._core.types import BaseRecord, RunRequest
 from buttermilk._core.unified_processor import UnifiedProcessor
 from buttermilk._core.unified_batch_processor import UnifiedBatchProcessor
@@ -60,19 +49,24 @@ class LLMProcessor(UnifiedProcessor):
     architecture while maintaining proper observability and fail-fast semantics.
     """
 
-    def __init__(self, config: LLMProcessorConfig):
-        super().__init__(config)
-        self.config: LLMProcessorConfig = config
+    model: str = Field(..., description="LLM model identifier")
+    prompt_template: str = Field(..., description="Jinja2 template for prompts")
+    temperature: float = Field(default=0.7, description="Sampling temperature")
+    max_tokens: int = Field(default=1024, description="Maximum tokens to generate")
+    output_col: str = Field(default="llm_output", description="Output column name")
+    input_variables: dict[str, Any] = Field(default_factory=dict, description="Static variables for the prompt")
 
-        # Create LLMCore instance with config values
-        # Map LLMProcessorConfig fields to LLMCore fields
+    _llm_core: Any = PrivateAttr(default=None)
+
+    def model_post_init(self, __context: Any) -> None:
+        """Create LLMCore instance after Pydantic initialization."""
         self._llm_core = LLMCore(
-            model=config.model,
-            template=config.prompt_template,
-            temperature=config.temperature,
-            max_tokens=config.max_tokens,
-            output_col=config.output_col,
-            template_vars=config.input_variables,
+            model=self.model,
+            template=self.prompt_template,
+            temperature=self.temperature,
+            max_tokens=self.max_tokens,
+            output_col=self.output_col,
+            template_vars=self.input_variables,
         )
 
     async def _process_record(
@@ -95,8 +89,8 @@ class LLMProcessor(UnifiedProcessor):
         logger.debug(
             "LLMProcessor starting",
             record_id=record_id,
-            model=self.config.model,
-            template=self.config.prompt_template,
+            model=self.model,
+            template=self.prompt_template,
         )
 
         # Build template variables by flattening record metadata
@@ -123,12 +117,12 @@ class LLMProcessor(UnifiedProcessor):
         # Enrich record with LLM output
         enriched_metadata = {
             **(context.record.metadata if context.record.metadata else {}),
-            f"llm_{self.config.name or 'processor'}": llm_result.metadata,
+            f"llm_{self.name or 'processor'}": llm_result.metadata,
         }
 
         enriched_record = context.record.model_copy(
             update={
-                self.config.output_col: llm_result.content,
+                self.output_col: llm_result.content,
                 "metadata": enriched_metadata,
             }
         )
@@ -136,7 +130,7 @@ class LLMProcessor(UnifiedProcessor):
         logger.debug(
             "LLMProcessor completed",
             record_id=record_id,
-            output_col=self.config.output_col,
+            output_col=self.output_col,
         )
 
         yield enriched_record
@@ -152,9 +146,10 @@ class GroupchatProcessor(UnifiedProcessor):
     processor architecture while maintaining proper isolation and observability.
     """
 
-    def __init__(self, config: GroupchatProcessorConfig):
-        super().__init__(config)
-        self.config: GroupchatProcessorConfig = config
+    flow_name: str = Field(..., description="Name of the flow to execute")
+    flow_config: Any = Field(..., description="Flow configuration")
+    parameters: dict[str, Any] = Field(default_factory=dict, description="Parameters for orchestrator")
+    collect_traces: bool = Field(default=True, description="Collect ExecutionTrace outputs")
 
     async def _process_record(
         self,
@@ -179,12 +174,12 @@ class GroupchatProcessor(UnifiedProcessor):
         logger.debug(
             "GroupchatProcessor starting",
             record_id=record_id,
-            flow_name=self.config.flow_name,
+            flow_name=self.flow_name,
         )
 
         # Create fresh orchestrator for each record (state isolation)
         orchestrator = OrchestratorFactory.create_orchestrator(
-            self.config.flow_config, self.config.flow_name
+            self.flow_config, self.flow_name
         )
 
         # Collect ExecutionTrace outputs via callback
@@ -199,25 +194,25 @@ class GroupchatProcessor(UnifiedProcessor):
         callback = context.ui_callback if context.ui_callback else collect_callback
 
         # If context has ui_callback but we need to collect traces, chain callbacks
-        if context.ui_callback and self.config.collect_traces:
+        if context.ui_callback and self.collect_traces:
             async def chained_callback(message: Any) -> None:
                 """Chain both callbacks."""
                 await context.ui_callback(message)
                 await collect_callback(message)
             callback = chained_callback
-        elif self.config.collect_traces:
+        elif self.collect_traces:
             callback = collect_callback
         else:
             callback = context.ui_callback
 
         # Create RunRequest from record
         run_request = RunRequest(
-            flow=self.config.flow_name,
+            flow=self.flow_name,
             inputs={
                 "record_id": record_id,
                 "record": context.record.model_dump() if hasattr(context.record, "model_dump") else context.record,
             },
-            parameters=self.config.parameters,
+            parameters=self.parameters,
             callback_to_ui=callback,
         )
 
@@ -236,7 +231,7 @@ class GroupchatProcessor(UnifiedProcessor):
                 **(context.record.metadata if context.record.metadata else {}),
                 "groupchat": {
                     "status": "processed",
-                    "flow_name": self.config.flow_name,
+                    "flow_name": self.flow_name,
                     "trace_count": len(traces),
                     "outputs": outputs,
                 },
@@ -245,7 +240,7 @@ class GroupchatProcessor(UnifiedProcessor):
             logger.debug(
                 "GroupchatProcessor completed",
                 record_id=record_id,
-                flow_name=self.config.flow_name,
+                flow_name=self.flow_name,
                 trace_count=len(traces),
                 output_count=len(outputs),
             )
@@ -256,7 +251,7 @@ class GroupchatProcessor(UnifiedProcessor):
             logger.error(
                 "GroupchatProcessor failed",
                 record_id=record_id,
-                flow_name=self.config.flow_name,
+                flow_name=self.flow_name,
                 error=str(e),
             )
             # Re-raise to let pipeline handle the error
@@ -265,22 +260,20 @@ class GroupchatProcessor(UnifiedProcessor):
 
 class ExpanderProcessor(UnifiedProcessor):
     """Expands a single record into multiple records based on a list field."""
-    
-    def __init__(self, config: ExpanderProcessorConfig):
-        super().__init__(config)
-        self.config: ExpanderProcessorConfig = config
+
+    field_to_expand: str = Field(..., description="Name of the list field to expand into multiple records")
 
     async def _process_record(
         self,
         context: ProcessingContext,
     ) -> AsyncGenerator[BaseRecord, None]:
-        field_name = self.config.field_to_expand
-        
+        field_name = self.field_to_expand
+
         # Access the field from the record (attribute or metadata)
         values = getattr(context.record, field_name, None)
         if values is None:
             values = context.record.metadata.get(field_name)
-            
+
         if not isinstance(values, list):
             logger.warning(
                 f"Field '{field_name}' is not a list, cannot expand. Skipping expansion.",
@@ -294,18 +287,18 @@ class ExpanderProcessor(UnifiedProcessor):
         for i, value in enumerate(values):
             # Create updates dictionary
             updates = {"record_id": f"{context.record.record_id}_{i}"}
-            
+
             # Prepare metadata update
             # We copy existing metadata to avoid mutating the original record's metadata if it's shared
             new_metadata = context.record.metadata.copy()
             new_metadata["expansion_source_id"] = context.record.record_id
             new_metadata["expansion_index"] = i
-            
+
             if hasattr(context.record, field_name):
                  updates[field_name] = value
             else:
                  new_metadata[field_name] = value
-            
+
             updates["metadata"] = new_metadata
 
             # Create new record with updates
@@ -328,21 +321,23 @@ class TransformProcessor(UnifiedProcessor):
     - Graceful handling when expression returns None
     """
 
-    def __init__(self, config: TransformProcessorConfig):
-        super().__init__(config)
-        self.config: TransformProcessorConfig = config
+    expression: str = Field(..., description="JMESPath expression for transformation")
+    output_field: str = Field(default="transformed", description="Output field name in context metadata")
 
-        # Compile JMESPath expression once during initialization
+    _compiled_expression: Any = PrivateAttr(default=None)
+
+    def model_post_init(self, __context: Any) -> None:
+        """Compile JMESPath expression after Pydantic initialization."""
         try:
-            self._compiled_expression = jmespath.compile(config.expression)
+            self._compiled_expression = jmespath.compile(self.expression)
         except JMESPathError as e:
             logger.error(
                 "Invalid JMESPath expression",
-                expression=config.expression,
+                expression=self.expression,
                 error=str(e),
             )
             raise ValueError(
-                f"Invalid JMESPath expression: {config.expression}"
+                f"Invalid JMESPath expression: {self.expression}"
             ) from e
 
     async def _process_record(
@@ -363,8 +358,8 @@ class TransformProcessor(UnifiedProcessor):
         logger.debug(
             "Applying JMESPath transformation",
             record_id=context.record.record_id,
-            expression=self.config.expression,
-            output_field=self.config.output_field,
+            expression=self.expression,
+            output_field=self.output_field,
         )
 
         # Convert record to dict for JMESPath processing
@@ -376,30 +371,30 @@ class TransformProcessor(UnifiedProcessor):
 
             if result is not None:
                 # Store result in context metadata
-                context.update_metadata(self.config.output_field, result)
+                context.update_metadata(self.output_field, result)
 
                 logger.debug(
                     "JMESPath transformation complete",
                     record_id=context.record.record_id,
-                    output_field=self.config.output_field,
+                    output_field=self.output_field,
                     result_type=type(result).__name__,
                 )
             else:
                 logger.debug(
                     "JMESPath expression returned None, no metadata stored",
                     record_id=context.record.record_id,
-                    expression=self.config.expression,
+                    expression=self.expression,
                 )
 
         except Exception as e:
             logger.error(
                 "Error applying JMESPath expression",
                 record_id=context.record.record_id,
-                expression=self.config.expression,
+                expression=self.expression,
                 error=str(e),
             )
             raise ValueError(
-                f"Error applying JMESPath expression '{self.config.expression}': {str(e)}"
+                f"Error applying JMESPath expression '{self.expression}': {str(e)}"
             ) from e
 
         # Yield the original record (metadata is stored in context)
@@ -417,9 +412,8 @@ class ShellProcessor(UnifiedProcessor):
     - Respects timeout_seconds from config
     """
 
-    def __init__(self, config: ShellProcessorConfig):
-        super().__init__(config)
-        self.config: ShellProcessorConfig = config
+    command: str = Field(..., description="Shell command to execute (supports {record_id} placeholder)")
+    timeout_seconds: float = Field(default=30.0, description="Timeout for shell command execution")
 
     async def _process_record(
         self,
@@ -438,13 +432,13 @@ class ShellProcessor(UnifiedProcessor):
             asyncio.TimeoutError: If command exceeds timeout_seconds
         """
         # Replace placeholders in command
-        command = self.config.command.replace("{record_id}", context.record.record_id)
+        command = self.command.replace("{record_id}", context.record.record_id)
 
         logger.debug(
             "Executing shell command",
             record_id=context.record.record_id,
             command=command,
-            timeout=self.config.timeout_seconds,
+            timeout=self.timeout_seconds,
         )
 
         try:
@@ -458,7 +452,7 @@ class ShellProcessor(UnifiedProcessor):
             # Wait for completion with timeout
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
                 process.communicate(),
-                timeout=self.config.timeout_seconds,
+                timeout=self.timeout_seconds,
             )
 
             # Decode output
@@ -496,10 +490,10 @@ class ShellProcessor(UnifiedProcessor):
                 "Shell command timed out",
                 record_id=context.record.record_id,
                 command=command,
-                timeout=self.config.timeout_seconds,
+                timeout=self.timeout_seconds,
             )
             raise asyncio.TimeoutError(
-                f"Shell command timed out after {self.config.timeout_seconds}s: {command}"
+                f"Shell command timed out after {self.timeout_seconds}s: {command}"
             )
         except Exception as e:
             logger.error(
@@ -533,21 +527,22 @@ class FilterProcessor(UnifiedProcessor):
         - "metadata.score >= `80`" - Filter by numeric threshold
     """
 
-    def __init__(self, config: FilterProcessorConfig):
-        super().__init__(config)
-        self.config: FilterProcessorConfig = config
+    criteria: str = Field(..., description="JMESPath expression for filtering")
 
-        # Compile JMESPath expression once during initialization
+    _compiled_criteria: Any = PrivateAttr(default=None)
+
+    def model_post_init(self, __context: Any) -> None:
+        """Compile JMESPath criteria after Pydantic initialization."""
         try:
-            self._compiled_criteria = jmespath.compile(config.criteria)
+            self._compiled_criteria = jmespath.compile(self.criteria)
         except JMESPathError as e:
             logger.error(
                 "Invalid JMESPath criteria expression",
-                criteria=config.criteria,
+                criteria=self.criteria,
                 error=str(e),
             )
             raise ValueError(
-                f"Invalid JMESPath criteria: {config.criteria}"
+                f"Invalid JMESPath criteria: {self.criteria}"
             ) from e
 
     async def _process_record(
@@ -568,7 +563,7 @@ class FilterProcessor(UnifiedProcessor):
         logger.debug(
             "Evaluating filter criteria",
             record_id=context.record.record_id,
-            criteria=self.config.criteria,
+            criteria=self.criteria,
         )
 
         # Convert record to dict for JMESPath processing
@@ -598,11 +593,11 @@ class FilterProcessor(UnifiedProcessor):
             logger.error(
                 "Error evaluating filter criteria",
                 record_id=context.record.record_id,
-                criteria=self.config.criteria,
+                criteria=self.criteria,
                 error=str(e),
             )
             raise ValueError(
-                f"Error evaluating filter criteria '{self.config.criteria}': {str(e)}"
+                f"Error evaluating filter criteria '{self.criteria}': {str(e)}"
             ) from e
 
 
@@ -620,11 +615,21 @@ class EmbeddingProcessor(UnifiedBatchProcessor):
     - Handles records without chunks gracefully
     """
 
-    def __init__(self, config: EmbeddingProcessorConfig):
-        super().__init__(config)
-        self.config: EmbeddingProcessorConfig = config
+    embedding_model: str = Field(..., description="Model identifier for embedding generation")
+    dimensionality: int = Field(default=3072, description="Output embedding dimensionality")
+    task: str = Field(default="RETRIEVAL_DOCUMENT", description="Task type for embedding model")
+    embedding_max_retries: int = Field(default=5, description="Maximum retry attempts for embedding API")
+    embedding_min_wait_seconds: float = Field(default=1.0, description="Minimum wait time for exponential backoff")
+    embedding_max_wait_seconds: float = Field(default=120.0, description="Maximum wait time for exponential backoff")
+    embedding_cooldown_seconds: float = Field(default=0.1, description="Cooldown between embedding batches")
+
+    _embedding_semaphore: Any = PrivateAttr(default=None)
+    _client: Any = PrivateAttr(default=None)
+
+    def model_post_init(self, __context: Any) -> None:
+        """Initialize special state attributes after Pydantic initialization."""
         self._embedding_semaphore = asyncio.Semaphore(20)
-        self._client: genai.Client | None = None
+        self._client = None
 
     @property
     def client(self) -> genai.Client:
@@ -678,7 +683,7 @@ class EmbeddingProcessor(UnifiedBatchProcessor):
         for context in records_with_chunks:
             context.update_metadata("embedding_stats", {
                 "chunks_embedded": len(context.record.chunks),
-                "embedding_model": self.config.embedding_model,
+                "embedding_model": self.embedding_model,
                 "processing_time_ms": processing_time_ms,
             })
 
@@ -776,10 +781,10 @@ class EmbeddingProcessor(UnifiedBatchProcessor):
             async with self._embedding_semaphore:
                 try:
                     response = self.client.models.embed_content(
-                        model=self.config.embedding_model,
+                        model=self.embedding_model,
                         contents=batch_texts,
                         config={
-                            "output_dimensionality": self.config.dimensionality,
+                            "output_dimensionality": self.dimensionality,
                             "auto_truncate": False,
                         },
                     )
@@ -797,8 +802,8 @@ class EmbeddingProcessor(UnifiedBatchProcessor):
                     )
 
                     # Add cooldown to avoid rate limits
-                    if self.config.embedding_cooldown_seconds > 0:
-                        await asyncio.sleep(self.config.embedding_cooldown_seconds)
+                    if self.embedding_cooldown_seconds > 0:
+                        await asyncio.sleep(self.embedding_cooldown_seconds)
 
                     return embeddings
 
@@ -813,7 +818,7 @@ class EmbeddingProcessor(UnifiedBatchProcessor):
 
         # Process in batches
         results: list[tuple[int, int, list[float] | None]] = []
-        batch_size = self.config.batch_size
+        batch_size = self.batch_size
 
         for i in range(0, len(embeddings_input), batch_size):
             batch = embeddings_input[i : i + batch_size]
@@ -822,7 +827,7 @@ class EmbeddingProcessor(UnifiedBatchProcessor):
 
             # Retry logic
             last_exception = None
-            for attempt in range(self.config.embedding_max_retries):
+            for attempt in range(self.embedding_max_retries):
                 try:
                     embeddings = await _run_embed_batch(batch_texts, attempt=attempt)
 
@@ -836,8 +841,8 @@ class EmbeddingProcessor(UnifiedBatchProcessor):
                     if self._is_rate_limit_error(exc):
                         # Exponential backoff for rate limits
                         wait_time = min(
-                            self.config.embedding_min_wait_seconds * (2**attempt),
-                            self.config.embedding_max_wait_seconds,
+                            self.embedding_min_wait_seconds * (2**attempt),
+                            self.embedding_max_wait_seconds,
                         )
                         logger.warning(
                             "Rate limit hit, retrying",
@@ -845,7 +850,7 @@ class EmbeddingProcessor(UnifiedBatchProcessor):
                             wait_time=wait_time,
                         )
                         await asyncio.sleep(wait_time)
-                    elif attempt == self.config.embedding_max_retries - 1:
+                    elif attempt == self.embedding_max_retries - 1:
                         # Last attempt failed
                         logger.error(
                             "Embedding batch failed after retries",
@@ -890,17 +895,28 @@ class ChromaDBProcessor(UnifiedProcessor):
     - Enriches context metadata with upload statistics
     """
 
-    def __init__(self, config: ChromaDBProcessorConfig):
-        super().__init__(config)
-        self.config: ChromaDBProcessorConfig = config
+    collection_name: str = Field(..., description="ChromaDB collection name")
+    persist_directory: str = Field(..., description="ChromaDB persistence directory path")
+    sync_batch_size: int = Field(default=50, description="Number of records processed before sync")
+    sync_interval_minutes: int = Field(default=10, description="Time interval between syncs in minutes")
+    disable_auto_sync: bool = Field(default=False, description="Disable automatic syncing to remote")
+    upsert_batch_size: int = Field(default=1000, description="Batch size for ChromaDB upserts")
 
-        # Private attributes for state management
-        self._client: ClientAPI | None = None
-        self._collection: chromadb.Collection | None = None
-        self._original_remote_path: str | None = None
-        self._processed_count: int = 0
-        self._last_sync_time: float = time.time()
-        self._cache_initialized: bool = False
+    _client: Any = PrivateAttr(default=None)
+    _collection: Any = PrivateAttr(default=None)
+    _original_remote_path: Any = PrivateAttr(default=None)
+    _processed_count: int = PrivateAttr(default=0)
+    _last_sync_time: float = PrivateAttr(default=0.0)
+    _cache_initialized: bool = PrivateAttr(default=False)
+
+    def model_post_init(self, __context: Any) -> None:
+        """Initialize special state attributes after Pydantic initialization."""
+        self._client = None
+        self._collection = None
+        self._original_remote_path = None
+        self._processed_count = 0
+        self._last_sync_time = time.time()
+        self._cache_initialized = False
 
     async def _process_record(
         self,
@@ -984,7 +1000,7 @@ class ChromaDBProcessor(UnifiedProcessor):
             # Update context metadata with statistics
             context.update_metadata("chromadb_stats", {
                 "chunks_uploaded": len(chunks_with_embeddings),
-                "collection_name": self.config.collection_name,
+                "collection_name": self.collection_name,
                 "processing_time_ms": processing_time_ms,
             })
 
@@ -995,7 +1011,7 @@ class ChromaDBProcessor(UnifiedProcessor):
                 "timestamp": time.time(),
                 "processor": "ChromaDBProcessor",
                 "chunks_uploaded": len(chunks_with_embeddings),
-                "collection": self.config.collection_name,
+                "collection": self.collection_name,
                 "processing_time_ms": processing_time_ms,
             }
 
@@ -1018,7 +1034,7 @@ class ChromaDBProcessor(UnifiedProcessor):
         Raises:
             ValueError: If collection initialization fails
         """
-        persist_dir = self.config.persist_directory
+        persist_dir = self.persist_directory
 
         # Handle remote storage by downloading to local cache
         if persist_dir.startswith(("gs://", "s3://", "azure://", "gcs://")):
@@ -1039,20 +1055,20 @@ class ChromaDBProcessor(UnifiedProcessor):
         if not self._collection:
             try:
                 self._collection = await asyncio.to_thread(
-                    self._client.get_collection, name=self.config.collection_name
+                    self._client.get_collection, name=self.collection_name
                 )
                 collection_count = await asyncio.to_thread(self._collection.count)
                 logger.info(
                     "Using existing collection",
-                    collection_name=self.config.collection_name,
+                    collection_name=self.collection_name,
                     count=collection_count,
                 )
             except Exception:
                 self._collection = await asyncio.to_thread(
-                    self._client.create_collection, name=self.config.collection_name
+                    self._client.create_collection, name=self.collection_name
                 )
                 logger.info(
-                    "Created new collection", collection_name=self.config.collection_name
+                    "Created new collection", collection_name=self.collection_name
                 )
 
         self._cache_initialized = True
@@ -1145,8 +1161,8 @@ class ChromaDBProcessor(UnifiedProcessor):
             metadatas.append(_sanitize_metadata_for_chroma(enhanced_metadata))
 
         # Batch upsert to ChromaDB
-        for i in range(0, len(ids), self.config.upsert_batch_size):
-            batch_end = min(i + self.config.upsert_batch_size, len(ids))
+        for i in range(0, len(ids), self.upsert_batch_size):
+            batch_end = min(i + self.upsert_batch_size, len(ids))
 
             await asyncio.to_thread(
                 self._collection.upsert,
@@ -1166,19 +1182,19 @@ class ChromaDBProcessor(UnifiedProcessor):
 
     async def _maybe_sync(self) -> None:
         """Sync to remote if conditions are met."""
-        if self.config.disable_auto_sync:
+        if self.disable_auto_sync:
             return
 
         # Check if we should sync based on count or time
         should_sync = False
         current_time = time.time()
 
-        if self._processed_count >= self.config.sync_batch_size:
+        if self._processed_count >= self.sync_batch_size:
             should_sync = True
             reason = f"batch size ({self._processed_count} records)"
-        elif (current_time - self._last_sync_time) >= (self.config.sync_interval_minutes * 60):
+        elif (current_time - self._last_sync_time) >= (self.sync_interval_minutes * 60):
             should_sync = True
-            reason = f"time interval ({self.config.sync_interval_minutes} minutes)"
+            reason = f"time interval ({self.sync_interval_minutes} minutes)"
 
         if should_sync and self._original_remote_path:
             logger.debug(
@@ -1266,14 +1282,3 @@ class ChromaDBProcessor(UnifiedProcessor):
                 "Local cache path does not exist", cache_path=str(local_cache_path)
             )
             return None
-
-
-# Register processors on module import
-register_processor("llm", LLMProcessor)
-register_processor("groupchat", GroupchatProcessor)
-register_processor("expander", ExpanderProcessor)
-register_processor("transform", TransformProcessor)
-register_processor("shell", ShellProcessor)
-register_processor("filter", FilterProcessor)
-register_processor("embedding", EmbeddingProcessor)
-register_processor("chromadb", ChromaDBProcessor)

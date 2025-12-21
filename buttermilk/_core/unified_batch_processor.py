@@ -19,7 +19,7 @@ from buttermilk._core.types import BaseRecord
 from buttermilk import logger
 
 
-class UnifiedBatchProcessor(BaseModel, BatchProcessor):
+class UnifiedBatchProcessor(BaseModel):
     """Base class for all unified batch processors.
 
     Batch processors are Pydantic models with field-based configuration.

@@ -19,56 +19,44 @@ import pytest
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.protocols import BatchProcessor
 from buttermilk._core.types import BaseRecord
+from buttermilk.processors.unified_processors import EmbeddingProcessor
 
 
-class TestEmbeddingProcessorConfig:
-    """Test EmbeddingProcessorConfig exists and validates correctly."""
+class TestEmbeddingProcessorPydantic:
+    """Test EmbeddingProcessor Pydantic model validation."""
 
-    def test_embedding_processor_config_class_exists(self):
-        """Verify EmbeddingProcessorConfig class is defined."""
-        from buttermilk._core.processor_config import EmbeddingProcessorConfig
-
+    def test_embedding_processor_is_pydantic_model(self):
+        """Verify EmbeddingProcessor is a Pydantic model."""
         # Verify it's a Pydantic model
-        assert hasattr(EmbeddingProcessorConfig, "model_validate")
+        assert hasattr(EmbeddingProcessor, "model_validate")
 
-    def test_embedding_processor_config_has_required_fields(self):
-        """Verify EmbeddingProcessorConfig has necessary fields."""
-        from buttermilk._core.processor_config import EmbeddingProcessorConfig
-
-        # Create a minimal config
-        config = EmbeddingProcessorConfig(
-            type="embedding",
+    def test_embedding_processor_has_required_fields(self):
+        """Verify EmbeddingProcessor has necessary fields."""
+        # Create a minimal processor
+        processor = EmbeddingProcessor(
             embedding_model="gemini-embedding-001",
         )
 
         # Verify required fields
-        assert config.type == "embedding"
-        assert config.embedding_model == "gemini-embedding-001"
+        assert processor.embedding_model == "gemini-embedding-001"
 
-    def test_embedding_processor_config_inherits_from_batch_processor_config(self):
-        """Verify EmbeddingProcessorConfig inherits from BatchProcessorConfig."""
-        from buttermilk._core.processor_config import (
-            BatchProcessorConfig,
-            EmbeddingProcessorConfig,
-        )
+    def test_embedding_processor_inherits_from_unified_batch_processor(self):
+        """Verify EmbeddingProcessor inherits from UnifiedBatchProcessor."""
+        from buttermilk._core.unified_batch_processor import UnifiedBatchProcessor
 
-        config = EmbeddingProcessorConfig(
-            type="embedding",
+        processor = EmbeddingProcessor(
             embedding_model="gemini-embedding-001",
             batch_size=64,
         )
 
         # Should have batch_size from parent
-        assert config.batch_size == 64
-        assert isinstance(config, BatchProcessorConfig)
+        assert processor.batch_size == 64
+        assert isinstance(processor, UnifiedBatchProcessor)
 
-    def test_embedding_processor_config_has_optional_fields(self):
-        """Verify EmbeddingProcessorConfig has optional configuration fields."""
-        from buttermilk._core.processor_config import EmbeddingProcessorConfig
-
-        # Create config with optional fields
-        config = EmbeddingProcessorConfig(
-            type="embedding",
+    def test_embedding_processor_has_optional_fields(self):
+        """Verify EmbeddingProcessor has optional configuration fields."""
+        # Create processor with optional fields
+        processor = EmbeddingProcessor(
             embedding_model="gemini-embedding-001",
             dimensionality=768,
             task="RETRIEVAL_DOCUMENT",
@@ -77,28 +65,10 @@ class TestEmbeddingProcessorConfig:
         )
 
         # Verify optional fields
-        assert config.dimensionality == 768
-        assert config.task == "RETRIEVAL_DOCUMENT"
-        assert config.embedding_max_retries == 3
-        assert config.batch_size == 50
-
-    def test_embedding_processor_config_validates_type_literal(self):
-        """Verify config type field is enforced as literal 'embedding'."""
-        from buttermilk._core.processor_config import EmbeddingProcessorConfig
-
-        # Valid type
-        config = EmbeddingProcessorConfig(
-            type="embedding",
-            embedding_model="gemini-embedding-001",
-        )
-        assert config.type == "embedding"
-
-        # Invalid type should fail validation (fail-fast)
-        with pytest.raises(Exception):  # Pydantic ValidationError
-            EmbeddingProcessorConfig(
-                type="wrong_type",
-                embedding_model="gemini-embedding-001",
-            )
+        assert processor.dimensionality == 768
+        assert processor.task == "RETRIEVAL_DOCUMENT"
+        assert processor.embedding_max_retries == 3
+        assert processor.batch_size == 50
 
 
 class TestEmbeddingProcessorProtocol:
@@ -106,30 +76,22 @@ class TestEmbeddingProcessorProtocol:
 
     def test_embedding_processor_class_exists(self):
         """Verify EmbeddingProcessor class is defined."""
-        from buttermilk.processors.unified_processors import EmbeddingProcessor
-
         # Verify class exists
         assert EmbeddingProcessor is not None
 
     def test_embedding_processor_inherits_from_unified_batch_processor(self):
         """Verify EmbeddingProcessor inherits from UnifiedBatchProcessor."""
         from buttermilk._core.unified_batch_processor import UnifiedBatchProcessor
-        from buttermilk.processors.unified_processors import EmbeddingProcessor
 
         # Verify inheritance
         assert issubclass(EmbeddingProcessor, UnifiedBatchProcessor)
 
     def test_embedding_processor_implements_batch_processor_protocol(self):
         """Verify EmbeddingProcessor satisfies BatchProcessor protocol."""
-        from buttermilk._core.processor_config import EmbeddingProcessorConfig
-        from buttermilk.processors.unified_processors import EmbeddingProcessor
-
-        # Create instance
-        config = EmbeddingProcessorConfig(
-            type="embedding",
+        # Create instance directly as Pydantic model
+        processor = EmbeddingProcessor(
             embedding_model="gemini-embedding-001",
         )
-        processor = EmbeddingProcessor(config)
 
         # Verify protocol methods exist
         assert hasattr(processor, "process_batch")
@@ -138,56 +100,16 @@ class TestEmbeddingProcessorProtocol:
         # Verify it's recognized as BatchProcessor
         assert isinstance(processor, BatchProcessor)
 
-    def test_embedding_processor_has_config_attribute(self):
-        """Verify processor stores config correctly."""
-        from buttermilk._core.processor_config import EmbeddingProcessorConfig
-        from buttermilk.processors.unified_processors import EmbeddingProcessor
-
-        config = EmbeddingProcessorConfig(
-            type="embedding",
+    def test_embedding_processor_stores_fields(self):
+        """Verify processor stores configuration fields correctly."""
+        processor = EmbeddingProcessor(
             embedding_model="gemini-embedding-001",
             batch_size=100,
         )
-        processor = EmbeddingProcessor(config)
 
-        # Verify config is stored
-        assert processor.config == config
-        assert processor.config.embedding_model == "gemini-embedding-001"
-        assert processor.config.batch_size == 100
-
-
-class TestEmbeddingProcessorRegistry:
-    """Test EmbeddingProcessor registers with processor registry."""
-
-    def test_embedding_processor_registered_as_embedding_type(self):
-        """Verify EmbeddingProcessor is registered with type 'embedding'."""
-        from buttermilk._core.processor_registry import get_registered_types
-
-        # Import processors module to trigger registration
-        import buttermilk.processors.unified_processors  # noqa: F401
-
-        # Verify 'embedding' type is registered
-        registered_types = get_registered_types()
-        assert "embedding" in registered_types
-
-    def test_create_processor_returns_embedding_processor(self):
-        """Verify registry creates EmbeddingProcessor from config."""
-        from buttermilk._core.processor_config import EmbeddingProcessorConfig
-        from buttermilk._core.processor_registry import create_processor
-        from buttermilk.processors.unified_processors import EmbeddingProcessor
-
-        # Create config
-        config = EmbeddingProcessorConfig(
-            type="embedding",
-            embedding_model="gemini-embedding-001",
-        )
-
-        # Create processor via registry
-        processor = create_processor(config)
-
-        # Verify correct type created
-        assert isinstance(processor, EmbeddingProcessor)
-        assert processor.config.type == "embedding"
+        # Verify fields are stored
+        assert processor.embedding_model == "gemini-embedding-001"
+        assert processor.batch_size == 100
 
 
 class TestEmbeddingProcessorBatchProcessing:
@@ -196,18 +118,12 @@ class TestEmbeddingProcessorBatchProcessing:
     @pytest.mark.anyio
     async def test_embedding_processor_processes_batch_with_chunks(self):
         """Verify EmbeddingProcessor adds embeddings to chunks in batch."""
-        from buttermilk._core.processor_config import EmbeddingProcessorConfig
-        from buttermilk.processors.unified_processors import EmbeddingProcessor
-
-        # Create config
-        config = EmbeddingProcessorConfig(
-            type="embedding",
+        # Create processor directly as Pydantic model
+        processor = EmbeddingProcessor(
             embedding_model="gemini-embedding-001",
             dimensionality=768,
             batch_size=10,
         )
-
-        processor = EmbeddingProcessor(config)
 
         # Create test records with chunks
         contexts = [
@@ -257,15 +173,10 @@ class TestEmbeddingProcessorBatchProcessing:
     @pytest.mark.anyio
     async def test_embedding_processor_handles_records_without_chunks(self):
         """Verify processor handles records without chunks gracefully."""
-        from buttermilk._core.processor_config import EmbeddingProcessorConfig
-        from buttermilk.processors.unified_processors import EmbeddingProcessor
-
-        config = EmbeddingProcessorConfig(
-            type="embedding",
+        # Create processor directly as Pydantic model
+        processor = EmbeddingProcessor(
             embedding_model="gemini-embedding-001",
         )
-
-        processor = EmbeddingProcessor(config)
 
         # Create record without chunks
         contexts = [
@@ -292,17 +203,11 @@ class TestEmbeddingProcessorBatchProcessing:
     @pytest.mark.anyio
     async def test_embedding_processor_batches_api_calls(self):
         """Verify processor batches embedding API calls efficiently."""
-        from buttermilk._core.processor_config import EmbeddingProcessorConfig
-        from buttermilk.processors.unified_processors import EmbeddingProcessor
-
-        # Create config with small batch size
-        config = EmbeddingProcessorConfig(
-            type="embedding",
+        # Create processor directly as Pydantic model with small batch size
+        processor = EmbeddingProcessor(
             embedding_model="gemini-embedding-001",
             batch_size=2,  # Small batch to test batching logic
         )
-
-        processor = EmbeddingProcessor(config)
 
         # Create 5 records, each with 2 chunks = 10 chunks total
         contexts = [
@@ -352,15 +257,10 @@ class TestEmbeddingProcessorBatchProcessing:
     @pytest.mark.anyio
     async def test_embedding_processor_enriches_context_metadata(self):
         """Verify processor adds embedding metadata to context."""
-        from buttermilk._core.processor_config import EmbeddingProcessorConfig
-        from buttermilk.processors.unified_processors import EmbeddingProcessor
-
-        config = EmbeddingProcessorConfig(
-            type="embedding",
+        # Create processor directly as Pydantic model
+        processor = EmbeddingProcessor(
             embedding_model="gemini-embedding-001",
         )
-
-        processor = EmbeddingProcessor(config)
 
         # Create record with chunks
         context = ProcessingContext(
@@ -402,16 +302,11 @@ class TestEmbeddingProcessorErrorHandling:
     @pytest.mark.anyio
     async def test_embedding_processor_retries_on_api_failure(self):
         """Verify processor retries on transient API failures."""
-        from buttermilk._core.processor_config import EmbeddingProcessorConfig
-        from buttermilk.processors.unified_processors import EmbeddingProcessor
-
-        config = EmbeddingProcessorConfig(
-            type="embedding",
+        # Create processor directly as Pydantic model
+        processor = EmbeddingProcessor(
             embedding_model="gemini-embedding-001",
             embedding_max_retries=3,
         )
-
-        processor = EmbeddingProcessor(config)
 
         # Create test context
         context = ProcessingContext(
@@ -451,16 +346,11 @@ class TestEmbeddingProcessorErrorHandling:
     @pytest.mark.anyio
     async def test_embedding_processor_fails_after_max_retries(self):
         """Verify processor fails fast after exhausting retries."""
-        from buttermilk._core.processor_config import EmbeddingProcessorConfig
-        from buttermilk.processors.unified_processors import EmbeddingProcessor
-
-        config = EmbeddingProcessorConfig(
-            type="embedding",
+        # Create processor directly as Pydantic model
+        processor = EmbeddingProcessor(
             embedding_model="gemini-embedding-001",
             embedding_max_retries=2,
         )
-
-        processor = EmbeddingProcessor(config)
 
         # Create test context
         context = ProcessingContext(
@@ -490,15 +380,10 @@ class TestEmbeddingProcessorFinalization:
     @pytest.mark.anyio
     async def test_embedding_processor_finalize_method_exists(self):
         """Verify finalize method exists and can be called."""
-        from buttermilk._core.processor_config import EmbeddingProcessorConfig
-        from buttermilk.processors.unified_processors import EmbeddingProcessor
-
-        config = EmbeddingProcessorConfig(
-            type="embedding",
+        # Create processor directly as Pydantic model
+        processor = EmbeddingProcessor(
             embedding_model="gemini-embedding-001",
         )
-
-        processor = EmbeddingProcessor(config)
 
         # Finalize should not raise
         await processor.finalize()

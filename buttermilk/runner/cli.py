@@ -251,7 +251,7 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
                 )
 
                 # Generate pipeline configuration from batch mode parameters
-                from buttermilk._core.processor_config import GroupchatProcessorConfig
+                from buttermilk.processors.unified_processors import GroupchatProcessor
                 from buttermilk.utils.utils import expand_dict
 
                 flow_name = conf.run.flow
@@ -274,16 +274,14 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
                 # Expand flow parameters into variants
                 param_variants = expand_dict(flow.parameters) if hasattr(flow, 'parameters') and flow.parameters else [{}]
 
-                # Build processor configs for each parameter variant
-                processor_configs = []
+                # Build processors directly for each parameter variant
+                processors = []
                 for params in param_variants:
-                    processor_configs.append(
-                        GroupchatProcessorConfig(
-                            type="groupchat",
-                            flow_config=flow,
+                    processors.append(
+                        GroupchatProcessor(
                             flow_name=flow_name,
+                            flow_config=flow,
                             parameters=params,
-                            collect_traces=True,
                         )
                     )
 
@@ -291,7 +289,7 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
                 pipeline_conf = {
                     "pipeline_name": f"batch_{flow_name}",
                     "source": source,
-                    "processors": processor_configs,
+                    "processors": processors,
                     "limit": conf.run.limit,
                     "concurrency": getattr(conf.run, "concurrency", 1) or 1,
                     "enable_record_cache": False,  # Explicit: no caching for orchestrators
@@ -338,24 +336,17 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
                     pipeline_conf["limit"] = conf.run.limit
                     logger.info(f"Processing limit: {conf.run.limit} records")
 
-            # Instantiate processors (shared path for both batch and pipeline modes)
-            logger.info(f"Loading {len(pipeline_conf['processors'])} processor(s)...")
-            processors = []
+            # Instantiate processors (pipeline mode only - batch mode already has them)
+            if not is_batch_mode:
+                logger.info(f"Loading {len(pipeline_conf['processors'])} processor(s)...")
+                processors = []
 
-            # Import processor registry and config for type checking
-            from buttermilk._core.processor_config import ProcessorConfig
-            from buttermilk._core.processor_registry import create_processor
-            # Ensure unified processors are registered
-            import buttermilk.processors.unified_processors  # noqa: F401
-
-            for proc_conf in pipeline_conf["processors"]:
-                if isinstance(proc_conf, ProcessorConfig):
-                    # Already a ProcessorConfig (e.g., from batch mode) - use registry
-                    processors.append(create_processor(proc_conf))
-                else:
+                for proc_conf in pipeline_conf["processors"]:
                     # DictConfig from pipeline mode - use Hydra instantiate
                     processors.append(hydra.utils.instantiate(proc_conf))
-            pipeline_conf["processors"] = processors
+                pipeline_conf["processors"] = processors
+            else:
+                logger.info(f"Using {len(pipeline_conf['processors'])} batch-generated processor(s)...")
 
             # Instantiate pipeline orchestrator (shared for both modes)
             from buttermilk.pipeline import PipelineOrchestrator
