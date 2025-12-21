@@ -35,7 +35,8 @@ class LLMProcessorConfig(ProcessorConfig):
     prompt_template: str = Field(..., description="Prompt template string or path.")
     temperature: float = Field(default=0.0, description="Sampling temperature.")
     max_tokens: Optional[int] = Field(default=None, description="Max output tokens.")
-    
+    output_col: str = Field(default="output", description="Field name for LLM output in record.")
+
     # Parameters to inject into the prompt
     input_variables: dict[str, Any] = Field(default_factory=dict, description="Static variables for the prompt.")
 

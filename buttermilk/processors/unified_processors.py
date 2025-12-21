@@ -24,6 +24,7 @@ from jmespath.exceptions import JMESPathError
 from google import genai
 
 from buttermilk._core.contract import ExecutionTrace
+from buttermilk._core.llm_core import LLMCore
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.processor_config import (
     ChromaDBProcessorConfig,
@@ -31,6 +32,7 @@ from buttermilk._core.processor_config import (
     ExpanderProcessorConfig,
     FilterProcessorConfig,
     GroupchatProcessorConfig,
+    LLMProcessorConfig,
     ShellProcessorConfig,
     TransformProcessorConfig,
 )
@@ -46,6 +48,98 @@ from buttermilk.utils.utils import scrub_serializable, upload_chromadb_cache
 # For ChromaDBProcessor remote storage support
 # Import bm for session_info access (same pattern as chromadb_uploader.py)
 from buttermilk import bm
+
+
+class LLMProcessor(UnifiedProcessor):
+    """Unified processor for LLM-based transformations.
+
+    Uses LLMCore internally to handle template rendering and LLM calls.
+    Processes single records through LLM inference and enriches them with outputs.
+
+    This processor enables LLM-based transformations within the unified processor
+    architecture while maintaining proper observability and fail-fast semantics.
+    """
+
+    def __init__(self, config: LLMProcessorConfig):
+        super().__init__(config)
+        self.config: LLMProcessorConfig = config
+
+        # Create LLMCore instance with config values
+        # Map LLMProcessorConfig fields to LLMCore fields
+        self._llm_core = LLMCore(
+            model=config.model,
+            template=config.prompt_template,
+            temperature=config.temperature,
+            max_tokens=config.max_tokens,
+            output_col=config.output_col,
+            template_vars=config.input_variables,
+        )
+
+    async def _process_record(
+        self,
+        context: ProcessingContext,
+    ) -> AsyncGenerator[BaseRecord, None]:
+        """Process a record through LLM inference.
+
+        Args:
+            context: Processing context containing the record to process
+
+        Yields:
+            The record enriched with LLM output in the configured output column
+
+        Raises:
+            ProcessingError: If LLM processing fails
+        """
+        record_id = context.record.record_id
+
+        logger.debug(
+            "LLMProcessor starting",
+            record_id=record_id,
+            model=self.config.model,
+            template=self.config.prompt_template,
+        )
+
+        # Build template variables by flattening record metadata
+        # This allows templates to access both record fields and metadata fields directly
+        record_dict = context.record.model_dump()
+        template_vars = {
+            **record_dict.get("metadata", {}),  # Flatten metadata fields
+            **{k: v for k, v in record_dict.items() if k != "metadata"},  # Top-level fields
+        }
+
+        # Use LLMCore.process_with_llm() for LLM inference
+        # Trace emission is handled by UnifiedProcessor base class
+        llm_result = await self._llm_core.process_with_llm(
+            template_vars=template_vars,
+            record=context.record,
+            parent_trace_id=context.session_id,
+        )
+
+        # Check for errors
+        if llm_result.error:
+            from buttermilk._core.exceptions import ProcessingError
+            raise ProcessingError(f"LLM processing failed: {llm_result.error}")
+
+        # Enrich record with LLM output
+        enriched_metadata = {
+            **(context.record.metadata if context.record.metadata else {}),
+            f"llm_{self.config.name or 'processor'}": llm_result.metadata,
+        }
+
+        enriched_record = context.record.model_copy(
+            update={
+                self.config.output_col: llm_result.content,
+                "metadata": enriched_metadata,
+            }
+        )
+
+        logger.debug(
+            "LLMProcessor completed",
+            record_id=record_id,
+            output_col=self.config.output_col,
+        )
+
+        yield enriched_record
 
 
 class GroupchatProcessor(UnifiedProcessor):
@@ -1175,6 +1269,7 @@ class ChromaDBProcessor(UnifiedProcessor):
 
 
 # Register processors on module import
+register_processor("llm", LLMProcessor)
 register_processor("groupchat", GroupchatProcessor)
 register_processor("expander", ExpanderProcessor)
 register_processor("transform", TransformProcessor)
