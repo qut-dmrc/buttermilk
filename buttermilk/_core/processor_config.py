@@ -96,7 +96,18 @@ class EmbeddingProcessorConfig(BatchProcessorConfig):
     embedding_cooldown_seconds: float = Field(default=0.1, description="Cooldown between successful embedding calls.")
 
 
+class ChromaDBProcessorConfig(ProcessorConfig):
+    """Configuration for ChromaDB upload processors."""
+    type: Literal["chromadb"] = "chromadb"
+    collection_name: str = Field(..., description="ChromaDB collection name")
+    persist_directory: str = Field(..., description="ChromaDB persist directory (can be remote)")
+    sync_batch_size: int = Field(default=50, description="Sync to remote every N records")
+    sync_interval_minutes: int = Field(default=10, description="Sync to remote every N minutes")
+    disable_auto_sync: bool = Field(default=False, description="Disable automatic syncing (manual only)")
+    upsert_batch_size: int = Field(default=1000, description="Batch size for ChromaDB upserts")
+
+
 # Discriminated Union for type-safe parsing
 # Add new processor config types here
-ProcessorConfigUnion = LLMProcessorConfig | FilterProcessorConfig | ShellProcessorConfig | GroupchatProcessorConfig | ExpanderProcessorConfig | TransformProcessorConfig | EmbeddingProcessorConfig | BatchProcessorConfig
+ProcessorConfigUnion = LLMProcessorConfig | FilterProcessorConfig | ShellProcessorConfig | GroupchatProcessorConfig | ExpanderProcessorConfig | TransformProcessorConfig | EmbeddingProcessorConfig | ChromaDBProcessorConfig | BatchProcessorConfig
 

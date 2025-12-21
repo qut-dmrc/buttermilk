@@ -7,21 +7,26 @@ This module contains concrete implementations of standard processors:
 - ShellProcessor: Executes shell commands with placeholder substitution.
 - FilterProcessor: Filters records based on JMESPath criteria.
 - EmbeddingProcessor: Generates embeddings for chunks in batch.
+- ChromaDBProcessor: Uploads records with embeddings to ChromaDB.
 
 Processors are automatically registered on import.
 """
 
 import asyncio
 import time
+from pathlib import Path
 from typing import Any, AsyncGenerator
 
+import chromadb
 import jmespath
+from chromadb.api import ClientAPI
 from jmespath.exceptions import JMESPathError
 from google import genai
 
 from buttermilk._core.contract import ExecutionTrace
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.processor_config import (
+    ChromaDBProcessorConfig,
     EmbeddingProcessorConfig,
     ExpanderProcessorConfig,
     FilterProcessorConfig,
@@ -35,7 +40,12 @@ from buttermilk._core.unified_processor import UnifiedProcessor
 from buttermilk._core.unified_batch_processor import UnifiedBatchProcessor
 from buttermilk.runner.flowrunner import OrchestratorFactory
 from buttermilk import logger
-from buttermilk.utils.utils import scrub_serializable
+from buttermilk.data.vector import _sanitize_metadata_for_chroma
+from buttermilk.utils.utils import scrub_serializable, upload_chromadb_cache
+
+# For ChromaDBProcessor remote storage support
+# Import bm for session_info access (same pattern as chromadb_uploader.py)
+from buttermilk import bm
 
 
 class GroupchatProcessor(UnifiedProcessor):
@@ -768,6 +778,402 @@ class EmbeddingProcessor(UnifiedBatchProcessor):
         )
 
 
+class ChromaDBProcessor(UnifiedProcessor):
+    """Upload records with embeddings to ChromaDB.
+
+    Processes records with embedded chunks and uploads them to a ChromaDB collection.
+    Handles remote storage, caching, and syncing to remote backends.
+
+    This processor is typically used for batch updates to vector databases and
+    wouldn't be included in production RAG pipelines.
+
+    Features:
+    - Processes single records with chunks and embeddings
+    - Uploads to ChromaDB collection via upserts
+    - Handles remote storage paths (gs://, s3://, etc)
+    - Automatic syncing based on batch size or time interval
+    - Final sync via finalize_processing()
+    - Enriches context metadata with upload statistics
+    """
+
+    def __init__(self, config: ChromaDBProcessorConfig):
+        super().__init__(config)
+        self.config: ChromaDBProcessorConfig = config
+
+        # Private attributes for state management
+        self._client: ClientAPI | None = None
+        self._collection: chromadb.Collection | None = None
+        self._original_remote_path: str | None = None
+        self._processed_count: int = 0
+        self._last_sync_time: float = time.time()
+        self._cache_initialized: bool = False
+
+    async def _process_record(
+        self,
+        context: ProcessingContext,
+    ) -> AsyncGenerator[BaseRecord, None]:
+        """Process a record by uploading its embedded chunks to ChromaDB.
+
+        Args:
+            context: Processing context containing the record to process
+
+        Yields:
+            BaseRecord: The original record with updated metadata (passthrough after upload)
+        """
+        # Ensure cache is initialized for remote storage
+        if not self._cache_initialized:
+            await self._ensure_cache_initialized()
+
+        # Check if record has embedded chunks
+        chunks_count = len(getattr(context.record, "chunks", []))
+        logger.debug(
+            "ChromaDBProcessor received record",
+            record_id=context.record.record_id,
+            has_chunks=hasattr(context.record, "chunks"),
+            chunks_count=chunks_count,
+        )
+
+        if not hasattr(context.record, "chunks") or not context.record.chunks:
+            logger.warning(
+                "Record has no chunks to upload",
+                record_id=context.record.record_id,
+            )
+            yield context.record
+            return
+
+        # Check if chunks have embeddings
+        chunks_with_embeddings = [
+            c
+            for c in context.record.chunks
+            if (
+                c.get("embedding")
+                if isinstance(c, dict)
+                else getattr(c, "embedding", None)
+            )
+            is not None
+        ]
+        logger.debug(
+            "ChromaDBProcessor chunk embedding status",
+            record_id=context.record.record_id,
+            total_chunks=len(context.record.chunks),
+            chunks_with_embeddings=len(chunks_with_embeddings),
+        )
+
+        if not chunks_with_embeddings:
+            logger.warning(
+                "Record chunks have no embeddings",
+                record_id=context.record.record_id,
+                chunks_count=len(context.record.chunks),
+            )
+            yield context.record
+            return
+
+        # Upload chunks to ChromaDB
+        start_time = time.time()
+        try:
+            await self._store_chunks_for_record(context.record)
+            processing_time_ms = (time.time() - start_time) * 1000
+
+            logger.info(
+                "Successfully uploaded to ChromaDB",
+                record_id=context.record.record_id,
+                chunks_uploaded=len(chunks_with_embeddings),
+                processing_time_ms=processing_time_ms,
+            )
+
+            # Update processed count
+            self._processed_count += 1
+
+            # Check if we need to sync
+            await self._maybe_sync()
+
+            # Update context metadata with statistics
+            context.update_metadata("chromadb_stats", {
+                "chunks_uploaded": len(chunks_with_embeddings),
+                "collection_name": self.config.collection_name,
+                "processing_time_ms": processing_time_ms,
+            })
+
+            # Add metadata to record about upload
+            metadata = context.record.metadata.copy() if context.record.metadata else {}
+            metadata["chromadb_upload"] = {
+                "status": "uploaded",
+                "timestamp": time.time(),
+                "processor": "ChromaDBProcessor",
+                "chunks_uploaded": len(chunks_with_embeddings),
+                "collection": self.config.collection_name,
+                "processing_time_ms": processing_time_ms,
+            }
+
+            # Yield record with updated metadata
+            processed_record = context.record.model_copy(update={"metadata": metadata})
+            yield processed_record
+
+        except Exception as e:
+            logger.error(
+                "Failed to upload to ChromaDB",
+                record_id=context.record.record_id,
+                error=str(e),
+            )
+            # Re-raise for fail-fast behavior
+            raise
+
+    async def _ensure_cache_initialized(self) -> None:
+        """Ensure ChromaDB cache and collection are ready for use.
+
+        Raises:
+            ValueError: If collection initialization fails
+        """
+        persist_dir = self.config.persist_directory
+
+        # Handle remote storage by downloading to local cache
+        if persist_dir.startswith(("gs://", "s3://", "azure://", "gcs://")):
+            self._original_remote_path = persist_dir
+            local_cache_path = await self._setup_local_cache(persist_dir)
+            persist_dir = str(local_cache_path)
+
+        # Initialize ChromaDB client
+        if not self._client:
+            self._client = await asyncio.to_thread(
+                chromadb.PersistentClient,
+                path=persist_dir,
+                settings=chromadb.Settings(anonymized_telemetry=False),
+            )
+            logger.info("ChromaDB client initialized", persist_directory=persist_dir)
+
+        # Get or create collection
+        if not self._collection:
+            try:
+                self._collection = await asyncio.to_thread(
+                    self._client.get_collection, name=self.config.collection_name
+                )
+                collection_count = await asyncio.to_thread(self._collection.count)
+                logger.info(
+                    "Using existing collection",
+                    collection_name=self.config.collection_name,
+                    count=collection_count,
+                )
+            except Exception:
+                self._collection = await asyncio.to_thread(
+                    self._client.create_collection, name=self.config.collection_name
+                )
+                logger.info(
+                    "Created new collection", collection_name=self.config.collection_name
+                )
+
+        self._cache_initialized = True
+
+    async def _setup_local_cache(self, remote_path: str) -> Path:
+        """Setup local cache for remote ChromaDB.
+
+        Args:
+            remote_path: Remote storage path (e.g., gs://bucket/path)
+
+        Returns:
+            Path: Local cache directory path
+        """
+        # Use SessionInfo for consistent cache key generation
+        cache_key = bm.session_info.generate_cache_key(remote_path)
+        local_cache_path = bm.session_info.get_chromadb_cache_dir() / cache_key
+        local_cache_path.mkdir(parents=True, exist_ok=True)
+
+        logger.info(
+            "Using local cache for remote ChromaDB",
+            remote_path=remote_path,
+            local_cache=str(local_cache_path),
+        )
+
+        return local_cache_path
+
+    async def _store_chunks_for_record(self, record: BaseRecord) -> None:
+        """Store record chunks with metadata in ChromaDB.
+
+        Args:
+            record: BaseRecord with chunks and embeddings
+
+        Raises:
+            ValueError: If collection not initialized or no chunks to store
+        """
+        if not self._collection:
+            raise ValueError("Collection not initialized")
+
+        chunks_to_upsert = []
+
+        # Convert chunks to dicts if needed and filter for embeddings
+        for c in record.chunks:
+            if hasattr(c, "model_dump"):
+                # Convert ChunkedDocument to dict
+                chunk_dict = c.model_dump()
+            elif isinstance(c, dict):
+                chunk_dict = c
+            else:
+                # Skip unsupported chunk types
+                continue
+
+            if chunk_dict.get("embedding") is not None:
+                chunks_to_upsert.append(chunk_dict)
+
+        if not chunks_to_upsert:
+            return
+
+        ids = []
+        documents = []
+        embeddings_list = []
+        metadatas = []
+
+        for chunk in chunks_to_upsert:
+            ids.append(chunk["chunk_id"])
+            documents.append(chunk["chunk_text"])
+
+            # Convert numpy array or list to regular Python floats
+            embedding = chunk["embedding"]
+            if hasattr(embedding, "tolist"):
+                embeddings_list.append(embedding.tolist())
+            else:
+                embeddings_list.append([float(x) for x in embedding])
+
+            # Build metadata
+            chunk_metadata = chunk.get("metadata", {})
+            enhanced_metadata = {
+                "document_title": chunk["document_title"],
+                "chunk_index": chunk["chunk_index"],
+                "document_id": chunk["document_id"],
+                "content_type": chunk_metadata.get("content_type", "unknown"),
+                "chunk_type": chunk_metadata.get("chunk_type", "unknown"),
+                **{
+                    k: v
+                    for k, v in chunk_metadata.items()
+                    if k not in ["content_type", "chunk_type"]
+                },
+            }
+            # Ensure metadata is serializable and ChromaDB-compatible
+            enhanced_metadata = scrub_serializable(enhanced_metadata)
+            metadatas.append(_sanitize_metadata_for_chroma(enhanced_metadata))
+
+        # Batch upsert to ChromaDB
+        for i in range(0, len(ids), self.config.upsert_batch_size):
+            batch_end = min(i + self.config.upsert_batch_size, len(ids))
+
+            await asyncio.to_thread(
+                self._collection.upsert,
+                ids=ids[i:batch_end],
+                documents=documents[i:batch_end],
+                embeddings=embeddings_list[i:batch_end],
+                metadatas=metadatas[i:batch_end],
+            )
+
+            logger.debug(
+                "Upserted batch to ChromaDB",
+                record_id=record.record_id,
+                batch_start=i,
+                batch_end=batch_end,
+                total=len(ids),
+            )
+
+    async def _maybe_sync(self) -> None:
+        """Sync to remote if conditions are met."""
+        if self.config.disable_auto_sync:
+            return
+
+        # Check if we should sync based on count or time
+        should_sync = False
+        current_time = time.time()
+
+        if self._processed_count >= self.config.sync_batch_size:
+            should_sync = True
+            reason = f"batch size ({self._processed_count} records)"
+        elif (current_time - self._last_sync_time) >= (self.config.sync_interval_minutes * 60):
+            should_sync = True
+            reason = f"time interval ({self.config.sync_interval_minutes} minutes)"
+
+        if should_sync and self._original_remote_path:
+            logger.debug(
+                "Syncing to remote storage",
+                reason=reason,
+                processed_count=self._processed_count,
+            )
+            try:
+                # Get the local cache path
+                local_cache_path = await self._get_local_cache_path()
+                if local_cache_path:
+                    await upload_chromadb_cache(
+                        str(local_cache_path), self._original_remote_path
+                    )
+                    logger.info(
+                        "Successfully synced ChromaDB to remote storage",
+                        processed_count=self._processed_count,
+                    )
+                else:
+                    logger.warning("Could not determine local cache path for sync")
+            except Exception as e:
+                logger.error(
+                    "Failed to sync to remote storage",
+                    error=str(e),
+                    processed_count=self._processed_count,
+                )
+            finally:
+                # Reset counters regardless of sync success/failure
+                self._processed_count = 0
+                self._last_sync_time = current_time
+
+    async def finalize_processing(self) -> bool:
+        """Finalize processing by syncing to remote.
+
+        Returns:
+            bool: True if finalization successful, False otherwise
+        """
+        if self._original_remote_path:
+            logger.info(
+                "Final sync to remote storage", processed_count=self._processed_count
+            )
+            try:
+                # Get the local cache path
+                local_cache_path = await self._get_local_cache_path()
+                if local_cache_path:
+                    await upload_chromadb_cache(
+                        str(local_cache_path), self._original_remote_path
+                    )
+                    logger.info(
+                        "Successfully completed final sync to remote storage",
+                        processed_count=self._processed_count,
+                    )
+                    return True
+                else:
+                    logger.warning(
+                        "Could not determine local cache path for final sync"
+                    )
+                    return False
+            except Exception as e:
+                logger.error(
+                    "Failed final sync to remote storage",
+                    error=str(e),
+                    processed_count=self._processed_count,
+                )
+                return False
+        return True
+
+    async def _get_local_cache_path(self) -> Path | None:
+        """Get the local cache path for the ChromaDB instance.
+
+        Returns:
+            Path: Local cache path if exists, None otherwise
+        """
+        if not self._original_remote_path:
+            return None
+
+        # Recreate the cache path logic from _setup_local_cache (must match SessionInfo)
+        cache_key = bm.session_info.generate_cache_key(self._original_remote_path)
+        local_cache_path = bm.session_info.get_chromadb_cache_dir() / cache_key
+
+        if local_cache_path.exists():
+            return local_cache_path
+        else:
+            logger.warning(
+                "Local cache path does not exist", cache_path=str(local_cache_path)
+            )
+            return None
+
+
 # Register processors on module import
 register_processor("groupchat", GroupchatProcessor)
 register_processor("expander", ExpanderProcessor)
@@ -775,3 +1181,4 @@ register_processor("transform", TransformProcessor)
 register_processor("shell", ShellProcessor)
 register_processor("filter", FilterProcessor)
 register_processor("embedding", EmbeddingProcessor)
+register_processor("chromadb", ChromaDBProcessor)
