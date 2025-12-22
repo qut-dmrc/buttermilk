@@ -5,6 +5,7 @@ synthesiser:
   agent_obj: Judge
   description: Team leaders, responsible for synthesizes diverging draft answers from participants, taking into account feedback and other relevant information already provided.
   num_runs: 1
+  required: [criteria]  # RFC #311: criteria comes from record.metadata via inputs
   parameters:
     template: synthesise
     formatting: json_rules
@@ -13,7 +14,6 @@ synthesiser:
 
   variants:
     model: ${llms.synthesisers}
-    criteria: ${....parameters.criteria}
   # Record mapping: tries FETCH first, falls back to other sources (e.g., injected records)
   record: "FETCH.outputs"
   inputs:
