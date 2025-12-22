@@ -54,7 +54,7 @@ from buttermilk._core.contract import (
     TaskProcessingStarted,
     UserResponseMessage,  # Messages from the user
 )
-from buttermilk._core.exceptions import ProcessingError  # Custom exceptions
+from buttermilk._core.exceptions import FatalError, ProcessingError  # Custom exceptions
 from buttermilk._core.message_data import extract_message_data
 from buttermilk._core.types import BaseRecord  # Data record structure
 from buttermilk.utils.templating import (
@@ -1016,6 +1016,17 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 if k in self.required_inputs
             }
             updated_inputs.inputs = filtered_inputs
+
+        # Validate all required inputs are present (fail-fast)
+        if self.required_inputs:
+            available_keys = set(updated_inputs.inputs.keys()) if updated_inputs.inputs else set()
+            missing_keys = set(self.required_inputs) - available_keys
+            if missing_keys:
+                raise FatalError(
+                    f"Agent {self.agent_id} is missing required inputs: {sorted(missing_keys)}. "
+                    f"Available inputs: {sorted(available_keys)}. "
+                    f"Ensure the pipeline provides all required inputs."
+                )
 
         logger.debug(
             f"Agent {self.agent_id}: Added state to input. "

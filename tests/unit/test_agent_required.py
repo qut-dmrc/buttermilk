@@ -68,3 +68,39 @@ class TestAgentInputFiltering:
         assert "extra_field" not in result.inputs
         assert "another" not in result.inputs
         assert result.inputs["criteria"] == "test_value"
+
+    @pytest.mark.anyio
+    async def test_missing_required_input_raises_fatal_error(self):
+        """Test that FatalError is raised when a required input is missing."""
+        from buttermilk._core.config import AgentConfig
+        from buttermilk._core.contract import AgentInput
+        from buttermilk._core.agent import Agent
+        from buttermilk._core.exceptions import FatalError
+        from unittest.mock import MagicMock
+
+        # Create config with required=["criteria", "model"]
+        config = AgentConfig(
+            role="judge",
+            description="Test agent",
+            required=["criteria", "model"],  # Both required
+            inputs={},
+        )
+
+        # Create a mock agent with this config
+        agent = MagicMock(spec=Agent)
+        agent._config = config
+        agent.required_inputs = config.required
+        agent._data = {}
+        agent.inputs = {}
+        agent.record_mapping = None
+        agent.context_mapping = None
+        agent.agent_id = "TEST-001"
+
+        # Create input with only "criteria" - missing "model"
+        agent_input = AgentInput(
+            inputs={"criteria": "test_value"},  # "model" is missing!
+        )
+
+        # Should raise FatalError because "model" is required but missing
+        with pytest.raises(FatalError, match="model"):
+            await Agent._add_state_to_input(agent, agent_input)
