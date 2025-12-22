@@ -4,6 +4,7 @@ This module contains concrete implementations of standard processors:
 - LLMProcessor: Runs LLM-based transformations on records.
 - GroupchatProcessor: Runs a group chat session.
 - ExpanderProcessor: Expands a record into multiple records (1:N).
+- ParameterExpansionProcessor: Expands a record based on cartesian product of variants.
 - TransformProcessor: Applies JMESPath transformations to records.
 - ShellProcessor: Executes shell commands with placeholder substitution.
 - FilterProcessor: Filters records based on JMESPath criteria.
@@ -325,6 +326,35 @@ class ExpanderProcessor(UnifiedProcessor):
             expanded_record = context.record.model_copy(update=updates)
 
             yield expanded_record
+
+
+class ParameterExpansionProcessor(UnifiedProcessor):
+    """Expands record into N records based on cartesian product of variants.
+
+    Takes a record and expands it into multiple records by computing the
+    cartesian product of all parameter variants. Each variant combination
+    becomes a separate record.
+    """
+
+    variants: dict[str, list[Any] | Any] = Field(
+        ...,
+        description="Parameter variants to expand into cartesian product"
+    )
+
+    async def _process_record(
+        self,
+        context: ProcessingContext,
+    ) -> AsyncGenerator[BaseRecord, None]:
+        """Expand record into multiple records based on variants.
+
+        Args:
+            context: Processing context containing the record to expand
+
+        Yields:
+            BaseRecord: One record per variant combination
+        """
+        # Minimal implementation: just yield original record for now
+        yield context.record
 
 
 class TransformProcessor(UnifiedProcessor):
