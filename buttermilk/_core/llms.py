@@ -1001,7 +1001,10 @@ class LiteLLMWrapper(BaseModel):
             logger.debug(f"LiteLLMWrapper: Using fake tool '{fake_tool_name}' for structured output (no native support)")
 
         # Log the final litellm_params for debugging
-        logger.debug(f"LiteLLMWrapper: Final params (keys): {list(litellm_params.keys())}, response_format={litellm_params.get('response_format')}")
+        logger.debug(
+            f"LiteLLMWrapper: Final params (keys): {list(litellm_params.keys())}",
+            has_response_format=litellm_params.get("response_format") is not None,
+        )
 
         # Handle tools
         if tools:
