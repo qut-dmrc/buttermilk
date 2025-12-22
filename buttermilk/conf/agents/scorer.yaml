@@ -10,6 +10,7 @@ scorer:
     output_model: "buttermilk.agents.evaluators.scorer.QualScore"
     template: score
   inputs:
+    expected: "FETCH.outputs.ground_truth"
+    source: "FETCH.outputs.content"
     instructions: "JUDGE.messages[0].content || SYNTHESISER.messages[0].content"
     answers: "[JUDGE,SYNTHESISER][].{agent_id: agent_info.agent_id, result: outputs, answer_id: call_id, error: error }"
-  record: "FETCH.outputs"

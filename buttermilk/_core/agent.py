@@ -219,6 +219,11 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         """Get session_id from config if available."""
         return getattr(self._config, "session_id", "")
 
+    @property
+    def required_inputs(self) -> list[str]:
+        """Get the list of required input keys from config."""
+        return self._config.required
+
     def get_effective_bm(self) -> Any:
         """Get the effective BM instance (session-scoped if available, otherwise global singleton).
 
@@ -1003,6 +1008,14 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 k: v for k, v in updated_inputs.inputs.items()
                 if not (isinstance(v, list) and len(v) == 0)
             }
+
+        # Filter inputs to only include keys in required list (whitelist)
+        if self.required_inputs and updated_inputs.inputs:
+            filtered_inputs = {
+                k: v for k, v in updated_inputs.inputs.items()
+                if k in self.required_inputs
+            }
+            updated_inputs.inputs = filtered_inputs
 
         logger.debug(
             f"Agent {self.agent_id}: Added state to input. "
