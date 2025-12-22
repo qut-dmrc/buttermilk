@@ -220,8 +220,12 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         return getattr(self._config, "session_id", "")
 
     @property
-    def required_inputs(self) -> list[str]:
-        """Get the list of required input keys from config."""
+    def required_inputs(self) -> list[str] | None:
+        """Get the list of required input keys from config.
+
+        Returns None if not set (no filtering), empty list if explicitly
+        set to filter all inputs, or a list of keys to whitelist.
+        """
         return self._config.required
 
     def get_effective_bm(self) -> Any:
@@ -462,14 +466,12 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             final_input = await self._add_state_to_input(message)
         except Exception as e:
             logger.error(f"Error preparing data for Agent {self.agent_id}: {e}")
-            # Create an ErrorEvent to capture the error
-            err_result = ErrorEvent(source=self.agent_id, content=f"Invoke error: {e}")
             await self._publish(
                 TaskProcessingComplete(
                     agent_id=self.agent_id,
                     role=self.role,
                     is_error=True,
-                    error=[err_result],
+                    error=str(e),  # TaskProcessingComplete.error expects string
                 ),
                 topic_id=self._topic_id,
             )
@@ -483,18 +485,12 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 return None
         except Exception as e:
             logger.error(f"Agent {self.agent_id} error during invoke: {e}")
-            # Create an ErrorEvent to capture the error
-            err_result = ErrorEvent(source=self.agent_id, content=f"Invoke error: {e}")
-
-            logger.error(f"Error preparing data for Agent {self.agent_id}: {e}")
-            # Create an ErrorEvent to capture the error
-            err_result = ErrorEvent(source=self.agent_id, content=f"Invoke error: {e}")
             await self._publish(
                 TaskProcessingComplete(
                     agent_id=self.agent_id,
                     role=self.role,
                     is_error=True,
-                    error=[err_result],
+                    error=str(e),  # TaskProcessingComplete.error expects string
                 ),
                 topic_id=self._topic_id,
             )
@@ -1010,7 +1006,8 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             }
 
         # Filter inputs to only include keys in required list (whitelist)
-        if self.required_inputs and updated_inputs.inputs:
+        # None = no filtering (backward compatible), [] = filter all, ["key"] = only key
+        if self.required_inputs is not None and updated_inputs.inputs:
             filtered_inputs = {
                 k: v for k, v in updated_inputs.inputs.items()
                 if k in self.required_inputs
@@ -1018,6 +1015,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             updated_inputs.inputs = filtered_inputs
 
         # Validate all required inputs are present (fail-fast)
+        # Only validate if required is set and non-empty
         if self.required_inputs:
             available_keys = set(updated_inputs.inputs.keys()) if updated_inputs.inputs else set()
             missing_keys = set(self.required_inputs) - available_keys

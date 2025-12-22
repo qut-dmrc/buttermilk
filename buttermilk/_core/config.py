@@ -364,11 +364,12 @@ class AgentConfig(BaseModel):
         description="JMESPath expression for extracting conversation context from flow state. "
                     "Maps directly to AgentInput.context field.",
     )
-    required: list[str] = Field(
-        default_factory=list,
+    required: list[str] | None = Field(
+        default=None,
         description="Whitelist of input keys to pass to the agent. "
-                    "Only these keys are passed; others are filtered out. "
-                    "If empty, no inputs are passed to the agent.",
+                    "If None (default), no filtering occurs (backward compatible). "
+                    "If empty list [], all inputs are filtered out. "
+                    "If non-empty, only those keys are passed.",
     )
 
     name_components: list[str] = Field(
@@ -627,7 +628,13 @@ class AgentVariants(AgentConfig):
             },
             exclude_none=True,  # Exclude None values to avoid overriding defaults in AgentConfig
         )
+        # Preserve 'required' before clean_empty_values - empty list has semantic meaning
+        # ([] = filter all inputs, None = no filtering)
+        required_value = static_config_dict.get("required")
         static_config_dict = clean_empty_values(static_config_dict)
+        # Restore required if it was explicitly set (even if empty list)
+        if required_value is not None:
+            static_config_dict["required"] = required_value
 
         # Ensure 'parameters' exists and is a dict, even if empty from model_dump
         base_parameters = static_config_dict.pop("parameters", {})

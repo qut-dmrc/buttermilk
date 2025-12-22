@@ -6,6 +6,9 @@ fetch:
   description: "Data fetcher that retrieves records from configured data sources"
   agent_obj: FetchAgent
   num_runs: 1
+  # RFC #311: Empty required list prevents metadata (including uri) from being merged into inputs
+  # FETCH extracts record_id from message.record directly, doesn't need uri/record_id from inputs
+  required: []
   parameters:
     batch_size: 100 # Default batch size
     # Data source will be determined by flow configuration

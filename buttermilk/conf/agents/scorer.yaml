@@ -6,6 +6,7 @@ scorer:
   description: Checks and scores answers against our expected ground truth.
   variants:
     model: ${llms.judgers}
+  required: [expected, source, instructions, answers]  # RFC #311: template vars (no criteria needed)
   parameters:
     output_model: "buttermilk.agents.evaluators.scorer.QualScore"
     template: score

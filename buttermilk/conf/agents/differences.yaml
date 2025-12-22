@@ -6,6 +6,7 @@ differentiator:
   description: Prepares analysis of the discussion and differences between draft answers (required step after synthesizing a response).
   variants:
     model: ${llms.general}
+  required: [answers]  # RFC #311: answers from JUDGE/SYNTH via JMESPath
   parameters:
     template: differences
   # Record mapping: tries FETCH first, falls back to other sources (e.g., injected records)

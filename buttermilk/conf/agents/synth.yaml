@@ -5,7 +5,7 @@ synthesiser:
   agent_obj: Judge
   description: Team leaders, responsible for synthesizes diverging draft answers from participants, taking into account feedback and other relevant information already provided.
   num_runs: 1
-  required: [criteria]  # RFC #311: criteria comes from record.metadata via inputs
+  required: [criteria, answers]  # RFC #311: criteria from metadata, answers from JUDGE via JMESPath
   parameters:
     template: synthesise
     formatting: json_rules

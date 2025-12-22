@@ -325,8 +325,11 @@ class AutogenOrchestrator(Orchestrator):
             # Define a factory function required by Autogen's registration.
             # Check if this is a Buttermilk Agent subclass
             if issubclass(agent_cls, Agent):
+                dumped_config = variant_config.model_dump()
+                # DEBUG RFC #311: Check if required field is in config
+                logger.debug(f"Agent {variant_config.role}: model_dump required field = {dumped_config.get('required')!r}")
                 config_with_session = {
-                    **variant_config.model_dump(),
+                    **dumped_config,
                     "session_id": params.session_id,
                     "topic_id": self._topic,
                 }
