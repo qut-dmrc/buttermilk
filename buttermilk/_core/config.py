@@ -364,6 +364,12 @@ class AgentConfig(BaseModel):
         description="JMESPath expression for extracting conversation context from flow state. "
                     "Maps directly to AgentInput.context field.",
     )
+    required: list[str] = Field(
+        default_factory=list,
+        description="Whitelist of input keys to pass to the agent. "
+                    "Only these keys are passed; others are filtered out. "
+                    "If empty, no inputs are passed to the agent.",
+    )
 
     name_components: list[str] = Field(
         default=["role", "agent_id"],
