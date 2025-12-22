@@ -353,8 +353,34 @@ class ParameterExpansionProcessor(UnifiedProcessor):
         Yields:
             BaseRecord: One record per variant combination
         """
-        # Minimal implementation: just yield original record for now
-        yield context.record
+        from buttermilk.utils.utils import expand_dict
+
+        record = context.record
+
+        # Generate cartesian product of variants
+        variant_combinations = expand_dict(self.variants)
+
+        if not variant_combinations or variant_combinations == [{}]:
+            yield record
+            return
+
+        for combo in variant_combinations:
+            # Build unique record_id suffix
+            suffix_parts = [f"{k}={v}" for k, v in sorted(combo.items())]
+            suffix = "_".join(suffix_parts)
+            new_record_id = f"{record.record_id}_{suffix}"
+
+            # Merge variant parameters into metadata
+            new_metadata = {
+                **(record.metadata if record.metadata else {}),
+                **combo,  # Variant parameters as flat keys
+                "expansion_source_id": record.record_id,
+            }
+
+            expanded_record = record.model_copy(
+                update={"record_id": new_record_id, "metadata": new_metadata}
+            )
+            yield expanded_record
 
 
 class TransformProcessor(UnifiedProcessor):
