@@ -811,6 +811,7 @@ async def create_session_from_context_async(
         batch_id=session.batch_id,
         platform=session.platform,
         template_paths=session.template_paths,
+        save_dir_base=getattr(session, "save_dir_base", None),
         cloud_manager=execution_context.cloud_manager
         if execution_context.clouds
         else None,

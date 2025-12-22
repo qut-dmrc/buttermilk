@@ -156,6 +156,10 @@ class SessionInfo(BaseModel):
     flow_api: str | None = Field(
         default=None, description="URL or identifier for a flow API, if applicable."
     )
+    save_dir_base: str | None = Field(
+        default=None,
+        description="Base directory/URI for saving session outputs (e.g., gs://bucket/runs). If None, uses temp directory.",
+    )
 
     # Enhanced observability fields
     status: str = Field(default="initializing", description="Current session status.")

@@ -16,6 +16,7 @@ storage:
     schema_path: traces.schema.json
 session:
   llm_wrapper: litellm
+  save_dir_base: gs://prosocial-dev/runs
 infrastructure:
   clouds:
     - type: gcp
