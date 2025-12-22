@@ -210,13 +210,16 @@ class GroupchatProcessor(UnifiedProcessor):
         else:
             callback = context.ui_callback
 
-        # Create RunRequest from record
+        # Create RunRequest from record with metadata merged into inputs
+        base_inputs = {
+            "record_id": record_id,
+            "record": context.record.model_dump() if hasattr(context.record, "model_dump") else context.record,
+        }
+        merged_inputs = self._merge_metadata_to_inputs(base_inputs, context.record.metadata)
+
         run_request = RunRequest(
             flow=self.flow_name,
-            inputs={
-                "record_id": record_id,
-                "record": context.record.model_dump() if hasattr(context.record, "model_dump") else context.record,
-            },
+            inputs=merged_inputs,
             parameters=self.parameters,
             callback_to_ui=callback,
         )
@@ -277,6 +280,42 @@ class GroupchatProcessor(UnifiedProcessor):
             )
             # Re-raise to let pipeline handle the error
             raise
+
+    def _merge_metadata_to_inputs(
+        self,
+        base_inputs: dict[str, Any],
+        metadata: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """Merge record metadata into inputs dict for agent access.
+
+        Merges serializable metadata values into inputs, allowing
+        ParameterExpansionProcessor to pass parameters to downstream agents.
+
+        Args:
+            base_inputs: Base inputs dict with record_id and record
+            metadata: Record metadata to merge (or None)
+
+        Returns:
+            Merged inputs dict with metadata values added
+        """
+        if not metadata:
+            return base_inputs
+
+        result = dict(base_inputs)
+        reserved_keys = {"record_id", "record"}
+
+        for key, value in metadata.items():
+            # Skip reserved keys (base_inputs takes precedence)
+            if key in reserved_keys:
+                continue
+
+            # Skip non-serializable values (classes, functions, etc.)
+            if callable(value) or isinstance(value, type):
+                continue
+
+            result[key] = value
+
+        return result
 
 
 class ExpanderProcessor(UnifiedProcessor):
