@@ -1166,7 +1166,7 @@ class LiteLLMWrapper(BaseModel):
                 )
                 result.parsed_object = parsed
             except Exception as e:
-                result.error_message = f"Failed to parse structured output: {e}"
+                result.error_message = f"Failed to parse structured output: {e.args}"
                 result.parsed_object = None
 
         return result

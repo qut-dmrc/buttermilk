@@ -4,6 +4,22 @@
 
 This file contains Buttermilk-specific debugging tools and workflows.
 
+## Context Management for LLM Debugging
+
+**CRITICAL for Claude/LLM agents**: Debugging generates large outputs that can overflow context.
+
+| What | Location | How to use |
+|------|----------|------------|
+| **Console output** | Terminal | Monitor for errors/completion only - do NOT read full output into context |
+| **Debug logs** | `/tmp/bm_*.jsonl` | NEVER read manually; use `analyze` and `logs -n` commands with small limits |
+| **Session logs** | GCS: `gs://.../sessions/{groupchat_id}*.jsonl` | The substantive internal conversation - read THIS to understand how the groupchat worked |
+
+**Rules**:
+1. **Don't capture full flow output** - just run and watch for errors/completion
+2. **Debug logs are verbose** - always use scripts (`analyze`, `logs -l ERROR`) not `cat`
+3. **Session logs are the substance** - when you want to understand what actually happened in the groupchat, read the session log, not the debug log
+
+
 ## Quick Reference
 
 **Start debugging session**:
@@ -306,6 +322,97 @@ uv run python scripts/analyze_import_profile.py
 ```bash
 cat /tmp/import.txt | grep "import time" | sort -k2 -rn | head -20
 ```
+
+## Evaluating Substantive Flow Success
+
+**Exit code 0 proves NOTHING** - it only means the process didn't crash. A flow can exit cleanly while producing garbage, skipping steps, or failing silently.
+
+### Validation Hierarchy
+
+**1. Basic Success** (necessary but NOT sufficient)
+- Exit code 0
+- No exceptions/tracebacks
+
+**2. Input Validation** (often missed)
+- Verify the flow received correct input data
+- Check input was parsed properly
+- If input is wrong, output validity is meaningless
+
+**3. Config Audit**
+- Verify actual config used matches your assumptions
+- Check session log or hydra output for resolved config
+- If `llms=cheap` wasn't actually applied, you won't know from output alone
+
+**4. Structural Completeness**
+- Expected number of records processed (with `limit=1`, exactly 1)
+- Session log exists and is parseable (`.jsonl` in `sessions/`)
+- All expected agents participated (check message types in session log)
+
+**5. Data Quality**
+- Read the session log - check actual `AgentOutput` and `ToolOutput` messages
+- Look for `error` fields in outputs - empty means clean execution
+- Verify outputs match expected schema (required fields, correct types)
+
+**6. Semantic Validation** (requires human judgment)
+- For judgment flows: Did the judge produce a score AND rationale?
+- Is the output coherent and responsive to the input?
+- Does the judgment contradict the input data?
+
+### Session Log Analysis
+
+The session log (`.jsonl` in `sessions/{groupchat_id}/`) captures in-band messages only:
+- `ToolOutput` - tool/function results
+- `AgentOutput` - agent processing results
+- `UserResponseMessage` - user feedback
+- `BaseRecord` subclasses - data records
+
+**To validate a flow ran correctly:**
+
+```bash
+# 1. Find the session log
+ls -la sessions/
+
+# 2. Count messages by type
+cat sessions/*.jsonl | jq -r '.type' | sort | uniq -c
+
+# 3. Check for error fields in any message
+cat sessions/*.jsonl | jq 'select(.content.error != null and .content.error != [])'
+
+# 4. Extract agent outputs for review
+cat sessions/*.jsonl | jq 'select(.type == "AgentOutput") | .content'
+```
+
+### What "Ran Perfectly" Actually Means
+
+| Level | What it proves |
+|-------|----------------|
+| Exit 0 | Didn't crash |
+| No errors in logs | No exceptions thrown |
+| Session log exists | Messages were exchanged |
+| Expected agent count | All agents participated |
+| Output has required fields | Schema compliance |
+| Output is semantically valid | **Actually worked** |
+
+**The last level requires reading the actual output content and verifying it makes sense for the input.**
+
+### Common False Positives
+
+- ❌ "47 tests passed" - tests might use fakes/mocks
+- ❌ "Flow completed successfully" - completion ≠ correctness
+- ❌ "No errors in output" - errors might be in different fields or logs
+- ❌ "Agent produced output" - output might be garbage
+
+### Verification Checklist
+
+Before declaring a flow "worked":
+
+1. [ ] Config was applied as expected (check logs)
+2. [ ] Input data was correct (not placeholder/empty)
+3. [ ] Expected number of records processed
+4. [ ] All expected agents produced output
+5. [ ] No error fields in outputs
+6. [ ] Output schema matches expectations
+7. [ ] **Manual review**: Output content is semantically valid for input
 
 ## Common Debugging Scenarios
 
