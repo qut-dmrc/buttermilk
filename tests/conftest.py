@@ -167,7 +167,7 @@ def real_flow_runner(real_conf):
     constructed instance. Most tests can use this mock.
     """
     from unittest.mock import AsyncMock, Mock
-    from buttermilk.runner.flowrunner import FlowRunner
+    from buttermilk.runner.flowrunner import FlowRunContext, FlowRunner
 
     mock_runner = Mock(spec=FlowRunner)
     # Provide basic structure that tests might expect
