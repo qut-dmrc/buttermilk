@@ -18,7 +18,6 @@ execution of defined flows.
 """
 
 import asyncio
-import os  # For setting environment variables (e.g., Slack tokens)
 
 import hydra  # For configuration management
 from omegaconf import DictConfig, OmegaConf  # Hydra's configuration objects
@@ -123,10 +122,23 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
     """
     OmegaConf.resolve(conf)
 
+    # Extract config source directory from Hydra for template path resolution
+    config_source_dir = None
+    try:
+        from hydra.core.hydra_config import HydraConfig
+        hydra_cfg = HydraConfig.get()
+        for src in hydra_cfg.runtime.config_sources:
+            if src.schema == "file":
+                config_source_dir = src.path
+                break
+    except Exception:
+        pass  # Fall back to None if HydraConfig unavailable
+
     # Run async initialization
     bm = asyncio.run(
         init_async(
-            config=conf  # Pass the existing Hydra configuration
+            config=conf,  # Pass the existing Hydra configuration
+            config_source_dir=config_source_dir
         )
     )
     conf = bm.cfg  # Use the typed config from BM

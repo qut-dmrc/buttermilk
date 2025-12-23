@@ -314,6 +314,7 @@ async def init_async(
     overrides: list[str] | None = None,
     config: DictConfig | None = None,
     base_dir: str | None = None,
+    config_source_dir: str | None = None,
 ):
     """PRIMARY async initialization function for Buttermilk.
 
@@ -335,6 +336,7 @@ async def init_async(
         overrides: List of Hydra override strings for customization (e.g., ["run=cli", "debug=true"])
         config: Pre-loaded configuration (if already available from Hydra context)
         base_dir: DEPRECATED - no longer used, kept for backward compatibility
+        config_source_dir: Optional path to directory containing config files for template resolution
 
     Returns:
         Buttermilk instance ready to use with config accessible via bm.cfg
@@ -361,6 +363,7 @@ async def init_async(
         overrides=overrides,
         config=config,
         base_dir=base_dir,
+        config_source_dir=config_source_dir,
     )
     return bm
 
@@ -472,6 +475,7 @@ async def bootstrap_session_with_config_async(
     overrides: list[str] | None = None,
     config: DictConfig | None = None,
     base_dir: str | None = None,
+    config_source_dir: str | None = None,
 ):
     """Simplified unified async session bootstrap.
 
@@ -486,6 +490,7 @@ async def bootstrap_session_with_config_async(
         overrides: List of Hydra override strings
         config: Pre-loaded configuration (if already available from Hydra context)
         base_dir: DEPRECATED - no longer used, kept for backward compatibility
+        config_source_dir: Source directory for template resolution (falls back to config_dir if None)
 
     Returns:
         Tuple of (Buttermilk instance, typed ButtermilkConfig)
@@ -523,10 +528,11 @@ async def bootstrap_session_with_config_async(
     # Resolve template paths
     template_paths = list(typed_config.session.template_paths)
     resolved_template_paths = []
+    base_path = config_source_dir or config_dir
     for path in template_paths:
         if not Path(path).is_absolute():
-            if config_dir:
-                resolved_path = Path(config_dir) / path
+            if base_path:
+                resolved_path = Path(base_path) / path
                 resolved_template_paths.append(str(resolved_path.resolve()))
             else:
                 resolved_template_paths.append(str(Path(path).resolve()))
@@ -538,7 +544,7 @@ async def bootstrap_session_with_config_async(
 
     # Phase 2: Create or get ExecutionContext (singleton)
     # Pass root-level llms config if present (for model_parameters)
-    llms_config = typed_config.llms if hasattr(typed_config, 'llms') else None
+    llms_config = typed_config.llms if hasattr(typed_config, "llms") else None
     execution_context = await from_config_async(
         typed_config.infrastructure,
         project_name=typed_config.session.project_name,
