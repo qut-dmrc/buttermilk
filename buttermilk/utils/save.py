@@ -8,6 +8,8 @@ DataFrames, JSON data, binary data, and pickled objects. Retry mechanisms are
 implemented for cloud operations using the `tenacity` library.
 """
 
+from __future__ import annotations
+
 import asyncio
 import io  # For in-memory binary streams (BytesIO)
 import json
@@ -15,24 +17,10 @@ import pickle  # For serializing Python objects
 import tempfile  # For creating temporary files/directories
 from collections.abc import Callable, Hashable, Mapping  # For type hinting
 from pathlib import Path  # For local path manipulation
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import google.cloud.storage  # For GCS interactions (though client often from bm)
 import pandas as pd
 import shortuuid  # For generating short unique IDs
-from cloudpathlib import (
-    AnyPath,
-    CloudPath,
-    GSPath,
-)  # For handling local and cloud paths
-from cloudpathlib.exceptions import (
-    InvalidPrefixError,
-)  # Specific CloudPathlib exception
-from google.api_core.exceptions import (
-    ClientError,
-    GoogleAPICallError,
-)  # Google Cloud exceptions
-from google.cloud import bigquery, storage  # Google Cloud clients
 from pydantic import BaseModel  # For type checking if data is a Pydantic model
 from tenacity import (  # Retry library components
     retry,
@@ -40,6 +28,16 @@ from tenacity import (  # Retry library components
     stop_after_attempt,
     wait_exponential_jitter,
 )
+
+# Exception types needed for retry decorators (lightweight)
+from google.api_core.exceptions import ClientError, GoogleAPICallError
+
+# Heavy imports deferred to function level (cloudpathlib pulls in google.cloud.storage)
+if TYPE_CHECKING:
+    import google.cloud.storage
+    from cloudpathlib import AnyPath, CloudPath, GSPath
+    from cloudpathlib.exceptions import InvalidPrefixError
+    from google.cloud import bigquery, storage
 
 from buttermilk._core.exceptions import StorageError
 
@@ -120,7 +118,9 @@ def save(
         TypeError: If data types are incompatible with chosen save methods.
 
     """
-    # from .utils import reset_index_and_dedup_columns # Already imported at module level
+    # Lazy import cloudpathlib (pulls in google.cloud.storage)
+    from cloudpathlib import AnyPath, CloudPath
+    from cloudpathlib.exceptions import InvalidPrefixError
 
     final_save_dir_str: str | None = None
     if isinstance(save_dir, (CloudPath, Path)):
@@ -328,6 +328,10 @@ def upload_dataframe_json(data: pd.DataFrame, uri: str, **kwargs: Any) -> str:
         google.api_core.exceptions.ClientError: For GCS client errors after retries.
 
     """
+    # Lazy import to avoid loading google.cloud at module level
+    import google.cloud.storage
+    from google.cloud import storage
+
     if not isinstance(data, pd.DataFrame):
         raise TypeError(
             "Input `data` must be a Pandas DataFrame for upload_dataframe_json."
@@ -508,6 +512,9 @@ async def upload_rows_async(
         TypeError: If schema format is incorrect.
 
     """
+    # Lazy import to avoid loading google.cloud at module level
+    from google.cloud import bigquery
+
     final_schema = schema
     final_dataset = dataset
 
@@ -627,6 +634,9 @@ def upload_rows(
         TypeError: If schema format is incorrect.
 
     """
+    # Lazy import to avoid loading google.cloud at module level
+    from google.cloud import bigquery
+
     final_schema = schema
     final_dataset = dataset
 
@@ -731,6 +741,10 @@ def upload_binary(data: bytes | io.BufferedIOBase, *, uri: str) -> str:
         google.api_core.exceptions.ClientError: For GCS client errors after retries.
 
     """
+    # Lazy import to avoid loading google.cloud at module level
+    import google.cloud.storage
+    from google.cloud import storage
+
     assert data is not None, "Data for upload_binary cannot be None."
     gcs_client = storage.Client()
 
@@ -844,6 +858,9 @@ def read_pickle(filename: str | GSPath) -> Any:
         Any: The unpickled Python object.
 
     """
+    # Lazy import cloudpathlib
+    from cloudpathlib import AnyPath, GSPath
+
     path_to_read: AnyPath
     if isinstance(filename, str):
         # Determine if it's a GCS path string or local path string
@@ -889,6 +906,10 @@ def upload_text(data: str, *, uri: str, **kwargs: Any) -> str:
         google.api_core.exceptions.ClientError: For GCS client errors after retries.
 
     """
+    # Lazy import to avoid loading google.cloud at module level
+    import google.cloud.storage
+    from google.cloud import storage
+
     gcs_client = storage.Client()
     logger.debug(f"Uploading text data to GCS URI: {uri}.")
     blob = google.cloud.storage.blob.Blob.from_string(uri, client=gcs_client)

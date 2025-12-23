@@ -6,12 +6,16 @@ import os
 import sys
 import threading
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
-from google.cloud import logging as gcp_logging
-from google.cloud.logging_v2.handlers import CloudLoggingHandler
 from rich.console import Console
+
+# Lazy imports for google.cloud.logging (heavy dependency)
+# Only imported when cloud logging is actually configured
+if TYPE_CHECKING:
+    from google.cloud import logging as gcp_logging
+    from google.cloud.logging_v2.handlers import CloudLoggingHandler
 from rich.logging import RichHandler
 from structlog.processors import CallsiteParameter, CallsiteParameterAdder
 
@@ -345,6 +349,10 @@ def setup_cloud_logging(logger_cfg, cloud_manager, session_info) -> None:
         cloud_manager: Cloud manager instance for GCS client access
         session_info: Session information
     """
+    # Lazy import to avoid loading google.cloud at module load time
+    from google.cloud import logging as gcp_logging
+    from google.cloud.logging_v2.handlers import CloudLoggingHandler
+
     global _cloud_logging_sessions
 
     # Check if cloud logging is already configured for this session

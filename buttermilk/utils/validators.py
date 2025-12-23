@@ -1,15 +1,20 @@
 # validators.py
+from __future__ import annotations
+
 import importlib
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 import httpx
 import pydantic
 from bleach import clean
-from cloudpathlib import CloudPath
 from markdown_it import MarkdownIt
 from omegaconf import DictConfig, ListConfig, OmegaConf
+
+# Lazy import cloudpathlib (pulls in google.cloud.storage)
+if TYPE_CHECKING:
+    from cloudpathlib import CloudPath
 
 T = TypeVar("T")
 
@@ -69,6 +74,9 @@ def make_uri_validator() -> Callable[[Any], str]:
     """Convert input to string URI if possible"""
 
     def validator(path: Any) -> str:
+        # Lazy import cloudpathlib (pulls in google.cloud.storage)
+        from cloudpathlib import CloudPath
+
         if isinstance(path, bytes):
             path = path.decode("utf-8")
 
@@ -89,6 +97,9 @@ def make_path_validator() -> Callable[[Any], str]:
     """Convert CloudPath to string URI"""
 
     def validator(path: Any) -> str:
+        # Lazy import cloudpathlib
+        from cloudpathlib import CloudPath
+
         if isinstance(path, CloudPath):
             return str(path.as_uri())
         return path

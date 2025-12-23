@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import base64
 import datetime
@@ -25,8 +27,12 @@ import regex as re
 import requests
 import validators
 import yaml
-from cloudpathlib import AnyPath, CloudPath, exceptions
 from fake_useragent import UserAgent
+
+# Lazy import cloudpathlib (it pulls in google.cloud.storage at import time)
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from cloudpathlib import AnyPath, CloudPath, exceptions
 from omegaconf import DictConfig, ListConfig, OmegaConf
 
 from buttermilk._core.exceptions import ProcessingError
@@ -137,12 +143,15 @@ session_headers = {
 
 
 async def download_limited_async(
-    url: str | httpx.URL | pydantic.AnyUrl | AnyPath,
+    url: str | httpx.URL | pydantic.AnyUrl | "AnyPath",
     *,
     allow_arbitrarily_large_downloads: bool = False,
     max_size: int = 1024 * 1024 * 10,
     token: str | None = None,
 ) -> tuple[bytes, str]:
+    # Lazy import to avoid loading google.cloud at module level
+    from cloudpathlib import CloudPath, exceptions
+
     try:
         url = CloudPath(url)
         data = await run_async_newthread(url.read_bytes)

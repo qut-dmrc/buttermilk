@@ -35,8 +35,13 @@ from typing import Any
 import psutil  # For system utilities like getting username
 import pydantic  # Pydantic core
 import shortuuid  # For generating short, unique IDs
-from cloudpathlib import AnyPath, CloudPath  # For handling local and cloud paths
 from omegaconf import DictConfig
+
+# Lazy import cloudpathlib (it pulls in google.cloud.storage at import time)
+# Import TYPE_CHECKING guard for type hints
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from cloudpathlib import AnyPath, CloudPath
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -443,6 +448,9 @@ class BM(BaseModel):
             ValueError: If `save_dir_base` is not a string, `Path`, or `CloudPath`.
 
         """
+        # Lazy import to avoid loading google.cloud at module level
+        from cloudpathlib import CloudPath
+
         if isinstance(save_dir_base, str):
             return save_dir_base
         if isinstance(save_dir_base, Path):
@@ -648,6 +656,9 @@ class BM(BaseModel):
 
         Constructs the full save directory path and stores it in session_info.save_dir.
         """
+        # Lazy import to avoid loading google.cloud at module level
+        from cloudpathlib import AnyPath
+
         # Construct full save directory path using session_id for uniqueness
         save_dir_path = (
             AnyPath(self.save_dir_base)
@@ -918,6 +929,9 @@ class BM(BaseModel):
             effective_extension = "." + effective_extension
 
         try:
+            # Lazy import to avoid loading google.cloud at module level
+            from cloudpathlib import AnyPath
+
             # Call the utility save function
             saved_file_path = save.save(
                 data=data,

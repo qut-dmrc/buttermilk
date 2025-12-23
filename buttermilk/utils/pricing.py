@@ -6,12 +6,23 @@ from typing import Any
 
 from buttermilk._core.log import logger
 
-try:
-    from litellm.cost_calculator import completion_cost, cost_per_token
-except ImportError:
-    logger.warning("litellm not installed. Token cost tracking will be disabled.")
-    completion_cost = None
-    cost_per_token = None
+# Lazy-load litellm cost calculator to avoid slow import at module load time
+_cost_per_token = None
+_cost_per_token_loaded = False
+
+
+def _get_cost_per_token():
+    """Get cost_per_token function, lazy-loading litellm on first use."""
+    global _cost_per_token, _cost_per_token_loaded
+    if not _cost_per_token_loaded:
+        try:
+            from litellm.cost_calculator import cost_per_token
+            _cost_per_token = cost_per_token
+        except ImportError:
+            logger.warning("litellm not installed. Token cost tracking will be disabled.")
+            _cost_per_token = None
+        _cost_per_token_loaded = True
+    return _cost_per_token
 
 
 # Simple model mappings for backward compatibility
@@ -82,6 +93,7 @@ def calculate_token_cost(
     Returns:
         Tuple of (prompt_tokens, completion_tokens, total_cost)
     """
+    cost_per_token = _get_cost_per_token()
     if cost_per_token is None:
         return prompt_tokens, completion_tokens, 0.0
 

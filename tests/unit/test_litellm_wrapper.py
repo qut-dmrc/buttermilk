@@ -8,7 +8,6 @@ from pydantic import BaseModel, ConfigDict
 
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llms import (
-    LITELLM_AVAILABLE,
     LiteLLMWrapper,
     ModelInfo,
     ModelParameters,
@@ -17,21 +16,8 @@ from buttermilk._core.llms import (
 )
 
 
-@pytest.mark.skipif(not LITELLM_AVAILABLE, reason="LiteLLM not installed")
 class TestLiteLLMWrapper:
     """Test suite for LiteLLMWrapper functionality."""
-
-    def test_init_requires_litellm(self):
-        """Test that LiteLLMWrapper requires LiteLLM to be installed."""
-        if not LITELLM_AVAILABLE:
-            model_info = ModelInfo(
-                vision=False, function_calling=True, json_output=False, family="gpt-4"
-            )
-
-            with pytest.raises(ImportError, match="LiteLLM is not installed"):
-                LiteLLMWrapper(
-                    model="gpt-4", model_info=model_info, litellm_model_name="gpt-4"
-                )
 
     def test_init_valid_params(self):
         """Test LiteLLMWrapper initialization with valid parameters."""
@@ -112,7 +98,6 @@ class TestMessageFormatConversion:
         assert result.cached is False
 
 
-@pytest.mark.skipif(not LITELLM_AVAILABLE, reason="LiteLLM not installed")
 @pytest.mark.anyio
 class TestLiteLLMWrapperCreate:
     """Test LiteLLMWrapper.create() method."""
@@ -222,7 +207,6 @@ class TestLiteLLMWrapperCreate:
             assert mock_acompletion.call_count == 2  # Initial + 1 retry
 
 
-@pytest.mark.skipif(not LITELLM_AVAILABLE, reason="LiteLLM not installed")
 @pytest.mark.anyio
 class TestLiteLLMWrapperStructuredOutput:
     """Test structured output with LiteLLMWrapper."""
@@ -272,7 +256,6 @@ class TestLiteLLMWrapperStructuredOutput:
             assert result.parsed_object.sentiment == "positive"
 
 
-@pytest.mark.skipif(not LITELLM_AVAILABLE, reason="LiteLLM not installed")
 class TestLiteLLMWrapperPricing:
     """Test pricing calculation in LiteLLMWrapper."""
 
