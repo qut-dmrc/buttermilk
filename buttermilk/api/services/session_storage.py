@@ -56,85 +56,137 @@ class SessionStorageService:
             session_id: The session identifier
 
         Returns:
-            Path to the session JSON file
+            Path to the session JSONL file
         """
-        return self.sessions_dir / f"{session_id}.json"
+        return self.sessions_dir / f"{session_id}.jsonl"
+
+    def _append_entry(self, session_id: str, entry: dict) -> None:
+        """Append a single entry to the session JSONL file.
+
+        Args:
+            session_id: The session identifier
+            entry: Dictionary entry to append
+
+        Raises:
+            IOError: If file cannot be written
+        """
+        session_file = self._get_session_file(session_id)
+
+        try:
+            with open(session_file, "a", encoding="utf-8") as f:
+                json.dump(entry, f)
+                f.write("\n")
+        except IOError as e:
+            logger.error(
+                "Failed to append entry to session file",
+                session_id=session_id,
+                error=e,
+            )
+            raise
 
     def _get_or_create_session_data(self, session_id: str) -> dict:
-        """Get existing session data or create new session data structure.
+        """Get existing session data by reading JSONL file.
 
-        This helper method consolidates the logic for loading session files,
-        handling potential JSON decode errors, and creating new session data
-        if the file doesn't exist or is corrupted.
+        Reconstructs session data structure from JSONL entries.
+        Each entry has a _type field indicating its type (message, parameter_update, etc.).
 
         Args:
             session_id: The session identifier
 
         Returns:
-            Dictionary containing session data
+            Dictionary containing session data reconstructed from JSONL entries
+
+        Raises:
+            json.JSONDecodeError: If JSONL entries are malformed
         """
         session_file = self._get_session_file(session_id)
 
-        # Try to load existing session data
-        if session_file.exists():
-            try:
-                with open(session_file, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            except json.JSONDecodeError:
-                logger.warning(
-                    "Corrupted session file, creating new", session_file=session_file
-                )
+        # Create new session data if file doesn't exist
+        if not session_file.exists():
+            return self._create_new_session_data(session_id)
 
-        # Create new session data if file doesn't exist or is corrupted
-        return self._create_new_session_data(session_id)
+        # Reconstruct session data from JSONL entries
+        session_data = self._create_new_session_data(session_id)
+        messages = []
+
+        try:
+            with open(session_file, "r", encoding="utf-8") as f:
+                for line_num, line in enumerate(f, 1):
+                    line = line.strip()
+                    if not line:
+                        continue
+
+                    try:
+                        entry = json.loads(line)
+                        entry_type = entry.get("_type")
+
+                        if entry_type == "message":
+                            # Remove metadata fields before storing
+                            entry.pop("_type", None)
+                            entry.pop("_timestamp", None)
+                            messages.append(entry)
+                        elif entry_type == "parameter_update":
+                            session_data["parameters"] = entry.get("parameters", {})
+                            session_data["last_updated"] = entry.get("_timestamp")
+                            session_data["last_activity"] = entry.get("_timestamp")
+                        elif entry_type == "status_update":
+                            session_data["flow_status"] = entry.get("status", "idle")
+                            session_data["last_updated"] = entry.get("_timestamp")
+                            session_data["last_activity"] = entry.get("_timestamp")
+                        elif entry_type == "completion":
+                            session_data["completed_at"] = entry.get("completed_at")
+                            session_data["last_updated"] = entry.get("_timestamp")
+                            session_data["last_activity"] = entry.get("_timestamp")
+                        elif entry_type == "session_init":
+                            session_data["created_at"] = entry.get("_timestamp")
+                            session_data["last_updated"] = entry.get("_timestamp")
+                            session_data["last_activity"] = entry.get("_timestamp")
+
+                    except json.JSONDecodeError as e:
+                        logger.warning(
+                            "Skipping malformed JSONL entry",
+                            session_file=session_file,
+                            line_num=line_num,
+                            error=e,
+                        )
+                        continue
+
+            session_data["messages"] = messages
+            return session_data
+
+        except Exception as e:
+            logger.error(
+                "Failed to read session file",
+                session_file=session_file,
+                error=e,
+            )
+            raise
 
     def save_message(self, session_id: str, message: ChatMessage) -> None:
-        """Save a message to the session file.
+        """Save a message to the session file using incremental append.
 
-        Messages are appended to the existing session file if it exists,
-        or a new file is created. Duplicate messages are automatically
-        detected and skipped to prevent session log corruption.
-
-        Deduplication logic:
-        - For record messages: Skip if same record_id already exists
-        - For all messages: Skip if same message_id already exists
+        Messages are appended as JSONL entries to the session file.
+        Each entry includes _type: "message" and _timestamp for tracking.
 
         Args:
             session_id: The session identifier
             message: The ChatMessage to persist
+
+        Raises:
+            IOError: If file cannot be written
         """
         if not self.should_persist_message(message):
             logger.debug("Skipping persistence for message", message_type=message.type)
             return
 
-        session_file = self._get_session_file(session_id)
-
         try:
-            # Use helper method to get/create session data
-            session_data = self._get_or_create_session_data(session_id)
-
-            # Check for duplicate messages to prevent corruption
+            # Convert message to dict and add metadata
             message_dict = scrub_serializable(message.model_dump())
+            message_dict["_type"] = "message"
+            message_dict["_timestamp"] = datetime.now(UTC).isoformat()
 
-            # General deduplication: check if message_id already exists
-            if message.message_id:
-                for existing_msg in session_data["messages"]:
-                    if existing_msg.get("message_id") == message.message_id:
-                        logger.debug(
-                            "Skipping duplicate message",
-                            message_id=message.message_id,
-                            session_id=session_id,
-                        )
-                        return
-
-            # Add the new message
-            session_data["messages"].append(message_dict)
-            session_data["last_updated"] = datetime.now(UTC).isoformat()
-            session_data["last_activity"] = datetime.now(UTC).isoformat()
-
-            # Write back to file
-            with open(session_file, "w", encoding="utf-8") as f:
-                json.dump(session_data, f, indent=2)
+            # Append to file
+            self._append_entry(session_id, message_dict)
 
             logger.debug(
                 "Saved message to session",
@@ -146,28 +198,26 @@ class SessionStorageService:
             logger.error(
                 "Failed to save message to session", session_id=session_id, error=e
             )
+            raise
 
     def save_parameters(self, session_id: str, parameters: dict) -> None:
-        """Save flow parameters to the session file.
+        """Save flow parameters to the session file using incremental append.
 
         Args:
             session_id: The session identifier
             parameters: Dictionary containing flow parameters (flow, record_id, criteria, etc.)
+
+        Raises:
+            IOError: If file cannot be written
         """
-        session_file = self._get_session_file(session_id)
-
         try:
-            # Use helper method to get/create session data
-            session_data = self._get_or_create_session_data(session_id)
+            entry = {
+                "_type": "parameter_update",
+                "_timestamp": datetime.now(UTC).isoformat(),
+                "parameters": parameters,
+            }
 
-            # Update parameters and activity
-            session_data["parameters"] = parameters
-            session_data["last_updated"] = datetime.now(UTC).isoformat()
-            session_data["last_activity"] = datetime.now(UTC).isoformat()
-
-            # Write back to file
-            with open(session_file, "w", encoding="utf-8") as f:
-                json.dump(session_data, f, indent=2)
+            self._append_entry(session_id, entry)
 
             logger.debug(
                 "Saved parameters for session",
@@ -179,28 +229,26 @@ class SessionStorageService:
             logger.error(
                 "Failed to save parameters for session", session_id=session_id, error=e
             )
+            raise
 
     def update_flow_status(self, session_id: str, status: str) -> None:
-        """Update the flow status for a session.
+        """Update the flow status for a session using incremental append.
 
         Args:
             session_id: The session identifier
             status: New flow status (idle, running, completed, failed)
+
+        Raises:
+            IOError: If file cannot be written
         """
-        session_file = self._get_session_file(session_id)
-
         try:
-            # Use helper method to get/create session data
-            session_data = self._get_or_create_session_data(session_id)
+            entry = {
+                "_type": "status_update",
+                "_timestamp": datetime.now(UTC).isoformat(),
+                "status": status,
+            }
 
-            # Update flow status and activity
-            session_data["flow_status"] = status
-            session_data["last_updated"] = datetime.now(UTC).isoformat()
-            session_data["last_activity"] = datetime.now(UTC).isoformat()
-
-            # Write back to file
-            with open(session_file, "w", encoding="utf-8") as f:
-                json.dump(session_data, f, indent=2)
+            self._append_entry(session_id, entry)
 
             logger.debug("Updated flow status", status=status, session_id=session_id)
 
@@ -210,6 +258,7 @@ class SessionStorageService:
                 session_id=session_id,
                 error=e,
             )
+            raise
 
     def get_flow_status(self, session_id: str) -> str:
         """Get the current flow status for a session.
@@ -298,7 +347,7 @@ class SessionStorageService:
             return True
 
     def get_session_messages(self, session_id: str) -> List[ChatMessage]:
-        """Retrieve all messages for a session.
+        """Retrieve all messages for a session from JSONL file.
 
         Args:
             session_id: The session identifier
@@ -313,22 +362,45 @@ class SessionStorageService:
             logger.debug("Session file not found", session_id=session_id)
             return []
 
+        messages = []
+
         try:
             with open(session_file, "r", encoding="utf-8") as f:
-                session_data = json.load(f)
+                for line_num, line in enumerate(f, 1):
+                    line = line.strip()
+                    if not line:
+                        continue
 
-            messages = []
-            for msg_data in session_data.get("messages", []):
-                try:
-                    message = ChatMessage(**msg_data)
-                    messages.append(message)
-                except Exception as e:
-                    logger.warning(
-                        "Failed to parse message in session",
-                        session_id=session_id,
-                        error=e,
-                    )
-                    continue
+                    try:
+                        entry = json.loads(line)
+
+                        # Only process message entries
+                        if entry.get("_type") != "message":
+                            continue
+
+                        # Remove metadata fields before parsing as ChatMessage
+                        entry.pop("_type", None)
+                        entry.pop("_timestamp", None)
+
+                        message = ChatMessage(**entry)
+                        messages.append(message)
+
+                    except json.JSONDecodeError as e:
+                        logger.warning(
+                            "Skipping malformed JSONL entry",
+                            session_file=session_file,
+                            line_num=line_num,
+                            error=e,
+                        )
+                        continue
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to parse message in session",
+                            session_id=session_id,
+                            line_num=line_num,
+                            error=e,
+                        )
+                        continue
 
             logger.info(
                 "Retrieved messages for session",
@@ -337,9 +409,6 @@ class SessionStorageService:
             )
             return messages
 
-        except json.JSONDecodeError as e:
-            logger.error("Corrupted session file", session_file=session_file, error=e)
-            return []
         except Exception as e:
             logger.error("Failed to read session", session_id=session_id, error=e)
             return []
@@ -455,7 +524,7 @@ class SessionStorageService:
         """
         sessions = []
 
-        for session_file in self.sessions_dir.glob("*.json"):
+        for session_file in self.sessions_dir.glob("*.jsonl"):
             session_id = session_file.stem
             metadata = self.get_session_metadata(session_id)
             if metadata:
@@ -547,19 +616,31 @@ class SessionStorageService:
         Args:
             session_id: The session identifier
             final_status: Final session status (completed or failed)
+
+        Raises:
+            IOError: If file cannot be written
         """
         try:
-            # Update the session with final status and completion time
-            session_data = self._get_or_create_session_data(session_id)
-            session_data["flow_status"] = final_status
-            session_data["completed_at"] = datetime.now(UTC).isoformat()
-            session_data["last_updated"] = datetime.now(UTC).isoformat()
-            session_data["last_activity"] = datetime.now(UTC).isoformat()
+            # Append status update entry
+            timestamp = datetime.now(UTC).isoformat()
+            self._append_entry(
+                session_id,
+                {
+                    "_type": "status_update",
+                    "_timestamp": timestamp,
+                    "status": final_status,
+                },
+            )
 
-            # Write the finalized session data
-            session_file = self._get_session_file(session_id)
-            with open(session_file, "w", encoding="utf-8") as f:
-                json.dump(session_data, f, indent=2)
+            # Append completion entry
+            self._append_entry(
+                session_id,
+                {
+                    "_type": "completion",
+                    "_timestamp": timestamp,
+                    "completed_at": timestamp,
+                },
+            )
 
             logger.info("Finalized session", session_id=session_id, status=final_status)
 
@@ -577,3 +658,4 @@ class SessionStorageService:
 
         except Exception as e:
             logger.error("Error finalizing session", session_id=session_id, error=e)
+            raise

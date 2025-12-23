@@ -9,7 +9,6 @@ and integrates with the Buttermilk agent and contract system.
 import asyncio
 import itertools
 from collections.abc import Awaitable, Callable  # Added type hints for clarity
-from datetime import UTC, datetime
 from typing import Any
 
 import shortuuid
@@ -39,13 +38,11 @@ from buttermilk._core.agent import Agent
 from buttermilk._core.constants import MANAGER
 from buttermilk._core.contract import (
     ConductorRequest,
-    ExecutionTrace,
     FlowEvent,
     FlowMessage,
     TaskProcessingComplete,
     UserResponseMessage,
 )
-from buttermilk.utils import scrub_serializable
 from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk._core.orchestrator import Orchestrator  # Base class for orchestrators.
 from buttermilk._core.types import RunRequest
@@ -142,7 +139,6 @@ class AutogenOrchestrator(Orchestrator):
         default_factory=list
     )
     _is_initialized: bool = PrivateAttr(default=False)
-    _session_messages: list[dict] = PrivateAttr(default_factory=list)
 
     # Dynamically generates a unique topic ID for this specific orchestrator run.
     # Ensures messages within this run don't interfere with other concurrent runs.
@@ -184,9 +180,6 @@ class AutogenOrchestrator(Orchestrator):
         await self._register_agents(params=request)
 
         await self.register_ui(callback_to_ui=request.callback_to_ui)
-
-        # Register session message collector for logging (captures FlowMessages, not ExecutionTraces)
-        await self._register_session_collector()
 
         # Send a broadcast message to initialize all agents subscribed to the group chat
         logger.info(
@@ -457,80 +450,6 @@ class AutogenOrchestrator(Orchestrator):
             f"[AutogenOrchestrator.register_ui] ClosureAgent registered successfully for type: {MANAGER}"
         )
 
-    async def _register_session_collector(self) -> None:
-        """Register a ClosureAgent to collect all FlowMessages for session logging.
-
-        This collector captures all messages except ExecutionTraces (which go to BigQuery).
-        Messages are stored in self._session_messages and saved to GCS at end of run.
-        """
-        # Clear any previous messages
-        self._session_messages = []
-
-        async def collect_session_message(
-            _ctx: ClosureContext, message: AllMessages, ctx: MessageContext
-        ) -> None:
-            # Skip ExecutionTraces - they go to BigQuery via TraceWriter
-            if isinstance(message, ExecutionTrace):
-                return
-
-            try:
-                # Serialize message content
-                if hasattr(message, "model_dump"):
-                    content = scrub_serializable(message.model_dump())
-                else:
-                    content = str(message)
-
-                self._session_messages.append({
-                    "timestamp": datetime.now(UTC).isoformat(),
-                    "type": type(message).__name__,
-                    "source": getattr(message, "source", None),
-                    "content": content,
-                })
-            except Exception as e:
-                logger.warning(f"Failed to collect session message: {e}")
-
-        # Register collector with unique type name
-        collector_type = f"SESSION_COLLECTOR_{shortuuid.uuid()[:6]}"
-        await ClosureAgent.register_closure(
-            runtime=self._runtime,
-            type=collector_type,
-            closure=collect_session_message,
-            subscriptions=lambda: [
-                TypeSubscription(
-                    topic_type=self._topic.type,
-                    agent_type=collector_type,
-                ),
-            ],
-        )
-        logger.debug(f"Session collector registered for topic '{self._topic.type}'")
-
-    def _save_session_log(self) -> None:
-        """Save collected session messages to GCS."""
-        if not self._session_messages:
-            logger.debug("No session messages to save")
-            return
-
-        try:
-            bm_instance = self.get_effective_bm()
-            groupchat_id = self._topic.type if self._topic else "unknown"
-
-            session_data = {
-                "groupchat_id": groupchat_id,
-                "message_count": len(self._session_messages),
-                "start_time": self._session_messages[0]["timestamp"] if self._session_messages else None,
-                "end_time": self._session_messages[-1]["timestamp"] if self._session_messages else None,
-                "messages": self._session_messages,
-            }
-
-            saved_path = bm_instance.save(
-                data=session_data,
-                basename=f"sessions/{groupchat_id}",
-                extension=".json",
-            )
-            logger.info(f"Session log saved: {saved_path} ({len(self._session_messages)} messages)")
-        except Exception as e:
-            logger.warning(f"Failed to save session log: {e}")
-
     async def _run(self, request: RunRequest, flow_name: str = "") -> None:
         """Simplified main execution loop for the orchestrator.
 
@@ -619,8 +538,7 @@ class AutogenOrchestrator(Orchestrator):
             )
             raise
         finally:
-            # Save session log to GCS before cleanup
-            self._save_session_log()
+            pass
 
     def make_publish_callback(self) -> Callable[[FlowMessage], Awaitable[None]]:
         """Creates an asynchronous callback function for the UI to use.
