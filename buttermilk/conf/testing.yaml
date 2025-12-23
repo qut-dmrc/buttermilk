@@ -1,7 +1,5 @@
 defaults:
   - llms: lite
-  - flows:
-      - trans
   - _self_
 project_name: buttermilk
 job: testing
