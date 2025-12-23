@@ -1,4 +1,3 @@
-from .bq import construct_dict_from_schema
 from .flows import col_mapping_hydra_to_local
 from .utils import (
     download_limited,
@@ -35,3 +34,11 @@ __all__ = [
     "remove_punctuation",
     "scrub_serializable",
 ]
+
+
+def __getattr__(name: str):
+    """Lazy import for heavy BigQuery utilities."""
+    if name == "construct_dict_from_schema":
+        from .bq import construct_dict_from_schema
+        return construct_dict_from_schema
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -180,13 +180,6 @@ class TestLiteLLMModelNameResolution:
 class TestLiteLLMIntegration:
     """Test that generated model names actually work with litellm cost_per_token."""
 
-    @pytest.mark.skipif(
-        not hasattr(
-            __import__("litellm.cost_calculator", fromlist=["cost_per_token"]),
-            "cost_per_token",
-        ),
-        reason="litellm not available",
-    )
     def test_gemini_vertex_openai_litellm_compatibility(self):
         """Test that generated model names work with actual litellm cost_per_token."""
         from litellm.cost_calculator import cost_per_token
@@ -212,13 +205,6 @@ class TestLiteLLMIntegration:
         except Exception as e:
             pytest.fail(f"litellm cost_per_token failed for {resolved_name}: {e}")
 
-    @pytest.mark.skipif(
-        not hasattr(
-            __import__("litellm.cost_calculator", fromlist=["cost_per_token"]),
-            "cost_per_token",
-        ),
-        reason="litellm not available",
-    )
     def test_gemini_models_litellm_compatibility(self):
         """Test multiple gemini model variations with litellm."""
         from litellm.cost_calculator import cost_per_token
@@ -276,13 +262,6 @@ class TestLiteLLMIntegration:
             # Some models may not be in litellm's pricing database yet - that's OK
             pytest.skip(f"Model {resolved_name} not in litellm pricing: {e}")
 
-    @pytest.mark.skipif(
-        not hasattr(
-            __import__("litellm.cost_calculator", fromlist=["cost_per_token"]),
-            "cost_per_token",
-        ),
-        reason="litellm not available",
-    )
     def test_bad_model_names_should_fail(self):
         """Test that malformed model names properly fail with litellm."""
         from litellm.cost_calculator import cost_per_token

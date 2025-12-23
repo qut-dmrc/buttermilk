@@ -12,9 +12,11 @@ The design intentionally avoids Agent-specific concepts to maintain
 flexibility while preserving full observability through metadata tracking.
 """
 
+from __future__ import annotations
+
 import time
 import uuid
-from typing import Any, AsyncGenerator, Optional, Self
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Optional, Self
 
 import pydantic
 from autogen_core import CancellationToken
@@ -25,8 +27,10 @@ from pydantic import BaseModel, Field, PrivateAttr, model_validator
 from buttermilk import bm, logger
 from buttermilk._core.contract import ErrorEvent
 from buttermilk._core.exceptions import ProcessingError
-from buttermilk._core.llms import CreateResult, ModelOutput
 from buttermilk._core.processor_core import ProcessorCore
+
+if TYPE_CHECKING:
+    from buttermilk._core.llms import CreateResult, ModelOutput
 from buttermilk._core.types import BaseRecord
 from buttermilk.utils.templating import load_template, make_messages
 from buttermilk.utils.utils import clean_empty_values, scrub_serializable
@@ -320,6 +324,9 @@ class LLMCore(ProcessorCore):
                 context=conversation_history,
             )
         """
+        # Lazy import to avoid loading litellm at module load time
+        from buttermilk._core.llms import ModelOutput
+
         tracer = trace.get_tracer("buttermilk.llm_core")
         result = LLMResult(content=None, error=None)
 
