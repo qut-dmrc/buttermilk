@@ -48,6 +48,7 @@ class ChatMessage(BaseModel):
         "differences",
         "judge_reasons",
         "start_flow",
+        "agent_output",  # Generic fallback for external BaseModel types
     ] = Field(..., description="Type of message")
     message_id: str = Field(default_factory=lambda: uuid())
     preview: str | None = Field(
@@ -233,7 +234,7 @@ class MessageService:
                 preview = message[:PREVIEW_LENGTH]
             elif isinstance(message, BaseModel):
                 # Fallback for any Pydantic model not explicitly handled (e.g., QualScore from external packages)
-                message_type = message.__class__.__name__.lower()
+                message_type = "agent_output"
             else:
                 return None
 

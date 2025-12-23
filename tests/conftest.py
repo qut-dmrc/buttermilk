@@ -10,6 +10,9 @@ import pytest
 # weave import removed
 from pytest import MarkDecorator
 
+# Get absolute path to tests directory for test data files
+TESTS_DIR = Path(__file__).parent.resolve()
+
 # Heavy imports deferred to fixtures to speed up collection
 if TYPE_CHECKING:
     from buttermilk import BM
@@ -251,7 +254,7 @@ def config_override():
 @pytest.fixture(scope="session")
 def image_bytes() -> bytes:
     from buttermilk.utils.utils import read_file
-    return read_file("tests/data/Rijksmuseum_(25621972346).jpg")
+    return read_file(str(TESTS_DIR / "data/Rijksmuseum_(25621972346).jpg"))
 
 
 @pytest.fixture(scope="session")
@@ -261,7 +264,7 @@ def video_bytes(video_url: str) -> bytes:
 
 
 MEDIA_RECORDS = [
-    ("sad robot local image", "tests/data/sadrobot.jpg", "image/jpeg"),
+    ("sad robot local image", str(TESTS_DIR / "data/sadrobot.jpg"), "image/jpeg"),
     # Skip: picsum.photos uses redirects that cloudpathlib can't handle
     # ("web image", "https://picsum.photos/64", "image/jpeg"),
     # Skip: This URL causes HTTPPath timestamp AttributeError
@@ -271,7 +274,7 @@ MEDIA_RECORDS = [
     #     "video/mpeg4",
     # ),
     ("gcs video", "gs://dmrc-platforms/data/tonepolice/v2IF1Kw4.mp4", "video/mpeg4"),
-    ("rijksmuseum local", "tests/data/Rijksmuseum_(25621972346).jpg", "image/jpeg"),
+    ("rijksmuseum local", str(TESTS_DIR / "data/Rijksmuseum_(25621972346).jpg"), "image/jpeg"),
     (
         "fight no more forever",
         """Tell General Howard I know his heart. What he told me before, I have it in my heart. I am tired of fighting. Our Chiefs are killed; Looking Glass is dead, Ta Hool Hool Shute is dead. The old men are all dead. It is the young men who say yes or no. He who led on the young men is dead. It is cold, and we have no blankets; the little children are freezing to death. My people, some of them, have run away to the hills, and have no blankets, no food. No one knows where they are - perhaps freezing to death. I want to have time to look for my children, and see how many of them I can find. Maybe I shall find them among the dead. Hear me, my Chiefs! I am tired; my heart is sick and sad. From where the sun now stands I will fight no more forever.""",

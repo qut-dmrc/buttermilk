@@ -432,7 +432,7 @@ class TestSessionGCSArchival:
         # Verify BM save was called with correct parameters
         real_bm.save.assert_called_once()
         call_args = real_bm.save.call_args
-        assert "sessions/session_test-session_archived.json" in call_args[1]["basename"]
+        assert call_args[1]["basename"] == f"session-{session_id}"
 
     def test_finalize_session(self, real_bm):
         """Test session finalization with completion metadata."""
