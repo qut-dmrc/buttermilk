@@ -410,7 +410,7 @@ def upload_dataframe_json(data: pd.DataFrame, uri: str, **kwargs: Any) -> str:
 
 def data_to_export_rows(
     data: pd.DataFrame | dict[str, Any] | list[Mapping[str, Any]] | BaseModel,
-    schema: list[bigquery.SchemaField],  # Expecting BigQuery SchemaField objects
+    schema: list,  # Expecting BigQuery SchemaField objects
 ) -> list[Mapping[Hashable, Any]]:
     """Converts various data types into a list of dictionaries suitable for BigQuery row insertion.
 
@@ -434,6 +434,7 @@ def data_to_export_rows(
         represents a row ready for BigQuery insertion.
 
     """
+    from google.cloud import bigquery  # Lazy import for runtime isinstance checks
     from .bq import construct_dict_from_schema  # Deferred import
 
     bq_rows: list[Mapping[str, Any]] | Mapping[str, Any]  # Adjusted type hint
