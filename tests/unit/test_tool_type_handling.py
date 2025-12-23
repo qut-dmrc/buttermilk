@@ -270,23 +270,28 @@ class TestToolTypeHandling:
 
     def test_type_hints_accept_both_tool_and_toolschema(self):
         """Test that the type hints Tool | ToolSchema work correctly."""
-        import inspect
-        from typing import get_args, get_origin
+        from collections.abc import Sequence as ABCSequence
+        from typing import get_args, get_origin, get_type_hints
 
         from buttermilk._core.llms import LiteLLMWrapper
 
-        # Get the create method signature
-        sig = inspect.signature(LiteLLMWrapper.create)
-        tools_param = sig.parameters["tools"]
-
-        # Check that the annotation includes both Tool and ToolSchema
-        annotation = tools_param.annotation
+        # Get resolved type hints (handles PEP 563 stringified annotations)
+        hints = get_type_hints(LiteLLMWrapper.create)
+        annotation = hints["tools"]
 
         # This should be Sequence[Tool | ToolSchema]
-        assert get_origin(annotation).__name__ == "Sequence"
+        # get_origin returns the actual class for collections.abc.Sequence
+        origin = get_origin(annotation)
+        assert origin is not None, "Expected a generic type with origin"
+        # Check it's Sequence (either from typing or collections.abc)
+        assert "Sequence" in str(origin) or origin is ABCSequence, (
+            f"Expected Sequence origin, got {origin}"
+        )
 
         # Get the inner type (Tool | ToolSchema)
-        inner_type = get_args(annotation)[0]
+        args = get_args(annotation)
+        assert len(args) > 0, "Expected type arguments for Sequence"
+        inner_type = args[0]
 
         # Verify it's a Union that includes both types
         if hasattr(inner_type, "__args__"):  # Union type

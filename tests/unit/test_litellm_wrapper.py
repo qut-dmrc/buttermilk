@@ -121,7 +121,7 @@ class TestLiteLLMWrapperCreate:
         ]
 
         # Mock the acompletion call
-        with patch("buttermilk._core.llms.acompletion") as mock_acompletion:
+        with patch("litellm.acompletion") as mock_acompletion:
             mock_response = MagicMock()
             mock_response.choices = [MagicMock()]
             mock_response.choices[0].message.content = "Hello!"
@@ -161,7 +161,7 @@ class TestLiteLLMWrapperCreate:
 
         messages = [UserMessage(content="Hello!", source="user")]
 
-        with patch("buttermilk._core.llms.acompletion") as mock_acompletion:
+        with patch("litellm.acompletion") as mock_acompletion:
             # First call fails with rate limit, second succeeds
             mock_response = MagicMock()
             mock_response.choices = [MagicMock()]
@@ -198,7 +198,7 @@ class TestLiteLLMWrapperCreate:
 
         messages = [UserMessage(content="Hello!", source="user")]
 
-        with patch("buttermilk._core.llms.acompletion") as mock_acompletion:
+        with patch("litellm.acompletion") as mock_acompletion:
             mock_acompletion.side_effect = Exception("Rate limit exceeded")
 
             with pytest.raises(ProcessingError, match="LiteLLM call failed"):
@@ -237,7 +237,7 @@ class TestLiteLLMWrapperStructuredOutput:
 
         messages = [UserMessage(content="Analyze this text", source="user")]
 
-        with patch("buttermilk._core.llms.acompletion") as mock_acompletion:
+        with patch("litellm.acompletion") as mock_acompletion:
             mock_response = MagicMock()
             mock_response.choices = [MagicMock()]
             mock_response.choices[
