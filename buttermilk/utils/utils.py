@@ -32,7 +32,9 @@ from fake_useragent import UserAgent
 # Lazy import cloudpathlib (it pulls in google.cloud.storage at import time)
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from cloudpathlib import AnyPath, CloudPath, exceptions
+    from cloudpathlib import AnyPath, exceptions
+
+from cloudpathlib import CloudPath
 from omegaconf import DictConfig, ListConfig, OmegaConf
 
 from buttermilk._core.exceptions import ProcessingError
