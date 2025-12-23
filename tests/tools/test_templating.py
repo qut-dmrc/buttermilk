@@ -21,10 +21,11 @@ def test_template_synth():
         "criteria": "criteria_ordinary",
         "formatting": "json_rules",
     }
+    # Merge parameters with flow_data (parameters take precedence)
+    merged_vars = {**flow_data, **parameters}
     rendered, unfilled, template_hash = load_template(
         template="synthesise",
-        parameters=parameters,
-        untrusted_inputs=flow_data,
+        template_vars=merged_vars,
     )
     # Placeholder variables (record, context) are intentionally kept unfilled
     # by load_template() - they're processed by make_messages() later
@@ -80,8 +81,7 @@ def test_load_template_hash_consistency():
     # Get hash from load_template
     _, _, template_hash = load_template(
         template="synthesise",
-        parameters={"test": "value"},
-        untrusted_inputs={},
+        template_vars={"test": "value"},
     )
 
     # Should be the same

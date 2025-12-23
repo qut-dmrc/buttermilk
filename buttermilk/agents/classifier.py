@@ -263,10 +263,11 @@ class ClassifierCore(ProcessorCore):
         inputs.update(kwargs)
 
         try:
+            # Merge inputs with parameters (parameters take precedence)
+            merged_vars = {**inputs, **self.parameters}
             rendered_text, unfilled_vars, template_hash = load_template(
                 template=self.template,
-                parameters=self.parameters,
-                untrusted_inputs=inputs,
+                template_vars=merged_vars,
             )
             logger.debug(
                 f"Classifier rendered template '{self.template}', "
@@ -527,10 +528,11 @@ class HuggingFaceClassifier(ClassifierCore):
         inputs.update(kwargs)
 
         try:
+            # Merge inputs with parameters (parameters take precedence)
+            merged_vars = {**inputs, **self.parameters}
             rendered_text, unfilled_vars, template_hash = load_template(
                 template=self.template,
-                parameters=self.parameters,
-                untrusted_inputs=inputs,
+                template_vars=merged_vars,
             )
             logger.debug(
                 f"HuggingFaceClassifier rendered template '{self.template}', "
@@ -770,10 +772,11 @@ class ZentropiClassifier(ClassifierCore):
         inputs["content"] = ""  # Don't include content in template render
 
         try:
+            # Merge inputs with parameters (parameters take precedence)
+            merged_vars = {**inputs, **self.parameters}
             rendered_text, unfilled_vars, template_hash = load_template(
                 template=self.template,
-                parameters=self.parameters,
-                untrusted_inputs=inputs,
+                template_vars=merged_vars,
             )
             logger.debug(
                 f"ZentropiClassifier rendered template '{self.template}', "

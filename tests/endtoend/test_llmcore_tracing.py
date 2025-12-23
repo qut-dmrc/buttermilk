@@ -508,8 +508,7 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
     # The test uses template="ra"
     _, _, expected_template_hash = load_template(
         template="ra",
-        parameters={},
-        untrusted_inputs={},
+        template_vars={},
     )
     assert logged_template_hash == expected_template_hash, (
         f"Logged template_hash should match recomputed hash.\nLogged:   {logged_template_hash}\nExpected: {expected_template_hash}"

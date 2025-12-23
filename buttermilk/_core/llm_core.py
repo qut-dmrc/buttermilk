@@ -512,15 +512,15 @@ class LLMCore(ProcessorCore):
 
         logger.debug(f"LLMCore: Using template '{template_name}'")
 
-        # Merge template variables: config defaults, then runtime overrides
-        merged_vars = {**self.template_vars, **(template_vars or {})}
+        # Merge template variables: config defaults, then runtime overrides, then parameters
+        # Parameters take highest precedence (can control fail_on_unfilled_parameters, etc.)
+        merged_vars = {**self.template_vars, **(template_vars or {}), **self.parameters}
         filtered_vars = clean_empty_values(merged_vars) if merged_vars else {}
 
         # Load and render template
         rendered_template_str, unfilled_vars, template_hash = load_template(
             template=template_name,
-            parameters=self.parameters,
-            untrusted_inputs=filtered_vars,
+            template_vars=filtered_vars,
         )
 
         try:

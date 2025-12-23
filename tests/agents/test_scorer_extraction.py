@@ -157,7 +157,7 @@ class TestScoreTemplateRendering:
         # Render template
         rendered, undefined_vars, template_hash = load_template(
             template="score",
-            parameters={
+            template_vars={
                 "source": source,
                 "expected": expected,
                 "instructions": instructions,
@@ -181,7 +181,7 @@ class TestScoreTemplateRendering:
 
         rendered, _, _ = load_template(
             template="score",
-            parameters={
+            template_vars={
                 "source": "Test source",
                 "expected": expected,
                 "instructions": "Test instructions",
@@ -197,7 +197,7 @@ class TestScoreTemplateRendering:
         """Verify template handles expected when it's a plain string."""
         rendered, _, _ = load_template(
             template="score",
-            parameters={
+            template_vars={
                 "source": "Test source",
                 "expected": "This is a simple string ground truth",
                 "instructions": "Test instructions",
@@ -216,7 +216,7 @@ class TestScoreTemplateRendering:
 
         rendered, _, _ = load_template(
             template="score",
-            parameters={
+            template_vars={
                 "source": "Test source",
                 "expected": {"reasons": ["Test reason"]},
                 "instructions": "Test instructions",

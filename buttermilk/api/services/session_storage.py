@@ -583,11 +583,10 @@ class SessionStorageService:
             session_data["archived_from"] = str(self._get_session_file(session_id))
 
             # Use BM's save method to archive to GCS
-            archive_filename = f"session_{session_id}_archived.json"
             saved_path = bm.save(
                 data=session_data,
-                basename=f"sessions/{archive_filename}",
-                extension="",  # Already included in basename
+                basename=f"session-{session_id}",
+                extension=".jsonl",
             )
 
             if saved_path:

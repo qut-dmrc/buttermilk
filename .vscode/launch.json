@@ -18,7 +18,7 @@
       ],
       "justMyCode": false,
       "args": [
-        "--config-path=/opt/nic/writing/explorations/tja/conf",
+        "--config-path=/opt/nic/explorations/tja/conf",
         "--config-name=tja",
         "run.limit=1",
         "llms=${input:llms}"

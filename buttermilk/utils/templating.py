@@ -434,50 +434,40 @@ def _parse_prompty(string_template: str) -> str:
 
 def load_template(
     template: str,  # Name of the template file (without .jinja2 extension)
-    parameters: dict[str, Any],  # Parameters for template rendering (trusted)
-    untrusted_inputs: dict[str, Any] | None = None,  # User inputs (less trusted)
+    template_vars: dict[str, Any] | None = None,  # Variables for template rendering
 ) -> tuple[str, set[str], str]:
-    """Renders a Jinja2 template with hierarchical includes and security considerations.
+    """Renders a Jinja2 template with hierarchical includes.
 
-    It uses a sandboxed Jinja2 environment to limit potential risks from templates
-    that might include user-provided data. Undefined variables in the template
+    Uses a sandboxed Jinja2 environment. Undefined variables in the template
     are preserved as `{{ variable_name }}` in the output, and their names are
     collected.
 
-    The template loader searches recursively within `TEMPLATES_PATH`.
+    The template loader searches recursively within configured template paths.
 
     Args:
         template (str): The name of the template file (without the .jinja2 extension)
-            to load from the `TEMPLATES_PATH`.
-        parameters (dict[str, Any]): A dictionary of "trusted" parameters that
-            are directly available to the template. These can control template
-            logic, includes, etc.
-        untrusted_inputs (dict[str, Any] | None): Optional. A dictionary of "untrusted"
-            user-provided inputs. These are also made available to the template
-            but might be treated with more caution or subjected to stricter escaping
-            if the sandbox environment were configured for autoescaping (currently not).
-            Empty values (None, "", [], {}) are automatically removed to enforce fail-fast -
-            variables with empty values will be treated as missing/unfilled.
-            Defaults to an empty dictionary if None.
+            to load from configured template paths.
+        template_vars (dict[str, Any] | None): Variables available to the template.
+            Can control template logic, includes, and content substitution.
+            Empty values (None, "", [], {}) are automatically removed to enforce
+            fail-fast - variables with empty values will be treated as missing/unfilled.
 
     Returns:
         tuple[str, set[str], str]: A tuple containing:
             - str: The fully rendered template content as a string.
-            - set[str]: A set of strings, where each string is the name of a
-              variable that was present in the template but not found in
-              `parameters` or `untrusted_inputs`.
+            - set[str]: A set of variable names present in template but not in template_vars.
             - str: The SHA-256 hash of the template file content, prefixed with "sha256:".
 
     Raises:
         FatalError: If the specified template file cannot be loaded.
 
     """
-    effective_untrusted_inputs = untrusted_inputs or {}
+    effective_vars = template_vars or {}
 
-    # Clean empty values from untrusted_inputs to enforce fail-fast
+    # Clean empty values to enforce fail-fast
     # Empty values (None, "", [], {}) are removed so they're treated as missing
     # This prevents silent failures where empty data is rendered as valid input
-    effective_untrusted_inputs = clean_empty_values(effective_untrusted_inputs)
+    effective_vars = clean_empty_values(effective_vars)
 
     # Define search paths for templates using the new helper
     search_paths = _get_template_search_paths()
@@ -515,16 +505,12 @@ def load_template(
             f"Template '{template}' (file: '{template_filename}') could not be loaded."
         ) from err
 
-    # Combine parameters and untrusted inputs for rendering context.
-    # Trusted `parameters` can override `untrusted_inputs` if keys collide.
-    rendering_context = {**effective_untrusted_inputs, **parameters}
-
     # Exclude 'record' and 'context' from Jinja2 rendering - these are handled
     # specially by make_messages() as placeholder roles, not template variables.
     # If they're in rendering_context, Jinja2 would render them as JSON/dict
     # instead of leaving {{record}} for make_messages to process.
     placeholder_keys = {"record", "context"}
-    rendering_context = {k: v for k, v in rendering_context.items() if k not in placeholder_keys}
+    rendering_context = {k: v for k, v in effective_vars.items() if k not in placeholder_keys}
 
     rendered_string = jinja_template.render(**rendering_context)
 
@@ -541,7 +527,7 @@ def load_template(
     # Check for unfilled parameters if requested (fail-fast)
     # Exclude placeholder keys (record, context) - these are handled by make_messages, not Jinja2
     unfilled_vars = set(collected_undefined_vars) - placeholder_keys
-    if parameters.get("fail_on_unfilled_parameters") and unfilled_vars:
+    if effective_vars.get("fail_on_unfilled_parameters") and unfilled_vars:
         raise FatalError(
             f"Template '{template}' has unfilled parameters: {', '.join(sorted(unfilled_vars))}"
         )

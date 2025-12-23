@@ -1005,8 +1005,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 if not (isinstance(v, list) and len(v) == 0)
             }
 
-        # Filter inputs to only include keys in required list (whitelist)
-        # None = no filtering (backward compatible), [] = filter all, ["key"] = only key
+        # Filter inputs to only include keys in required list
         if self.required_inputs is not None and updated_inputs.inputs:
             filtered_inputs = {
                 k: v for k, v in updated_inputs.inputs.items()
