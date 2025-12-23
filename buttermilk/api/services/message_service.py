@@ -231,6 +231,9 @@ class MessageService:
                 # Handle string messages (like StructuredLLMHost summaries) as chat messages
                 message_type = "chat_message"
                 preview = message[:PREVIEW_LENGTH]
+            elif isinstance(message, BaseModel):
+                # Fallback for any Pydantic model not explicitly handled (e.g., QualScore from external packages)
+                message_type = message.__class__.__name__.lower()
             else:
                 return None
 
