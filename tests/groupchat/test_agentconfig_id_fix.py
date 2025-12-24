@@ -22,8 +22,8 @@ def test_agentconfig_conditional_id_generation():
     config2 = AgentConfig(role="TEST", description="Test agent", agent_id=existing_id)
     assert config2.agent_id == existing_id
 
-    # Test 3: Agent name uses actual agent_id
-    assert config2.agent_name == f"TEST {existing_id}"
+    # Test 3: Agent name uses actual agent_id (default name_components is just ["agent_id"])
+    assert config2.agent_name == existing_id
 
 
 def test_agentconfig_no_unique_identifier():
