@@ -212,7 +212,7 @@ class HostAgent(Agent):
                 )
                 self._tasks_condition.notify_all()
             else:
-                logger.warning(
+                logger.debug(
                     "Host received TaskComplete from agent but it was not in pending tasks.",
                     agent_id=agent_id_to_update,
                     role=message.role,
@@ -660,7 +660,7 @@ class HostAgent(Agent):
 
         """
         try:
-            logger.info(
+            logger.debug(
                 "Host starting flow execution",
                 agent_name=self.agent_name,
                 num_participants=len(self._participants),
@@ -699,7 +699,7 @@ class HostAgent(Agent):
 
             # Initialize generator now that participants are known
             self._step_generator = self._sequence()
-            logger.info(
+            logger.debug(
                 "Host participants initialized",
                 participants=list(self._participants.keys()),
             )
@@ -708,7 +708,7 @@ class HostAgent(Agent):
             early_stop_reason = ""
 
             async for next_step in self._step_generator:
-                logger.info(
+                logger.debug(
                     f"Host processing step {next_step.role}",
                     agent_name=self.agent_name,
                     step_role=next_step.role,
@@ -731,7 +731,7 @@ class HostAgent(Agent):
                 # Skip this check for END steps since they don't generate tasks
                 if next_step.role != END:
                     if not await self.wait_check_current_step_completions():
-                        logger.info(
+                        logger.debug(
                             "Step completion check failed - stopping flow",
                             agent_name=self.agent_name,
                         )
@@ -742,7 +742,7 @@ class HostAgent(Agent):
                         break
 
             # --- Sequence finished ---
-            logger.info("Host flow execution finished.", agent_name=self.agent_name)
+            logger.debug("Host flow execution finished.", agent_name=self.agent_name)
 
             # Send END message if we stopped early
             if flow_stopped_early:
@@ -818,7 +818,7 @@ class HostAgent(Agent):
                     await self._progress_reporter_task  # Await cancellation
                 except asyncio.CancelledError:
                     pass  # Expected
-        logger.info("Host shutdown complete.", agent_name=self.agent_name)
+        logger.debug("Host shutdown complete.", agent_name=self.agent_name)
 
     async def wait_check_current_step_completions(self) -> bool:
         """Wait for tasks from the current step to complete and check for errors."""

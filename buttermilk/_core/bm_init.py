@@ -671,7 +671,12 @@ class BM(BaseModel):
         """Construct the final save_dir path for this session.
 
         Constructs the full save directory path and stores it in session_info.save_dir.
-        Path hierarchy: {base}/{project}/{job}/{execution_context_id}/{session_id}
+        Path hierarchy: {base}/{project}/{job}/{timestamp}-{exec_slug}-{session_slug}
+
+        Collapses exec and session IDs into a single directory using:
+        - timestamp from execution context
+        - 8-char UUID slug from execution context
+        - 8-char UUID slug from session
         """
         # Lazy import to avoid loading google.cloud at module level
         from cloudpathlib import AnyPath
@@ -681,13 +686,27 @@ class BM(BaseModel):
         # Get execution context for the execution_context_id
         exec_ctx = get_execution_context()
 
-        # Construct full save directory path with execution context and session
+        # Extract components from IDs:
+        # exec format: exec-{timestamp}-{slug}-{node}-{user}
+        # session format: session-{timestamp}-{slug}-{node}-{user}
+        # Example: exec-20251224T1921Z-ZoYkuM8a-dev3-debian
+        # Split:   ['exec', '20251224T1921Z', 'ZoYkuM8a', 'dev3', 'debian']
+        exec_parts = exec_ctx.execution_context_id.split("-")
+        session_parts = self.session_info.session_id.split("-")
+
+        exec_timestamp = exec_parts[1]  # e.g., "20251224T1921Z"
+        exec_slug = exec_parts[2]  # 8-char UUID
+        session_slug = session_parts[2]  # 8-char UUID
+
+        # Collapsed directory name: {timestamp}-{exec_slug}-{session_slug}
+        collapsed_dir = f"{exec_timestamp}-{exec_slug}-{session_slug}"
+
+        # Construct full save directory path
         save_dir_path = (
             AnyPath(self.save_dir_base)
             / self.session_info.project_name
             / self.session_info.job
-            / exec_ctx.execution_context_id
-            / self.session_info.session_id
+            / collapsed_dir
         )
         self.session_info.save_dir = str(save_dir_path)
         logger.debug(f"Finalized session save_dir: {self.session_info.save_dir}")
