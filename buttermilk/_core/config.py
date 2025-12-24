@@ -294,9 +294,11 @@ class AgentConfig(BaseModel):
             should be structured or transformed before being sent out.
             (Currently, its usage might be pending full implementation).
             Serialized as `mapping_outputs`.
-        name_components (list[str]): A list of attribute names or JMESPath expressions
-            used to construct the human-friendly `agent_name`. Defaults to
-            `["role", "unique_identifier"]`.
+        name_components (list[str], init-only): A list of attribute names or JMESPath
+            expressions used to construct the human-friendly `agent_name`. Defaults to
+            `["agent_id"]` (which already contains the role). This is an init-only
+            parameter that is consumed during initialization and NOT stored on the
+            model instance.
         model_config (ConfigDict): Pydantic model configuration.
             - `extra`: "allow" - Allows extra fields not explicitly defined, useful with Hydra.
             - `arbitrary_types_allowed`: False.
@@ -365,11 +367,10 @@ class AgentConfig(BaseModel):
                     "Maps directly to AgentInput.context field.",
     )
 
-    name_components: list[str] = Field(
-        default=["role", "agent_id"],
-        description="List of attribute names or JMESPath expressions to construct the 'agent_name'.",
-        exclude=False,  # Ensure it's included in model_dump etc.
-    )
+    # NOTE: name_components is NOT a stored field. It's consumed during init
+    # and removed after generating agent_name. Pass it via kwargs and it will
+    # be extracted from __pydantic_extra__ in _generate_id_and_name.
+    # Default is ["agent_id"] if not provided (agent_id already contains role).
 
     # Pydantic Model Configuration
     model_config = ConfigDict(
@@ -430,10 +431,10 @@ class AgentConfig(BaseModel):
     def agent_name(self) -> str:
         """A human-friendly name for the agent instance.
 
-        This name is dynamically constructed based on the `name_components`
-        attribute, which can include the agent's `role`, `agent_id`,
-        or other values extracted via JMESPath from its configuration
-        (`inputs` and `parameters`).
+        This name is dynamically constructed during initialization based on the
+        `name_components` init-only parameter (defaults to ["agent_id"]),
+        which can include the agent's `role`, `agent_id`, or other values
+        extracted via JMESPath from its configuration (`inputs` and `parameters`).
 
         Returns:
             str: The generated human-friendly name for the agent.
@@ -452,10 +453,13 @@ class AgentConfig(BaseModel):
         assignments if `validate_assignment` is True. It ensures that:
         - `agent_id` is generated as a UUID if not already provided.
         - `_agent_name` (accessed via `agent_name` property) is constructed based
-          on `name_components`, allowing for dynamic naming using JMESPath
-          expressions on the agent's configuration.
+          on `name_components` (extracted from __pydantic_extra__ and removed),
+          allowing for dynamic naming using JMESPath expressions on the agent's
+          configuration.
 
         This method is designed to be idempotent and conditional.
+        Note: `name_components` is consumed and removed during this validation,
+        so it won't be stored on the model instance after initialization.
 
         Returns:
             Self: The instance of AgentConfig with `agent_id` and `_agent_name` populated/updated.
@@ -472,6 +476,13 @@ class AgentConfig(BaseModel):
         # Part 2: Generate agent_name
         name_parts = []
 
+        # Extract name_components from __pydantic_extra__ (since it's not a stored field)
+        # and remove it after use. Default to just ["agent_id"] since agent_id already
+        # contains the role (format: "{role}-{unique_id}").
+        name_components = ["agent_id"]  # default
+        if self.__pydantic_extra__ and "name_components" in self.__pydantic_extra__:
+            name_components = self.__pydantic_extra__.pop("name_components")
+
         # Construct the context for JMESPath search manually to avoid recursion.
         # This context should contain fields that name_components might refer to,
         # respecting aliases and excluding None values. Ensure the current
@@ -484,7 +495,7 @@ class AgentConfig(BaseModel):
         # Manually add unique_identifier as a special case (it's not in parameters)
         context_for_jmespath["unique_identifier"] = self._unique_identifier
 
-        for comp_path in self.name_components:
+        for comp_path in name_components:
             part = None
             try:
                 part = jmespath.search(comp_path, context_for_jmespath)
