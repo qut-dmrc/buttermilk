@@ -910,7 +910,6 @@ async def test_record_hash_stored_in_single_location(real_bm, sample_record: Bas
         "inputs": json.loads(trace.inputs) if isinstance(trace.inputs, str) else trace.inputs,
         "outputs": json.loads(trace.outputs) if isinstance(trace.outputs, str) else trace.outputs,
         "metadata": json.loads(trace.metadata) if isinstance(trace.metadata, str) else trace.metadata,
-        "parameters": json.loads(trace.parameters) if isinstance(trace.parameters, str) else trace.parameters,
     }
 
     # Step 5: Walk the entire structure and find ALL occurrences of record_hash
@@ -1052,7 +1051,6 @@ async def test_template_hash_stored_in_single_location(real_bm, sample_record: B
         "inputs": json.loads(trace.inputs) if isinstance(trace.inputs, str) else trace.inputs,
         "outputs": json.loads(trace.outputs) if isinstance(trace.outputs, str) else trace.outputs,
         "metadata": json.loads(trace.metadata) if isinstance(trace.metadata, str) else trace.metadata,
-        "parameters": json.loads(trace.parameters) if isinstance(trace.parameters, str) else trace.parameters,
     }
 
     # Step 5: Walk the entire structure and find ALL occurrences of template_hash

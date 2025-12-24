@@ -91,12 +91,14 @@ def create_agent_trace_info(
 ) -> dict[str, Any]:
     """Create comprehensive agent info for ExecutionTrace.
 
-    Captures all critical parameters for reproducibility and debugging:
+    Captures agent identity and static config for reproducibility:
     - Agent identity (type, name, role)
     - Template name and hash
     - Model configuration
-    - Full parameter set
     - Optional hash collection for systematic tracing
+
+    Note: Template variables (criteria, instructions, etc.) go in trace.inputs,
+    not in agent_info. This function captures only static agent configuration.
 
     Args:
         agent: Agent instance
@@ -120,12 +122,10 @@ def create_agent_trace_info(
         "agent_class": f"{agent.__class__.__module__}.{agent.__class__.__name__}",  # Full
         "agent_name": agent.agent_name,
         "agent_role": agent.role,
-        # Critical parameters for reproducibility
+        # Static config for reproducibility (template vars go in trace.inputs)
         "template": agent.parameters.get("template"),
         "template_hash": template_hash or agent.parameters.get("template_hash"),
         "model": agent.parameters.get("model"),
-        # Full config for reference
-        "parameters": agent.parameters,
         # Additional metadata
         "description": agent.description,
     }
@@ -664,7 +664,6 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 "agent_id": self.agent_id,
                 "role": self.role,
             },
-            parameters=message.parameters if hasattr(message, "parameters") else None,
             tracing={"tracing_link": tracing_link} if tracing_link else None,
             record=message.record if hasattr(message, "record") else None,
         )

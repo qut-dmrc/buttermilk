@@ -220,14 +220,20 @@ class LLMCore(ProcessorCore):
                     llm_config = bm.llms.connections[self.model]
                     model_configs = llm_config.configs.copy() if llm_config.configs else {}
 
-                # Build trace parameters: LLMCore params + model configs (no duplication)
-                # - self.parameters has: model (alias), template, and any runtime kwargs
-                # - model_configs has: temperature, api_version, safety_settings, etc.
-                trace_parameters = {**self.parameters, **model_configs}
+                # Add model config to extra_metadata for traceability
+                # (model, template, temperature etc. are static config, not template vars)
+                config_metadata = {
+                    "llm_config": {
+                        "model": self.model,
+                        "template": self.template,
+                        **model_configs,
+                    }
+                }
+                combined_metadata = {**result.metadata, **config_metadata}
 
                 # Emit success trace using inherited helper
-                # Always pass record for traceability - record field serves different purpose
-                # than template_vars (full context vs resolved variables)
+                # inputs contains template variables (criteria, instructions, etc.)
+                # Static config (model, template) is in metadata.llm_config
                 await self._emit_success_trace(
                     record=record,
                     outputs=result.content,
@@ -236,10 +242,9 @@ class LLMCore(ProcessorCore):
                     duration_ms=duration_ms,
                     messages=result.messages,
                     inputs=result.resolved_inputs if result.resolved_inputs else kwargs,
-                    extra_metadata=result.metadata,
+                    extra_metadata=combined_metadata,
                     execution_type="llm_processing",
                     trace_id=result.trace_id,
-                    parameters=trace_parameters,
                     component_name=component_name,
                 )
 
@@ -260,15 +265,8 @@ class LLMCore(ProcessorCore):
                 # Create error trace with same structure as success trace
                 duration_ms = (time.time() - start_time) * 1000
 
-                # Get model configs for error trace too
-                error_model_configs = {}
-                if self.model in bm.llms.connections:
-                    error_llm_config = bm.llms.connections[self.model]
-                    error_model_configs = error_llm_config.configs.copy() if error_llm_config.configs else {}
-
                 # Emit error trace using inherited helper
-                # Always pass record for traceability - record field serves different purpose
-                # than template_vars (full context vs resolved variables)
+                # inputs contains template variables (criteria, instructions, etc.)
                 await self._emit_error_trace(
                     record=record,
                     error=e,
@@ -277,7 +275,6 @@ class LLMCore(ProcessorCore):
                     duration_ms=duration_ms,
                     inputs=result.resolved_inputs if result.resolved_inputs else kwargs,
                     execution_type="llm_processing",
-                    parameters={**self.parameters, **error_model_configs},
                     component_name=component_name,
                 )
 
@@ -379,9 +376,11 @@ class LLMCore(ProcessorCore):
 
                 # Flatten template_vars directly into inputs (no wrapper)
                 # Record data lives ONLY in trace.record, not duplicated in inputs
+                # Include both config-time template_vars and runtime template_vars
                 result.resolved_inputs = {
-                    **template_vars_for_trace,  # Flattened template variables
-                    "context": context,  # Conversation history (reserved key)
+                    **self.template_vars,       # Config template vars (criteria, instructions, etc.)
+                    **template_vars_for_trace,  # Runtime template vars (override config)
+                    "context": context,         # Conversation history (reserved key)
                 }
 
                 # Store this for later use in trace emission

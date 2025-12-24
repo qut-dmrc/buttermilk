@@ -78,13 +78,11 @@ class TestExecutionTrace:
         trace = ExecutionTrace.from_output(
             output,
             agent_info={"component_name": "TestAgent", "execution_type": "agent"},
-            inputs={"input": "test"},
-            parameters={"param": "value"},
+            inputs={"input": "test", "param": "value"},  # All template vars go in inputs
         )
 
         assert trace.outputs == "Test result"
-        assert trace.inputs == {"input": "test"}
-        assert trace.parameters == {"param": "value"}
+        assert trace.inputs == {"input": "test", "param": "value"}
         assert len(trace.messages) == 1
         assert trace.metadata["test_key"] == "test_value"
 

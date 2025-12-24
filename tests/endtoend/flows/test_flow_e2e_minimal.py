@@ -164,10 +164,10 @@ async def test_flow_e2e_minimal(
     print(f"\n=== JUDGE TRACES: {len(judge_traces)} ===")
     judge_criteria = set()
     for trace in judge_traces:
-        # Criteria is in trace.parameters, not agent_info
+        # Criteria is in trace.inputs (template variables consolidated there)
         criteria = None
-        if trace.parameters:
-            criteria = trace.parameters.get("criteria")
+        if trace.inputs:
+            criteria = trace.inputs.get("criteria")
         agent_id = trace.agent_info.get("agent_id", "unknown")
         component = trace.agent_info.get("component_name", "unknown")
         print(f"  - {agent_id}: criteria={criteria}, component={component}")

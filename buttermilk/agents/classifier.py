@@ -225,7 +225,6 @@ class ClassifierCore(ProcessorCore):
                     extra_metadata=stage_metadata,
                     execution_type="classification",
                     trace_id=result.trace_id,
-                    parameters={"template": self.template, **self.parameters},
                 )
 
                 yield enriched_record
@@ -240,7 +239,6 @@ class ClassifierCore(ProcessorCore):
                     duration_ms=int((time.time() - start_time) * 1000),
                     inputs=kwargs if kwargs else None,
                     execution_type="classification",
-                    parameters={"template": self.template, **self.parameters},
                 )
 
                 span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
