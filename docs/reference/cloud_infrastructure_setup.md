@@ -1,3 +1,23 @@
+# BigQuery Tables
+
+## Traces Table
+
+Create the traces table manually with partitioning and clustering. Schema is defined in `buttermilk/schemas/traces.schema.json`.
+
+```sql
+CREATE TABLE IF NOT EXISTS `{project}.{dataset}.traces`
+(
+  -- Fields from traces.schema.json
+  -- See buttermilk/schemas/traces.schema.json for full schema
+)
+PARTITION BY DATE(timestamp)
+CLUSTER BY session_id, call_id;
+```
+
+Use `bq mk` or the BigQuery console to create the table from the JSON schema, then add partitioning/clustering.
+
+---
+
 # IAM permissions
 
 ```
