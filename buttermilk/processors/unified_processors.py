@@ -404,21 +404,18 @@ class ParameterExpansionProcessor(UnifiedProcessor):
             return
 
         for combo in variant_combinations:
-            # Build unique record_id suffix
+            # Build variant suffix for tracking (but NOT for record_id - record_id is immutable)
             suffix_parts = [f"{k}={v}" for k, v in sorted(combo.items())]
-            suffix = "_".join(suffix_parts)
-            new_record_id = f"{record.record_id}_{suffix}"
+            variant_suffix = "_".join(suffix_parts)
 
-            # Merge variant parameters into metadata
+            # Store variant info in metadata only - record_id stays unchanged
             new_metadata = {
                 **(record.metadata if record.metadata else {}),
                 **combo,  # Variant parameters as flat keys
-                "expansion_source_id": record.record_id,
+                "variant_suffix": variant_suffix,  # For deduplication/tracking if needed
             }
 
-            expanded_record = record.model_copy(
-                update={"record_id": new_record_id, "metadata": new_metadata}
-            )
+            expanded_record = record.model_copy(update={"metadata": new_metadata})
             yield expanded_record
 
 

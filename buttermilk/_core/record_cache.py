@@ -197,7 +197,19 @@ class RecordCache:
         )
         return record
 
-    def save(self, record: BaseRecord, stage: str, include_chunks: bool = True) -> bool:
+    def save(
+        self, record: BaseRecord, stage: str, include_chunks: bool = True, cache_key: str | None = None
+    ) -> bool:
+        """Save a record to cache.
+
+        Args:
+            record: The record to cache
+            stage: Pipeline stage name
+            include_chunks: Whether to include chunks in cache
+            cache_key: Optional explicit cache key (defaults to record.record_id).
+                       Use this for 1:N transformations where multiple outputs share
+                       the same record_id but need separate cache entries.
+        """
         if not self.enabled:
             logger.debug(
                 "🚫 Cache disabled - not saving",
@@ -218,7 +230,9 @@ class RecordCache:
             )
             return False
 
-        path = self._record_path(stage, record.record_id)
+        # Use explicit cache_key if provided, otherwise use record_id
+        effective_cache_key = cache_key if cache_key else record.record_id
+        path = self._record_path(stage, effective_cache_key)
         tmp_path = path.with_suffix(".tmp")
         chunks_count = len(getattr(record, "chunks", []))
 

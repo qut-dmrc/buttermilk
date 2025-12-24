@@ -994,20 +994,21 @@ class PipelineOrchestrator(BaseModel):
                 self._record_cache.save(outputs[0], processor_stage_name)
             else:
                 # 1:N transformation - use indexed cache keys
+                # IMPORTANT: record_id is immutable - use cache_key for cache indexing only
                 for output_index, output_record in enumerate(outputs):
                     cache_key = f"{input_record.record_id}_output_{output_index}"
 
-                    # Preserve original record_id in metadata (only if not already set)
+                    # Store cache key in metadata for cache lookup, but preserve original record_id
                     updated_metadata = (
                         output_record.metadata.copy() if output_record.metadata else {}
                     )
-                    if "original_record_id" not in updated_metadata:
-                        updated_metadata["original_record_id"] = input_record.record_id
+                    updated_metadata["cache_key"] = cache_key
+                    updated_metadata["output_index"] = output_index
 
                     cache_record = output_record.model_copy(
-                        update={"record_id": cache_key, "metadata": updated_metadata}
+                        update={"metadata": updated_metadata}
                     )
-                    self._record_cache.save(cache_record, processor_stage_name)
+                    self._record_cache.save(cache_record, processor_stage_name, cache_key=cache_key)
         except Exception as e:
             logger.debug(
                 "💥 Failed to save processor cache",

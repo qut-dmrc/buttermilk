@@ -580,6 +580,13 @@ class AutogenOrchestrator(Orchestrator):
             )
             raise
         finally:
+            # Stop the runtime gracefully to avoid "Task was destroyed but it is pending!" errors
+            if hasattr(self, "_runtime") and self._runtime:
+                try:
+                    await self._runtime.stop()
+                except Exception as e:
+                    logger.warning(f"Failed to stop runtime: {e}")
+
             if self._storage_service and self._session_id:
                 try:
                     self._storage_service.finalize_session(self._session_id, "completed")
