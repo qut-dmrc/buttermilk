@@ -107,8 +107,7 @@ class TestPromptStyles:
         # Load the TJA criteria template (83KB)
         criteria_text, _, _ = load_template(
             template="criteria/tja",
-            parameters={},
-            untrusted_inputs={},
+            template_vars={},
         )
 
         # Verify we loaded a substantial criteria template

@@ -225,7 +225,6 @@ class ClassifierCore(ProcessorCore):
                     extra_metadata=stage_metadata,
                     execution_type="classification",
                     trace_id=result.trace_id,
-                    parameters={"template": self.template, **self.parameters},
                 )
 
                 yield enriched_record
@@ -240,7 +239,6 @@ class ClassifierCore(ProcessorCore):
                     duration_ms=int((time.time() - start_time) * 1000),
                     inputs=kwargs if kwargs else None,
                     execution_type="classification",
-                    parameters={"template": self.template, **self.parameters},
                 )
 
                 span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
@@ -263,10 +261,11 @@ class ClassifierCore(ProcessorCore):
         inputs.update(kwargs)
 
         try:
+            # Merge inputs with parameters (parameters take precedence)
+            merged_vars = {**inputs, **self.parameters}
             rendered_text, unfilled_vars, template_hash = load_template(
                 template=self.template,
-                parameters=self.parameters,
-                untrusted_inputs=inputs,
+                template_vars=merged_vars,
             )
             logger.debug(
                 f"Classifier rendered template '{self.template}', "
@@ -527,10 +526,11 @@ class HuggingFaceClassifier(ClassifierCore):
         inputs.update(kwargs)
 
         try:
+            # Merge inputs with parameters (parameters take precedence)
+            merged_vars = {**inputs, **self.parameters}
             rendered_text, unfilled_vars, template_hash = load_template(
                 template=self.template,
-                parameters=self.parameters,
-                untrusted_inputs=inputs,
+                template_vars=merged_vars,
             )
             logger.debug(
                 f"HuggingFaceClassifier rendered template '{self.template}', "
@@ -770,10 +770,11 @@ class ZentropiClassifier(ClassifierCore):
         inputs["content"] = ""  # Don't include content in template render
 
         try:
+            # Merge inputs with parameters (parameters take precedence)
+            merged_vars = {**inputs, **self.parameters}
             rendered_text, unfilled_vars, template_hash = load_template(
                 template=self.template,
-                parameters=self.parameters,
-                untrusted_inputs=inputs,
+                template_vars=merged_vars,
             )
             logger.debug(
                 f"ZentropiClassifier rendered template '{self.template}', "

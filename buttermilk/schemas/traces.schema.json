@@ -25,14 +25,14 @@
     "mode": "REQUIRED"
   },
   {
+    "name": "execution_context_id",
+    "type": "STRING",
+    "mode": "NULLABLE"
+  },
+  {
     "name": "agent_info",
     "type": "JSON",
     "mode": "REQUIRED"
-  },
-  {
-    "name": "parameters",
-    "type": "JSON",
-    "mode": "NULLABLE"
   },
   {
     "name": "inputs",

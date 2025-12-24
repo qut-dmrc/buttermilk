@@ -12,22 +12,25 @@ The design intentionally avoids Agent-specific concepts to maintain
 flexibility while preserving full observability through metadata tracking.
 """
 
+from __future__ import annotations
+
 import time
 import uuid
-from typing import Any, AsyncGenerator, Optional, Self
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Optional, Self
 
 import pydantic
 from autogen_core import CancellationToken
 from autogen_core.models import LLMMessage
-from autogen_core.tools import Tool
 from opentelemetry import trace
 from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 from buttermilk import bm, logger
-from buttermilk._core.contract import ErrorEvent, ExecutionTrace
-from buttermilk._core.exceptions import FatalError, ProcessingError
-from buttermilk._core.llms import CreateResult, ModelOutput
+from buttermilk._core.contract import ErrorEvent
+from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.processor_core import ProcessorCore
+
+if TYPE_CHECKING:
+    from buttermilk._core.llms import CreateResult, ModelOutput
 from buttermilk._core.types import BaseRecord
 from buttermilk.utils.templating import load_template, make_messages
 from buttermilk.utils.utils import clean_empty_values, scrub_serializable
@@ -187,12 +190,15 @@ class LLMCore(ProcessorCore):
         ) as span:
             try:
                 # Build template_vars: if kwargs provided, merge with record fields
-                # Otherwise let process_with_llm derive from record
+                # Record content is separately handled by make_messages at {{ record }} placeholders
                 # Exclude computed hashes to prevent duplication in trace
                 template_vars_derived_from_record = False
                 if kwargs:
                     # Merge record fields with kwargs to create template_vars
-                    template_vars = {**(record.model_dump(exclude={'record_hash', 'ground_truth_hash'}) if record and hasattr(record, "model_dump") else {}), **kwargs}
+                    template_vars = {
+                        **(record.model_dump(exclude={"record_hash", "ground_truth_hash"}) if record and hasattr(record, "model_dump") else {}),
+                        **kwargs,
+                    }
                     template_vars_derived_from_record = bool(record)
                 else:
                     template_vars = None
@@ -214,14 +220,20 @@ class LLMCore(ProcessorCore):
                     llm_config = bm.llms.connections[self.model]
                     model_configs = llm_config.configs.copy() if llm_config.configs else {}
 
-                # Build trace parameters: LLMCore params + model configs (no duplication)
-                # - self.parameters has: model (alias), template, and any runtime kwargs
-                # - model_configs has: temperature, api_version, safety_settings, etc.
-                trace_parameters = {**self.parameters, **model_configs}
+                # Add model config to extra_metadata for traceability
+                # (model, template, temperature etc. are static config, not template vars)
+                config_metadata = {
+                    "llm_config": {
+                        "model": self.model,
+                        "template": self.template,
+                        **model_configs,
+                    }
+                }
+                combined_metadata = {**result.metadata, **config_metadata}
 
                 # Emit success trace using inherited helper
-                # Always pass record for traceability - record field serves different purpose
-                # than template_vars (full context vs resolved variables)
+                # inputs contains template variables (criteria, instructions, etc.)
+                # Static config (model, template) is in metadata.llm_config
                 await self._emit_success_trace(
                     record=record,
                     outputs=result.content,
@@ -230,10 +242,9 @@ class LLMCore(ProcessorCore):
                     duration_ms=duration_ms,
                     messages=result.messages,
                     inputs=result.resolved_inputs if result.resolved_inputs else kwargs,
-                    extra_metadata=result.metadata,
+                    extra_metadata=combined_metadata,
                     execution_type="llm_processing",
                     trace_id=result.trace_id,
-                    parameters=trace_parameters,
                     component_name=component_name,
                 )
 
@@ -254,15 +265,8 @@ class LLMCore(ProcessorCore):
                 # Create error trace with same structure as success trace
                 duration_ms = (time.time() - start_time) * 1000
 
-                # Get model configs for error trace too
-                error_model_configs = {}
-                if self.model in bm.llms.connections:
-                    error_llm_config = bm.llms.connections[self.model]
-                    error_model_configs = error_llm_config.configs.copy() if error_llm_config.configs else {}
-
                 # Emit error trace using inherited helper
-                # Always pass record for traceability - record field serves different purpose
-                # than template_vars (full context vs resolved variables)
+                # inputs contains template variables (criteria, instructions, etc.)
                 await self._emit_error_trace(
                     record=record,
                     error=e,
@@ -271,7 +275,6 @@ class LLMCore(ProcessorCore):
                     duration_ms=duration_ms,
                     inputs=result.resolved_inputs if result.resolved_inputs else kwargs,
                     execution_type="llm_processing",
-                    parameters={**self.parameters, **error_model_configs},
                     component_name=component_name,
                 )
 
@@ -301,9 +304,9 @@ class LLMCore(ProcessorCore):
 
         Args:
             template_vars: Variables to fill Jinja2 template placeholders.
-                          If None and record is provided, uses record.model_dump().
-            record: Optional record for {{ render_or_include(record) }} placeholders.
-                   NOT used as template variables unless template_vars is None.
+            record: Optional record for {{ record }} placeholders. Handled by
+                   make_messages() which calls record.as_message() to insert content.
+
             context: Optional conversation history for message context injection.
             parent_trace_id: Optional parent trace ID for correlation.
             cancellation_token: Optional token for cancelling LLM calls.
@@ -311,19 +314,16 @@ class LLMCore(ProcessorCore):
         Returns:
             LLMResult with the processed output and metadata.
 
-        Example - Agent mode (explicit template vars):
+        Example:
             result = await llm_core.process_with_llm(
                 template_vars={"question": "What is 2+2?"},
-                record=document_record,
+                record=document_record,  # Inserted at {{ record }} placeholder
                 context=conversation_history,
             )
-
-        Example - Processor mode (template vars from record):
-            result = await llm_core.process_with_llm(
-                template_vars=None,  # Will use record.model_dump()
-                record=enriched_record,
-            )
         """
+        # Lazy import to avoid loading litellm at module load time
+        from buttermilk._core.llms import ModelOutput
+
         tracer = trace.get_tracer("buttermilk.llm_core")
         result = LLMResult(content=None, error=None)
 
@@ -340,11 +340,10 @@ class LLMCore(ProcessorCore):
         ) as span:
             try:
                 # === NORMALIZE INPUTS ===
-                # If template_vars not provided, derive from record
-                # Exclude computed hashes to prevent duplication in trace
+                # template_vars are passed explicitly; record is handled separately
+                # by make_messages() which inserts it at {{ record }} placeholders
                 if template_vars is None:
-                    template_vars = record.model_dump(exclude={'record_hash', 'ground_truth_hash'}) if record else {}
-                    _template_vars_derived_from_record = bool(record)
+                    template_vars = {}
 
                 # Ensure context is always a list
                 if context is None:
@@ -361,8 +360,7 @@ class LLMCore(ProcessorCore):
                     record_text = getattr(record, "text", None)
                     if tv_text and record_text and tv_text != record_text:
                         logger.warning(
-                            f"Record mismatch detected: template_vars.text differs from record.text. "
-                            f"This may indicate data integrity issues."
+                            "Record mismatch detected: template_vars.text differs from record.text. This may indicate data integrity issues."
                         )
 
                 # Store resolved inputs for traceability
@@ -371,16 +369,18 @@ class LLMCore(ProcessorCore):
                 # Full record is in trace.record
                 if _template_vars_derived_from_record and record:
                     # Only strip bulky content fields - keep identifiers for quick reference
-                    bulky_fields = {'text', 'content', 'metadata', 'images', 'attachments', 'embedding'}
+                    bulky_fields = {"text", "content", "metadata", "images", "attachments", "embedding"}
                     template_vars_for_trace = {k: v for k, v in template_vars.items() if k not in bulky_fields}
                 else:
                     template_vars_for_trace = template_vars
 
                 # Flatten template_vars directly into inputs (no wrapper)
                 # Record data lives ONLY in trace.record, not duplicated in inputs
+                # Include both config-time template_vars and runtime template_vars
                 result.resolved_inputs = {
-                    **template_vars_for_trace,  # Flattened template variables
-                    "context": context,  # Conversation history (reserved key)
+                    **self.template_vars,       # Config template vars (criteria, instructions, etc.)
+                    **template_vars_for_trace,  # Runtime template vars (override config)
+                    "context": context,         # Conversation history (reserved key)
                 }
 
                 # Store this for later use in trace emission
@@ -511,15 +511,15 @@ class LLMCore(ProcessorCore):
 
         logger.debug(f"LLMCore: Using template '{template_name}'")
 
-        # Merge template variables: config defaults, then runtime overrides
-        merged_vars = {**self.template_vars, **(template_vars or {})}
+        # Merge template variables: config defaults, then runtime overrides, then parameters
+        # Parameters take highest precedence (can control fail_on_unfilled_parameters, etc.)
+        merged_vars = {**self.template_vars, **(template_vars or {}), **self.parameters}
         filtered_vars = clean_empty_values(merged_vars) if merged_vars else {}
 
         # Load and render template
         rendered_template_str, unfilled_vars, template_hash = load_template(
             template=template_name,
-            parameters=self.parameters,
-            untrusted_inputs=filtered_vars,
+            template_vars=filtered_vars,
         )
 
         try:

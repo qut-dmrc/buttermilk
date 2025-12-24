@@ -54,7 +54,7 @@ from buttermilk._core.contract import (
     TaskProcessingStarted,
     UserResponseMessage,  # Messages from the user
 )
-from buttermilk._core.exceptions import ProcessingError  # Custom exceptions
+from buttermilk._core.exceptions import FatalError, ProcessingError  # Custom exceptions
 from buttermilk._core.message_data import extract_message_data
 from buttermilk._core.types import BaseRecord  # Data record structure
 from buttermilk.utils.templating import (
@@ -91,12 +91,14 @@ def create_agent_trace_info(
 ) -> dict[str, Any]:
     """Create comprehensive agent info for ExecutionTrace.
 
-    Captures all critical parameters for reproducibility and debugging:
+    Captures agent identity and static config for reproducibility:
     - Agent identity (type, name, role)
     - Template name and hash
     - Model configuration
-    - Full parameter set
     - Optional hash collection for systematic tracing
+
+    Note: Template variables (criteria, instructions, etc.) go in trace.inputs,
+    not in agent_info. This function captures only static agent configuration.
 
     Args:
         agent: Agent instance
@@ -120,12 +122,10 @@ def create_agent_trace_info(
         "agent_class": f"{agent.__class__.__module__}.{agent.__class__.__name__}",  # Full
         "agent_name": agent.agent_name,
         "agent_role": agent.role,
-        # Critical parameters for reproducibility
+        # Static config for reproducibility (template vars go in trace.inputs)
         "template": agent.parameters.get("template"),
         "template_hash": template_hash or agent.parameters.get("template_hash"),
         "model": agent.parameters.get("model"),
-        # Full config for reference
-        "parameters": agent.parameters,
         # Additional metadata
         "description": agent.description,
     }
@@ -218,6 +218,15 @@ class Agent(RoutedAgent):  # noqa: PLR0904
     def session_id(self) -> str:
         """Get session_id from config if available."""
         return getattr(self._config, "session_id", "")
+
+    @property
+    def required_inputs(self) -> list[str] | None:
+        """Get the list of required input keys from config.
+
+        Returns None if not set (no filtering), empty list if explicitly
+        set to filter all inputs, or a list of keys to whitelist.
+        """
+        return self._config.required
 
     def get_effective_bm(self) -> Any:
         """Get the effective BM instance (session-scoped if available, otherwise global singleton).
@@ -457,14 +466,12 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             final_input = await self._add_state_to_input(message)
         except Exception as e:
             logger.error(f"Error preparing data for Agent {self.agent_id}: {e}")
-            # Create an ErrorEvent to capture the error
-            err_result = ErrorEvent(source=self.agent_id, content=f"Invoke error: {e}")
             await self._publish(
                 TaskProcessingComplete(
                     agent_id=self.agent_id,
                     role=self.role,
                     is_error=True,
-                    error=[err_result],
+                    error=str(e),  # TaskProcessingComplete.error expects string
                 ),
                 topic_id=self._topic_id,
             )
@@ -478,18 +485,12 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 return None
         except Exception as e:
             logger.error(f"Agent {self.agent_id} error during invoke: {e}")
-            # Create an ErrorEvent to capture the error
-            err_result = ErrorEvent(source=self.agent_id, content=f"Invoke error: {e}")
-
-            logger.error(f"Error preparing data for Agent {self.agent_id}: {e}")
-            # Create an ErrorEvent to capture the error
-            err_result = ErrorEvent(source=self.agent_id, content=f"Invoke error: {e}")
             await self._publish(
                 TaskProcessingComplete(
                     agent_id=self.agent_id,
                     role=self.role,
                     is_error=True,
-                    error=[err_result],
+                    error=str(e),  # TaskProcessingComplete.error expects string
                 ),
                 topic_id=self._topic_id,
             )
@@ -663,7 +664,6 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 "agent_id": self.agent_id,
                 "role": self.role,
             },
-            parameters=message.parameters if hasattr(message, "parameters") else None,
             tracing={"tracing_link": tracing_link} if tracing_link else None,
             record=message.record if hasattr(message, "record") else None,
         )
@@ -1003,6 +1003,26 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 k: v for k, v in updated_inputs.inputs.items()
                 if not (isinstance(v, list) and len(v) == 0)
             }
+
+        # Filter inputs to only include keys in required list
+        if self.required_inputs is not None and updated_inputs.inputs:
+            filtered_inputs = {
+                k: v for k, v in updated_inputs.inputs.items()
+                if k in self.required_inputs
+            }
+            updated_inputs.inputs = filtered_inputs
+
+        # Validate all required inputs are present (fail-fast)
+        # Only validate if required is set and non-empty
+        if self.required_inputs:
+            available_keys = set(updated_inputs.inputs.keys()) if updated_inputs.inputs else set()
+            missing_keys = set(self.required_inputs) - available_keys
+            if missing_keys:
+                raise FatalError(
+                    f"Agent {self.agent_id} is missing required inputs: {sorted(missing_keys)}. "
+                    f"Available inputs: {sorted(available_keys)}. "
+                    f"Ensure the pipeline provides all required inputs."
+                )
 
         logger.debug(
             f"Agent {self.agent_id}: Added state to input. "

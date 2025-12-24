@@ -1,246 +1,139 @@
-"""Type-safe configuration models for pipeline processing.
+"""Configuration for Pipelines in the Unified Architecture.
 
-This module provides Pydantic models for pipeline configurations,
-which orchestrate multi-stage data processing workflows.
+Defines the structure of a pipeline, which is essentially a sequence of processor configurations.
 """
 
-from typing import Any
+import itertools
+from typing import Any, Optional
 
-import hydra
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
-from buttermilk._core.exceptions import FatalError
-from buttermilk._core.log import logger
-from buttermilk._core.storage_config import BaseStorageConfig
-from buttermilk.utils.utils import clean_empty_values, expand_dict
-
-
-class TMDBProcessorConfig(BaseModel):
-    """Configuration for TMDB metadata enrichment processor."""
-
-    region: str = Field(
-        default="US", description="Region code for TMDB data (e.g., 'US', 'GB')"
-    )
-    language: str = Field(default="en-US", description="Language code for TMDB data")
-
-    model_config = {
-        "extra": "allow",  # Allow additional TMDB-specific parameters
-    }
-
-
-class PipelineConfig(BaseModel):
-    """Configuration for pipeline processing mode.
-
-    Pipelines orchestrate multiple processors (TMDB enrichment, uploading, etc.)
-    to transform data from a source to an output destination.
-    """
-
-    # Source configuration
-    source: dict[str, Any] | BaseStorageConfig | None = Field(
-        default=None, description="Source storage configuration for input data"
-    )
-
-    # Output configuration
-    output: dict[str, Any] | BaseStorageConfig | None = Field(
-        default=None, description="Output storage configuration for processed data"
-    )
-
-    # Processor configurations
-    tmdb: TMDBProcessorConfig | dict[str, Any] | bool | None = Field(
-        default=None,
-        description="TMDB processor configuration (True to enable with defaults, dict for custom config, None to disable)",
-    )
-
-    # Pipeline execution parameters
-    concurrency: int = Field(
-        default=1, ge=1, description="Number of concurrent processing tasks"
-    )
-    max_records: int | None = Field(
-        default=None,
-        description="Maximum number of records to process (None for unlimited)",
-    )
-    sample_size: int | None = Field(
-        default=None,
-        description="Number of samples to collect from source (for sampling pipelines)",
-    )
-    num_runs: int = Field(
-        default=1,
-        ge=1,
-        description="Number of times to replicate each source record (for reliability studies)",
-    )
-
-    # Uploader configuration
-    buffer_size: int = Field(
-        default=10, ge=1, description="Buffer size for batch uploading"
-    )
-    flush_interval: int = Field(
-        default=30, ge=1, description="Interval in seconds for flushing buffered data"
-    )
-
-    model_config = {
-        "extra": "allow",  # Allow additional processor configurations
-        "arbitrary_types_allowed": True,  # Allow storage config objects
-    }
-
-    def get_source_config(self) -> BaseStorageConfig | None:
-        """Get source storage configuration.
-
-        Returns:
-            StorageConfig instance or None if not configured
-        """
-        if self.source is None:
-            return None
-        if isinstance(self.source, BaseStorageConfig):
-            return self.source
-        if isinstance(self.source, dict):
-            from buttermilk._core.storage_config import StorageFactory
-
-            return StorageFactory.create_config(self.source)
-        return None
-
-    def get_output_config(self) -> BaseStorageConfig | None:
-        """Get output storage configuration.
-
-        Returns:
-            StorageConfig instance or None if not configured
-        """
-        if self.output is None:
-            return None
-        if isinstance(self.output, BaseStorageConfig):
-            return self.output
-        if isinstance(self.output, dict):
-            from buttermilk._core.storage_config import StorageFactory
-
-            return StorageFactory.create_config(self.output)
-        return None
-
-    def get_tmdb_config(self) -> TMDBProcessorConfig | None:
-        """Get TMDB processor configuration.
-
-        Returns:
-            TMDBProcessorConfig instance or None if TMDB processing is disabled
-        """
-        if self.tmdb is None or self.tmdb is False:
-            return None
-        if self.tmdb is True:
-            return TMDBProcessorConfig()
-        if isinstance(self.tmdb, TMDBProcessorConfig):
-            return self.tmdb
-        if isinstance(self.tmdb, dict):
-            return TMDBProcessorConfig(**self.tmdb)
-        return None
+from buttermilk.utils.validators import import_class_from_path
 
 
 class ProcessorVariants(BaseModel):
-    """Factory for creating multiple processor instances with different configurations.
+    """Configuration for running a processor with multiple parameter variants.
 
-    Similar to AgentVariants but for processors. Generates multiple processor
-    instances with different parameter combinations for A/B testing, ensemble
-    methods, or quality comparison.
-
-    NOTE: For repeated runs (num_runs), use ReplicatingSource at the pipeline
-    source level instead of replicating processors. This prevents exponential
-    API call multiplication.
+    Expands parameters into cartesian product of all variant combinations.
+    This enables A/B testing and parallel execution of different processor
+    configurations within a single pipeline run.
 
     Attributes:
-        processor_obj: Processor class path to instantiate (e.g., 'buttermilk.processors.LLMCore')
-        variants: Parallel variant parameters (e.g., {'model': ['gpt-4', 'claude-3']})
-        parameters: Base processor parameters merged with variant params
+        processor_obj: Fully qualified class path of processor to instantiate
+            (e.g., "buttermilk.processors.JMESPathTransform").
+        variants: Parameter variations to expand. Each key is a parameter name,
+            each value is a list of values to try. Creates cartesian product.
+        parameters: Static parameters merged with all variant configs.
+        num_runs: Number of times to run each variant (not used in get_configs,
+            handled at source level instead to avoid exponential multiplication).
 
     Example:
-        ```yaml
-        - processor_obj: buttermilk.processors.LLMCore
-          variants:
-            model: ["gpt-4", "claude-3", "gemini-pro"]
-            temperature: [0.7]
-          parameters:
-            prompt_template: "default"
+        ```python
+        cfg = ProcessorVariants(
+            processor_obj="buttermilk.processors.LLMCore",
+            variants={
+                "model": ["gpt-4", "claude-3"],
+                "temperature": [0.0, 0.7],
+            },
+            parameters={"prompt_template": "default"},
+        )
+        # Creates 4 configs: 2 models × 2 temperatures
+        configs = cfg.get_configs()
         ```
     """
 
     processor_obj: str = Field(
-        description="Processor class path to instantiate (e.g., 'buttermilk.processors.LLMCore')"
+        ...,
+        description="Fully qualified class path of processor to instantiate.",
     )
     variants: dict[str, list[Any]] = Field(
         default_factory=dict,
-        description="Parameters for parallel processor variations (e.g., {'model': ['gpt-4', 'claude-3']})",
+        description="Parameter variants to expand into cartesian product.",
     )
     parameters: dict[str, Any] = Field(
         default_factory=dict,
-        description="Base processor parameters merged with variant params",
+        description="Static parameters for all variants.",
+    )
+    num_runs: int = Field(
+        default=1,
+        description="Number of runs (handled at source level, not in get_configs).",
     )
 
-    model_config = {
-        "extra": "allow",
-        "arbitrary_types_allowed": True,
-    }
+    model_config = ConfigDict(
+        extra="forbid",
+        populate_by_name=True,
+    )
 
-    def get_configs(
-        self, flow_default_params: dict[str, Any] | None = None
-    ) -> list[tuple[type[Any], dict[str, Any]]]:
-        """Generate processor configurations from variants.
+    def get_configs(self) -> list[tuple[type, dict[str, Any]]]:
+        """Generate processor configs for each variant combination.
 
-        Expands variant parameters to create multiple processor instances.
-        Each variant gets its own parameter set combining base params,
-        flow defaults, and variant-specific values.
-
-        Args:
-            flow_default_params: Optional default parameters from pipeline config
+        Creates cartesian product of all variant parameters and merges with
+        base parameters. Loads the processor class and returns tuples of
+        (processor_class, config_dict).
 
         Returns:
-            List of (processor_class, config_dict) tuples
+            List of (processor_class, config_dict) tuples, one per variant.
 
         Raises:
-            ValueError: If processor_obj cannot be instantiated
-            FatalError: If no processor configurations generated
+            ValueError: If processor_obj class path is invalid or class cannot be loaded.
+            ImportError: If module cannot be imported.
+            AttributeError: If class cannot be found in module.
 
         Example:
-            >>> variants = ProcessorVariants(
-            ...     processor_obj="buttermilk.processors.LLMCore",
-            ...     variants={"model": ["gpt-4", "claude-3"]},
-            ...     parameters={"temperature": 0.7}
+            >>> cfg = ProcessorVariants(
+            ...     processor_obj="buttermilk.processors.JMESPathTransform",
+            ...     variants={"expression": ["content", "metadata"]},
+            ...     parameters={"output_field": "result"},
             ... )
-            >>> configs = variants.get_configs()
+            >>> configs = cfg.get_configs()
             >>> len(configs)
             2
+            >>> configs[0][1]["expression"]
+            'content'
+            >>> configs[0][1]["output_field"]
+            'result'
         """
-        if flow_default_params is None:
-            flow_default_params = {}
-
-        # Get processor class
+        # Load the processor class
         try:
-            processor_class = hydra.utils.get_class(self.processor_obj)
-        except Exception as e:
+            processor_class = import_class_from_path(self.processor_obj)
+        except (ImportError, AttributeError, ValueError) as e:
             raise ValueError(
-                f"Failed to load processor class '{self.processor_obj}': {e}"
+                f"Failed to load processor class from '{self.processor_obj}': {e}"
             ) from e
 
-        # Expand variant combinations
-        variant_combinations = (
-            expand_dict(clean_empty_values(self.variants)) if self.variants else [{}]
-        )
+        # If no variants, return single config with base parameters
+        if not self.variants:
+            return [(processor_class, self.parameters.copy())]
 
-        generated_configs: list[tuple[type[Any], dict[str, Any]]] = []
+        # Generate cartesian product of all variant values
+        # Extract keys and values in consistent order
+        variant_keys = list(self.variants.keys())
+        variant_values = [self.variants[k] for k in variant_keys]
 
-        for variant_params in variant_combinations:
-            # Merge parameters: flow defaults, then base, then variant-specific
-            final_params = {
-                **flow_default_params,
-                **self.parameters,
-                **variant_params,
-            }
+        configs = []
+        for value_combination in itertools.product(*variant_values):
+            # Create config dict by merging base parameters with variant values
+            config = self.parameters.copy()
+            for key, value in zip(variant_keys, value_combination):
+                config[key] = value
+            configs.append((processor_class, config))
 
-            generated_configs.append((processor_class, final_params))
+        return configs
 
-        if not generated_configs:
-            raise FatalError(
-                f"No processor configurations generated for ProcessorVariants: {self.processor_obj}"
-            )
 
-        logger.debug(
-            f"ProcessorVariants generated {len(generated_configs)} configs for {self.processor_obj}",
-            processor_obj=self.processor_obj,
-            variant_count=len(generated_configs),
-        )
+class PipelineConfig(BaseModel):
+    """Configuration for a complete processing pipeline.
 
-        return generated_configs
+    Attributes:
+        name: Unique name for the pipeline.
+        processors: Ordered list of processor configurations (Pydantic models).
+        version: Version of the pipeline configuration.
+    """
+    name: str = Field(..., description="Name of the pipeline.")
+    processors: list[Any] = Field(..., description="Sequence of processors (Pydantic models).")
+    version: str = Field(default="1.0", description="Config version.")
+
+    model_config = ConfigDict(
+        extra="forbid",
+        populate_by_name=True,
+    )

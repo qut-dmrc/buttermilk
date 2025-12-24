@@ -56,7 +56,7 @@ async def test_batch_simple_should_expand_parameters():
 
     This test demonstrates what SHOULD happen:
     - expand_dict is called on flow.parameters
-    - Multiple OrchestratorProcessor instances created (one per variant)
+    - Multiple GroupchatProcessor instances created (one per variant)
     - Each processor gets different parameter variant
     - Multiple pipelines created and executed
 

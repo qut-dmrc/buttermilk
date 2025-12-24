@@ -163,7 +163,6 @@ class ProcessorCore(ABC, BaseModel):
         extra_metadata: Optional[dict[str, Any]] = None,
         execution_type: str = "processing",
         trace_id: Optional[str] = None,
-        parameters: Optional[dict[str, Any]] = None,
         component_name: Optional[str] = None,
     ) -> str:
         """Emit a success execution trace.
@@ -175,11 +174,10 @@ class ProcessorCore(ABC, BaseModel):
             parent_trace_id: Parent trace ID for correlation
             duration_ms: Processing duration in milliseconds
             messages: Optional message history
-            inputs: Optional template inputs/variables
+            inputs: Optional template inputs/variables (includes criteria, instructions, etc.)
             extra_metadata: Additional metadata
             execution_type: Type of execution
             trace_id: Optional trace ID (generated if not provided)
-            parameters: Optional parameters override (defaults to self.parameters)
             component_name: Optional component name (defaults to class name)
 
         Returns:
@@ -201,7 +199,6 @@ class ProcessorCore(ABC, BaseModel):
             inputs=inputs,
             outputs=outputs,
             messages=messages,
-            parameters=parameters if parameters is not None else self.parameters,
             metadata=self._build_trace_metadata(record, duration_ms, extra_metadata),
             parent_call_id=parent_trace_id,
             record=record,
@@ -219,7 +216,6 @@ class ProcessorCore(ABC, BaseModel):
         duration_ms: float,
         inputs: Optional[dict[str, Any]] = None,
         execution_type: str = "processing",
-        parameters: Optional[dict[str, Any]] = None,
         component_name: Optional[str] = None,
     ) -> None:
         """Emit an error execution trace.
@@ -230,9 +226,8 @@ class ProcessorCore(ABC, BaseModel):
             processor_stage: Pipeline stage identifier
             parent_trace_id: Parent trace ID for correlation
             duration_ms: Processing duration in milliseconds
-            inputs: Optional template inputs/variables
+            inputs: Optional template inputs/variables (includes criteria, instructions, etc.)
             execution_type: Type of execution
-            parameters: Optional parameters override (defaults to self.parameters)
             component_name: Optional component name (defaults to class name)
         """
         # Build agent_info
@@ -247,7 +242,6 @@ class ProcessorCore(ABC, BaseModel):
                 "event": str(error),
                 "details": {"error_type": type(error).__name__},
             },
-            parameters=parameters if parameters is not None else self.parameters,
             metadata=self._build_trace_metadata(record, duration_ms),
             parent_call_id=parent_trace_id,
             record=record,

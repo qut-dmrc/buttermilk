@@ -114,7 +114,7 @@ class TestOSBTemplate:
 
         rendered, undefined_vars, template_hash = load_template(
             template="osb",
-            parameters=parameters,
+            template_vars=parameters,
         )
 
         # Should have rendered successfully
@@ -134,7 +134,7 @@ class TestOSBTemplate:
 
         rendered, _, _ = load_template(
             template="osb",
-            parameters=parameters,
+            template_vars=parameters,
         )
 
         assert "What is the main issue in these cases?" in rendered
@@ -150,7 +150,7 @@ class TestOSBTemplate:
 
         rendered, _, _ = load_template(
             template="osb",
-            parameters=parameters,
+            template_vars=parameters,
         )
 
         # Parse into messages - the osb template has just system instructions
@@ -176,7 +176,7 @@ class TestAnalystTemplate:
 
         rendered, undefined_vars, _ = load_template(
             template="analyst",
-            parameters=parameters,
+            template_vars=parameters,
         )
 
         assert "You are a careful analyst" in rendered
@@ -195,7 +195,7 @@ class TestAnalystTemplate:
 
         rendered, _, _ = load_template(
             template="analyst",
-            parameters=parameters,
+            template_vars=parameters,
         )
 
         assert "BEGIN EXPERTISE" in rendered
@@ -221,7 +221,7 @@ class TestAnalystTemplate:
 
         rendered, _, _ = load_template(
             template="analyst",
-            parameters=parameters,
+            template_vars=parameters,
         )
 
         # Pass record to make_messages instead
@@ -251,7 +251,7 @@ class TestRAGTemplate:
 
         rendered, _, _ = load_template(
             template="rag",
-            parameters=parameters,
+            template_vars=parameters,
         )
 
         assert "You are a research assistant" in rendered
@@ -267,7 +267,7 @@ class TestRAGTemplate:
 
         rendered, _, _ = load_template(
             template="rag",
-            parameters=parameters,
+            template_vars=parameters,
         )
 
         # Create context messages
@@ -293,7 +293,7 @@ class TestRAGTemplate:
 
         rendered, _, _ = load_template(
             template="rag",
-            parameters=parameters,
+            template_vars=parameters,
         )
 
         # Should still render successfully

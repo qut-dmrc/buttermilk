@@ -19,21 +19,25 @@ import datetime
 import os
 import platform
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import psutil
 import shortuuid
 from pydantic import BaseModel, Field, PrivateAttr
 
-from buttermilk._core.cloud import CloudManager
 from buttermilk._core.cloud_config import CloudProvider
 from buttermilk._core.config import LoggerConfig, Tracing
 from buttermilk._core.constants import CONFIG_CACHE_FILENAME, MODELS_CFG_KEY, SHARED_CREDENTIALS_KEY, cache, get_base_cache_dir
-from buttermilk._core.keys import SecretsManager
-from buttermilk._core.llms import LLMs
 from buttermilk._core.log import logger, setup_console_logging, setup_file_logging
-from buttermilk._core.query import QueryRunner
 from buttermilk._core.storage_config import BaseStorageConfig
+
+# Lazy imports for heavy dependencies (google.cloud.*, litellm)
+# These are only imported when their properties are first accessed
+if TYPE_CHECKING:
+    from buttermilk._core.cloud import CloudManager
+    from buttermilk._core.keys import SecretsManager
+    from buttermilk._core.llms import LLMs
+    from buttermilk._core.query import QueryRunner
 from buttermilk.utils.utils import load_json_flexi
 
 # Global variable to store the execution context ID
@@ -282,9 +286,10 @@ class ExecutionContext(BaseModel):
             return self.project_name
 
     @property
-    def cloud_manager(self) -> CloudManager:
+    def cloud_manager(self) -> "CloudManager":
         """Provides access to the CloudManager instance."""
         if self._cloud_manager is None:
+            from buttermilk._core.cloud import CloudManager
             self._cloud_manager = CloudManager(clouds=self.clouds)
             self._ensure_cloud_authentication()
         return self._cloud_manager
@@ -315,7 +320,7 @@ class ExecutionContext(BaseModel):
         return None
 
     @property
-    def secret_manager(self) -> SecretsManager:
+    def secret_manager(self) -> "SecretsManager":
         """Provides access to the SecretsManager instance."""
         if self._secret_manager is None:
             # Use service-aware cloud provider pattern
@@ -334,9 +339,10 @@ class ExecutionContext(BaseModel):
         return self._secret_manager
 
     @property
-    def llms(self) -> LLMs:
+    def llms(self) -> "LLMs":
         """Provides access to the LLMs manager instance."""
         if self._llms_instance is None:
+            from buttermilk._core.llms import LLMs
             connections_data: dict[str, Any] | None = None
             # Use centralized cache directory
             cache_dir = get_base_cache_dir() / cache.MODELS
@@ -421,9 +427,10 @@ class ExecutionContext(BaseModel):
         cache_path.write_text(json.dumps(connections_data), encoding="utf-8")
 
     @property
-    def query_runner(self) -> QueryRunner:
+    def query_runner(self) -> "QueryRunner":
         """Provides access to the QueryRunner instance."""
         if self._query_runner is None:
+            from buttermilk._core.query import QueryRunner
             self._query_runner = QueryRunner(bq_client=self.bq)
         return self._query_runner
 
@@ -811,6 +818,7 @@ async def create_session_from_context_async(
         batch_id=session.batch_id,
         platform=session.platform,
         template_paths=session.template_paths,
+        save_dir_base=getattr(session, "save_dir_base", None),
         cloud_manager=execution_context.cloud_manager
         if execution_context.clouds
         else None,

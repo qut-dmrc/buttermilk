@@ -176,10 +176,6 @@ dev = [
   "bump-my-version>=1.2.2",
 ]
 
-# Everything (for backwards compatibility or quick start)
-all = [
-  "buttermilk[ml,dev]",
-]
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]
@@ -260,7 +256,7 @@ timeout = 90
 addopts = [
   "--continue-on-collection-errors",
   "--durations=10",
-  "-n 20",
+#  "-n 20",
   "-q", # quiet - reduces output noise for TUI compatibility
   "-rfEX", # show extra summary info for failed/errors only
   "--tb=short",

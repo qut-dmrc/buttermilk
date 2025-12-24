@@ -265,8 +265,7 @@ async def test_huggingface_classifier_input_tracing(
     # Recompute template hash and verify it matches
     _, _, expected_template_hash = load_template(
         template="test/classify",
-        parameters={},
-        untrusted_inputs={},
+        template_vars={},
     )
     assert metadata["template_hash"] == expected_template_hash, (
         "template_hash should match recomputed hash"
@@ -379,8 +378,7 @@ async def test_zentropi_classifier_input_tracing(
     # Recompute template hash and verify it matches
     _, _, expected_template_hash = load_template(
         template="test/classify",
-        parameters={},
-        untrusted_inputs={},
+        template_vars={},
     )
     assert metadata["template_hash"] == expected_template_hash, (
         "template_hash should match recomputed hash"

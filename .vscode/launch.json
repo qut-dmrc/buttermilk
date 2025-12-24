@@ -5,47 +5,25 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Buttermilk API daemon",
+      "name": "trans flow",
       "type": "debugpy",
       "request": "launch",
-      "consoleName": "Buttermilk Daemon",
+      "consoleName": "trans",
       "module": "buttermilk.runner.cli",
       "cwd": "${workspaceFolder}",
       "python": "./.venv/bin/uv",
       "pythonArgs": [
         "run",
         "python",
-        "-Xfrozen_modules=off",
-        "-Xdev"
       ],
       "justMyCode": false,
       "args": [
-        "+flows@run.flows.trans=trans",
-        "run=api",
-        "verbose=true",
+        "--config-path=/opt/nic/explorations/tja/conf",
+        "--config-name=tja",
+        "run.limit=1",
         "llms=${input:llms}"
       ],
       "envFile": "${userHome}/.env",
-      "console": "integratedTerminal"
-    },
-    {
-      "name": "Chat web ui",
-      "request": "launch",
-      "runtimeArgs": [
-        "run",
-        "dev"
-      ],
-      "sourceMaps": true,
-      "cwd": "${workspaceFolder}/buttermilk/frontend/chat/",
-      "runtimeExecutable": "npm",
-      "skipFiles": [
-        "<node_internals>/**"
-      ],
-      "outFiles": [
-        "${workspaceFolder}/buttermilk/frontend/chat/dist/**/*.js"
-      ],
-      "type": "node",
-      "envFile": "${workspaceFolder}/buttermilk/frontend/chat/.env",
       "console": "integratedTerminal"
     },
     {
@@ -278,10 +256,10 @@
       "options": [
         "debug",
         "lite",
-        "expensive",
+        "cheap",
         "full"
       ],
-      "default": "debug"
+      "default": "cheap"
     },
     {
       "id": "query",

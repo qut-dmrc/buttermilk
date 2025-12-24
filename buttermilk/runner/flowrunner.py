@@ -1352,25 +1352,16 @@ class FlowRunner(BaseModel):
     def _save_config_snapshot(self, run_request: "RunRequest") -> None:
         """Save a snapshot of the current configuration for reproducibility.
 
-        Saves one config file per session (named by session_id) in the same location
-        as session message logs. File descriptors are properly closed after writing.
+        Saves config to GCS via bm.save() for persistence alongside other run artifacts.
 
         Args:
             run_request: The run request containing flow and session information
         """
         try:
-            import json
-            from pathlib import Path
-
             from omegaconf import OmegaConf
 
             # Get session ID, defaulting to "default" if not available
             session_id = getattr(run_request, "session_id", "default") or "default"
-
-            # Use session_id as the base filename (same pattern as message logs)
-            # Store in /tmp/runs/{session_id}/ alongside message logs
-            session_dir = Path(f"/tmp/runs/{session_id}")
-            session_dir.mkdir(parents=True, exist_ok=True)
 
             # Save flow configuration with session_id as base name
             if run_request.flow in self.flows:
@@ -1388,34 +1379,29 @@ class FlowRunner(BaseModel):
                         else str(flow_config)
                     )
 
-                # Config file named by session_id (e.g., /tmp/runs/abc123/abc123_config.json)
-                # This overwrites on each run, keeping only one config file per session
-                config_file = session_dir / f"{session_id}_config.json"
+                config_data = {
+                    "flow_name": run_request.flow,
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "session_id": session_id,
+                    "job_id": getattr(run_request, "job_id", None),
+                    "flow_config": config_dict,
+                    "run_parameters": getattr(run_request, "parameters", {}),
+                    "run_inputs": getattr(run_request, "inputs", {}),
+                    "flows_available": list(self.flows.keys()),
+                    "total_flows": len(self.flows),
+                }
 
-                # Use 'with' statement to ensure file descriptor is closed
-                with open(config_file, "w") as f:
-                    json.dump(
-                        {
-                            "flow_name": run_request.flow,
-                            "timestamp": datetime.now(UTC).isoformat(),
-                            "session_id": session_id,
-                            "job_id": getattr(run_request, "job_id", None),
-                            "flow_config": config_dict,
-                            "run_parameters": getattr(run_request, "parameters", {}),
-                            "run_inputs": getattr(run_request, "inputs", {}),
-                            "flows_available": list(self.flows.keys()),
-                            "total_flows": len(self.flows),
-                        },
-                        f,
-                        indent=2,
-                        default=str,
-                    )
-                # File is automatically closed here when exiting 'with' block
+                # Save to GCS via bm.save()
+                saved_path = bm.save(
+                    data=config_data,
+                    basename=f"config/{session_id}_config",
+                    extension=".json",
+                )
 
                 logger.debug(
-                    "Saved config snapshot for session",
+                    "Saved config snapshot",
                     session_id=session_id,
-                    config_file=str(config_file),
+                    saved_path=saved_path,
                 )
 
         except Exception as e:

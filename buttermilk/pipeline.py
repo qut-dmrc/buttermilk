@@ -62,8 +62,6 @@ from typing import (
     AsyncIterator,
     Mapping,
     Optional,
-    Protocol,
-    runtime_checkable,
 )
 
 import hydra
@@ -76,6 +74,8 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from buttermilk import bm, logger
 from buttermilk._core.hashing import compute_processor_config_hash
+from buttermilk._core.processing_context import ProcessingContext
+from buttermilk._core.protocols import Processor
 from buttermilk._core.types import BaseRecord
 
 
@@ -83,104 +83,6 @@ class RecordSkippedException(Exception):
     """Exception raised when a record is intentionally skipped/filtered."""
 
     pass
-
-
-@runtime_checkable
-class Processor(Protocol):
-    """Standard processor interface - async generator that accepts and yields BaseRecord objects.
-
-    PROCESSOR GUIDELINES:
-
-    1. **record_id Uniqueness**: Each record must have a unique record_id for proper caching.
-       For 1:N transformations, the pipeline automatically creates indexed record_ids
-       (e.g., "ABC123_output_0", "ABC123_output_1") and preserves the original in metadata.
-
-    2. **Semantic Identifiers**: When creating 1:N transformations (splits), add your own
-       meaningful identifier fields for business logic:
-       - Chunking processor: Add `chunk_id`, `chunk_index` fields
-       - TMDB processor: Add `observation_id`, `provider_name` fields
-       - LLM processor with multiple calls: Add `llm_call_index` field
-
-    3. **Metadata Namespacing**: Store processor-specific metadata in record.metadata[stage_name].
-       Each processor should use its own namespace to avoid conflicts.
-
-    4. **Pipeline Metadata**: The pipeline will automatically add stage metadata with:
-       - status: "processed"
-       - timestamp: processing timestamp
-       - processing_time_ms: time taken
-       - output_index, total_outputs: for 1:N transformations
-
-    5. **Filtering**: To filter out a record, simply yield nothing.
-       The pipeline will handle the RecordSkippedException automatically.
-
-    6. Processors MUST work with standard Python types. When loading from cache, objects
-       will be deserialized into dicts/lists/primitives. Processors must handle their own
-       own conversions internally if needed.
-    """
-
-    async def process(
-        self,
-        record: Any = BaseRecord,
-        *,
-        processor_stage: str,
-        parent_trace_id: Optional[str] = None,
-        component_name: str = "LLMCore",
-        cancellation_token: Optional[Any] = None,
-        **kwargs: Any,
-    ) -> AsyncGenerator[BaseRecord, None]:
-        """Process a BaseRecord and yield zero or more output BaseRecord objects.
-
-        Args:
-            record: BaseRecord object to process
-
-        Yields:
-            BaseRecord objects (can be zero for filtering, one for 1:1, multiple for 1:N)
-
-        Examples:
-            # 1:1 transformation preserving record_id
-            updated_record = record.model_copy(update={
-                output_col: LLMResult.content,
-                "metadata": {
-                    **record.metadata,
-                    "summarizer": {"model": "gpt-4", "tokens": 500}
-                }
-            })
-            yield updated_record
-
-            # 1:N transformation with semantic IDs
-            chunks = split_text(record.content)
-            for i, chunk_text in enumerate(chunks):
-                chunk_record = record.model_copy(update={
-                    "content": chunk_text,
-                    "chunk_id": f"{record.record_id}_chunk_{i}",
-                    "chunk_index": i,
-                    "metadata": {
-                        **record.metadata,
-                        "chunking": {"parent_id": record.record_id, "index": i}
-                    }
-                })
-                yield chunk_record
-
-            # Filtering (yield nothing)
-            if should_filter(record):
-                return  # Record is filtered out
-            yield record  # Pass through unchanged
-        """
-        ...
-
-    async def finalize_processing(self) -> bool:
-        """Optional: Perform cleanup/finalization after all records are processed.
-
-        Called by the pipeline at the end of processing to allow processors to:
-        - Flush any remaining data (e.g., ChromaDBUploader syncing to remote)
-        - Close connections or resources
-        - Perform any final cleanup operations
-
-        Returns:
-            bool: True if finalization succeeded, False if there were issues
-                 (False doesn't stop pipeline, just logs a warning)
-        """
-        ...
 
 
 class PipelineOrchestrator(BaseModel):
@@ -519,11 +421,14 @@ class PipelineOrchestrator(BaseModel):
                                     current_record, "parent_call_id", None
                                 )
 
-                                async for output_record in processor.process(
-                                    current_record,
-                                    processor_stage=processor_stage_name,
-                                    parent_trace_id=parent_trace_id,
-                                ):
+                                # All processors now use unified ProcessingContext interface
+                                context = ProcessingContext(
+                                    session_id=parent_trace_id or processor_stage_name,
+                                    record=current_record,
+                                    batch_id=self.pipeline_name,
+                                    span=processor_span,
+                                )
+                                async for output_record in processor.process(context):
                                     outputs.append(output_record)
                             except Exception as e:
                                 # Don't log here - let the task wrapper handle error logging

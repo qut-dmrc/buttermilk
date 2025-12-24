@@ -349,9 +349,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
                     flow_name=self.name,
                     display_name=display_name,
                     requested_flow=request.flow,
-                    inputs=inputs,
-                    tracing_attributes=request.tracing_attributes,
-                    parameters=request.parameters,
+                    input_keys=list(inputs.keys()) if isinstance(inputs, dict) else None,
                     batch_id=request.batch_id,
                 )
                 await self._run(request=request)

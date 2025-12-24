@@ -3,18 +3,43 @@ from __future__ import annotations
 import asyncio
 import inspect
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 # weave import removed
 from pytest import MarkDecorator
 
-from buttermilk import BM, init
-from buttermilk._core.llms import CHAT_MODELS, CHEAP_CHAT_MODELS, LLMs
-from buttermilk._core.types import Record
-from buttermilk.runner.flowrunner import FlowRunContext, FlowRunner
-from buttermilk.utils.media import download_and_convert
-from buttermilk.utils.utils import read_file
+# Get absolute path to tests directory for test data files
+TESTS_DIR = Path(__file__).parent.resolve()
+
+# Heavy imports deferred to fixtures to speed up collection
+if TYPE_CHECKING:
+    from buttermilk import BM
+    from buttermilk._core.llms import LLMs
+    from buttermilk._core.types import Record
+    from buttermilk.runner.flowrunner import FlowRunContext, FlowRunner
+
+# Model lists duplicated here to avoid importing llms.py at collection time
+# (llms.py imports litellm which takes ~3s)
+CHAT_MODELS = [
+    "gemini-pro",
+    "gemini-flash",
+    "gemini-flash-lite",
+    "gpt-mini",
+    "gpt-nano",
+    "gpt-4o",
+    "llama-maverick",
+    "claude-sonnet",
+    "gpt-oss-safeguard-20b",
+]
+
+CHEAP_CHAT_MODELS = [
+    "gemini-flash-lite",
+    "llama-maverick",
+    "gpt-nano",
+    "claude-haiku",
+]
 
 
 # Ensure async tests get the anyio marker automatically,
@@ -59,6 +84,7 @@ async def session_runner():
 @pytest.fixture(scope="session")
 def real_bm():
     """Real BM instance created from testing.yaml configuration."""
+    from buttermilk import init
     # Config dir resolution will find buttermilk/conf, testing.yaml has project_name and job
     return init(config_name="testing")
 
@@ -70,7 +96,7 @@ def real_conf(real_bm):
 
 
 @pytest.fixture(scope="session")
-def real_llms(real_bm: BM) -> LLMs:
+def real_llms(real_bm: "BM") -> "LLMs":
     """Real LLMs instance from testing configuration."""
     return real_bm.llms
 
@@ -82,7 +108,7 @@ def real_model_name(request) -> str:
 
 
 @pytest.fixture(params=CHAT_MODELS)
-async def real_model_name_expensive(request, real_bm: BM, session_runner):
+async def real_model_name_expensive(request, real_bm: "BM", session_runner):
     """Real expensive LLM instance for testing.
 
     Depends on session_runner to ensure single event loop for session.
@@ -91,7 +117,7 @@ async def real_model_name_expensive(request, real_bm: BM, session_runner):
 
 
 @pytest.fixture(params=CHAT_MODELS)
-async def real_llm_multimodal(request, real_bm: BM, session_runner):
+async def real_llm_multimodal(request, real_bm: "BM", session_runner):
     """Real LLM instance for testing (all chat models).
 
     Depends on session_runner to ensure single event loop for session.
@@ -100,7 +126,7 @@ async def real_llm_multimodal(request, real_bm: BM, session_runner):
 
 
 @pytest.fixture(params=CHEAP_CHAT_MODELS)
-async def real_llm(request, real_bm: BM, session_runner):
+async def real_llm(request, real_bm: "BM", session_runner):
     """Real LLM instance for testing.
 
     Depends on session_runner to ensure single event loop for session.
@@ -109,7 +135,7 @@ async def real_llm(request, real_bm: BM, session_runner):
 
 
 @pytest.fixture(params=["litellm"])
-def llm_wrapper_type(request, real_bm: BM) -> str:
+def llm_wrapper_type(request, real_bm: "BM") -> str:
     """Fixture that provides the LLM wrapper type.
 
     After removing autogen wrapper support, this is always "litellm".
@@ -126,7 +152,7 @@ def llm_wrapper_type(request, real_bm: BM) -> str:
 
 
 @pytest.fixture(params=CHAT_MODELS)
-async def real_llm_expensive(request, real_bm: BM, session_runner):
+async def real_llm_expensive(request, real_bm: "BM", session_runner):
     """Real expensive LLM instance for testing.
 
     Depends on session_runner to ensure single event loop for session.
@@ -144,6 +170,7 @@ def real_flow_runner(real_conf):
     constructed instance. Most tests can use this mock.
     """
     from unittest.mock import AsyncMock, Mock
+    from buttermilk.runner.flowrunner import FlowRunContext, FlowRunner
 
     mock_runner = Mock(spec=FlowRunner)
     # Provide basic structure that tests might expect
@@ -226,16 +253,18 @@ def config_override():
 
 @pytest.fixture(scope="session")
 def image_bytes() -> bytes:
-    return read_file("tests/data/Rijksmuseum_(25621972346).jpg")
+    from buttermilk.utils.utils import read_file
+    return read_file(str(TESTS_DIR / "data/Rijksmuseum_(25621972346).jpg"))
 
 
 @pytest.fixture(scope="session")
 def video_bytes(video_url: str) -> bytes:
+    from buttermilk.utils.utils import read_file
     return read_file(video_url)
 
 
 MEDIA_RECORDS = [
-    ("sad robot local image", "tests/data/sadrobot.jpg", "image/jpeg"),
+    ("sad robot local image", str(TESTS_DIR / "data/sadrobot.jpg"), "image/jpeg"),
     # Skip: picsum.photos uses redirects that cloudpathlib can't handle
     # ("web image", "https://picsum.photos/64", "image/jpeg"),
     # Skip: This URL causes HTTPPath timestamp AttributeError
@@ -245,7 +274,7 @@ MEDIA_RECORDS = [
     #     "video/mpeg4",
     # ),
     ("gcs video", "gs://dmrc-platforms/data/tonepolice/v2IF1Kw4.mp4", "video/mpeg4"),
-    ("rijksmuseum local", "tests/data/Rijksmuseum_(25621972346).jpg", "image/jpeg"),
+    ("rijksmuseum local", str(TESTS_DIR / "data/Rijksmuseum_(25621972346).jpg"), "image/jpeg"),
     (
         "fight no more forever",
         """Tell General Howard I know his heart. What he told me before, I have it in my heart. I am tired of fighting. Our Chiefs are killed; Looking Glass is dead, Ta Hool Hool Shute is dead. The old men are all dead. It is the young men who say yes or no. He who led on the young men is dead. It is cold, and we have no blankets; the little children are freezing to death. My people, some of them, have run away to the hills, and have no blankets, no food. No one knows where they are - perhaps freezing to death. I want to have time to look for my children, and see how many of them I can find. Maybe I shall find them among the dead. Hear me, my Chiefs! I am tired; my heart is sick and sad. From where the sun now stands I will fight no more forever.""",
@@ -367,7 +396,8 @@ Perhaps they could just shut up and get on with it.""",
     params=MEDIA_RECORDS,
     ids=[x[0] for x in MEDIA_RECORDS],
 )
-async def multimodal_record(request) -> Record:
+async def multimodal_record(request) -> "Record":
+    from buttermilk.utils.media import download_and_convert
     from buttermilk.utils.utils import is_filepath, is_uri
 
     source = request.param[1]
@@ -404,7 +434,8 @@ async def multimodal_record(request) -> Record:
     params=NEWS_RECORDS,
     ids=[x[0] for x in NEWS_RECORDS],
 )
-async def news_record(request) -> Record:
+async def news_record(request) -> "Record":
+    from buttermilk.utils.media import download_and_convert
     record = await download_and_convert(
         uri=request.param[1],
         mime=request.param[2],
@@ -414,7 +445,8 @@ async def news_record(request) -> Record:
 
 
 @pytest.fixture
-def fight_no_more_forever() -> Record:
+def fight_no_more_forever() -> "Record":
+    from buttermilk._core.types import Record
     return Record(
         content="""Tell General Howard I know his heart. What he told me before, I have it in my heart. I am tired of fighting. Our Chiefs are killed; Looking Glass is dead, Ta Hool Hool Shute is dead. The old men are all dead. It is the young men who say yes or no. He who led on the young men is dead. It is cold, and we have no blankets; the little children are freezing to death. My people, some of them, have run away to the hills, and have no blankets, no food. No one knows where they are - perhaps freezing to death. I want to have time to look for my children, and see how many of them I can find. Maybe I shall find them among the dead. Hear me, my Chiefs! I am tired; my heart is sick and sad. From where the sun now stands I will fight no more forever.""",
         mime="text/plain",
@@ -427,7 +459,8 @@ def fight_no_more_forever() -> Record:
     params=TEXT_RECORDS,
     ids=[x[0] for x in TEXT_RECORDS],
 )
-async def text_record(request) -> Record:
+async def text_record(request) -> "Record":
+    from buttermilk.utils.media import download_and_convert
     record = await download_and_convert(
         text=request.param[1],
         mime=request.param[2],

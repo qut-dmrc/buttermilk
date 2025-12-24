@@ -9,43 +9,83 @@ It uses LiteLLM as the unified interface for interacting with various LLM APIs
 and provides a consistent interface for agents within the Buttermilk framework.
 """
 
+from __future__ import annotations
+
 import asyncio
 import importlib
 import json
+import logging
 import random
 import socket
 from collections.abc import Sequence
 from enum import Enum
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 import urllib3.exceptions
 
 # Core LLM library imports
 from google.auth.exceptions import TransportError as GoogleAuthTransportError
 
-# LiteLLM imports
-try:
-    import litellm
-    from litellm import acompletion
+# LiteLLM is lazy-loaded to speed up import time (~3s savings)
+# Use _get_litellm() and _get_acompletion() instead of direct imports
+_litellm_module = None
+_litellm_initialized = False
 
-    # Suppress litellm logging - we handle errors via retry wrapper
-    litellm.suppress_debug_info = True
-    import logging
 
-    # Suppress all LiteLLM loggers including internal workers
-    logging.getLogger("LiteLLM").setLevel(logging.CRITICAL)
-    logging.getLogger("litellm").setLevel(logging.CRITICAL)
+def _init_litellm():
+    """Initialize litellm with logging suppression. Called once on first use."""
+    global _litellm_module, _litellm_initialized
+    if _litellm_initialized:
+        return
 
-    # Suppress asyncio logging for LiteLLM's internal background tasks
-    # This prevents "LoggingWorker error: TimeoutError" messages from appearing
-    litellm_logger = logging.getLogger("litellm.litellm_core_utils.logging_worker")
-    litellm_logger.setLevel(logging.CRITICAL)
-    litellm_logger.propagate = False
+    try:
+        import litellm
+        _litellm_module = litellm
 
-    LITELLM_AVAILABLE = True
-except ImportError:
-    LITELLM_AVAILABLE = False
-    acompletion = None
+        # Suppress litellm logging - we handle errors via retry wrapper
+        litellm.suppress_debug_info = True
+
+        # Suppress all LiteLLM loggers including internal workers
+        logging.getLogger("LiteLLM").setLevel(logging.CRITICAL)
+        logging.getLogger("litellm").setLevel(logging.CRITICAL)
+
+        # Suppress asyncio logging for LiteLLM's internal background tasks
+        litellm_logger = logging.getLogger("litellm.litellm_core_utils.logging_worker")
+        litellm_logger.setLevel(logging.CRITICAL)
+        litellm_logger.propagate = False
+
+        _litellm_initialized = True
+    except ImportError:
+        _litellm_module = None
+        _litellm_initialized = True
+
+
+def _get_litellm():
+    """Get the litellm module, initializing if needed."""
+    _init_litellm()
+    return _litellm_module
+
+
+def _get_acompletion():
+    """Get litellm.acompletion function."""
+    litellm = _get_litellm()
+    if litellm is None:
+        return None
+    return litellm.acompletion
+
+
+def _litellm_available() -> bool:
+    """Check if litellm is available."""
+    return _get_litellm() is not None
+
+
+# Module-level __getattr__ for lazy attribute access (PEP 562)
+# This allows LITELLM_AVAILABLE to be imported without triggering litellm import
+# until the attribute is actually accessed
+def __getattr__(name: str):
+    if name == "LITELLM_AVAILABLE":
+        return _litellm_available()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 # Autogen library imports - used for message/tool type compatibility
 # OpenAI SDK for exception handling
@@ -773,7 +813,7 @@ class LiteLLMWrapper(BaseModel):
         """Initialize LiteLLMWrapper."""
         super().__init__(**data)
 
-        if not LITELLM_AVAILABLE:
+        if not _litellm_available():
             raise ImportError(
                 "LiteLLM is not installed. Please install it with: pip install litellm"
             )
@@ -1001,7 +1041,10 @@ class LiteLLMWrapper(BaseModel):
             logger.debug(f"LiteLLMWrapper: Using fake tool '{fake_tool_name}' for structured output (no native support)")
 
         # Log the final litellm_params for debugging
-        logger.debug(f"LiteLLMWrapper: Final params (keys): {list(litellm_params.keys())}, response_format={litellm_params.get('response_format')}")
+        logger.debug(
+            f"LiteLLMWrapper: Final params (keys): {list(litellm_params.keys())}",
+            has_response_format=litellm_params.get("response_format") is not None,
+        )
 
         # Handle tools
         if tools:
@@ -1049,19 +1092,23 @@ class LiteLLMWrapper(BaseModel):
 
         # Execute with retry logic
         async def _call_litellm() -> Any:
+            acompletion = _get_acompletion()
             return await acompletion(**litellm_params)
 
         try:
             response = await self._execute_with_retry(_call_litellm)
-        except litellm.ContentPolicyViolationError as e:
-            # Handle content moderation errors from OpenAI/Azure without traceback
-            error_msg = f"Content blocked by provider safety filter: {e!s}"
-            logger.error(error_msg)
-            raise ContentBlockedError(
-                message=error_msg,
-                filter_result={}  # LiteLLM doesn't provide detailed filter results
-            ) from e
         except Exception as e:
+            # Check if it's a ContentPolicyViolationError (lazy check since litellm is lazy-loaded)
+            litellm = _get_litellm()
+            if litellm is not None and isinstance(e, litellm.ContentPolicyViolationError):
+                # Handle content moderation errors from OpenAI/Azure without traceback
+                error_msg = f"Content blocked by provider safety filter: {e!s}"
+                logger.error(error_msg)
+                raise ContentBlockedError(
+                    message=error_msg,
+                    filter_result={}  # LiteLLM doesn't provide detailed filter results
+                ) from e
+            # Generic LiteLLM error
             error_msg = f"LiteLLM call failed: {e}"
             raise ProcessingError(error_msg) from e
 
@@ -1119,7 +1166,7 @@ class LiteLLMWrapper(BaseModel):
                 )
                 result.parsed_object = parsed
             except Exception as e:
-                result.error_message = f"Failed to parse structured output: {e}"
+                result.error_message = f"Failed to parse structured output: {e.args}"
                 result.parsed_object = None
 
         return result

@@ -752,6 +752,16 @@ class HostAgent(Agent):
                     reason=early_stop_reason,
                 )
                 await self._publish(StepRequest(role=END, content=early_stop_reason))
+                # Signal flow failure to pipeline via TaskProcessingComplete
+                await self._publish(
+                    TaskProcessingComplete(
+                        agent_id=self.agent_id,
+                        role=self.role,
+                        is_error=True,
+                        error=early_stop_reason,
+                    ),
+                    topic_id=self._topic_id,
+                )
 
             # Send final progress update before any cleanup begins
             final_progress_message = FlowProgressUpdate(

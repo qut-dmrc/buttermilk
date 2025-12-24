@@ -7,10 +7,8 @@ defined in YAML files and overridden via command-line arguments.
 Based on the configuration, this script can:
 - Run a Buttermilk flow directly in the console for interactive use (`console` mode).
 - Start a FastAPI web server to expose Buttermilk flows via an HTTP API (`api` mode).
-- Process records through a flow using pipeline (`batch` mode).
+- Run data processing pipelines with composable processors (`pipeline` mode).
 - Launch a Streamlit web application for a graphical user interface (`streamlit` mode).
-- Start a Google Cloud Pub/Sub listener for message-driven flow execution (`pub/sub` mode,
-  potentially delegating to `batch_cli.main`).
 - Run a Slack bot that interacts with Buttermilk flows (`slackbot` mode).
 
 It initializes a global `BM` (Buttermilk) instance with the loaded configuration,
@@ -20,7 +18,6 @@ execution of defined flows.
 """
 
 import asyncio
-import os  # For setting environment variables (e.g., Slack tokens)
 
 import hydra  # For configuration management
 from omegaconf import DictConfig, OmegaConf  # Hydra's configuration objects
@@ -53,7 +50,7 @@ def _validate_flow_config(conf: DictConfig, mode: str) -> None:
     )
 
     # Modes that require a flow to be specified
-    flow_required_modes = {"console", "batch"}
+    flow_required_modes = {"console"}
 
     if mode_str in flow_required_modes:
         if not hasattr(conf.run, "flow") or not conf.run.flow:
@@ -99,40 +96,49 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
         # Run a flow in console mode with default config
         python -m buttermilk.runner.cli run.mode=console run.flow=trans
 
-        # Run batch processing with limit
-        python -m buttermilk.runner.cli run.mode=batch run.flow=trans run.limit=100
-
         # Start API server
         python -m buttermilk.runner.cli run.mode=api
 
-        # Run pipeline mode
-        python -m buttermilk.runner.cli run.mode=pipeline
+        # Run pipeline mode with processors
+        python -m buttermilk.runner.cli run.mode=pipeline run.limit=100
 
     Hydra Configuration Overrides:
         You can override any configuration parameter using Hydra's dot notation:
-        - run.mode=<mode>        : Set operational mode (console, batch, api, pipeline, streamlit, slackbot)
-        - run.flow=<flow_name>   : Specify which flow to run (required for most modes)
-        - run.limit=<number>     : Limit number of records/jobs to process
+        - run.mode=<mode>        : Set operational mode (console, api, pipeline, streamlit, slackbot)
+        - run.flow=<flow_name>   : Specify which flow to run (console mode)
+        - run.limit=<number>     : Limit number of records to process (pipeline mode)
         - run.record_id=<id>     : Run on a specific record (console mode)
-        - run.concurrency=<n>    : Number of concurrent records (batch, pipeline modes)
+        - run.concurrency=<n>    : Number of concurrent records (pipeline mode)
         - llms=<config>          : Override LLM configuration
         - storage=<config>       : Override storage configuration
 
     Available Modes:
         - console      : Run a single flow interactively in the terminal
-        - batch        : Process records through a flow using pipeline (recommended)
         - api          : Start FastAPI server for HTTP API access
-        - pipeline     : Run data processing pipeline
+        - pipeline     : Run data processing pipeline with composable processors
         - streamlit    : Launch Streamlit web interface
         - slackbot     : Start Slack bot integration
 
     """
     OmegaConf.resolve(conf)
 
+    # Extract config source directory from Hydra for template path resolution
+    config_source_dir = None
+    try:
+        from hydra.core.hydra_config import HydraConfig
+        hydra_cfg = HydraConfig.get()
+        for src in hydra_cfg.runtime.config_sources:
+            if src.schema == "file":
+                config_source_dir = src.path
+                break
+    except Exception:
+        pass  # Fall back to None if HydraConfig unavailable
+
     # Run async initialization
     bm = asyncio.run(
         init_async(
-            config=conf  # Pass the existing Hydra configuration
+            config=conf,  # Pass the existing Hydra configuration
+            config_source_dir=config_source_dir
         )
     )
     conf = bm.cfg  # Use the typed config from BM
@@ -238,16 +244,25 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
                 logger.info("API server stopped.")
 
         case "pipeline":
-            # Pipeline mode: Run data processing pipeline
+            # Pipeline mode: Run data processing pipeline with composable processors
             logger.info("Pipeline mode: Starting data processing pipeline")
 
             if not hasattr(conf.run, "pipeline"):
                 raise ValueError(
                     "Pipeline configuration missing. Ensure 'run.pipeline' is configured.\n"
-                    "Check your pipeline configurations in buttermilk/conf/"
+                    "Example:\n"
+                    "  run:\n"
+                    "    mode: pipeline\n"
+                    "    pipeline:\n"
+                    "      pipeline_name: my_pipeline\n"
+                    "      source: ${storage.my_source}\n"
+                    "      processors:\n"
+                    "        - _target_: buttermilk.processors.GroupchatProcessor\n"
+                    "          flow_name: trans\n"
+                    "          flow_config: ${flows.trans}"
                 )
 
-            pipeline_conf = conf.run.pipeline
+            pipeline_conf = dict(conf.run.pipeline)
 
             # Instantiate source (either via _target_ or as storage config)
             logger.info("Initializing source...")
@@ -266,17 +281,17 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
                     output = bm.get_storage(output)
                 pipeline_conf["output"] = output
 
-            # Instantiate processors
+            # Use run.limit instead of pipeline.max_records for consistency
+            if conf.run.limit is not None:
+                pipeline_conf["limit"] = conf.run.limit
+                logger.info(f"Processing limit: {conf.run.limit} records")
+
+            # Instantiate processors via Hydra
             logger.info(f"Loading {len(pipeline_conf['processors'])} processor(s)...")
             processors = []
             for proc_conf in pipeline_conf["processors"]:
                 processors.append(hydra.utils.instantiate(proc_conf))
             pipeline_conf["processors"] = processors
-
-            # Use run.limit instead of pipeline.max_records for consistency with batch modes
-            if conf.run.limit is not None:
-                pipeline_conf["limit"] = conf.run.limit
-                logger.info(f"Processing limit: {conf.run.limit} records")
 
             # Instantiate pipeline orchestrator
             from buttermilk.pipeline import PipelineOrchestrator
@@ -285,8 +300,6 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
 
             async def run_pipeline() -> None:
                 # Ensure tracing is initialized before running pipeline
-                # This is required because @weave.op decorators are evaluated at import time
-                # but weave.init() hasn't been called yet
                 from buttermilk._core.execution_context import get_execution_context
 
                 exec_ctx = get_execution_context()
@@ -303,84 +316,11 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
             except Exception as e:
                 logger.error(f"✗ Pipeline failed: {e}")
                 raise
-        case "batch":
-            # Batch mode: Pipeline-based processing without Pub/Sub
-            # Uses OrchestratorProcessor to wrap flows as pipeline processors
-            flow_name = conf.run.flow
-            limit = conf.run.limit
-            concurrency = getattr(conf.run, "concurrency", 1) or 1
-
-            logger.info(
-                f"Batch mode: Processing flow '{flow_name}' via pipeline"
-            )
-            if limit:
-                logger.info(f"Processing limit: {limit} records")
-            logger.info(f"Concurrency: {concurrency}")
-
-            async def run_batch() -> None:
-                from buttermilk.pipeline import PipelineOrchestrator
-                from buttermilk.processors.orchestrator_processor import (
-                    OrchestratorProcessor,
-                )
-                from buttermilk.utils.utils import expand_dict
-
-                # Get flow configuration
-                flow = flow_runner.flows[flow_name]
-
-                # Get source storage (same logic as create_batch)
-                if hasattr(flow, "storage") and flow.storage:
-                    if "initial" in flow.storage:
-                        storage_cfg = flow.storage["initial"]
-                    else:
-                        storage_cfg = next(iter(flow.storage.values()))
-                else:
-                    raise ValueError(
-                        f"Flow '{flow_name}' has no storage configuration"
-                    )
-
-                source = bm.get_storage(storage_cfg)
-
-                # Expand flow parameters into variants
-                param_variants = expand_dict(flow.parameters) if hasattr(flow, 'parameters') and flow.parameters else [{}]
-
-                # Create and run a pipeline for each parameter variant
-                for params in param_variants:
-                    # Create OrchestratorProcessor to wrap the flow
-                    processor = OrchestratorProcessor(
-                        flow_config=flow,
-                        flow_name=flow_name,
-                        bm=bm,  # Pass session-scoped BM for observability
-                        parameters=params,
-                    )
-
-                    # Create pipeline with the orchestrator processor
-                    pipeline = PipelineOrchestrator(
-                        pipeline_name=f"batch_{flow_name}",
-                        source=source,
-                        processors=[processor],
-                        limit=limit,
-                        concurrency=concurrency,
-                        enable_record_cache=False,  # Explicit: no caching for orchestrators
-                    )
-
-                    logger.info(f"Starting pipeline-based batch processing with parameters: {params}")
-                    async for _ in pipeline():
-                        pass  # Results handled by orchestrator callbacks
-
-                await bm.graceful_shutdown()
-
-            try:
-                asyncio.run(run_batch())
-                logger.info(f"✓ Batch mode completed for flow '{flow_name}'")
-            except Exception as e:
-                logger.error(f"✗ Batch mode failed: {e}")
-                raise
 
         case _:
             # Handles any unsupported modes specified in the configuration.
             valid_modes = [
                 "console",
-                "batch",
                 "api",
                 "pipeline",
                 "streamlit",
