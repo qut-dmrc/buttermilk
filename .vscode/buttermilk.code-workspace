@@ -18,6 +18,26 @@
     "ruff.lint.enable": true,
     "ruff.nativeServer": "on",
     "python.testing.pytestEnabled": true,
-    "editor.defaultFormatter": "charliermarsh.ruff"
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "workbench.colorCustomizations": {
+      "activityBar.activeBackground": "#f2ff9b",
+      "activityBar.background": "#f2ff9b",
+      "activityBar.foreground": "#15202b",
+      "activityBar.inactiveForeground": "#15202b99",
+      "activityBarBadge.background": "#00a6bf",
+      "activityBarBadge.foreground": "#e7e7e7",
+      "commandCenter.border": "#15202b99",
+      "sash.hoverBorder": "#f2ff9b",
+      "statusBar.background": "#ecff68",
+      "statusBar.foreground": "#15202b",
+      "statusBarItem.hoverBackground": "#e6ff35",
+      "statusBarItem.remoteBackground": "#ecff68",
+      "statusBarItem.remoteForeground": "#15202b",
+      "titleBar.activeBackground": "#ecff68",
+      "titleBar.activeForeground": "#15202b",
+      "titleBar.inactiveBackground": "#ecff6899",
+      "titleBar.inactiveForeground": "#15202b99"
+    },
+    "peacock.remoteColor": "ecff68"
   }
 }

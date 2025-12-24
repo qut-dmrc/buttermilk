@@ -153,8 +153,15 @@ class AutogenOrchestrator(Orchestrator):
         """Initializes the Autogen runtime and registers all configured agents."""
         # Initialize the topic ID if not already set
         if self._topic is None:
+            # Import execution context for slug extraction
+            from buttermilk._core.execution_context import get_execution_context
+
+            exec_ctx = get_execution_context()
+            # Format: {project}-{exec_slug}-{session_slug}-{suffix}
+            # Example: TJA-cge7b5Fi-dda43ff9-a3b2
+            suffix = shortuuid.uuid()[:4]  # Unique suffix for multiple groupchats in same session
             self._topic = DefaultTopicId(
-                type=f"{bm.session_info.project_name}-{bm.session_info.job}-{shortuuid.uuid()[:8]}"
+                type=f"{bm.session_info.project_name}-{exec_ctx.slug}-{bm.session_info.slug}-{suffix}"
             )
 
         msg = f"Setting up AutogenOrchestrator for topic: {self._topic.type}"

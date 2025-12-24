@@ -77,7 +77,7 @@ def _make_session_id() -> str:
     # Format timestamp for use in filenames (simplified ISO 8601)
     session_time = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%MZ")
 
-    session_id = f"session-{session_time}-{shortuuid.uuid()[:4]}-{node_name}-{username}"
+    session_id = f"session-{session_time}-{shortuuid.uuid()[:8]}-{node_name}-{username}"
     return session_id
 
 
@@ -206,6 +206,22 @@ class SessionInfo(BaseModel):
         default="litellm",
         description="Global LLM wrapper selection (autogen or litellm). Per-model use_litellm overrides this.",
     )
+
+    @property
+    def slug(self) -> str:
+        """Extract 8-char slug from session_id.
+
+        The session_id format is: session-{timestamp}-{slug}-{node}-{user}
+        This extracts the {slug} portion for use in topic IDs and path construction.
+
+        Returns:
+            str: The 8-character slug portion of the session_id.
+        """
+        # Format: session-20241224T1430Z-dda43ff9-hostname-user
+        # Split by '-' and get the 3rd component (index 2)
+        parts = self.session_id.split("-")
+        # Parts: ['session', '20241224T1430Z', 'dda43ff9', 'hostname', 'user']
+        return parts[2] if len(parts) >= 3 else self.session_id[:8]
 
     _get_ip_task: asyncio.Task[Any] | None = PrivateAttr(default=None)  # type: ignore
 
@@ -655,15 +671,22 @@ class BM(BaseModel):
         """Construct the final save_dir path for this session.
 
         Constructs the full save directory path and stores it in session_info.save_dir.
+        Path hierarchy: {base}/{project}/{job}/{execution_context_id}/{session_id}
         """
         # Lazy import to avoid loading google.cloud at module level
         from cloudpathlib import AnyPath
 
-        # Construct full save directory path using session_id for uniqueness
+        from buttermilk._core.execution_context import get_execution_context
+
+        # Get execution context for the execution_context_id
+        exec_ctx = get_execution_context()
+
+        # Construct full save directory path with execution context and session
         save_dir_path = (
             AnyPath(self.save_dir_base)
             / self.session_info.project_name
             / self.session_info.job
+            / exec_ctx.execution_context_id
             / self.session_info.session_id
         )
         self.session_info.save_dir = str(save_dir_path)

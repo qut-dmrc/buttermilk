@@ -256,7 +256,7 @@ timeout = 90
 addopts = [
   "--continue-on-collection-errors",
   "--durations=10",
-#  "-n 20",
+  "-n 20",
   "-q", # quiet - reduces output noise for TUI compatibility
   "-rfEX", # show extra summary info for failed/errors only
   "--tb=short",

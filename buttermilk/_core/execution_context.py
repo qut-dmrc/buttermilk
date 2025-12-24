@@ -66,7 +66,7 @@ def _make_execution_context_id() -> str:
     context_time = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%MZ")
 
     execution_context_id = (
-        f"exec-{context_time}-{shortuuid.uuid()[:4]}-{node_name}-{username}"
+        f"exec-{context_time}-{shortuuid.uuid()[:8]}-{node_name}-{username}"
     )
     _global_execution_context_id = execution_context_id
     return execution_context_id
@@ -120,6 +120,22 @@ class ExecutionContext(BaseModel):
         default_factory=dict,
         description="Per-model parameter overrides from YAML config. Passed to LLMs instance.",
     )
+
+    @property
+    def slug(self) -> str:
+        """Extract 8-char slug from execution_context_id.
+
+        The execution_context_id format is: exec-{timestamp}-{slug}-{node}-{user}
+        This extracts the {slug} portion for use in topic IDs and path construction.
+
+        Returns:
+            str: The 8-character slug portion of the execution_context_id.
+        """
+        # Format: exec-20241224T1430Z-cge7b5Fi-hostname-user
+        # Split by '-' and get the 3rd component (index 2)
+        parts = self.execution_context_id.split("-")
+        # Parts: ['exec', '20241224T1430Z', 'cge7b5Fi', 'hostname', 'user']
+        return parts[2] if len(parts) >= 3 else self.execution_context_id[:8]
 
     # Private attributes for lazy-loaded infrastructure
     _cloud_manager: CloudManager | None = PrivateAttr(default=None)
