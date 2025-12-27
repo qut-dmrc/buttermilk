@@ -1,6 +1,6 @@
 # Buttermilk Project Instructions
 
-@bots/agents/_CORE.md @bots/agents/INSTRUCTIONS.md @docs/bots/DEBUGGING.md @bots/docs/_CHUNKS/E2E-TESTING.md
+@docs/bots/_CORE.md
 
 ## Project-Specific Notes
 

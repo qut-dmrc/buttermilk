@@ -3,6 +3,7 @@ host: gemini-flash
 general:
   - gemini-flash
   - claude-sonnet
+  - llama-maverick
 
 judgers:
   - gemini-pro

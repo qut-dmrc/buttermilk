@@ -455,5 +455,3 @@ When using debugging tools, **extract key findings** instead of dumping full out
 **Limit excerpts to 10-15 lines maximum per tool invocation.**
 
 See framework DEBUGGING.md for generic profiling and systematic troubleshooting.
-
-See `bots/docs/_CHUNKS/DEBUGGING.md` for complete ws_debug_cli command reference.

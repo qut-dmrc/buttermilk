@@ -2,16 +2,12 @@ host: gemini-flash-lite
 cheap:
   - claude-haiku
   - gemini-flash-lite
-  - gpt-nano
 general:
   - gemini-flash-lite
-  - gpt-nano
   - claude-haiku
 judgers:
   - claude-haiku
   - gemini-flash-lite
-  - gpt-nano
 synthesisers:
   - gemini-flash-lite
-  - gpt-nano
   - claude-haiku
