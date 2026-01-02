@@ -1,0 +1,537 @@
+"""Vertex AI batch prediction utilities.
+
+This module provides utilities for submitting and managing batch prediction
+jobs on Vertex AI, with support for both Gemini and Claude models.
+
+Uses buttermilk's existing save utilities for GCS operations.
+
+Usage:
+    from buttermilk._core.vertex_batch import BatchJobManager
+    from buttermilk import bm
+
+    manager = BatchJobManager(client=bm.genai)
+    job = await manager.submit_batch(
+        model="gemini-2.5-flash",
+        requests=requests,
+        cache_refs=cache_refs,
+    )
+    results = await manager.wait_for_results(job)
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import uuid
+from typing import TYPE_CHECKING, Any
+
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
+
+if TYPE_CHECKING:
+    from google.genai.types import BatchJob
+
+from buttermilk._core.log import logger
+
+
+class BatchRequest(BaseModel):
+    """A single request in a batch job.
+
+    Attributes:
+        custom_id: Unique identifier for mapping results back to input
+        record_id: Original record ID from the source data
+        criteria_key: Key identifying which criteria template was used
+        content: The record content to send as user message
+        cache_name: Optional cache resource name for criteria
+    """
+
+    custom_id: str
+    record_id: str
+    criteria_key: str
+    content: str
+    cache_name: str | None = None
+
+
+class BatchResult(BaseModel):
+    """Result from a batch job request.
+
+    Attributes:
+        custom_id: The custom_id from the request
+        record_id: Original record ID
+        criteria_key: Criteria key used
+        response: The model's response content
+        error: Error message if request failed
+        usage: Token usage information
+    """
+
+    custom_id: str
+    record_id: str
+    criteria_key: str
+    response: str | None = None
+    error: str | None = None
+    usage: dict[str, Any] | None = None
+
+
+class BatchJobManager(BaseModel):
+    """Manage Vertex AI batch prediction jobs.
+
+    Handles JSONL generation, GCS upload (via bm.save), job submission,
+    polling, and result retrieval.
+
+    Uses buttermilk's session save_dir for GCS operations.
+
+    Attributes:
+        client: Google GenAI client (from bm.genai)
+        poll_interval: Seconds between job status checks (default: 30)
+        max_wait_hours: Maximum hours to wait for job completion (default: 24)
+    """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    client: Any = Field(..., description="Google GenAI client instance")
+    poll_interval: int = Field(default=30, description="Seconds between status checks")
+    max_wait_hours: int = Field(default=24, description="Max wait time in hours")
+
+    # Track active jobs
+    _active_jobs: dict[str, Any] = PrivateAttr(default_factory=dict)
+
+    def _generate_job_id(self) -> str:
+        """Generate a unique job ID."""
+        return f"batch_{uuid.uuid4().hex[:12]}"
+
+    def _build_gemini_request(
+        self,
+        request: BatchRequest,
+    ) -> dict[str, Any]:
+        """Build a Gemini batch request entry.
+
+        Args:
+            request: The batch request to format
+
+        Returns:
+            JSONL-ready dictionary for Gemini batch API
+        """
+        entry: dict[str, Any] = {
+            "custom_id": request.custom_id,
+            "request": {
+                "contents": [
+                    {
+                        "role": "user",
+                        "parts": [{"text": request.content}],
+                    }
+                ],
+            },
+        }
+
+        # Add cache reference if available
+        if request.cache_name:
+            entry["request"]["cached_content"] = request.cache_name
+
+        return entry
+
+    def _build_claude_request(
+        self,
+        request: BatchRequest,
+        criteria_content: str | None = None,
+        max_tokens: int = 4096,
+    ) -> dict[str, Any]:
+        """Build a Claude batch request entry.
+
+        For Claude, we use inline cache_control since batch API may not
+        support cached_content references directly.
+
+        Args:
+            request: The batch request to format
+            criteria_content: The criteria text to include with cache_control
+            max_tokens: Maximum tokens for response
+
+        Returns:
+            JSONL-ready dictionary for Claude batch API
+        """
+        messages_content = []
+
+        # Add criteria with cache_control if provided
+        if criteria_content:
+            messages_content.append({
+                "type": "text",
+                "text": criteria_content,
+                "cache_control": {"type": "ephemeral"},
+            })
+
+        # Add record content
+        messages_content.append({
+            "type": "text",
+            "text": request.content,
+        })
+
+        return {
+            "custom_id": request.custom_id,
+            "request": {
+                "anthropic_version": "vertex-2023-10-16",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": messages_content,
+                    }
+                ],
+                "max_tokens": max_tokens,
+            },
+        }
+
+    def build_jsonl(
+        self,
+        requests: list[BatchRequest],
+        model: str,
+        criteria_contents: dict[str, str] | None = None,
+    ) -> str:
+        """Build JSONL content for batch job.
+
+        Args:
+            requests: List of batch requests
+            model: Model identifier (determines format)
+            criteria_contents: Map of criteria_key -> content for Claude inline caching
+
+        Returns:
+            JSONL string ready for upload
+        """
+        lines = []
+        is_claude = "claude" in model.lower() or "anthropic" in model.lower()
+
+        for request in requests:
+            if is_claude:
+                criteria_content = (
+                    criteria_contents.get(request.criteria_key)
+                    if criteria_contents
+                    else None
+                )
+                entry = self._build_claude_request(request, criteria_content)
+            else:
+                entry = self._build_gemini_request(request)
+
+            lines.append(json.dumps(entry))
+
+        return "\n".join(lines)
+
+    def _upload_to_gcs(self, content: str, job_id: str) -> str:
+        """Upload JSONL content to GCS using bm.save.
+
+        Args:
+            content: JSONL string content to upload
+            job_id: Job identifier for organizing files
+
+        Returns:
+            GCS URI of uploaded file
+        """
+        from buttermilk import bm
+        from buttermilk.utils.save import upload_text
+
+        # Get save directory from session
+        save_dir = bm.session_info.save_dir
+        if not save_dir:
+            raise RuntimeError("No save_dir configured in session")
+
+        # Construct URI within session's save directory
+        uri = f"{save_dir}/batch/{job_id}/input.jsonl"
+
+        # Use existing upload utility
+        result_uri = upload_text(content, uri=uri, content_type="application/jsonl")
+
+        logger.info(f"Uploaded batch input to {result_uri}")
+        return result_uri
+
+    def _get_output_uri(self, job_id: str) -> str:
+        """Get the output URI for a batch job.
+
+        Args:
+            job_id: Job identifier
+
+        Returns:
+            GCS URI for output directory
+        """
+        from buttermilk import bm
+
+        save_dir = bm.session_info.save_dir
+        if not save_dir:
+            raise RuntimeError("No save_dir configured in session")
+
+        return f"{save_dir}/batch/{job_id}/output/"
+
+    def _download_from_gcs(self, uri: str) -> str:
+        """Download content from GCS.
+
+        Args:
+            uri: GCS URI to download
+
+        Returns:
+            File content as string
+        """
+        from cloudpathlib import AnyPath
+
+        path = AnyPath(uri)
+        return path.read_text()
+
+    def _get_vertex_model_path(self, model: str) -> str:
+        """Convert model name to Vertex AI model path.
+
+        Args:
+            model: Model name (e.g., "gemini-2.5-flash", "claude-sonnet-4")
+
+        Returns:
+            Full Vertex AI model path
+        """
+        if "claude" in model.lower() or "anthropic" in model.lower():
+            # Claude models use publisher path
+            # Map common names to full paths
+            claude_map = {
+                "claude-sonnet-4": "publishers/anthropic/models/claude-sonnet-4",
+                "claude-opus-4": "publishers/anthropic/models/claude-opus-4",
+                "claude-haiku": "publishers/anthropic/models/claude-3-5-haiku",
+            }
+            return claude_map.get(model, f"publishers/anthropic/models/{model}")
+        else:
+            # Gemini models use direct name
+            return model
+
+    async def submit_batch(
+        self,
+        model: str,
+        requests: list[BatchRequest],
+        criteria_contents: dict[str, str] | None = None,
+    ) -> "BatchJob":
+        """Submit a batch prediction job.
+
+        Args:
+            model: Model to use (e.g., "gemini-2.5-flash")
+            requests: List of batch requests
+            criteria_contents: For Claude, map of criteria_key -> content
+
+        Returns:
+            BatchJob object for tracking
+
+        Raises:
+            RuntimeError: If job submission fails
+        """
+        from google.genai.types import CreateBatchJobConfig
+
+        job_id = self._generate_job_id()
+
+        # Build JSONL
+        jsonl_content = self.build_jsonl(requests, model, criteria_contents)
+
+        # Upload to GCS using session's save_dir
+        input_uri = self._upload_to_gcs(jsonl_content, job_id)
+        output_uri = self._get_output_uri(job_id)
+
+        # Get model path
+        model_path = self._get_vertex_model_path(model)
+
+        logger.info(
+            f"Submitting batch job {job_id} with {len(requests)} requests",
+            extra={"model": model_path, "input_uri": input_uri},
+        )
+
+        try:
+            job = self.client.batches.create(
+                model=model_path,
+                src=input_uri,
+                config=CreateBatchJobConfig(dest=output_uri),
+            )
+
+            self._active_jobs[job_id] = {
+                "job": job,
+                "requests": requests,
+                "model": model,
+                "output_uri": output_uri,
+            }
+
+            logger.info(f"Batch job submitted: {job.name}")
+            return job
+
+        except Exception as e:
+            raise RuntimeError(f"Failed to submit batch job: {e}") from e
+
+    async def wait_for_completion(self, job: "BatchJob") -> "BatchJob":
+        """Wait for a batch job to complete.
+
+        Args:
+            job: The batch job to wait for
+
+        Returns:
+            Updated BatchJob with final status
+
+        Raises:
+            TimeoutError: If job doesn't complete within max_wait_hours
+            RuntimeError: If job fails
+        """
+        from google.genai.types import JobState
+
+        completed_states = {
+            JobState.JOB_STATE_SUCCEEDED,
+            JobState.JOB_STATE_FAILED,
+            JobState.JOB_STATE_CANCELLED,
+            JobState.JOB_STATE_PAUSED,
+        }
+
+        max_iterations = (self.max_wait_hours * 3600) // self.poll_interval
+        iteration = 0
+
+        while iteration < max_iterations:
+            await asyncio.sleep(self.poll_interval)
+            iteration += 1
+
+            try:
+                job = self.client.batches.get(name=job.name)
+            except Exception as e:
+                logger.warning(f"Error polling job status: {e}")
+                continue
+
+            logger.debug(f"Job {job.name} status: {job.state}")
+
+            if job.state in completed_states:
+                if job.state == JobState.JOB_STATE_SUCCEEDED:
+                    logger.info(f"Batch job {job.name} completed successfully")
+                    return job
+                elif job.state == JobState.JOB_STATE_FAILED:
+                    raise RuntimeError(f"Batch job {job.name} failed")
+                elif job.state == JobState.JOB_STATE_CANCELLED:
+                    raise RuntimeError(f"Batch job {job.name} was cancelled")
+                else:
+                    raise RuntimeError(f"Batch job {job.name} in unexpected state: {job.state}")
+
+        raise TimeoutError(
+            f"Batch job {job.name} did not complete within {self.max_wait_hours} hours"
+        )
+
+    def parse_results(
+        self,
+        output_uri: str,
+        requests: list[BatchRequest],
+    ) -> list[BatchResult]:
+        """Parse batch job results from GCS.
+
+        Uses cloudpathlib for GCS access (consistent with buttermilk patterns).
+
+        Args:
+            output_uri: GCS URI of output directory or file
+            requests: Original requests for mapping custom_id -> record info
+
+        Returns:
+            List of BatchResult objects
+        """
+        from cloudpathlib import AnyPath
+
+        # Build lookup from custom_id to request info
+        request_map = {r.custom_id: r for r in requests}
+
+        results = []
+
+        try:
+            output_path = AnyPath(output_uri)
+
+            # Find all JSONL files in output directory
+            if output_path.is_dir():
+                jsonl_files = list(output_path.glob("*.jsonl"))
+            else:
+                jsonl_files = [output_path]
+
+            for jsonl_file in jsonl_files:
+                content = jsonl_file.read_text()
+                for line in content.strip().split("\n"):
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                        custom_id = entry.get("custom_id", "")
+                        request = request_map.get(custom_id)
+
+                        result = BatchResult(
+                            custom_id=custom_id,
+                            record_id=request.record_id if request else "",
+                            criteria_key=request.criteria_key if request else "",
+                            response=self._extract_response(entry),
+                            error=entry.get("error", {}).get("message"),
+                            usage=entry.get("response", {}).get("usage"),
+                        )
+                        results.append(result)
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"Failed to parse result line: {e}")
+
+        except Exception as e:
+            logger.error(f"Failed to parse batch results from {output_uri}: {e}")
+            raise
+
+        logger.info(f"Parsed {len(results)} results from batch output")
+        return results
+
+    def _extract_response(self, entry: dict[str, Any]) -> str | None:
+        """Extract response text from batch result entry.
+
+        Handles both Gemini and Claude response formats.
+
+        Args:
+            entry: The result entry dictionary
+
+        Returns:
+            Response text or None
+        """
+        response = entry.get("response", {})
+
+        # Gemini format: response.candidates[0].content.parts[0].text
+        candidates = response.get("candidates", [])
+        if candidates:
+            content = candidates[0].get("content", {})
+            parts = content.get("parts", [])
+            if parts:
+                return parts[0].get("text")
+
+        # Claude format: response.content[0].text
+        content = response.get("content", [])
+        if content and isinstance(content, list):
+            for block in content:
+                if block.get("type") == "text":
+                    return block.get("text")
+
+        # Fallback: try direct text field
+        return response.get("text")
+
+    async def run_batch_and_wait(
+        self,
+        model: str,
+        requests: list[BatchRequest],
+        criteria_contents: dict[str, str] | None = None,
+    ) -> list[BatchResult]:
+        """Submit batch job, wait for completion, and return results.
+
+        Convenience method that combines submit, wait, and parse.
+
+        Args:
+            model: Model to use
+            requests: List of batch requests
+            criteria_contents: For Claude inline caching
+
+        Returns:
+            List of BatchResult objects
+        """
+        job = await self.submit_batch(model, requests, criteria_contents)
+        await self.wait_for_completion(job)
+
+        # Get output URI from active jobs registry
+        output_uri = self._get_output_uri_for_job(job.name)
+
+        return self.parse_results(output_uri, requests)
+
+    def _get_output_uri_for_job(self, job_name: str) -> str:
+        """Get output URI for a job from the active jobs registry.
+
+        Args:
+            job_name: Full resource name like "projects/.../batchJobs/..."
+
+        Returns:
+            Output URI for the job
+
+        Raises:
+            RuntimeError: If job not found in registry
+        """
+        for job_id, info in self._active_jobs.items():
+            if info["job"].name == job_name:
+                return info["output_uri"]
+        raise RuntimeError(f"Job {job_name} not found in active jobs registry")

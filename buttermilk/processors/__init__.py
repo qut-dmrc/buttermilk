@@ -11,6 +11,7 @@ from .jmespath_transform import JMESPathTransform
 from .parallel import ParallelProcessor
 from .unified_processors import GroupchatProcessor, ParameterExpansionProcessor
 from .variants import VariantProcessor
+from .vertex_batch import VertexBatchProcessor
 
 __all__ = [
     "ChromaDBUploader",
@@ -20,4 +21,5 @@ __all__ = [
     "ParallelProcessor",
     "ParameterExpansionProcessor",
     "VariantProcessor",
+    "VertexBatchProcessor",
 ]
