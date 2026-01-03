@@ -9,7 +9,7 @@ from .chromadb_uploader import ChromaDBUploader
 from .embeddings import EmbeddingGenerator
 from .jmespath_transform import JMESPathTransform
 from .parallel import ParallelProcessor
-from .unified_processors import GroupchatProcessor, ParameterExpansionProcessor
+from .unified_processors import GroupchatProcessor, LLMProcessor, ParameterExpansionProcessor
 from .variants import VariantProcessor
 from .vertex_batch import VertexBatchProcessor
 
@@ -18,6 +18,7 @@ __all__ = [
     "EmbeddingGenerator",
     "GroupchatProcessor",
     "JMESPathTransform",
+    "LLMProcessor",
     "ParallelProcessor",
     "ParameterExpansionProcessor",
     "VariantProcessor",

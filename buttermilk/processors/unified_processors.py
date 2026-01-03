@@ -57,6 +57,8 @@ class LLMProcessor(UnifiedProcessor):
     max_tokens: int = Field(default=1024, description="Maximum tokens to generate")
     output_col: str = Field(default="llm_output", description="Output column name")
     input_variables: dict[str, Any] = Field(default_factory=dict, description="Static variables for the prompt")
+    output_model: str | None = Field(default=None, description="Pydantic model path for structured output")
+    fail_on_unfilled_parameters: bool = Field(default=True, description="Fail if template parameters are unfilled")
 
     _llm_core: Any = PrivateAttr(default=None)
 
@@ -69,6 +71,8 @@ class LLMProcessor(UnifiedProcessor):
             max_tokens=self.max_tokens,
             output_col=self.output_col,
             template_vars=self.input_variables,
+            output_model=self.output_model,
+            fail_on_unfilled_parameters=self.fail_on_unfilled_parameters,
         )
 
     async def _process_record(
