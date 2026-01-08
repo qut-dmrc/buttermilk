@@ -12,16 +12,13 @@ Tests use REAL data patterns (no mocking internal code) and follow fail-fast phi
 from typing import AsyncGenerator
 
 import pytest
-from opentelemetry import trace
 from pydantic import Field
 
 from buttermilk._core.executor import PipelineExecutor
 from buttermilk._core.pipeline_config import PipelineConfig
 from buttermilk._core.processing_context import ProcessingContext
-from buttermilk._core.protocols import BatchProcessor, Processor
+from buttermilk._core.processor_core import BatchProcessorCore, ProcessorCore
 from buttermilk._core.types import BaseRecord
-from buttermilk._core.unified_processor import UnifiedProcessor
-from buttermilk._core.unified_batch_processor import UnifiedBatchProcessor
 from buttermilk.processors.unified_processors import (
     ExpanderProcessor,
     FilterProcessor,
@@ -491,22 +488,18 @@ class TestUnifiedProcessorTracing:
     """Test tracing functionality in UnifiedProcessor."""
 
     @pytest.mark.anyio
-    async def test_unified_processor_creates_trace_span(
-        self, tracer_provider, get_recorded_spans, clear_recorded_spans
-    ):
+    async def test_unified_processor_creates_trace_span(self, tracer_provider, get_recorded_spans, clear_recorded_spans):
         """Verify tracing is set up correctly."""
         # Clear any existing spans
         clear_recorded_spans()
 
         # Create a simple test processor
-        class TestProcessor(UnifiedProcessor):
-            async def _process_record(
-                self, context: ProcessingContext
-            ) -> AsyncGenerator[BaseRecord, None]:
+        class MockProcessor(ProcessorCore):
+            async def _process_record(self, context: ProcessingContext) -> AsyncGenerator[BaseRecord, None]:
                 # Just pass through
                 yield context.record
 
-        processor = TestProcessor(name="test_processor")
+        processor = MockProcessor(name="test_processor")
 
         record = BaseRecord(record_id="trace-001", content="content")
         context = ProcessingContext(session_id="trace-session", record=record)
@@ -526,7 +519,7 @@ class TestUnifiedProcessorTracing:
         assert len(spans) > 0
 
         # Find our processor span
-        processor_spans = [s for s in spans if s.name == "processor.TestProcessor"]
+        processor_spans = [s for s in spans if s.name == "processor.MockProcessor"]
         assert len(processor_spans) == 1
 
         span = processor_spans[0]
@@ -534,22 +527,18 @@ class TestUnifiedProcessorTracing:
         # Verify span attributes
         attributes = dict(span.attributes)
         assert attributes["processor.name"] == "test_processor"
-        assert attributes["processor.type"] == "TestProcessor"
+        assert attributes["processor.type"] == "MockProcessor"
         assert attributes["record.id"] == "trace-001"
 
     @pytest.mark.skip(reason="OTEL global TracerProvider cannot be overridden in tests")
     @pytest.mark.anyio
-    async def test_unified_processor_trace_on_error(
-        self, tracer_provider, get_recorded_spans, clear_recorded_spans
-    ):
+    async def test_unified_processor_trace_on_error(self, tracer_provider, get_recorded_spans, clear_recorded_spans):
         """Verify span records exceptions."""
         clear_recorded_spans()
 
         # Create processor that raises an error
         class ErrorProcessor(UnifiedProcessor):
-            async def _process_record(
-                self, context: ProcessingContext
-            ) -> AsyncGenerator[BaseRecord, None]:
+            async def _process_record(self, context: ProcessingContext) -> AsyncGenerator[BaseRecord, None]:
                 raise ValueError("Intentional test error")
                 yield  # Make it a generator
 
@@ -878,8 +867,23 @@ class TestGroupchatProcessor:
         )
 
         # Mock OrchestratorFactory.create_orchestrator
+        async def mock_run(request):
+            """Simulate orchestrator sending traces via callback."""
+            if request.callback_to_ui:
+                # Send a mock ExecutionTrace object
+                # agent_info is required by ExecutionTrace
+                from buttermilk._core.contract import ExecutionTrace
+
+                trace = ExecutionTrace(
+                    session_id="test-session",
+                    session_info=None,
+                    agent_info={"agent_name": "agent1", "task_name": "task1"},
+                    outputs={"result": "output1"},
+                )
+                await request.callback_to_ui(trace)
+
         mock_orchestrator = MagicMock()
-        mock_orchestrator.run = AsyncMock()
+        mock_orchestrator.run = AsyncMock(side_effect=mock_run)
 
         with patch(
             "buttermilk.processors.unified_processors.OrchestratorFactory.create_orchestrator",
@@ -906,7 +910,8 @@ class TestGroupchatProcessor:
     @pytest.mark.anyio
     async def test_groupchat_processor_enriches_metadata(self):
         """Verify GroupchatProcessor enriches record metadata with results."""
-        from unittest.mock import AsyncMock, MagicMock, patch
+        from unittest.mock import MagicMock, patch
+
         from buttermilk._core.contract import ExecutionTrace
 
         # Create mock flow config
@@ -991,13 +996,12 @@ class TestBatchProcessor:
     @pytest.mark.anyio
     async def test_batch_processor_buffers_records(self):
         """Verify BatchProcessor buffers records until batch_size is reached."""
+
         # Create a test batch processor that accumulates records
-        class TestBatchProcessor(UnifiedBatchProcessor):
+        class TestBatchProcessor(BatchProcessorCore):
             processed_batches: list = Field(default_factory=list)
 
-            async def _process_batch(
-                self, contexts: list[ProcessingContext]
-            ) -> AsyncGenerator[list[BaseRecord], None]:
+            async def _process_batch(self, contexts: list[ProcessingContext]) -> AsyncGenerator[list[BaseRecord], None]:
                 # Store batch for verification
                 self.processed_batches.append(contexts)
                 # Yield records unchanged
@@ -1019,8 +1023,8 @@ class TestBatchProcessor:
 
         # Process batch
         outputs = []
-        async for output_batch in processor.process_batch(contexts):
-            outputs.extend(output_batch)
+        async for output in processor.process_batch(contexts):
+            outputs.append(output)
 
         # Verify all records processed
         assert len(outputs) == 3
@@ -1034,13 +1038,12 @@ class TestBatchProcessor:
     @pytest.mark.anyio
     async def test_batch_processor_flushes_on_completion(self):
         """Verify remaining records are processed at end of stream."""
+
         # Create a test batch processor
-        class TestBatchProcessor(UnifiedBatchProcessor):
+        class TestBatchProcessor(BatchProcessorCore):
             batch_sizes: list = Field(default_factory=list)
 
-            async def _process_batch(
-                self, contexts: list[ProcessingContext]
-            ) -> AsyncGenerator[list[BaseRecord], None]:
+            async def _process_batch(self, contexts: list[ProcessingContext]) -> AsyncGenerator[list[BaseRecord], None]:
                 # Track batch size
                 self.batch_sizes.append(len(contexts))
                 # Yield records with metadata indicating batch size
@@ -1080,11 +1083,11 @@ class TestBatchProcessor:
         # Process both batches
         all_outputs = []
 
-        async for output_batch in processor.process_batch(batch1_contexts):
-            all_outputs.extend(output_batch)
+        async for output in processor.process_batch(batch1_contexts):
+            all_outputs.append(output)
 
-        async for output_batch in processor.process_batch(batch2_contexts):
-            all_outputs.extend(output_batch)
+        async for output in processor.process_batch(batch2_contexts):
+            all_outputs.append(output)
 
         # Verify batch sizes tracked
         assert processor.batch_sizes == [3, 1]
@@ -1097,11 +1100,10 @@ class TestBatchProcessor:
     @pytest.mark.anyio
     async def test_executor_handles_batch_processor(self):
         """Verify PipelineExecutor routes to batch processing correctly."""
+
         # Create a test batch processor for the pipeline
-        class SimpleBatchProcessor(UnifiedBatchProcessor):
-            async def _process_batch(
-                self, contexts: list[ProcessingContext]
-            ) -> AsyncGenerator[list[BaseRecord], None]:
+        class SimpleBatchProcessor(BatchProcessorCore):
+            async def _process_batch(self, contexts: list[ProcessingContext]) -> AsyncGenerator[list[BaseRecord], None]:
                 # Add batch metadata to each record
                 output_records = []
                 for ctx in contexts:
@@ -1149,17 +1151,13 @@ class TestBatchProcessor:
 
     @pytest.mark.skip(reason="OTEL global TracerProvider cannot be overridden in tests")
     @pytest.mark.anyio
-    async def test_batch_processor_tracing(
-        self, tracer_provider, get_recorded_spans, clear_recorded_spans
-    ):
+    async def test_batch_processor_tracing(self, tracer_provider, get_recorded_spans, clear_recorded_spans):
         """Verify batch processor creates appropriate trace spans."""
         clear_recorded_spans()
 
         # Create a simple batch processor
         class TracedBatchProcessor(UnifiedBatchProcessor):
-            async def _process_batch(
-                self, contexts: list[ProcessingContext]
-            ) -> AsyncGenerator[list[BaseRecord], None]:
+            async def _process_batch(self, contexts: list[ProcessingContext]) -> AsyncGenerator[list[BaseRecord], None]:
                 yield [ctx.record for ctx in contexts]
 
         processor = TracedBatchProcessor(

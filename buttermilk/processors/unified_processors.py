@@ -30,29 +30,27 @@ from buttermilk._core.contract import ExecutionTrace, TaskProcessingComplete
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llm_core import LLMCore
 from buttermilk._core.processing_context import ProcessingContext
+from buttermilk._core.processor_core import BatchProcessorCore, ProcessorCore
 from buttermilk._core.types import BaseRecord, RunRequest
-from buttermilk._core.unified_batch_processor import UnifiedBatchProcessor
-from buttermilk._core.unified_processor import UnifiedProcessor
 from buttermilk.data.vector import _sanitize_metadata_for_chroma
 from buttermilk.runner.flowrunner import OrchestratorFactory
 from buttermilk.utils.utils import scrub_serializable, upload_chromadb_cache
 
 
-class LLMProcessor(UnifiedProcessor):
+class LLMProcessor(ProcessorCore):
     """Unified processor for LLM-based transformations.
 
     Uses LLMCore internally to handle template rendering and LLM calls.
-    Processes single records through LLM inference and enriches them with outputs.
+    Yields the LLM output directly as a typed object (or string if no output_model).
 
-    This processor enables LLM-based transformations within the unified processor
-    architecture while maintaining proper observability and fail-fast semantics.
+    This processor enables typed data flow where processors yield their
+    natural output type rather than embedding results in BaseRecord fields.
     """
 
     model: str = Field(..., description="LLM model identifier")
     template: str = Field(..., description="Jinja2 template for prompts")
     temperature: float = Field(default=0.7, description="Sampling temperature")
     max_tokens: int = Field(default=1024, description="Maximum tokens to generate")
-    output_col: str = Field(default="llm_output", description="Output column name")
     input_variables: dict[str, Any] = Field(default_factory=dict, description="Static variables for the prompt")
     output_model: str | None = Field(default=None, description="Pydantic model path for structured output")
     fail_on_unfilled_parameters: bool = Field(default=True, description="Fail if template parameters are unfilled")
@@ -66,7 +64,6 @@ class LLMProcessor(UnifiedProcessor):
             template=self.template,
             temperature=self.temperature,
             max_tokens=self.max_tokens,
-            output_col=self.output_col,
             template_vars=self.input_variables,
             output_model=self.output_model,
             fail_on_unfilled_parameters=self.fail_on_unfilled_parameters,
@@ -82,12 +79,13 @@ class LLMProcessor(UnifiedProcessor):
             context: Processing context containing the record to process
 
         Yields:
-            The record enriched with LLM output in the configured output column
+            The LLM output directly (typed model if output_model set, else string)
 
         Raises:
             ProcessingError: If LLM processing fails
         """
-        record_id = context.record.record_id
+        # Safely get record_id for typed objects
+        record_id = getattr(context.record, "record_id", None) or str(type(context.record).__name__)
 
         logger.debug(
             "LLMProcessor starting",
@@ -96,16 +94,18 @@ class LLMProcessor(UnifiedProcessor):
             template=self.template,
         )
 
-        # Build template variables by flattening record metadata
-        # This allows templates to access both record fields and metadata fields directly
-        record_dict = context.record.model_dump()
-        template_vars = {
-            **record_dict.get("metadata", {}),  # Flatten metadata fields
-            **{k: v for k, v in record_dict.items() if k != "metadata"},  # Top-level fields
-        }
+        # Build template variables by flattening record data
+        if hasattr(context.record, "model_dump"):
+            record_dict = context.record.model_dump()
+            template_vars = {
+                **record_dict.get("metadata", {}),  # Flatten metadata fields
+                **{k: v for k, v in record_dict.items() if k != "metadata"},  # Top-level fields
+            }
+        else:
+            # For non-Pydantic records
+            template_vars = {"record": context.record}
 
         # Use LLMCore.process_with_llm() for LLM inference
-        # Trace emission is handled by UnifiedProcessor base class
         llm_result = await self._llm_core.process_with_llm(
             template_vars=template_vars,
             record=context.record,
@@ -118,29 +118,17 @@ class LLMProcessor(UnifiedProcessor):
 
             raise ProcessingError(f"LLM processing failed: {llm_result.error}")
 
-        # Enrich record with LLM output
-        enriched_metadata = {
-            **(context.record.metadata if context.record.metadata else {}),
-            f"llm_{self.name or 'processor'}": llm_result.metadata,
-        }
-
-        enriched_record = context.record.model_copy(
-            update={
-                self.output_col: llm_result.content,
-                "metadata": enriched_metadata,
-            }
-        )
-
         logger.debug(
-            "LLMProcessor completed",
+            "LLMProcessor yielding output",
             record_id=record_id,
-            output_col=self.output_col,
+            output_type=type(llm_result.content).__name__,
         )
 
-        yield enriched_record
+        # Yield the LLM output directly (typed or string)
+        yield llm_result.content
 
 
-class GroupchatProcessor(UnifiedProcessor):
+class GroupchatProcessor(ProcessorCore):
     """Wraps an Orchestrator to run multi-agent conversations as a unified processor.
 
     Creates a fresh orchestrator instance per record to ensure state isolation.
@@ -314,7 +302,7 @@ class GroupchatProcessor(UnifiedProcessor):
         return result
 
 
-class ExpanderProcessor(UnifiedProcessor):
+class ExpanderProcessor(ProcessorCore):
     """Expands a single record into multiple records based on a list field."""
 
     field_to_expand: str = Field(..., description="Name of the list field to expand into multiple records")
@@ -361,7 +349,7 @@ class ExpanderProcessor(UnifiedProcessor):
             yield expanded_record
 
 
-class ParameterExpansionProcessor(UnifiedProcessor):
+class ParameterExpansionProcessor(ProcessorCore):
     """Expands record into N records based on cartesian product of variants.
 
     Takes a record and expands it into multiple records by computing the
@@ -410,7 +398,7 @@ class ParameterExpansionProcessor(UnifiedProcessor):
             yield expanded_record
 
 
-class TransformProcessor(UnifiedProcessor):
+class TransformProcessor(ProcessorCore):
     """Applies JMESPath expressions to transform records.
 
     Evaluates a JMESPath expression against the record and stores the result
@@ -500,7 +488,7 @@ class TransformProcessor(UnifiedProcessor):
         yield context.record
 
 
-class ShellProcessor(UnifiedProcessor):
+class ShellProcessor(ProcessorCore):
     """Executes shell commands with placeholder substitution.
 
     Features:
@@ -602,7 +590,7 @@ class ShellProcessor(UnifiedProcessor):
         yield context.record
 
 
-class FilterProcessor(UnifiedProcessor):
+class FilterProcessor(ProcessorCore):
     """Filters records based on JMESPath criteria.
 
     Evaluates a JMESPath expression against each record and yields the record
@@ -691,7 +679,7 @@ class FilterProcessor(UnifiedProcessor):
             raise ValueError(f"Error evaluating filter criteria '{self.criteria}': {str(e)}") from e
 
 
-class EmbeddingProcessor(UnifiedBatchProcessor):
+class EmbeddingProcessor(BatchProcessorCore):
     """Batch processor for generating embeddings for document chunks.
 
     Processes batches of records with chunks, generating embeddings via Google GenAI.
@@ -970,7 +958,7 @@ class EmbeddingProcessor(UnifiedBatchProcessor):
         return any(k in msg for k in ["rate limit", "quota", "too many requests", "429"])
 
 
-class ChromaDBProcessor(UnifiedProcessor):
+class ChromaDBProcessor(ProcessorCore):
     """Upload records with embeddings to ChromaDB.
 
     Processes records with embedded chunks and uploads them to a ChromaDB collection.

@@ -16,7 +16,6 @@ from buttermilk._core.llms import CreateResult
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.protocols import Processor
 from buttermilk._core.types import BaseRecord
-from buttermilk._core.unified_processor import UnifiedProcessor
 from buttermilk.processors.unified_processors import LLMProcessor
 
 

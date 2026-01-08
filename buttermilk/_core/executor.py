@@ -10,14 +10,12 @@ Processors are expected to be already instantiated as Pydantic models before bei
 passed to the PipelineConfig.
 """
 
-import asyncio
-from typing import AsyncGenerator, Any
+from typing import AsyncGenerator
 
 from buttermilk._core.pipeline_config import PipelineConfig
 from buttermilk._core.processing_context import ProcessingContext
-from buttermilk._core.protocols import Processor, BatchProcessor
+from buttermilk._core.protocols import BatchProcessor, Processor
 from buttermilk._core.types import BaseRecord
-from buttermilk import logger
 
 
 class PipelineExecutor:
@@ -38,11 +36,7 @@ class PipelineExecutor:
             if isinstance(processor, BatchProcessor):
                 self._batch_buffers[len(self.processors) - 1] = []
 
-    async def run(
-        self,
-        source: AsyncGenerator[BaseRecord, None],
-        session_id: str
-    ) -> AsyncGenerator[BaseRecord, None]:
+    async def run(self, source: AsyncGenerator[BaseRecord, None], session_id: str) -> AsyncGenerator[BaseRecord, None]:
         """Run the pipeline on a source of records.
 
         Args:
@@ -64,11 +58,7 @@ class PipelineExecutor:
         async for result in self._flush_all_batches(0):
             yield result
 
-    async def _process_chain(
-        self,
-        context: ProcessingContext,
-        processor_index: int
-    ) -> AsyncGenerator[BaseRecord, None]:
+    async def _process_chain(self, context: ProcessingContext, processor_index: int) -> AsyncGenerator[BaseRecord, None]:
         """Recursively process the chain.
 
         Args:
@@ -92,7 +82,7 @@ class PipelineExecutor:
                     record=output_record,
                     metadata=context.metadata.copy(),  # Copy to avoid mutation
                     resources=context.resources,
-                    ui_callback=context.ui_callback
+                    ui_callback=context.ui_callback,
                 )
 
                 async for final_output in self._process_chain(next_context, processor_index + 1):
@@ -127,20 +117,26 @@ class PipelineExecutor:
         processor = self.processors[processor_index]
 
         # Process the batch
-        async for output_batch in processor.process_batch(buffer):
-            for output_record in output_batch:
-                # Create new context for the next stage
-                # Use the session_id from the first context in the batch
-                next_context = ProcessingContext(
-                    session_id=buffer[0].session_id,
-                    record=output_record,
-                    metadata={},  # Fresh metadata for batch output
-                    resources=buffer[0].resources,
-                    ui_callback=buffer[0].ui_callback
-                )
+        # Process the batch
+        async for output_record in processor.process_batch(buffer):
+            # Create new context for the next stage
+            # Use the session_id from the first context in the batch (maintained scope)
+            # Lineage tracking is implicitly handled by the processor returning one or more records
+            # that correspond to inputs.
 
-                async for final_output in self._process_chain(next_context, processor_index + 1):
-                    yield final_output
+            # Note: We use buffer[0] for shared context properties, but ideally
+            # we should track which input record produced which output if possible.
+            # However, for simple flattening, preserving session/resources is enough.
+            next_context = ProcessingContext(
+                session_id=buffer[0].session_id,
+                record=output_record,
+                metadata={},  # Fresh metadata for batch output
+                resources=buffer[0].resources,
+                ui_callback=buffer[0].ui_callback,
+            )
+
+            async for final_output in self._process_chain(next_context, processor_index + 1):
+                yield final_output
 
         # Clear the buffer after processing
         self._batch_buffers[processor_index] = []

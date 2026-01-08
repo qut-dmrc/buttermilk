@@ -8,7 +8,7 @@ It separates concerns into:
 These protocols enable a unified execution model where "everything is a processor".
 """
 
-from typing import Any, AsyncGenerator, Protocol, runtime_checkable
+from typing import AsyncGenerator, Protocol, runtime_checkable
 
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord
@@ -17,7 +17,7 @@ from buttermilk._core.types import BaseRecord
 @runtime_checkable
 class Processor(Protocol):
     """Standard processor interface for single-record processing.
-    
+
     Processors accept a ProcessingContext (which contains the input record)
     and yield zero or more output BaseRecord objects.
     """
@@ -42,7 +42,7 @@ class Processor(Protocol):
 @runtime_checkable
 class BatchProcessor(Protocol):
     """Processor interface for efficient batch operations.
-    
+
     Designed for operations that benefit from batching, such as GPU inference
     (LLMs, embeddings) or bulk API operations.
     """
@@ -50,17 +50,18 @@ class BatchProcessor(Protocol):
     async def process_batch(
         self,
         contexts: list[ProcessingContext],
-    ) -> AsyncGenerator[list[BaseRecord], None]:
+    ) -> AsyncGenerator[BaseRecord, None]:
         """Process a batch of records.
 
         Args:
             contexts: A list of ProcessingContext objects, each containing a record.
 
         Yields:
-            list[BaseRecord]: A list of output records corresponding to the batch.
-                              The structure of the output depends on the processor logic
-                              (e.g., one output per input, or flattened list).
-                              
+            BaseRecord: Output records corresponding to the batch.
+                        The processor handles mapping outputs to requests.
+
+            Note: The executor is responsible for routing these records to the next stage.
+
             Note: The executor is responsible for mapping outputs back to inputs
             if order is preserved, or the processor must handle lineage.
         """

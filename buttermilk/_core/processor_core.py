@@ -1,86 +1,60 @@
-"""Shared base class for all pipeline processors.
+"""Base class for all pipeline processors.
 
-This module provides ProcessorCore, a minimal base class that encapsulates
-common functionality shared between ClassifierCore, LLMCore, and
-ToxicityClassifierCore.
+This module provides ProcessorCore, the unified base class for all processors.
+It combines:
+- OpenTelemetry span wrapping (automatic for all processors)
+- ExecutionTrace emission helpers (opt-in for LLM/batch processors)
+- Hydra config compatibility (Pydantic models with _target_)
 
-The design enables:
-- Consistent tracing across all processor types
-- Shared infrastructure (trace_writer, error handling)
-- Unified Processor protocol implementation patterns
+The design enables consistent observability across all processor types.
 """
 
-import time
 from abc import ABC, abstractmethod
 from typing import Any, AsyncGenerator, Optional
 
 from opentelemetry import trace
-from pydantic import BaseModel, ConfigDict, PrivateAttr, computed_field
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, computed_field
 
 from buttermilk import logger
 from buttermilk._core.contract import ExecutionTrace
-from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord
 
 
-class ProcessorCore(ABC, BaseModel):
-    """Minimal shared base for all pipeline processors.
+class ObservabilityMixin(BaseModel):
+    """Mixin providing observability features (tracing, logging)."""
 
-    Provides:
-    - Lazy trace_writer property for BigQuery persistence
-    - Common trace emission patterns
-    - Processor protocol scaffolding
-
-    Subclasses (ClassifierCore, LLMCore, ToxicityClassifierCore) implement
-    their specific processing logic while inheriting common infrastructure.
-
-    Example:
-        ```python
-        class MyProcessor(ProcessorCore):
-            async def process(
-                self,
-                record: BaseRecord,
-                *,
-                processor_stage: str,
-                **kwargs,
-            ) -> AsyncGenerator[BaseRecord, None]:
-                # Process record
-                result = await self._do_processing(record)
-
-                # Emit trace
-                await self._emit_trace(...)
-
-                yield enriched_record
-        ```
-    """
+    # Common fields
+    name: str | None = Field(default=None, description="Processor instance name for tracing")
+    enabled: bool = Field(default=True, description="Whether this processor is active")
 
     model_config = ConfigDict(
-        extra="forbid",  # Strict - no unknown fields
+        extra="forbid",
         arbitrary_types_allowed=True,
         frozen=False,
     )
 
-    # Private attributes (not included in serialization)
     _trace_writer: Any = PrivateAttr(default=None)
+
+    @property
+    def processor_type(self) -> str:
+        """Return processor type name for tracing. Defaults to class name."""
+        return self.__class__.__name__
 
     @computed_field
     @property
-    def parameters(self) -> dict[str, Any]:
+    def config_dict(self) -> dict[str, Any]:
         """Return processor config for tracing (JSON-serializable)."""
-        excluded = {"client", "credentials", "tokenizer", "parameters"}
-        return {
-            k: v
-            for k, v in self.model_dump(exclude_none=True, exclude={"parameters"}).items()
-            if k not in excluded
-        }
+        excluded = {"client", "credentials", "tokenizer", "config_dict"}
+        return {k: v for k, v in self.model_dump(exclude_none=True, exclude={"config_dict"}).items() if k not in excluded}
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # ExecutionTrace Helpers (opt-in for LLM/batch processors)
+    # ─────────────────────────────────────────────────────────────────────────
 
     @property
     def trace_writer(self) -> Any:
-        """Lazy-load trace writer for BigQuery persistence.
-
-        Returns:
-            TraceWriter instance or None if unavailable
-        """
+        """Lazy-load trace writer for BigQuery persistence."""
         if self._trace_writer is None:
             try:
                 from buttermilk.utils.trace_writer import get_trace_writer
@@ -92,11 +66,7 @@ class ProcessorCore(ABC, BaseModel):
         return self._trace_writer
 
     async def _emit_trace(self, execution_trace: ExecutionTrace) -> None:
-        """Emit execution trace with error handling.
-
-        Args:
-            execution_trace: The ExecutionTrace to persist
-        """
+        """Emit execution trace with error handling."""
         if self.trace_writer:
             try:
                 await self.trace_writer.add(execution_trace)
@@ -108,17 +78,9 @@ class ProcessorCore(ABC, BaseModel):
         processor_stage: str,
         execution_type: str = "processing",
     ) -> dict[str, Any]:
-        """Build standardized agent_info dict for ExecutionTrace.
-
-        Args:
-            processor_stage: Pipeline stage identifier
-            execution_type: Type of execution (e.g., "classification", "llm_processing")
-
-        Returns:
-            Standardized agent_info dictionary
-        """
+        """Build standardized agent_info dict."""
         return {
-            "component_name": self.__class__.__name__,
+            "component_name": self.name or self.__class__.__name__,
             "processor_class": self.__class__.__name__,
             "execution_type": execution_type,
             "processor_stage": processor_stage,
@@ -130,25 +92,12 @@ class ProcessorCore(ABC, BaseModel):
         duration_ms: float,
         extra_metadata: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
-        """Build standardized metadata dict for ExecutionTrace.
-
-        Args:
-            record: Input record (for extracting input metadata)
-            duration_ms: Processing duration in milliseconds
-            extra_metadata: Additional metadata to include
-
-        Returns:
-            Standardized metadata dictionary
-        """
+        """Build standardized metadata dict."""
         metadata: dict[str, Any] = {"duration_ms": duration_ms}
-
-        # Include input metadata under 'input' key if available
         if record is not None and hasattr(record, "metadata") and record.metadata:
             metadata["input"] = record.metadata
-
         if extra_metadata:
             metadata.update(extra_metadata)
-
         return metadata
 
     async def _emit_success_trace(
@@ -165,30 +114,12 @@ class ProcessorCore(ABC, BaseModel):
         trace_id: Optional[str] = None,
         component_name: Optional[str] = None,
     ) -> str:
-        """Emit a success execution trace.
-
-        Args:
-            record: Input record
-            outputs: Processing outputs
-            processor_stage: Pipeline stage identifier
-            parent_trace_id: Parent trace ID for correlation
-            duration_ms: Processing duration in milliseconds
-            messages: Optional message history
-            inputs: Optional template inputs/variables (includes criteria, instructions, etc.)
-            extra_metadata: Additional metadata
-            execution_type: Type of execution
-            trace_id: Optional trace ID (generated if not provided)
-            component_name: Optional component name (defaults to class name)
-
-        Returns:
-            trace_id: The trace ID used
-        """
+        """Emit a success execution trace."""
         import uuid
 
         if trace_id is None:
             trace_id = str(uuid.uuid4())
 
-        # Build agent_info
         agent_info = self._build_agent_info(processor_stage, execution_type)
         if component_name:
             agent_info["component_name"] = component_name
@@ -218,19 +149,7 @@ class ProcessorCore(ABC, BaseModel):
         execution_type: str = "processing",
         component_name: Optional[str] = None,
     ) -> None:
-        """Emit an error execution trace.
-
-        Args:
-            record: Input record (may be None for early failures)
-            error: The exception that occurred
-            processor_stage: Pipeline stage identifier
-            parent_trace_id: Parent trace ID for correlation
-            duration_ms: Processing duration in milliseconds
-            inputs: Optional template inputs/variables (includes criteria, instructions, etc.)
-            execution_type: Type of execution
-            component_name: Optional component name (defaults to class name)
-        """
-        # Build agent_info
+        """Emit an error execution trace."""
         agent_info = self._build_agent_info(processor_stage, execution_type)
         if component_name:
             agent_info["component_name"] = component_name
@@ -249,30 +168,128 @@ class ProcessorCore(ABC, BaseModel):
 
         await self._emit_trace(error_trace)
 
-    @abstractmethod
+
+class ProcessorCore(ObservabilityMixin, ABC):
+    """Base class for single-record pipeline processors.
+
+    Implements Processor protocol with OTEL tracing.
+    """
+
     async def process(
         self,
-        record: BaseRecord,
-        *,
-        processor_stage: str,
-        parent_trace_id: Optional[str] = None,
-        **kwargs: Any,
+        context: ProcessingContext,
     ) -> AsyncGenerator[BaseRecord, None]:
-        """Process a BaseRecord and yield zero or more output records.
+        """Process with OTEL span wrapping.
 
-        This is the Processor protocol method that subclasses must implement.
+        Creates an OpenTelemetry span for this processor execution,
+        then delegates to _process_record().
 
         Args:
-            record: Input BaseRecord to process
-            processor_stage: Unique stage identifier for tracing
-            parent_trace_id: Optional trace ID for distributed tracing
-            **kwargs: Additional arguments
+            context: ProcessingContext with record and session state
 
         Yields:
-            BaseRecord: Enriched record(s) with processing results
-
-        Raises:
-            ProcessingError: If processing fails
+            Output records from _process_record()
         """
-        raise NotImplementedError("Subclasses must implement process()")
-        yield  # Make this a generator
+        tracer = trace.get_tracer("buttermilk.processor")
+        parent_context = trace.set_span_in_context(context.span) if context.span else None
+        processor_name = self.name or self.processor_type
+        record_id = getattr(context.record, "record_id", None) or str(type(context.record).__name__)
+
+        with tracer.start_as_current_span(
+            f"processor.{self.processor_type}",
+            context=parent_context,
+            attributes={
+                "processor.name": processor_name,
+                "processor.type": self.processor_type,
+                "record.id": record_id,
+            },
+        ) as span:
+            try:
+                async for output in self._process_record(context):
+                    yield output
+            except Exception as e:
+                span.record_exception(e)
+                logger.error(
+                    f"Processor {processor_name} failed: {e}",
+                    processor=processor_name,
+                    record_id=record_id,
+                    error=str(e),
+                )
+                raise
+
+    @abstractmethod
+    async def _process_record(
+        self,
+        context: ProcessingContext,
+    ) -> AsyncGenerator[BaseRecord, None]:
+        """Concrete processing logic. Must be implemented by subclasses.
+
+        Args:
+            context: ProcessingContext with record and session state
+
+        Yields:
+            Zero or more output records
+        """
+        raise NotImplementedError("Subclasses must implement _process_record")
+        yield
+
+
+class BatchProcessorCore(ObservabilityMixin, ABC):
+    """Base class for batch pipeline processors.
+
+    Implements BatchProcessor protocol with OTEL tracing.
+    """
+
+    batch_size: int = Field(default=32, description="Number of records to batch together")
+
+    async def process_batch(
+        self,
+        contexts: list[ProcessingContext],
+    ) -> AsyncGenerator[BaseRecord, None]:
+        """Process batch with OTEL span wrapping."""
+        tracer = trace.get_tracer("buttermilk.processor")
+        parent_context = None
+        if contexts and contexts[0].span:
+            parent_context = trace.set_span_in_context(contexts[0].span)
+
+        processor_name = self.name or self.processor_type
+
+        with tracer.start_as_current_span(
+            f"batch_processor.{self.processor_type}",
+            context=parent_context,
+            attributes={
+                "processor.name": processor_name,
+                "processor.type": self.processor_type,
+                "batch.size": len(contexts),
+            },
+        ) as span:
+            try:
+                # Delegate to _process_batch which yields list[BaseRecord]
+                # Flatten the output for the pipeline
+                async for output_batch in self._process_batch(contexts):
+                    span.set_attribute("batch.output_size", len(output_batch))
+                    for record in output_batch:
+                        yield record
+
+            except Exception as e:
+                span.record_exception(e)
+                logger.error(
+                    f"Batch processor {processor_name} failed: {e}",
+                    processor=processor_name,
+                    batch_size=len(contexts),
+                    error=str(e),
+                )
+                raise
+
+    async def finalize(self) -> None:
+        """Optional cleanup logic."""
+        pass
+
+    @abstractmethod
+    async def _process_batch(
+        self,
+        contexts: list[ProcessingContext],
+    ) -> AsyncGenerator[list[BaseRecord], None]:
+        """Concrete batch processing logic. Must be implemented by subclasses."""
+        raise NotImplementedError("Subclasses must implement _process_batch")
+        yield

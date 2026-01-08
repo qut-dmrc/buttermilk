@@ -6,13 +6,14 @@ They use a module-scoped fixture to share the BM instance across tests.
 
 import pytest
 
-from buttermilk import init
-
 
 @pytest.fixture(scope="module")
-def bm_instance():
-    """Module-scoped BM instance using testing.yaml config."""
-    return init(config_name="testing")
+def bm_instance(real_bm):
+    """Module-scoped BM instance reusing the session-scoped real_bm.
+
+    This avoids re-running init() which triggers logging configuration errors.
+    """
+    return real_bm
 
 
 def test_sync(bm_instance):

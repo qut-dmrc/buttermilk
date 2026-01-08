@@ -11,7 +11,6 @@ Tests follow the fail-fast philosophy and use REAL data patterns (no mocking int
 Only mock external services (ChromaDB) at the system boundary.
 """
 
-from typing import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -84,10 +83,9 @@ class TestChromaDBProcessorProtocol:
 
     def test_chromadb_processor_inherits_from_unified_processor(self):
         """Verify ChromaDBProcessor inherits from UnifiedProcessor."""
-        from buttermilk._core.unified_processor import UnifiedProcessor
+        from buttermilk._core.processor_core import ProcessorCore
 
-        # Verify inheritance
-        assert issubclass(ChromaDBProcessor, UnifiedProcessor)
+        assert issubclass(ChromaDBProcessor, ProcessorCore)
 
     def test_chromadb_processor_implements_processor_protocol(self):
         """Verify ChromaDBProcessor satisfies Processor protocol."""
@@ -347,9 +345,7 @@ class TestChromaDBProcessorRemoteStorage:
                 mock_session = MagicMock()
                 mock_session.generate_cache_key.return_value = "test_cache_key"
                 mock_session.get_chromadb_cache_dir.return_value = MagicMock(
-                    __truediv__=lambda self, x: MagicMock(
-                        mkdir=MagicMock(), exists=MagicMock(return_value=True)
-                    )
+                    __truediv__=lambda self, x: MagicMock(mkdir=MagicMock(), exists=MagicMock(return_value=True))
                 )
                 mock_bm.session_info = mock_session
 
@@ -391,9 +387,7 @@ class TestChromaDBProcessorFinalization:
         )
 
         # Mock upload utility
-        with patch(
-            "buttermilk.processors.unified_processors.upload_chromadb_cache"
-        ) as mock_upload:
+        with patch("buttermilk.processors.unified_processors.upload_chromadb_cache") as mock_upload:
             mock_upload.return_value = AsyncMock()
 
             # Mock session_info for cache path
@@ -402,9 +396,7 @@ class TestChromaDBProcessorFinalization:
                 mock_session.generate_cache_key.return_value = "test_cache_key"
                 mock_cache_path = MagicMock()
                 mock_cache_path.exists.return_value = True
-                mock_session.get_chromadb_cache_dir.return_value = MagicMock(
-                    __truediv__=lambda self, x: mock_cache_path
-                )
+                mock_session.get_chromadb_cache_dir.return_value = MagicMock(__truediv__=lambda self, x: mock_cache_path)
                 mock_bm.session_info = mock_session
 
                 # Initialize remote path by processing a record first

@@ -96,9 +96,9 @@ class TestTypedProcessorYieldsArbitraryTypes:
     @pytest.mark.anyio
     async def test_processor_can_yield_non_baserecord_type(self):
         """Processor should be able to yield JudgeOutput directly."""
-        from buttermilk._core.unified_processor import UnifiedProcessor
+        from buttermilk._core.processor_core import ProcessorCore
 
-        class MockJudgeProcessor(UnifiedProcessor):
+        class MockJudgeProcessor(ProcessorCore):
             """Test processor that yields JudgeOutput."""
 
             async def _process_record(self, context: ProcessingContext) -> AsyncGenerator[JudgeOutput, None]:
@@ -127,9 +127,9 @@ class TestTypedProcessorYieldsArbitraryTypes:
     @pytest.mark.anyio
     async def test_processor_can_yield_different_output_types(self):
         """Different processors can yield different output types."""
-        from buttermilk._core.unified_processor import UnifiedProcessor
+        from buttermilk._core.processor_core import ProcessorCore
 
-        class SummarizerProcessor(UnifiedProcessor):
+        class SummarizerProcessor(ProcessorCore):
             async def _process_record(self, context: ProcessingContext) -> AsyncGenerator[SummaryOutput, None]:
                 yield SummaryOutput(
                     summary="This is a summary",
@@ -160,10 +160,10 @@ class TestPipelineTypedFlow:
         """Output from stage 1 should be input to stage 2."""
         from buttermilk._core.executor import PipelineExecutor
         from buttermilk._core.pipeline_config import PipelineConfig
-        from buttermilk._core.unified_processor import UnifiedProcessor
+        from buttermilk._core.processor_core import ProcessorCore
 
         # Stage 1: BaseRecord -> JudgeOutput
-        class Stage1(UnifiedProcessor):
+        class Stage1(ProcessorCore):
             async def _process_record(self, ctx: ProcessingContext):
                 yield JudgeOutput(
                     prediction=True,
@@ -173,7 +173,7 @@ class TestPipelineTypedFlow:
 
         # Stage 2: JudgeOutput -> SummaryOutput
         # This should receive JudgeOutput as input
-        class Stage2(UnifiedProcessor):
+        class Stage2(ProcessorCore):
             async def _process_record(self, ctx: ProcessingContext):
                 # The input should be JudgeOutput from Stage 1
                 input_obj = ctx.record  # or however we access input
@@ -200,3 +200,34 @@ class TestPipelineTypedFlow:
         # Final output should be SummaryOutput
         assert len(results) == 1
         assert isinstance(results[0], SummaryOutput)
+
+
+class TestLLMProcessorTypedOutput:
+    """Test LLMProcessor typed output behavior."""
+
+    def test_llm_processor_backwards_compatibility_removed(self):
+        """Verify that output_col and yield_typed (legacy fields) are removed."""
+        from buttermilk.processors.unified_processors import LLMProcessor
+
+        processor = LLMProcessor(
+            model="test-model",
+            template="test_template",
+        )
+
+        # Confirm fields are GONE
+        assert not hasattr(processor, "output_col")
+        assert not hasattr(processor, "yield_typed")
+
+        # Confirm inner core doesn't have them either
+        assert not hasattr(processor._llm_core, "output_col")
+
+    def test_llm_processor_has_output_model_field(self):
+        """LLMProcessor should have output_model field for typed output."""
+        from buttermilk.processors.unified_processors import LLMProcessor
+
+        processor = LLMProcessor(
+            model="test-model",
+            template="test_template",
+            output_model="buttermilk.agents.judge.JudgeReasons",
+        )
+        assert processor.output_model == "buttermilk.agents.judge.JudgeReasons"
