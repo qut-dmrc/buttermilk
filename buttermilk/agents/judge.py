@@ -51,10 +51,7 @@ class Reasons(BaseModel):
 
         """
         reasons_str = "\n\n\t".join(f"- {reason}" for reason in self.reasons)
-        return (
-            f"**Conclusion:** {self.conclusion}\n\n"
-            f"**Reasoning Steps:**\n\t{reasons_str or 'No specific reasons provided.'}"
-        )
+        return f"**Conclusion:** {self.conclusion}\n\n**Reasoning Steps:**\n\t{reasons_str or 'No specific reasons provided.'}"
 
 
 class JudgeReasons(Reasons):
@@ -104,13 +101,7 @@ class JudgeReasons(Reasons):
         # Format reasons as bullet points
         reasons_str = "\n".join(f"- {reason}" for reason in self.reasons)
 
-        return (
-            f"{header}"
-            f"{self.conclusion}\n"
-            f"Conclusion: {conclusion_type}\n"
-            f"{reasons_str}\n"
-            f"Prediction: {self.prediction}"
-        )
+        return f"{header}{self.conclusion}\nConclusion: {conclusion_type}\n{reasons_str}\nPrediction: {self.prediction}"
 
     def __str__(self) -> str:
         """Returns a Markdown formatted string representation.
@@ -157,7 +148,7 @@ class Judge(LLMAgent):
 
     Key Configuration Parameters (from `AgentConfig.parameters`):
         - `model` (str): **Required**. The name of the LLM to use for judgment.
-        - `prompt_template` (str): **Required**. The name of the prompt template
+        - `template` (str): **Required**. The name of the prompt template
           that guides the LLM to perform the evaluation and output `JudgeReasons`.
 
     Attributes:
@@ -173,9 +164,7 @@ class Judge(LLMAgent):
         # Fail explicitly if config tries to override output_model - Judge requires JudgeReasons
         if "output_model" in kwargs and kwargs["output_model"] is not None:
             raise ValueError(
-                f"Judge agent requires output_model=JudgeReasons. "
-                f"Cannot override with {kwargs['output_model']}. "
-                f"Remove 'output_model' from config."
+                f"Judge agent requires output_model=JudgeReasons. Cannot override with {kwargs['output_model']}. Remove 'output_model' from config."
             )
         kwargs.pop("output_model", None)  # Remove None values to avoid duplicate kwarg
         super().__init__(output_model=JudgeReasons, **kwargs)

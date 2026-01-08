@@ -47,12 +47,8 @@ class Position(BaseModel):
 
     model_config = {"extra": "forbid"}  # Required for Azure OpenAI structured output
 
-    experts: list[str] = Field(
-        ..., description="A list of experts who hold or support this position."
-    )
-    position: str = Field(
-        ..., description="A concise summary or statement of the position."
-    )
+    experts: list[str] = Field(..., description="A list of experts who hold or support this position.")
+    position: str = Field(..., description="A concise summary or statement of the position.")
 
 
 class Divergence(BaseModel):
@@ -71,12 +67,8 @@ class Divergence(BaseModel):
 
     model_config = {"extra": "forbid"}  # Required for Azure OpenAI structured output
 
-    topic: str = Field(
-        ..., description="The key topic, point, or fact where differences are noted."
-    )
-    positions: list[Position] = Field(
-        ..., description="A list of distinct positions held by experts on this topic."
-    )
+    topic: str = Field(..., description="The key topic, point, or fact where differences are noted.")
+    positions: list[Position] = Field(..., description="A list of distinct positions held by experts on this topic.")
 
 
 class Differences(BaseModel):
@@ -129,9 +121,7 @@ class Differences(BaseModel):
         # Format divergences as structured list
         divergences_parts = []
         for div in self.divergences:
-            positions_str = "; ".join(
-                f"{pos.position} (by {', '.join(pos.experts)})" for pos in div.positions
-            )
+            positions_str = "; ".join(f"{pos.position} (by {', '.join(pos.experts)})" for pos in div.positions)
             divergences_parts.append(f"- {div.topic}: {positions_str}")
 
         divergences_str = "\n".join(divergences_parts)
@@ -204,7 +194,7 @@ class Differentiator(LLMAgent):
 
     Key Configuration Parameters (inherited from `LLMAgent` and used here):
         - `model` (str): **Required**. The name of the LLM to use for the analysis.
-        - `prompt_template` (str): **Required**. The name of the prompt template that
+        - `template` (str): **Required**. The name of the prompt template that
           guides the LLM to perform the difference analysis and structure its
           output according to the `Differences` model.
 

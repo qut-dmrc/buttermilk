@@ -11,7 +11,7 @@ from buttermilk._core.config_bootstrap import bootstrap_session_with_config_asyn
 # Apply markers to all tests in this directory
 # End-to-end tests need longer timeout (240s) than unit tests (60s default)
 # Note: This must also be passed via --timeout=240 when using pytest-xdist (-n)
-pytestmark = [pytest.mark.endtoend, pytest.mark.timeout(240)]
+pytestmark = [pytest.mark.endtoend, pytest.mark.slow, pytest.mark.timeout(240)]
 
 
 def pytest_addoption(parser):

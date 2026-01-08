@@ -102,7 +102,7 @@ processors:
 - type: llm
   name: summarizer
   model: gpt-4
-  prompt_template: "Summarize: {text}"
+  template: "Summarize: {text}"
   output_col: summary
 ```
 

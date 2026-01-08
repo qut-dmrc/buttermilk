@@ -8,15 +8,14 @@ Processors are Pydantic models that can be instantiated directly via Hydra's
 `_target_` mechanism. No registry or separate config classes needed.
 """
 
-from typing import Any, AsyncGenerator
+from typing import AsyncGenerator
 
 from opentelemetry import trace
 from pydantic import BaseModel, ConfigDict, Field
 
-from buttermilk._core.processing_context import ProcessingContext
-from buttermilk._core.protocols import Processor
-from buttermilk._core.types import BaseRecord
 from buttermilk import logger
+from buttermilk._core.processing_context import ProcessingContext
+from buttermilk._core.types import BaseRecord
 
 
 class UnifiedProcessor(BaseModel):
@@ -70,14 +69,17 @@ class UnifiedProcessor(BaseModel):
 
         processor_name = self.name or self.processor_type
 
+        # Safely get record_id (may not exist for typed objects)
+        record_id = getattr(context.record, "record_id", None) or str(type(context.record).__name__)
+
         with tracer.start_as_current_span(
             f"processor.{self.processor_type}",
             context=parent_context,
             attributes={
                 "processor.name": processor_name,
                 "processor.type": self.processor_type,
-                "record.id": context.record.record_id,
-            }
+                "record.id": record_id,
+            },
         ) as span:
             try:
                 # Delegate to concrete implementation
@@ -86,12 +88,7 @@ class UnifiedProcessor(BaseModel):
 
             except Exception as e:
                 span.record_exception(e)
-                logger.error(
-                    f"Processor {processor_name} failed: {e}",
-                    processor=processor_name,
-                    record_id=context.record.record_id,
-                    error=str(e)
-                )
+                logger.error(f"Processor {processor_name} failed: {e}", processor=processor_name, record_id=record_id, error=str(e))
                 raise
 
     async def _process_record(

@@ -19,7 +19,7 @@ import random
 import socket
 from collections.abc import Sequence
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable
+from typing import Any, Callable
 
 import urllib3.exceptions
 
@@ -40,6 +40,7 @@ def _init_litellm():
 
     try:
         import litellm
+
         _litellm_module = litellm
 
         # Suppress litellm logging - we handle errors via retry wrapper
@@ -87,9 +88,9 @@ def __getattr__(name: str):
         return _litellm_available()
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
+
 # Autogen library imports - used for message/tool type compatibility
 # OpenAI SDK for exception handling
-import openai
 from autogen_core import CancellationToken, FunctionCall  # Autogen core types
 from autogen_core.models import (
     AssistantMessage,
@@ -120,6 +121,7 @@ from buttermilk._core.constants import CONFIG_CACHE_FILENAME, cache, get_base_ca
 from buttermilk._core.exceptions import ContentBlockedError, ProcessingError  # Custom Buttermilk exceptions
 from buttermilk._core.json_schema import make_all_properties_required, resolve_json_schema_refs  # Schema $ref resolution for Azure compatibility
 from buttermilk.utils.pricing import calculate_token_cost  # Token cost calculation
+
 
 class ClientType(Enum):
     """Enumeration of supported LLM client types.
@@ -294,15 +296,9 @@ class LLMConfig(BaseModel):
     )
     base_url: str | None = Field(default=None, description="Custom URL to call")
 
-    model_info: ModelInfo = Field(
-        ..., description="Model metadata (family, context size, etc.)"
-    )
-    configs: dict = Field(
-        default_factory=dict, description="Options to pass to the LiteLLM client"
-    )
-    litellm_model: str | None = Field(
-        default=None, description="Explicit litellm model identifier override"
-    )
+    model_info: ModelInfo = Field(..., description="Model metadata (family, context size, etc.)")
+    configs: dict = Field(default_factory=dict, description="Options to pass to the LiteLLM client")
+    litellm_model: str | None = Field(default=None, description="Explicit litellm model identifier override")
     parameters: ModelParameters = Field(
         default_factory=ModelParameters,
         description="Default inference parameters (temperature, max_tokens, etc.)",
@@ -339,9 +335,7 @@ class LLMConfig(BaseModel):
                 raise ValueError(
                     f"Unsupported client_type '{v}'. Supported values are: {supported_values}",
                 )
-        raise ValueError(
-            f"client_type must be a string or ClientType enum, got {type(v)}"
-        )
+        raise ValueError(f"client_type must be a string or ClientType enum, got {type(v)}")
 
     @field_validator("parameters", mode="before")
     @classmethod
@@ -372,17 +366,7 @@ class LLMConfig(BaseModel):
 # cat .cache/buttermilk/models.json | jq "keys[]"
 # ```
 """A predefined list of chat model identifiers available within the Buttermilk setup."""
-CHAT_MODELS = [
-    "gemini-pro",
-    "gemini-flash",
-    "gemini-flash-lite",
-    "gpt-mini",
-    "gpt-nano",
-    "gpt-4o",
-    "llama-maverick",
-    "claude-sonnet",
-    "gpt-oss-safeguard-20b",
-]
+CHAT_MODELS = ["gemini-pro", "gemini-flash", "gemini-flash-lite", "gpt-mini", "gpt-nano", "gpt-4o", "llama-maverick", "claude-sonnet"]
 
 """A predefined list of identifiers for cost-effective chat models."""
 CHEAP_CHAT_MODELS = [
@@ -438,24 +422,12 @@ class ModelOutput(CreateResult):
         default=None,
         description="The Pydantic model instance hydrated from LLM's JSON or structured output.",
     )
-    error_message: str | None = Field(
-        default=None, description="Descriptive message about the error"
-    )
-    error_code: int | None = Field(
-        default=None, description="Optional error code associated with the error"
-    )
-    raw_response: Any | None = Field(
-        default=None, description="Raw response from the LLM, if available"
-    )
-    tool_outputs: list[FunctionExecutionResult] | None = Field(
-        default=None, description="Tool outputs if any were executed"
-    )
-    tool_calls: list[FunctionCall] | None = Field(
-        default=None, description="Tool calls made by the LLM, if any"
-    )
-    metadata: dict[str, Any] = Field(
-        default_factory=dict, description="Metadata including pricing information"
-    )
+    error_message: str | None = Field(default=None, description="Descriptive message about the error")
+    error_code: int | None = Field(default=None, description="Optional error code associated with the error")
+    raw_response: Any | None = Field(default=None, description="Raw response from the LLM, if available")
+    tool_outputs: list[FunctionExecutionResult] | None = Field(default=None, description="Tool outputs if any were executed")
+    tool_calls: list[FunctionCall] | None = Field(default=None, description="Tool calls made by the LLM, if any")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Metadata including pricing information")
 
 
 def _validate_schema_constraints(schema: type[BaseModel], model_info: Any) -> None:
@@ -542,9 +514,7 @@ async def _parse_structured_output(  # noqa: PLR0912
         simple_clean_llm_json_text = getattr(_mod, "simple_clean_llm_json_text")
 
         # Try to parse as strict JSON first to preserve types (avoid coercion)
-        logger.debug(
-            f"Attempting to parse string response into {schema.__name__}"
-        )
+        logger.debug(f"Attempting to parse string response into {schema.__name__}")
         text = simple_clean_llm_json_text(content)
 
         if parsed_object is None:
@@ -622,9 +592,7 @@ def autogen_to_litellm_messages(messages: Sequence[LLMMessage]) -> list[dict[str
             litellm_messages.append({"role": "user", "content": msg.content})
         elif msg_type == "AssistantMessage":
             # Handle tool calls in assistant messages
-            if isinstance(msg.content, list) and all(
-                isinstance(c, FunctionCall) for c in msg.content
-            ):
+            if isinstance(msg.content, list) and all(isinstance(c, FunctionCall) for c in msg.content):
                 # Convert FunctionCall objects to tool_calls format
                 tool_calls = []
                 for fc in msg.content:
@@ -635,14 +603,10 @@ def autogen_to_litellm_messages(messages: Sequence[LLMMessage]) -> list[dict[str
                             "function": {"name": fc.name, "arguments": fc.arguments},
                         }
                     )
-                litellm_messages.append(
-                    {"role": "assistant", "content": None, "tool_calls": tool_calls}
-                )
+                litellm_messages.append({"role": "assistant", "content": None, "tool_calls": tool_calls})
             else:
                 # Regular text response
-                content = (
-                    msg.content if isinstance(msg.content, str) else str(msg.content)
-                )
+                content = msg.content if isinstance(msg.content, str) else str(msg.content)
                 litellm_messages.append({"role": "assistant", "content": content})
         elif msg_type == "FunctionExecutionResultMessage":
             # Convert tool results to tool message format
@@ -663,9 +627,7 @@ def autogen_to_litellm_messages(messages: Sequence[LLMMessage]) -> list[dict[str
     return litellm_messages
 
 
-def litellm_to_autogen_result(
-    response: Any, usage: Any, model: str, schema: type[BaseModel] | None = None
-) -> ModelOutput:
+def litellm_to_autogen_result(response: Any, usage: Any, model: str, schema: type[BaseModel] | None = None) -> ModelOutput:
     """Convert LiteLLM response to Autogen ModelOutput.
 
     Args:
@@ -677,7 +639,6 @@ def litellm_to_autogen_result(
     Returns:
         ModelOutput compatible with Autogen interface (always returns ModelOutput to preserve pricing metadata)
     """
-    from autogen_core.models import RequestUsage
 
     # Extract content from response
     content: str | list[FunctionCall]
@@ -687,27 +648,17 @@ def litellm_to_autogen_result(
 
         # Check for tool calls (check both existence and non-empty list)
         tool_calls_attr = getattr(message, "tool_calls", None)
-        if (
-            tool_calls_attr is not None
-            and isinstance(tool_calls_attr, list)
-            and len(tool_calls_attr) > 0
-        ):
+        if tool_calls_attr is not None and isinstance(tool_calls_attr, list) and len(tool_calls_attr) > 0:
             # Convert to FunctionCall objects
             tool_calls: list[FunctionCall] = []
             for tc in tool_calls_attr:
-                tool_calls.append(
-                    FunctionCall(
-                        id=tc.id, name=tc.function.name, arguments=tc.function.arguments
-                    )
-                )
+                tool_calls.append(FunctionCall(id=tc.id, name=tc.function.name, arguments=tc.function.arguments))
             content = tool_calls
         else:
             # Regular text content
             content = message.content if hasattr(message, "content") else str(message)
 
-        raw_finish_reason = (
-            choice.finish_reason if hasattr(choice, "finish_reason") else "stop"
-        )
+        raw_finish_reason = choice.finish_reason if hasattr(choice, "finish_reason") else "stop"
         # Map LiteLLM finish_reason to Autogen values
         # LiteLLM uses "tool_calls", Autogen uses "function_calls"
         finish_reason_map = {
@@ -783,18 +734,10 @@ class LiteLLMWrapper(BaseModel):
     litellm_model_name: str = Field(..., description="Resolved model name for LiteLLM")
     api_key: str | None = Field(default=None, description="API key for the provider")
     base_url: str | None = Field(default=None, description="Custom base URL")
-    extra_headers: dict[str, str] | None = Field(
-        default=None, description="Extra headers for the API request (e.g., Authorization)"
-    )
-    token_provider: Callable[[], str] | None = Field(
-        default=None, description="Optional callable that returns an authentication token"
-    )
-    vertex_project: str | None = Field(
-        default=None, description="GCP project ID for Vertex AI providers"
-    )
-    vertex_location: str | None = Field(
-        default=None, description="GCP region for Vertex AI providers"
-    )
+    extra_headers: dict[str, str] | None = Field(default=None, description="Extra headers for the API request (e.g., Authorization)")
+    token_provider: Callable[[], str] | None = Field(default=None, description="Optional callable that returns an authentication token")
+    vertex_project: str | None = Field(default=None, description="GCP project ID for Vertex AI providers")
+    vertex_location: str | None = Field(default=None, description="GCP region for Vertex AI providers")
     default_parameters: ModelParameters = Field(
         default_factory=ModelParameters,
         description="Default inference parameters (temperature, max_tokens, etc.)",
@@ -814,13 +757,9 @@ class LiteLLMWrapper(BaseModel):
         super().__init__(**data)
 
         if not _litellm_available():
-            raise ImportError(
-                "LiteLLM is not installed. Please install it with: pip install litellm"
-            )
+            raise ImportError("LiteLLM is not installed. Please install it with: pip install litellm")
 
-    async def _execute_with_retry(
-        self, func: Callable[..., Any], *args: Any, **kwargs: Any
-    ) -> Any:
+    async def _execute_with_retry(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         """Execute a function with exponential backoff retry logic.
 
         Mirrors RetryWrapper behavior for consistency.
@@ -857,8 +796,7 @@ class LiteLLMWrapper(BaseModel):
                 )
 
                 is_retryable = isinstance(e, retryable_types) or any(
-                    keyword in error_msg
-                    for keyword in ["rate limit", "timeout", "503", "429", "502", "500", "name resolution"]
+                    keyword in error_msg for keyword in ["rate limit", "timeout", "503", "429", "502", "500", "name resolution"]
                 )
 
                 if attempt < self.max_retries and is_retryable:
@@ -866,10 +804,7 @@ class LiteLLMWrapper(BaseModel):
                     jitter = random.uniform(-self.jitter_seconds, self.jitter_seconds)
                     actual_wait = min(wait_time + jitter, self.max_wait_seconds)
 
-                    logger.warning(
-                        f"LiteLLM call failed (attempt {attempt + 1}/{self.max_retries + 1}): {e}. "
-                        f"Retrying in {actual_wait:.1f}s..."
-                    )
+                    logger.warning(f"LiteLLM call failed (attempt {attempt + 1}/{self.max_retries + 1}): {e}. Retrying in {actual_wait:.1f}s...")
 
                     await asyncio.sleep(actual_wait)
                     wait_time *= 2  # Exponential backoff
@@ -973,11 +908,7 @@ class LiteLLMWrapper(BaseModel):
         if schema and structured_output_enabled:
             # Native structured output supported - use response_format
             _validate_schema_constraints(schema, self.model_info)
-            schema_dict = (
-                schema.model_json_schema()
-                if hasattr(schema, "model_json_schema")
-                else schema.schema()
-            )
+            schema_dict = schema.model_json_schema() if hasattr(schema, "model_json_schema") else schema.schema()
 
             # Azure and Vertex AI models require $ref to be resolved inline
             # Vertex AI (including Llama) may not fully support $defs in JSON schemas
@@ -1019,11 +950,7 @@ class LiteLLMWrapper(BaseModel):
         elif schema and function_calling_enabled and not tools:
             # No native structured output, but function calling available and no tools provided
             # Use a fake tool to get structured output (same approach as AutoGenWrapper)
-            schema_dict = (
-                schema.model_json_schema()
-                if hasattr(schema, "model_json_schema")
-                else schema.schema()
-            )
+            schema_dict = schema.model_json_schema() if hasattr(schema, "model_json_schema") else schema.schema()
             fake_tool_name = f"create_{schema.__name__.lower()}"
             litellm_params["tools"] = [
                 {
@@ -1106,7 +1033,7 @@ class LiteLLMWrapper(BaseModel):
                 logger.error(error_msg)
                 raise ContentBlockedError(
                     message=error_msg,
-                    filter_result={}  # LiteLLM doesn't provide detailed filter results
+                    filter_result={},  # LiteLLM doesn't provide detailed filter results
                 ) from e
             # Generic LiteLLM error
             error_msg = f"LiteLLM call failed: {e}"
@@ -1144,15 +1071,10 @@ class LiteLLMWrapper(BaseModel):
                         message.tool_calls = None  # Clear tool calls
                         choice.finish_reason = "stop"  # Set finish_reason to stop
                     else:
-                        logger.warning(
-                            f"LiteLLMWrapper: Expected fake tool '{fake_tool_name}', "
-                            f"got '{tool_call.function.name}'"
-                        )
+                        logger.warning(f"LiteLLMWrapper: Expected fake tool '{fake_tool_name}', got '{tool_call.function.name}'")
 
         # Convert response to Autogen format (always returns ModelOutput now)
-        result = litellm_to_autogen_result(
-            response, usage, self.litellm_model_name, schema
-        )
+        result = litellm_to_autogen_result(response, usage, self.litellm_model_name, schema)
 
         # Add pricing metadata (result is always ModelOutput now)
         # Preserve actual_model that was set in litellm_to_autogen_result()
@@ -1161,9 +1083,7 @@ class LiteLLMWrapper(BaseModel):
         # Parse structured output if schema was provided
         if schema:
             try:
-                parsed = await _parse_structured_output(
-                    result.content, schema
-                )
+                parsed = await _parse_structured_output(result.content, schema)
                 result.parsed_object = parsed
             except Exception as e:
                 result.error_message = f"Failed to parse structured output: {e.args}"
@@ -1205,11 +1125,7 @@ class LiteLLMWrapper(BaseModel):
 
         # Extract pricing from initial call
         # Use `or 0` pattern to handle both missing keys AND explicit None values
-        initial_pricing = (
-            create_result.metadata.get("pricing", {})
-            if hasattr(create_result, "metadata")
-            else {}
-        )
+        initial_pricing = create_result.metadata.get("pricing", {}) if hasattr(create_result, "metadata") else {}
         aggregated_pricing = {
             "prompt_tokens": initial_pricing.get("prompt_tokens") or 0,
             "completion_tokens": initial_pricing.get("completion_tokens") or 0,
@@ -1217,15 +1133,11 @@ class LiteLLMWrapper(BaseModel):
         }
 
         # Step 2: Handle tool calls if present
-        if isinstance(create_result.content, list) and all(
-            isinstance(c, FunctionCall) for c in create_result.content
-        ):
+        if isinstance(create_result.content, list) and all(isinstance(c, FunctionCall) for c in create_result.content):
             tool_calls: list[FunctionCall] = create_result.content
 
             if intercept_tools:
-                logger.debug(
-                    f"Intercepting {len(tool_calls)} tool calls without execution"
-                )
+                logger.debug(f"Intercepting {len(tool_calls)} tool calls without execution")
                 return create_result
 
             # Add assistant message with tool calls to history
@@ -1239,9 +1151,7 @@ class LiteLLMWrapper(BaseModel):
                     tools_list=tools_list,
                     cancellation_token=cancellation_token,
                 )
-                tool_result_messages = FunctionExecutionResultMessage(
-                    content=tool_outputs
-                )
+                tool_result_messages = FunctionExecutionResultMessage(content=tool_outputs)
                 messages.append(tool_result_messages)
             except Exception as e:
                 raise ProcessingError(f"Failed to execute tools: {e}") from e
@@ -1258,27 +1168,16 @@ class LiteLLMWrapper(BaseModel):
                 )
 
                 # Aggregate pricing
-                if (
-                    hasattr(synthesis_result, "metadata")
-                    and "pricing" in synthesis_result.metadata
-                ):
+                if hasattr(synthesis_result, "metadata") and "pricing" in synthesis_result.metadata:
                     synthesis_pricing = synthesis_result.metadata["pricing"]
-                    aggregated_pricing["prompt_tokens"] += (
-                        synthesis_pricing.get("prompt_tokens") or 0
-                    )
-                    aggregated_pricing["completion_tokens"] += (
-                        synthesis_pricing.get("completion_tokens") or 0
-                    )
-                    aggregated_pricing["total_cost"] += (
-                        synthesis_pricing.get("total_cost") or 0.0
-                    )
+                    aggregated_pricing["prompt_tokens"] += synthesis_pricing.get("prompt_tokens") or 0
+                    aggregated_pricing["completion_tokens"] += synthesis_pricing.get("completion_tokens") or 0
+                    aggregated_pricing["total_cost"] += synthesis_pricing.get("total_cost") or 0.0
                     synthesis_result.metadata["pricing"] = aggregated_pricing
 
                 return synthesis_result
             except Exception as e:
-                raise ProcessingError(
-                    f"Failed to synthesize after tool execution: {e}"
-                ) from e
+                raise ProcessingError(f"Failed to synthesize after tool execution: {e}") from e
 
         # Return original result if no tool calls
         return create_result
@@ -1295,9 +1194,7 @@ class LiteLLMWrapper(BaseModel):
             # Find the tool by name
             tool = next((t for t in tools_list if t.name == call.name), None)
             if tool is None:
-                raise ProcessingError(
-                    f"Tool '{call.name}' requested by LLM not found in provided tools list."
-                )
+                raise ProcessingError(f"Tool '{call.name}' requested by LLM not found in provided tools list.")
 
             tasks.append(self._call_tool(call, tool, cancellation_token))
 
@@ -1325,9 +1222,7 @@ class LiteLLMWrapper(BaseModel):
     def _calculate_pricing(self, usage: Any) -> dict[str, Any]:
         """Calculate pricing information from usage data."""
         if usage is None:
-            logger.warning(
-                "LLM response had no usage data - using 0 tokens for pricing"
-            )
+            logger.warning("LLM response had no usage data - using 0 tokens for pricing")
             return {
                 "prompt_tokens": 0,
                 "completion_tokens": 0,
@@ -1488,9 +1383,7 @@ class LLMs(BaseModel):
         return prefix_map.get(client_type, client_type)  # fallback / extension
 
     @staticmethod
-    def _is_already_litellm_identifier(
-        model_name: str, registry: dict[str, Any] | None = None
-    ) -> bool:
+    def _is_already_litellm_identifier(model_name: str, registry: dict[str, Any] | None = None) -> bool:
         """Heuristic: treat as already-qualified if first segment is a known provider and not an internal key."""
         # Known litellm provider prefixes
         known_litellm_providers = {
@@ -1620,18 +1513,13 @@ class LLMs(BaseModel):
             return self.cached_clients[name]
 
         if name not in self.connections:
-            raise AttributeError(
-                f"LLM configuration named '{name}' not found in connections."
-            )
+            raise AttributeError(f"LLM configuration named '{name}' not found in connections.")
 
         config = self.connections[name]
         model_name = config.configs.get("model")
 
         # Resolve litellm model name using internal method
-        resolved_litellm = (
-            self.lookup_litellm_model_name(model_name or name, config.client_type.value)
-            or model_name
-        )
+        resolved_litellm = self.lookup_litellm_model_name(model_name or name, config.client_type.value) or model_name
 
         # Zentropi is a classification API, not an LLM - use ZentropiClassifier agent instead
         if config.client_type == ClientType.ZENTROPI:
@@ -1642,9 +1530,7 @@ class LLMs(BaseModel):
         # Get merged parameters for this model
         merged_params = self.get_merged_parameters(name)
 
-        logger.debug(
-            f"Creating LiteLLMWrapper for model '{name}' with provider '{config.client_type.value}'"
-        )
+        logger.debug(f"Creating LiteLLMWrapper for model '{name}' with provider '{config.client_type.value}'")
 
         # Prepare provider-specific configuration
         extra_headers: dict[str, str] | None = None
@@ -1668,9 +1554,7 @@ class LLMs(BaseModel):
             vertex_project = config.configs.get("project_id")
             vertex_location = config.configs.get("region")
             if not vertex_project or not vertex_location:
-                raise ValueError(
-                    "project_id and region are required for Anthropic Vertex AI."
-                )
+                raise ValueError("project_id and region are required for Anthropic Vertex AI.")
 
         elif config.client_type == ClientType.GEMINI_VERTEX:
             # Gemini on Vertex - uses standard Vertex AI auth
@@ -1685,9 +1569,7 @@ class LLMs(BaseModel):
             vertex_project = config.configs.get("project_id")
             vertex_location = config.configs.get("region")
             if not vertex_project or not vertex_location:
-                raise ValueError(
-                    "project_id and region are required for Llama Vertex AI."
-                )
+                raise ValueError("project_id and region are required for Llama Vertex AI.")
             # Don't pass base_url - let LiteLLM construct the correct endpoint
             effective_base_url = None
 
@@ -1697,6 +1579,7 @@ class LLMs(BaseModel):
             # Vertex models need GCP token refresh
             def get_vertex_token() -> str:
                 return bm.get_gcp_access_token()
+
             token_provider = get_vertex_token
 
         wrapped_client = LiteLLMWrapper(
@@ -1721,9 +1604,7 @@ class LLMs(BaseModel):
     def __getattr__(self, __name: str) -> LiteLLMWrapper:
         """Provides attribute-style access to LLM clients (e.g., `llms.my_model`)."""
         if __name not in self.connections:
-            raise AttributeError(
-                f"No LLM configuration found for '{__name}'. Available: {list(self.connections.keys())}"
-            )
+            raise AttributeError(f"No LLM configuration found for '{__name}'. Available: {list(self.connections.keys())}")
         return self.get_client(__name)
 
     def __getitem__(self, __name: str) -> LiteLLMWrapper:

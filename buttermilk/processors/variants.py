@@ -38,7 +38,7 @@ class VariantProcessor(BaseModel):
               model: ["gpt-4", "claude-3", "gemini-pro"]
               temperature: [0.7]
             parameters:
-              prompt_template: "default"
+              template: "default"
         ```
 
     Output metadata includes variant tracking:
@@ -52,9 +52,7 @@ class VariantProcessor(BaseModel):
         ```
     """
 
-    processor_obj: str = Field(
-        description="Processor class path to instantiate (e.g., 'buttermilk.processors.LLMCore')"
-    )
+    processor_obj: str = Field(description="Processor class path to instantiate (e.g., 'buttermilk.processors.LLMCore')")
     variants: dict[str, list[Any]] = Field(
         default_factory=dict,
         description="Parameter variations (e.g., {'model': ['gpt-4', 'claude-3']})",
@@ -81,9 +79,7 @@ class VariantProcessor(BaseModel):
             parameters=self.parameters,
         )
 
-        self._processors = [
-            proc_cls(**cfg) for proc_cls, cfg in variant_cfg.get_configs()
-        ]
+        self._processors = [proc_cls(**cfg) for proc_cls, cfg in variant_cfg.get_configs()]
 
         logger.debug(
             f"VariantProcessor instantiated {len(self._processors)} variants",
@@ -115,9 +111,7 @@ class VariantProcessor(BaseModel):
             Exception: If fail_on_error=False but ALL variants fail.
         """
 
-        async def stream_variant_outputs(
-            processor: Any, variant_idx: int, output_queue: asyncio.Queue
-        ) -> None:
+        async def stream_variant_outputs(processor: Any, variant_idx: int, output_queue: asyncio.Queue) -> None:
             """Stream outputs from one variant processor to the queue as they're produced."""
             variant_stage = f"{processor_stage}_v{variant_idx}"
             try:
@@ -145,10 +139,7 @@ class VariantProcessor(BaseModel):
         output_queue: asyncio.Queue = asyncio.Queue()
 
         # Create tasks for all variants
-        tasks = [
-            asyncio.create_task(stream_variant_outputs(proc, idx, output_queue))
-            for idx, proc in enumerate(self._processors)
-        ]
+        tasks = [asyncio.create_task(stream_variant_outputs(proc, idx, output_queue)) for idx, proc in enumerate(self._processors)]
 
         # Track original task count to know when all tasks are done
         original_task_count = len(tasks)

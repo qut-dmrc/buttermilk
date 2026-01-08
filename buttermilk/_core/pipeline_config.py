@@ -4,7 +4,7 @@ Defines the structure of a pipeline, which is essentially a sequence of processo
 """
 
 import itertools
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -35,7 +35,7 @@ class ProcessorVariants(BaseModel):
                 "model": ["gpt-4", "claude-3"],
                 "temperature": [0.0, 0.7],
             },
-            parameters={"prompt_template": "default"},
+            parameters={"template": "default"},
         )
         # Creates 4 configs: 2 models × 2 temperatures
         configs = cfg.get_configs()
@@ -97,9 +97,7 @@ class ProcessorVariants(BaseModel):
         try:
             processor_class = import_class_from_path(self.processor_obj)
         except (ImportError, AttributeError, ValueError) as e:
-            raise ValueError(
-                f"Failed to load processor class from '{self.processor_obj}': {e}"
-            ) from e
+            raise ValueError(f"Failed to load processor class from '{self.processor_obj}': {e}") from e
 
         # If no variants, return single config with base parameters
         if not self.variants:
@@ -129,6 +127,7 @@ class PipelineConfig(BaseModel):
         processors: Ordered list of processor configurations (Pydantic models).
         version: Version of the pipeline configuration.
     """
+
     name: str = Field(..., description="Name of the pipeline.")
     processors: list[Any] = Field(..., description="Sequence of processors (Pydantic models).")
     version: str = Field(default="1.0", description="Config version.")

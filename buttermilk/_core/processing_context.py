@@ -37,6 +37,8 @@ class ProcessingContext:
             updates to a user interface (e.g., streaming tokens, progress updates).
         resources (dict[str, Any]): Shared resources like database connections or clients,
             typically initialized once per session.
+        input (Optional[Any]): Captured input for tracing (set by capture_input).
+        outputs (list[Any]): Captured outputs for tracing (accumulated by capture_output).
     """
 
     # Identity
@@ -46,15 +48,19 @@ class ProcessingContext:
 
     # State
     metadata: dict[str, Any] = field(default_factory=dict)
-    
+
     # Observability
     span: Optional[Span] = None
-    
+
     # Interaction
     ui_callback: Optional[Callable[[Any], None]] = None
-    
+
     # Shared Resources (injected by Executor)
     resources: dict[str, Any] = field(default_factory=dict)
+
+    # I/O Capture for Tracing (typed data flow)
+    input: Optional[Any] = None
+    outputs: list[Any] = field(default_factory=list)
 
     def update_metadata(self, key: str, value: Any) -> None:
         """Update metadata with a new key-value pair."""
@@ -63,3 +69,21 @@ class ProcessingContext:
     def get_resource(self, key: str) -> Any:
         """Retrieve a shared resource by key."""
         return self.resources[key]
+
+    def capture_input(self, input_obj: Any) -> None:
+        """Capture the input object for tracing.
+
+        Args:
+            input_obj: The input being processed (any BaseModel).
+        """
+        self.input = input_obj
+
+    def capture_output(self, output_obj: Any) -> None:
+        """Capture an output object for tracing.
+
+        Supports 1:N processors by accumulating outputs.
+
+        Args:
+            output_obj: An output yielded by the processor (any BaseModel).
+        """
+        self.outputs.append(output_obj)

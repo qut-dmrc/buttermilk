@@ -19,26 +19,23 @@ from typing import Any, AsyncGenerator
 
 import chromadb
 import jmespath
-from chromadb.api import ClientAPI
-from jmespath.exceptions import JMESPathError
 from google import genai
+from jmespath.exceptions import JMESPathError
 from pydantic import Field, PrivateAttr
 
+# For ChromaDBProcessor remote storage support
+# Import bm for session_info access (same pattern as chromadb_uploader.py)
+from buttermilk import bm, logger
 from buttermilk._core.contract import ExecutionTrace, TaskProcessingComplete
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llm_core import LLMCore
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord, RunRequest
-from buttermilk._core.unified_processor import UnifiedProcessor
 from buttermilk._core.unified_batch_processor import UnifiedBatchProcessor
-from buttermilk.runner.flowrunner import OrchestratorFactory
-from buttermilk import logger
+from buttermilk._core.unified_processor import UnifiedProcessor
 from buttermilk.data.vector import _sanitize_metadata_for_chroma
+from buttermilk.runner.flowrunner import OrchestratorFactory
 from buttermilk.utils.utils import scrub_serializable, upload_chromadb_cache
-
-# For ChromaDBProcessor remote storage support
-# Import bm for session_info access (same pattern as chromadb_uploader.py)
-from buttermilk import bm
 
 
 class LLMProcessor(UnifiedProcessor):
@@ -52,7 +49,7 @@ class LLMProcessor(UnifiedProcessor):
     """
 
     model: str = Field(..., description="LLM model identifier")
-    prompt_template: str = Field(..., description="Jinja2 template for prompts")
+    template: str = Field(..., description="Jinja2 template for prompts")
     temperature: float = Field(default=0.7, description="Sampling temperature")
     max_tokens: int = Field(default=1024, description="Maximum tokens to generate")
     output_col: str = Field(default="llm_output", description="Output column name")
@@ -66,7 +63,7 @@ class LLMProcessor(UnifiedProcessor):
         """Create LLMCore instance after Pydantic initialization."""
         self._llm_core = LLMCore(
             model=self.model,
-            template=self.prompt_template,
+            template=self.template,
             temperature=self.temperature,
             max_tokens=self.max_tokens,
             output_col=self.output_col,
@@ -96,7 +93,7 @@ class LLMProcessor(UnifiedProcessor):
             "LLMProcessor starting",
             record_id=record_id,
             model=self.model,
-            template=self.prompt_template,
+            template=self.template,
         )
 
         # Build template variables by flattening record metadata
@@ -118,6 +115,7 @@ class LLMProcessor(UnifiedProcessor):
         # Check for errors
         if llm_result.error:
             from buttermilk._core.exceptions import ProcessingError
+
             raise ProcessingError(f"LLM processing failed: {llm_result.error}")
 
         # Enrich record with LLM output
@@ -184,9 +182,7 @@ class GroupchatProcessor(UnifiedProcessor):
         )
 
         # Create fresh orchestrator for each record (state isolation)
-        orchestrator = OrchestratorFactory.create_orchestrator(
-            self.flow_config, self.flow_name
-        )
+        orchestrator = OrchestratorFactory.create_orchestrator(self.flow_config, self.flow_name)
 
         # Collect ExecutionTrace outputs and TaskProcessingComplete errors via callback
         traces: list[ExecutionTrace] = []
@@ -204,10 +200,12 @@ class GroupchatProcessor(UnifiedProcessor):
 
         # If context has ui_callback but we need to collect traces, chain callbacks
         if context.ui_callback and self.collect_traces:
+
             async def chained_callback(message: Any) -> None:
                 """Chain both callbacks."""
                 await context.ui_callback(message)
                 await collect_callback(message)
+
             callback = chained_callback
         elif self.collect_traces:
             callback = collect_callback
@@ -235,12 +233,8 @@ class GroupchatProcessor(UnifiedProcessor):
             # Check for errors from TaskProcessingComplete signals (reliable source)
             # These are always published, even when exceptions prevent ExecutionTrace creation
             if task_errors:
-                error_details = [
-                    f"{t.agent_id}: {t.error or 'unknown error'}" for t in task_errors
-                ]
-                raise ProcessingError(
-                    f"Orchestrator had {len(task_errors)} agent error(s): {'; '.join(error_details)}"
-                )
+                error_details = [f"{t.agent_id}: {t.error or 'unknown error'}" for t in task_errors]
+                raise ProcessingError(f"Orchestrator had {len(task_errors)} agent error(s): {'; '.join(error_details)}")
 
             # Build outputs from collected traces
             outputs = []
@@ -250,9 +244,7 @@ class GroupchatProcessor(UnifiedProcessor):
 
             # Check if we got any meaningful outputs - no outputs likely means early termination
             if not outputs:
-                raise ProcessingError(
-                    f"Orchestrator completed but produced no outputs (early termination or all agents failed)"
-                )
+                raise ProcessingError("Orchestrator completed but produced no outputs (early termination or all agents failed)")
 
             # Enrich record metadata with orchestrator results
             enriched_metadata = {
@@ -340,9 +332,7 @@ class ExpanderProcessor(UnifiedProcessor):
 
         if not isinstance(values, list):
             logger.warning(
-                f"Field '{field_name}' is not a list, cannot expand. Skipping expansion.",
-                record_id=context.record.record_id,
-                value_type=type(values)
+                f"Field '{field_name}' is not a list, cannot expand. Skipping expansion.", record_id=context.record.record_id, value_type=type(values)
             )
             yield context.record
             return
@@ -359,9 +349,9 @@ class ExpanderProcessor(UnifiedProcessor):
             new_metadata["expansion_index"] = i
 
             if hasattr(context.record, field_name):
-                 updates[field_name] = value
+                updates[field_name] = value
             else:
-                 new_metadata[field_name] = value
+                new_metadata[field_name] = value
 
             updates["metadata"] = new_metadata
 
@@ -379,10 +369,7 @@ class ParameterExpansionProcessor(UnifiedProcessor):
     becomes a separate record.
     """
 
-    variants: dict[str, list[Any] | Any] = Field(
-        ...,
-        description="Parameter variants to expand into cartesian product"
-    )
+    variants: dict[str, list[Any] | Any] = Field(..., description="Parameter variants to expand into cartesian product")
 
     async def _process_record(
         self,
@@ -452,9 +439,7 @@ class TransformProcessor(UnifiedProcessor):
                 expression=self.expression,
                 error=str(e),
             )
-            raise ValueError(
-                f"Invalid JMESPath expression: {self.expression}"
-            ) from e
+            raise ValueError(f"Invalid JMESPath expression: {self.expression}") from e
 
     async def _process_record(
         self,
@@ -509,9 +494,7 @@ class TransformProcessor(UnifiedProcessor):
                 expression=self.expression,
                 error=str(e),
             )
-            raise ValueError(
-                f"Error applying JMESPath expression '{self.expression}': {str(e)}"
-            ) from e
+            raise ValueError(f"Error applying JMESPath expression '{self.expression}': {str(e)}") from e
 
         # Yield the original record (metadata is stored in context)
         yield context.record
@@ -589,10 +572,7 @@ class ShellProcessor(UnifiedProcessor):
                     exit_code=process.returncode,
                     stderr=stderr,
                 )
-                raise ValueError(
-                    f"Shell command failed with exit code {process.returncode}: {command}\n"
-                    f"stderr: {stderr}"
-                )
+                raise ValueError(f"Shell command failed with exit code {process.returncode}: {command}\nstderr: {stderr}")
 
             logger.debug(
                 "Shell command completed successfully",
@@ -608,9 +588,7 @@ class ShellProcessor(UnifiedProcessor):
                 command=command,
                 timeout=self.timeout_seconds,
             )
-            raise asyncio.TimeoutError(
-                f"Shell command timed out after {self.timeout_seconds}s: {command}"
-            )
+            raise asyncio.TimeoutError(f"Shell command timed out after {self.timeout_seconds}s: {command}")
         except Exception as e:
             logger.error(
                 "Error executing shell command",
@@ -657,9 +635,7 @@ class FilterProcessor(UnifiedProcessor):
                 criteria=self.criteria,
                 error=str(e),
             )
-            raise ValueError(
-                f"Invalid JMESPath criteria: {self.criteria}"
-            ) from e
+            raise ValueError(f"Invalid JMESPath criteria: {self.criteria}") from e
 
     async def _process_record(
         self,
@@ -712,9 +688,7 @@ class FilterProcessor(UnifiedProcessor):
                 criteria=self.criteria,
                 error=str(e),
             )
-            raise ValueError(
-                f"Error evaluating filter criteria '{self.criteria}': {str(e)}"
-            ) from e
+            raise ValueError(f"Error evaluating filter criteria '{self.criteria}': {str(e)}") from e
 
 
 class EmbeddingProcessor(UnifiedBatchProcessor):
@@ -753,6 +727,7 @@ class EmbeddingProcessor(UnifiedBatchProcessor):
         if self._client is None:
             try:
                 from buttermilk import bm
+
                 self._client = bm.genai
             except (RuntimeError, AttributeError):
                 # For testing, create a client directly
@@ -797,11 +772,14 @@ class EmbeddingProcessor(UnifiedBatchProcessor):
 
         # Update context metadata for all successful records
         for context in records_with_chunks:
-            context.update_metadata("embedding_stats", {
-                "chunks_embedded": len(context.record.chunks),
-                "embedding_model": self.embedding_model,
-                "processing_time_ms": processing_time_ms,
-            })
+            context.update_metadata(
+                "embedding_stats",
+                {
+                    "chunks_embedded": len(context.record.chunks),
+                    "embedding_model": self.embedding_model,
+                    "processing_time_ms": processing_time_ms,
+                },
+            )
 
         logger.info(
             "Successfully generated embeddings for batch",
@@ -845,7 +823,7 @@ class EmbeddingProcessor(UnifiedBatchProcessor):
 
         # Apply embeddings back to chunks
         success_count = 0
-        for (ctx_idx, chunk_idx, embedding) in embedding_results:
+        for ctx_idx, chunk_idx, embedding in embedding_results:
             if embedding is not None:
                 context = contexts[ctx_idx]
                 chunk = context.record.chunks[chunk_idx]
@@ -892,6 +870,7 @@ class EmbeddingProcessor(UnifiedBatchProcessor):
         Returns:
             List of (context_idx, chunk_idx, embedding) tuples where embedding can be None on failure
         """
+
         async def _run_embed_batch(batch_texts: list[str], attempt: int = 0):
             """Run embedding for a batch with semaphore."""
             async with self._embedding_semaphore:
@@ -988,9 +967,7 @@ class EmbeddingProcessor(UnifiedBatchProcessor):
     def _is_rate_limit_error(self, exc: Exception) -> bool:
         """Check if an exception is a rate limit error."""
         msg = str(exc).lower()
-        return any(
-            k in msg for k in ["rate limit", "quota", "too many requests", "429"]
-        )
+        return any(k in msg for k in ["rate limit", "quota", "too many requests", "429"])
 
 
 class ChromaDBProcessor(UnifiedProcessor):
@@ -1069,14 +1046,7 @@ class ChromaDBProcessor(UnifiedProcessor):
 
         # Check if chunks have embeddings
         chunks_with_embeddings = [
-            c
-            for c in context.record.chunks
-            if (
-                c.get("embedding")
-                if isinstance(c, dict)
-                else getattr(c, "embedding", None)
-            )
-            is not None
+            c for c in context.record.chunks if (c.get("embedding") if isinstance(c, dict) else getattr(c, "embedding", None)) is not None
         ]
         logger.debug(
             "ChromaDBProcessor chunk embedding status",
@@ -1114,11 +1084,14 @@ class ChromaDBProcessor(UnifiedProcessor):
             await self._maybe_sync()
 
             # Update context metadata with statistics
-            context.update_metadata("chromadb_stats", {
-                "chunks_uploaded": len(chunks_with_embeddings),
-                "collection_name": self.collection_name,
-                "processing_time_ms": processing_time_ms,
-            })
+            context.update_metadata(
+                "chromadb_stats",
+                {
+                    "chunks_uploaded": len(chunks_with_embeddings),
+                    "collection_name": self.collection_name,
+                    "processing_time_ms": processing_time_ms,
+                },
+            )
 
             # Add metadata to record about upload
             metadata = context.record.metadata.copy() if context.record.metadata else {}
@@ -1170,9 +1143,7 @@ class ChromaDBProcessor(UnifiedProcessor):
         # Get or create collection
         if not self._collection:
             try:
-                self._collection = await asyncio.to_thread(
-                    self._client.get_collection, name=self.collection_name
-                )
+                self._collection = await asyncio.to_thread(self._client.get_collection, name=self.collection_name)
                 collection_count = await asyncio.to_thread(self._collection.count)
                 logger.info(
                     "Using existing collection",
@@ -1180,12 +1151,8 @@ class ChromaDBProcessor(UnifiedProcessor):
                     count=collection_count,
                 )
             except Exception:
-                self._collection = await asyncio.to_thread(
-                    self._client.create_collection, name=self.collection_name
-                )
-                logger.info(
-                    "Created new collection", collection_name=self.collection_name
-                )
+                self._collection = await asyncio.to_thread(self._client.create_collection, name=self.collection_name)
+                logger.info("Created new collection", collection_name=self.collection_name)
 
         self._cache_initialized = True
 
@@ -1266,11 +1233,7 @@ class ChromaDBProcessor(UnifiedProcessor):
                 "document_id": chunk["document_id"],
                 "content_type": chunk_metadata.get("content_type", "unknown"),
                 "chunk_type": chunk_metadata.get("chunk_type", "unknown"),
-                **{
-                    k: v
-                    for k, v in chunk_metadata.items()
-                    if k not in ["content_type", "chunk_type"]
-                },
+                **{k: v for k, v in chunk_metadata.items() if k not in ["content_type", "chunk_type"]},
             }
             # Ensure metadata is serializable and ChromaDB-compatible
             enhanced_metadata = scrub_serializable(enhanced_metadata)
@@ -1322,9 +1285,7 @@ class ChromaDBProcessor(UnifiedProcessor):
                 # Get the local cache path
                 local_cache_path = await self._get_local_cache_path()
                 if local_cache_path:
-                    await upload_chromadb_cache(
-                        str(local_cache_path), self._original_remote_path
-                    )
+                    await upload_chromadb_cache(str(local_cache_path), self._original_remote_path)
                     logger.info(
                         "Successfully synced ChromaDB to remote storage",
                         processed_count=self._processed_count,
@@ -1349,25 +1310,19 @@ class ChromaDBProcessor(UnifiedProcessor):
             bool: True if finalization successful, False otherwise
         """
         if self._original_remote_path:
-            logger.info(
-                "Final sync to remote storage", processed_count=self._processed_count
-            )
+            logger.info("Final sync to remote storage", processed_count=self._processed_count)
             try:
                 # Get the local cache path
                 local_cache_path = await self._get_local_cache_path()
                 if local_cache_path:
-                    await upload_chromadb_cache(
-                        str(local_cache_path), self._original_remote_path
-                    )
+                    await upload_chromadb_cache(str(local_cache_path), self._original_remote_path)
                     logger.info(
                         "Successfully completed final sync to remote storage",
                         processed_count=self._processed_count,
                     )
                     return True
                 else:
-                    logger.warning(
-                        "Could not determine local cache path for final sync"
-                    )
+                    logger.warning("Could not determine local cache path for final sync")
                     return False
             except Exception as e:
                 logger.error(
@@ -1394,7 +1349,5 @@ class ChromaDBProcessor(UnifiedProcessor):
         if local_cache_path.exists():
             return local_cache_path
         else:
-            logger.warning(
-                "Local cache path does not exist", cache_path=str(local_cache_path)
-            )
+            logger.warning("Local cache path does not exist", cache_path=str(local_cache_path))
             return None

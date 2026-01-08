@@ -6,14 +6,12 @@ LLMProcessor implements the Processor protocol and inherits from UnifiedProcesso
 Tests use REAL templates and data patterns (no mocking internal code) and follow fail-fast philosophy.
 """
 
-from typing import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from autogen_core.models import RequestUsage, UserMessage
+from autogen_core.models import RequestUsage
 from pydantic import BaseModel
 
-from buttermilk._core.llm_core import LLMCore
 from buttermilk._core.llms import CreateResult
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.protocols import Processor
@@ -36,11 +34,11 @@ class TestLLMProcessorConfig:
         """Verify LLMProcessor can be created with required fields."""
         processor = LLMProcessor(
             model="gpt-4",
-            prompt_template="test/simple",
+            template="test/simple",
         )
 
         assert processor.model == "gpt-4"
-        assert processor.prompt_template == "test/simple"
+        assert processor.template == "test/simple"
         assert processor.temperature == 0.7  # Default value
         assert processor.max_tokens == 1024  # Default value
         assert processor.input_variables == {}
@@ -49,7 +47,7 @@ class TestLLMProcessorConfig:
         """Verify LLMProcessor can be created with optional fields."""
         processor = LLMProcessor(
             model="gpt-4",
-            prompt_template="test/simple",
+            template="test/simple",
             temperature=0.0,
             max_tokens=2000,
             input_variables={"criteria": "test", "language": "en"},
@@ -64,7 +62,7 @@ class TestLLMProcessorConfig:
         with pytest.raises(ValueError, match="Extra inputs are not permitted"):
             LLMProcessor(
                 model="gpt-4",
-                prompt_template="test/simple",
+                template="test/simple",
                 unknown_field="value",  # This should raise an error
             )
 
@@ -72,16 +70,16 @@ class TestLLMProcessorConfig:
         """Verify model field is required."""
         with pytest.raises(ValueError, match="Field required"):
             LLMProcessor(
-                prompt_template="test/simple",
+                template="test/simple",
                 # model is missing
             )
 
-    def test_llm_processor_requires_prompt_template(self):
-        """Verify prompt_template field is required."""
+    def test_llm_processor_requires_template(self):
+        """Verify template field is required."""
         with pytest.raises(ValueError, match="Field required"):
             LLMProcessor(
                 model="gpt-4",
-                # prompt_template is missing
+                # template is missing
             )
 
 
@@ -101,7 +99,7 @@ class TestLLMProcessorProtocol:
         """Verify LLMProcessor implements the Processor protocol."""
         processor = LLMProcessor(
             model="gpt-4",
-            prompt_template="test/simple",
+            template="test/simple",
         )
 
         # Should satisfy the Processor protocol
@@ -113,7 +111,7 @@ class TestLLMProcessorProtocol:
 
         processor = LLMProcessor(
             model="gpt-4",
-            prompt_template="test/simple",
+            template="test/simple",
         )
 
         # Should have process method
@@ -131,7 +129,7 @@ class TestLLMProcessorProcessing:
         """Verify LLMProcessor processes a single record and outputs to configured field."""
         processor = LLMProcessor(
             model="gpt-4",
-            prompt_template="test/simple",
+            template="test/simple",
             temperature=0.0,
         )
 
@@ -179,7 +177,7 @@ class TestLLMProcessorProcessing:
         """Verify LLMProcessor uses the configured template for LLM calls."""
         processor = LLMProcessor(
             model="gpt-4",
-            prompt_template="test/simple",
+            template="test/simple",
         )
 
         # Create test record with template variable
@@ -225,7 +223,7 @@ class TestLLMProcessorProcessing:
         """Verify LLMProcessor enriches record with LLM metadata (usage, model, etc)."""
         processor = LLMProcessor(
             model="gpt-4",
-            prompt_template="test/simple",
+            template="test/simple",
         )
 
         record = BaseRecord(
@@ -268,7 +266,7 @@ class TestLLMProcessorProcessing:
         """Verify LLMProcessor merges input_variables into template context."""
         processor = LLMProcessor(
             model="gpt-4",
-            prompt_template="test/simple",
+            template="test/simple",
             input_variables={"static_var": "static_value", "criteria": "test criteria"},
         )
 
@@ -316,7 +314,7 @@ class TestLLMProcessorIntegration:
         """Verify end-to-end processing: record -> template -> LLM -> enriched record."""
         processor = LLMProcessor(
             model="gpt-4",
-            prompt_template="test/simple",
+            template="test/simple",
             temperature=0.0,
         )
 
@@ -375,7 +373,7 @@ class TestLLMProcessorIntegration:
 
         processor = LLMProcessor(
             model="gpt-4",
-            prompt_template="test/structured_output",
+            template="test/structured_output",
             temperature=0.0,
         )
 
