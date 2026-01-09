@@ -160,13 +160,20 @@ class VertexBatchProcessor(ObservabilityMixin):
         # TODO: Implement true batch prediction API when available
         for record in records:
             try:
-                # Get variant variables from record metadata
-                variant_vars = record.metadata.get("variant_vars", {}) if record.metadata else {}
+                # Get template variables from record - flatten metadata like LLMProcessor does
+                if hasattr(record, "model_dump"):
+                    record_dict = record.model_dump()
+                    template_vars = {
+                        **record_dict.get("metadata", {}),  # Flatten metadata fields
+                        **{k: v for k, v in record_dict.items() if k != "metadata"},  # Top-level fields
+                    }
+                else:
+                    template_vars = record.metadata if record.metadata else {}
 
                 # Render the criteria/prompt
-                criteria_key = self._get_criteria_key(variant_vars)
+                criteria_key = self._get_criteria_key(template_vars)
                 if criteria_key not in self._cached_criteria:
-                    self._cached_criteria[criteria_key] = self._render_criteria(variant_vars)
+                    self._cached_criteria[criteria_key] = self._render_criteria(template_vars)
 
                 rendered_prompt, template_hash = self._cached_criteria[criteria_key]
 
