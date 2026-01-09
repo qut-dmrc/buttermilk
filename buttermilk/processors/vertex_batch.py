@@ -99,10 +99,11 @@ class VertexBatchProcessor(ObservabilityMixin):
         )
 
     def _ensure_client(self) -> None:
-        """Lazily initialize the Vertex AI client."""
+        """Lazily initialize the LLM client via buttermilk infrastructure."""
         if self._client is None:
             from buttermilk import bm
-            self._client = bm.genai
+            # Use buttermilk's LLM infrastructure for proper model routing
+            self._client = bm.llms[self.model]
 
     def _render_criteria(self, variant_vars: dict[str, Any]) -> tuple[str, str]:
         """Render the criteria template with given variables.
@@ -205,7 +206,7 @@ class VertexBatchProcessor(ObservabilityMixin):
                     processor_stage=self.name or "vertex_batch",
                     parent_trace_id=None,
                     duration_ms=duration_ms / len(records),
-                    inputs=variant_vars,
+                    inputs=template_vars,
                     extra_metadata={
                         "llm_config": {
                             "model": self.model,
@@ -235,7 +236,7 @@ class VertexBatchProcessor(ObservabilityMixin):
                     processor_stage=self.name or "vertex_batch",
                     parent_trace_id=None,
                     duration_ms=(time.time() - start_time) * 1000 / len(records),
-                    inputs=variant_vars if 'variant_vars' in dir() else {},
+                    inputs=template_vars if 'template_vars' in dir() else {},
                     execution_type="llm_processing (batch)",
                 )
 
@@ -254,7 +255,7 @@ class VertexBatchProcessor(ObservabilityMixin):
         return output_records
 
     async def _call_llm(self, prompt: str) -> str:
-        """Call the LLM with the given prompt.
+        """Call the LLM with the given prompt via buttermilk infrastructure.
 
         Args:
             prompt: The full prompt to send to the LLM
@@ -262,29 +263,19 @@ class VertexBatchProcessor(ObservabilityMixin):
         Returns:
             The LLM response text
         """
-        from google.genai import types
+        from autogen_core.models import SystemMessage, UserMessage
 
-        # Build the request
-        contents = [types.Content(role="user", parts=[types.Part(text=prompt)])]
-
-        config = types.GenerateContentConfig(
-            max_output_tokens=self.max_tokens,
-        )
-
+        # Build messages for the LLM
+        messages = []
         if self.system_instruction:
-            config.system_instruction = self.system_instruction
+            messages.append(SystemMessage(content=self.system_instruction))
+        messages.append(UserMessage(content=prompt, source="user"))
 
-        # Call the API
-        response = await self._client.aio.models.generate_content(
-            model=self.model,
-            contents=contents,
-            config=config,
-        )
+        # Call via buttermilk's LLM wrapper (handles model routing via litellm)
+        response = await self._client.create(messages=messages)
 
         # Extract text from response
-        if response.candidates and response.candidates[0].content.parts:
-            return response.candidates[0].content.parts[0].text
-        return ""
+        return response.content if response.content else ""
 
     async def finalize(self) -> None:
         """Clean up resources after processing."""
