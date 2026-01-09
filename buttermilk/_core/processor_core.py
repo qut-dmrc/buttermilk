@@ -246,3 +246,61 @@ class ProcessorCore(ObservabilityMixin, ABC):
         yield  # Make this a generator
 
 
+class BatchProcessorCore(ObservabilityMixin, ABC):
+    """Base class for batch pipeline processors.
+
+    Implements batch processing with OTEL tracing.
+    """
+
+    async def process_batch(
+        self,
+        records: list[BaseRecord],
+    ) -> list[BaseRecord]:
+        """Process batch with OTEL span wrapping.
+
+        Args:
+            records: List of records to process
+
+        Returns:
+            List of processed records
+        """
+        tracer = trace.get_tracer("buttermilk.processor")
+        processor_name = self.name or self.processor_type
+
+        attributes = {
+            "processor.name": processor_name,
+            "processor.type": self.processor_type,
+            "batch.size": len(records),
+        }
+
+        with tracer.start_as_current_span(
+            f"batch_processor.{self.processor_type}",
+            attributes=attributes,
+        ) as span:
+            try:
+                # Delegate to concrete implementation
+                return await self._process_batch(records)
+            except Exception as e:
+                span.record_exception(e)
+                logger.error(
+                    f"Batch Processor {processor_name} failed: {e}",
+                    processor=processor_name,
+                    batch_size=len(records),
+                    error=str(e),
+                )
+                raise
+
+    @abstractmethod
+    async def _process_batch(
+        self,
+        records: list[BaseRecord],
+    ) -> list[BaseRecord]:
+        """Concrete batch processing logic.
+
+        Args:
+            records: List of records to process
+
+        Returns:
+            List of processed records
+        """
+        raise NotImplementedError("Subclasses must implement _process_batch")
