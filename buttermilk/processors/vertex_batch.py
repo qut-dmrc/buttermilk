@@ -181,8 +181,8 @@ class VertexBatchProcessor(ObservabilityMixin):
                 # Build the full prompt with record content
                 full_prompt = f"{rendered_prompt}\n\n{record.content or ''}"
 
-                # Call the LLM
-                response = await self._call_llm(full_prompt)
+                # Call the LLM with schema for structured output
+                response = await self._call_llm(full_prompt, schema=self._output_class)
 
                 # Parse output if output_model is set
                 final_output = response
@@ -254,11 +254,12 @@ class VertexBatchProcessor(ObservabilityMixin):
 
         return output_records
 
-    async def _call_llm(self, prompt: str) -> str:
+    async def _call_llm(self, prompt: str, schema: type | None = None) -> str:
         """Call the LLM with the given prompt via buttermilk infrastructure.
 
         Args:
             prompt: The full prompt to send to the LLM
+            schema: Optional Pydantic model for structured JSON output
 
         Returns:
             The LLM response text
@@ -272,9 +273,10 @@ class VertexBatchProcessor(ObservabilityMixin):
         messages.append(UserMessage(content=prompt, source="user"))
 
         # Call via buttermilk's LLM wrapper (handles model routing via litellm)
-        response = await self._client.create(messages=messages)
+        # Pass schema to enable structured JSON output when output_model is set
+        response = await self._client.create(messages=messages, schema=schema)
 
-        # Extract text from response
+        # Extract text from response - if schema was used, content is the JSON string
         return response.content if response.content else ""
 
     async def finalize(self) -> None:
