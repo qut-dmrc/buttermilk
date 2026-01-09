@@ -30,7 +30,7 @@ from buttermilk._core.contract import ExecutionTrace, TaskProcessingComplete
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llm_core import LLMCore
 from buttermilk._core.processing_context import ProcessingContext
-from buttermilk._core.processor_core import BatchProcessorCore, ProcessorCore
+from buttermilk._core.processor_core import ProcessorCore
 from buttermilk._core.types import BaseRecord, RunRequest
 from buttermilk.data.vector import _sanitize_metadata_for_chroma
 from buttermilk.runner.flowrunner import OrchestratorFactory
@@ -679,9 +679,10 @@ class FilterProcessor(ProcessorCore):
             raise ValueError(f"Error evaluating filter criteria '{self.criteria}': {str(e)}") from e
 
 
-class EmbeddingProcessor(BatchProcessorCore):
+class EmbeddingProcessor(ProcessorCore):
     """Batch processor for generating embeddings for document chunks.
 
+    Implements BatchProcessor protocol for use inside BatchAccumulator.
     Processes batches of records with chunks, generating embeddings via Google GenAI.
     Implements retry logic with exponential backoff and semaphore-based concurrency control.
 
@@ -689,13 +690,14 @@ class EmbeddingProcessor(BatchProcessorCore):
     - Batches embedding API calls for efficiency
     - Retry logic with exponential backoff for rate limits
     - Semaphore-based concurrency control
-    - Enriches context metadata with embedding statistics
+    - Enriches record metadata with embedding statistics
     - Handles records without chunks gracefully
     """
 
     embedding_model: str = Field(..., description="Model identifier for embedding generation")
     dimensionality: int = Field(default=3072, description="Output embedding dimensionality")
     task: str = Field(default="RETRIEVAL_DOCUMENT", description="Task type for embedding model")
+    batch_size: int = Field(default=32, description="Batch size for embedding API calls")
     embedding_max_retries: int = Field(default=5, description="Maximum retry attempts for embedding API")
     embedding_min_wait_seconds: float = Field(default=1.0, description="Minimum wait time for exponential backoff")
     embedding_max_wait_seconds: float = Field(default=120.0, description="Maximum wait time for exponential backoff")
@@ -722,76 +724,88 @@ class EmbeddingProcessor(BatchProcessorCore):
                 self._client = genai.Client()
         return self._client
 
-    async def _process_batch(
+    async def process_batch(
         self,
-        contexts: list[ProcessingContext],
-    ) -> AsyncGenerator[list[BaseRecord], None]:
-        """Process batch of contexts by generating embeddings for their chunks.
+        records: list[BaseRecord],
+    ) -> list[BaseRecord]:
+        """Process batch of records by generating embeddings for their chunks.
+
+        Implements BatchProcessor protocol.
 
         Args:
-            contexts: List of ProcessingContext objects to process
+            records: List of BaseRecord objects to process
 
-        Yields:
-            list[BaseRecord]: Batch of records with embeddings added to chunks
+        Returns:
+            list[BaseRecord]: Records with embeddings added to chunks
         """
         start_time = time.time()
 
         # Collect all records and their chunks
         records_with_chunks = []
-        for context in contexts:
-            if hasattr(context.record, "chunks") and context.record.chunks:
-                records_with_chunks.append(context)
+        records_without_chunks = []
+        for record in records:
+            if hasattr(record, "chunks") and record.chunks:
+                records_with_chunks.append(record)
             else:
                 logger.debug(
                     "Record has no chunks to embed, skipping",
-                    record_id=context.record.record_id,
+                    record_id=record.record_id,
                 )
+                records_without_chunks.append(record)
 
         if not records_with_chunks:
-            # No records with chunks, yield all records unchanged
+            # No records with chunks, return all records unchanged
             logger.debug("No records with chunks in batch")
-            yield [ctx.record for ctx in contexts]
-            return
+            return records
 
         # Generate embeddings for all chunks across all records
-        success = await self._embed_all_chunks(records_with_chunks)
+        await self._embed_all_chunks(records_with_chunks)
 
         processing_time_ms = (time.time() - start_time) * 1000
 
-        # Update context metadata for all successful records
-        for context in records_with_chunks:
-            context.update_metadata(
-                "embedding_stats",
-                {
-                    "chunks_embedded": len(context.record.chunks),
-                    "embedding_model": self.embedding_model,
-                    "processing_time_ms": processing_time_ms,
-                },
-            )
+        # Update record metadata for all successful records
+        output_records = []
+        for record in records_with_chunks:
+            updated_metadata = record.metadata.copy() if record.metadata else {}
+            updated_metadata["embedding_stats"] = {
+                "chunks_embedded": len(record.chunks),
+                "embedding_model": self.embedding_model,
+                "processing_time_ms": processing_time_ms,
+            }
+            output_records.append(record.model_copy(update={"metadata": updated_metadata}))
 
         logger.info(
             "Successfully generated embeddings for batch",
             batch_size=len(records_with_chunks),
-            total_chunks=sum(len(ctx.record.chunks) for ctx in records_with_chunks),
+            total_chunks=sum(len(r.chunks) for r in records_with_chunks),
             processing_time_ms=processing_time_ms,
         )
 
-        # Yield all records (including those without chunks)
-        yield [ctx.record for ctx in contexts]
+        # Return all records (including those without chunks)
+        return output_records + records_without_chunks
 
-    async def _embed_all_chunks(self, contexts: list[ProcessingContext]) -> None:
-        """Generate embeddings for all chunks across all contexts.
+    async def _process_record(
+        self,
+        context: ProcessingContext,
+    ) -> AsyncGenerator[BaseRecord, None]:
+        """Process a single record (delegates to process_batch for single item)."""
+        results = await self.process_batch([context.record])
+        for record in results:
+            yield record
+
+    async def _embed_all_chunks(self, records: list[BaseRecord]) -> None:
+        """Generate embeddings for all chunks across all records.
 
         Args:
-            contexts: List of contexts with records that have chunks
+            records: List of records with chunks
 
         Raises:
             ValueError: If no chunks found or embeddings fail
         """
-        # Build list of (context_idx, chunk_idx, text) tuples
+        # Build list of (record_idx, chunk_idx, text) tuples
         embeddings_input = []
-        for ctx_idx, context in enumerate(contexts):
-            for chunk_idx, chunk in enumerate(context.record.chunks):
+        for record_idx, record in enumerate(records):
+            for chunk_idx, chunk in enumerate(record.chunks):
                 # Support both dict and object chunks
                 if isinstance(chunk, dict):
                     text = chunk.get("text", "")
@@ -801,7 +815,7 @@ class EmbeddingProcessor(BatchProcessorCore):
                     logger.warning(f"Unsupported chunk type: {type(chunk)}")
                     continue
 
-                embeddings_input.append((ctx_idx, chunk_idx, text))
+                embeddings_input.append((record_idx, chunk_idx, text))
 
         if not embeddings_input:
             raise ValueError("No chunks found to embed")
@@ -811,10 +825,10 @@ class EmbeddingProcessor(BatchProcessorCore):
 
         # Apply embeddings back to chunks
         success_count = 0
-        for ctx_idx, chunk_idx, embedding in embedding_results:
+        for record_idx, chunk_idx, embedding in embedding_results:
             if embedding is not None:
-                context = contexts[ctx_idx]
-                chunk = context.record.chunks[chunk_idx]
+                record = records[record_idx]
+                chunk = record.chunks[chunk_idx]
 
                 # Set embedding based on chunk type
                 if isinstance(chunk, dict):
@@ -836,8 +850,8 @@ class EmbeddingProcessor(BatchProcessorCore):
                 total=total_chunks,
             )
             # Clear embeddings to avoid partial state
-            for context in contexts:
-                for chunk in context.record.chunks:
+            for record in records:
+                for chunk in record.chunks:
                     if isinstance(chunk, dict):
                         chunk["embedding"] = None
                     elif hasattr(chunk, "embedding"):

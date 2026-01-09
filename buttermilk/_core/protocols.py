@@ -38,35 +38,42 @@ class Processor(Protocol):
         """
         ...
 
+    async def flush(self) -> AsyncGenerator[BaseRecord, None]:
+        """Flush any buffered records after source exhaustion.
+
+        Called by the pipeline after the source is exhausted to allow
+        processors that buffer (like BatchAccumulator) to process and
+        yield any remaining records.
+
+        Default implementation yields nothing. Override in buffering processors.
+
+        Yields:
+            BaseRecord: Any remaining buffered records after processing.
+        """
+        ...
+
 
 @runtime_checkable
 class BatchProcessor(Protocol):
     """Processor interface for efficient batch operations.
 
-    Designed for operations that benefit from batching, such as GPU inference
-    (LLMs, embeddings) or bulk API operations.
+    Designed for operations that benefit from batching, such as LLM calls,
+    embeddings, or bulk API operations. Used inside BatchAccumulator.
+
+    This is the golden path for batch processing - simple list in, list out.
     """
 
     async def process_batch(
         self,
-        contexts: list[ProcessingContext],
-    ) -> AsyncGenerator[BaseRecord, None]:
+        records: list[BaseRecord],
+    ) -> list[BaseRecord]:
         """Process a batch of records.
 
         Args:
-            contexts: A list of ProcessingContext objects, each containing a record.
+            records: List of input records.
 
-        Yields:
-            BaseRecord: Output records corresponding to the batch.
-                        The processor handles mapping outputs to requests.
-
-            Note: The executor is responsible for routing these records to the next stage.
-
-            Note: The executor is responsible for mapping outputs back to inputs
-            if order is preserved, or the processor must handle lineage.
+        Returns:
+            List of output records. Can be same length, shorter (filtering),
+            or longer (expansion).
         """
-        ...
-
-    async def finalize(self) -> None:
-        """Optional cleanup or finalization logic."""
         ...

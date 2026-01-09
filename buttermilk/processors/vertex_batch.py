@@ -12,33 +12,37 @@ Key features:
 Usage:
     ```yaml
     processors:
-      - _target_: buttermilk.processors.VertexBatchProcessor
-        model: gemini-2.5-flash
-        template: judge_criteria
-        template_vars:
-          criteria: "{{ criteria }}"
-        cache_ttl: "3600s"
-        variants:
-          criteria: ["criteria_A", "criteria_B", "criteria_C"]
+      - _target_: buttermilk.processors.BatchAccumulator
+        batch_size: 50
+        batch_processors:
+          - _target_: buttermilk.processors.VertexBatchProcessor
+            model: gemini-2.5-flash
+            template: judge_criteria
+            template_vars:
+              criteria: "{{ criteria }}"
+            cache_ttl: "3600s"
     ```
 """
 
 from __future__ import annotations
 
-from typing import Any, AsyncGenerator
+import hashlib
+import time
+from typing import Any
 
-from pydantic import Field, PrivateAttr
+from pydantic import BaseModel, Field, PrivateAttr
 
 from buttermilk import logger
-from buttermilk._core.processing_context import ProcessingContext
-from buttermilk._core.processor_core import BatchProcessorCore
+from buttermilk._core.processor_core import ObservabilityMixin
 from buttermilk._core.types import BaseRecord
 from buttermilk.utils.import_utils import load_class
+from buttermilk.utils.templating import load_template
 
 
-class VertexBatchProcessor(BatchProcessorCore):
+class VertexBatchProcessor(ObservabilityMixin):
     """Batch processor using Vertex AI with criteria caching.
 
+    Implements SimpleBatchProcessor protocol for use inside BatchAccumulator.
     Combines batch prediction (50% cost savings) with context caching
     (~90% savings on repeated criteria) for efficient large-scale evaluation.
 
@@ -67,25 +71,20 @@ class VertexBatchProcessor(BatchProcessorCore):
     )
     fail_on_unfilled_parameters: bool = Field(
         default=True,
-        description="Fail if template parameters are unfilled (compatibility field)",
+        description="Fail if template parameters are unfilled",
     )
     max_tokens: int = Field(
         default=4096,
-        description="Maximum tokens for response (Claude)",
+        description="Maximum tokens for response",
     )
 
     # Internal components
-    _cache_manager: CriteriaCacheManager | None = PrivateAttr(default=None)
-    _batch_manager: BatchJobManager | None = PrivateAttr(default=None)
-    _template_content: str | None = PrivateAttr(default=None)
     _output_class: type[BaseModel] | None = PrivateAttr(default=None)
+    _client: Any = PrivateAttr(default=None)
+    _cached_criteria: dict[str, tuple[str, str]] = PrivateAttr(default_factory=dict)  # key -> (rendered, hash)
 
     def model_post_init(self, __context: Any) -> None:
-        """Initialize managers after Pydantic initialization."""
-        super().model_post_init(__context)
-
-        # Load template content
-        self._template_content = load_template(self.template)
+        """Initialize after Pydantic initialization."""
 
         # Load output model class if specified
         if self.output_model:
@@ -99,87 +98,89 @@ class VertexBatchProcessor(BatchProcessorCore):
             output_model=self.output_model,
         )
 
-    # ... (skipping _ensure_managers, _render_criteria, _get_criteria_key - unchanged) ...
+    def _ensure_client(self) -> None:
+        """Lazily initialize the Vertex AI client."""
+        if self._client is None:
+            from buttermilk import bm
+            self._client = bm.genai
 
-    async def _process_batch(
+    def _render_criteria(self, variant_vars: dict[str, Any]) -> tuple[str, str]:
+        """Render the criteria template with given variables.
+
+        Args:
+            variant_vars: Variables to merge with template_vars for rendering
+
+        Returns:
+            Tuple of (rendered template string, template hash)
+        """
+        merged_vars = {**self.template_vars, **variant_vars}
+        if self.fail_on_unfilled_parameters:
+            merged_vars["fail_on_unfilled_parameters"] = True
+
+        rendered, unfilled, template_hash = load_template(self.template, merged_vars)
+        return rendered, template_hash
+
+    def _get_criteria_key(self, variant_vars: dict[str, Any]) -> str:
+        """Generate a unique key for a criteria variant.
+
+        Args:
+            variant_vars: Variables that distinguish this criteria variant
+
+        Returns:
+            Hash-based key for the criteria variant
+        """
+        # Create a deterministic key from variant variables
+        key_parts = sorted(f"{k}={v}" for k, v in variant_vars.items())
+        key_str = "|".join(key_parts) if key_parts else "default"
+        return hashlib.md5(key_str.encode()).hexdigest()[:8]
+
+    async def process_batch(
         self,
-        contexts: list[ProcessingContext],
-    ) -> AsyncGenerator[list[BaseRecord], None]:
-        """Process a batch of records through Vertex AI batch prediction."""
-        self._ensure_managers()
+        records: list[BaseRecord],
+    ) -> list[BaseRecord]:
+        """Process a batch of records through Vertex AI.
 
-        if not contexts:
-            return
+        Implements SimpleBatchProcessor protocol.
 
-        # ... (batch request implementation same as before until result processing) ...
-        # Need to reconstruct this part to inject trace emission and typing
+        Args:
+            records: List of BaseRecord objects to process
 
-        # Collect unique criteria variants and their rendered content
-        criteria_variants: dict[str, str] = {}
-        criteria_caches: dict[str, str] = {}
-        batch_requests: list[BatchRequest] = []
+        Returns:
+            List of processed BaseRecord objects with LLM outputs
+        """
+        self._ensure_client()
+
+        if not records:
+            return []
 
         start_time = time.time()
+        output_records: list[BaseRecord] = []
 
-        for ctx in contexts:
-            record = ctx.record
-            variant_vars = ctx.metadata.get("variant_vars", {})
-            criteria_key = self._get_criteria_key(variant_vars)
+        # For now, process records individually through the LLM
+        # TODO: Implement true batch prediction API when available
+        for record in records:
+            try:
+                # Get variant variables from record metadata
+                variant_vars = record.metadata.get("variant_vars", {}) if record.metadata else {}
 
-            if criteria_key not in criteria_variants:
-                rendered_criteria = self._render_criteria(variant_vars)
-                criteria_variants[criteria_key] = rendered_criteria
-                if not self._is_claude_model():
-                    cache_name = self._cache_manager.get_or_create_cache(
-                        criteria_content=rendered_criteria,
-                        display_name=f"{self.name or 'vertex_batch'}_{criteria_key}",
-                        system_instruction=self.system_instruction,
-                        model=self.model,
-                    )
-                    criteria_caches[criteria_key] = cache_name
+                # Render the criteria/prompt
+                criteria_key = self._get_criteria_key(variant_vars)
+                if criteria_key not in self._cached_criteria:
+                    self._cached_criteria[criteria_key] = self._render_criteria(variant_vars)
 
-            custom_id = f"{record.record_id}_{criteria_key}"
-            batch_requests.append(
-                BatchRequest(
-                    custom_id=custom_id,
-                    record_id=record.record_id,
-                    criteria_key=criteria_key,
-                    content=record.content or "",
-                    cache_name=criteria_caches.get(criteria_key),
-                )
-            )
+                rendered_prompt, template_hash = self._cached_criteria[criteria_key]
 
-        logger.info(
-            f"Processing batch of {len(batch_requests)} requests",
-            model=self.model,
-        )
+                # Build the full prompt with record content
+                full_prompt = f"{rendered_prompt}\n\n{record.content or ''}"
 
-        criteria_contents = criteria_variants if self._is_claude_model() else None
-        results = await self._batch_manager.run_batch_and_wait(
-            model=self.model,
-            requests=batch_requests,
-            criteria_contents=criteria_contents,
-        )
+                # Call the LLM
+                response = await self._call_llm(full_prompt)
 
-        result_map = {r.custom_id: r for r in results}
-        output_batch: list[BaseRecord] = []
-        duration_ms = (time.time() - start_time) * 1000
-
-        for ctx in contexts:
-            record = ctx.record
-            variant_vars = ctx.metadata.get("variant_vars", {})
-            criteria_key = self._get_criteria_key(variant_vars)
-            custom_id = f"{record.record_id}_{criteria_key}"
-            result = result_map.get(custom_id)
-
-            if result and result.response:
-                # 1. Parse Output if output_model is set
-                final_output = result.response
-                if self._output_class:
+                # Parse output if output_model is set
+                final_output = response
+                if self._output_class and response:
                     try:
-                        # Assuming response is JSON
-                        # Handle potential code block wrapping
-                        cleaned_response = result.response.strip()
+                        cleaned_response = response.strip()
                         if cleaned_response.startswith("```json"):
                             cleaned_response = cleaned_response[7:-3].strip()
                         elif cleaned_response.startswith("```"):
@@ -188,72 +189,97 @@ class VertexBatchProcessor(BatchProcessorCore):
                         final_output = self._output_class.model_validate_json(cleaned_response)
                     except Exception as e:
                         logger.warning(f"Failed to parse output for {record.record_id}: {e}")
-                        # Fallback to string or error? For now, raw string attached to record
-                        # But wait, if we expect typed, we might want to error or emit failure trace
-                        pass
 
-                # 2. Emit ExecutionTrace
-                extra_metadata = {
-                    "llm_config": {
-                        "model": self.model,
-                        "template": self.template,
-                        "criteria_key": criteria_key,
-                    },
-                    "usage": result.usage,
-                }
-
+                # Emit success trace
+                duration_ms = (time.time() - start_time) * 1000
                 await self._emit_success_trace(
                     record=record,
                     outputs=final_output,
                     processor_stage=self.name or "vertex_batch",
-                    parent_trace_id=ctx.session_id,  # Or something from context
-                    duration_ms=duration_ms / len(contexts),  # Approximate
+                    parent_trace_id=None,
+                    duration_ms=duration_ms / len(records),
                     inputs=variant_vars,
-                    extra_metadata=extra_metadata,
+                    extra_metadata={
+                        "llm_config": {
+                            "model": self.model,
+                            "template": self.template,
+                            "template_hash": template_hash,
+                            "criteria_key": criteria_key,
+                        },
+                    },
                     execution_type="llm_processing (batch)",
                 )
 
-                # 3. Yield Result
+                # Yield the typed output or enriched record
                 if self._output_class and isinstance(final_output, self._output_class):
-                    output_batch.append(final_output)
+                    output_records.append(final_output)
                 else:
-                    # Fallback: yield as is (string or dict)
-                    output_batch.append(result.response)
+                    # Enrich record with LLM output
+                    updated_metadata = record.metadata.copy() if record.metadata else {}
+                    updated_metadata["llm_output"] = response
+                    output_records.append(record.model_copy(update={"metadata": updated_metadata}))
 
-            elif result and result.error:
+            except Exception as e:
+                logger.error(f"Failed to process record {record.record_id}: {e}")
                 # Emit error trace
                 await self._emit_error_trace(
                     record=record,
-                    error=Exception(result.error),
+                    error=e,
                     processor_stage=self.name or "vertex_batch",
-                    parent_trace_id=ctx.session_id,
-                    duration_ms=duration_ms / len(contexts),
-                    inputs=variant_vars,
+                    parent_trace_id=None,
+                    duration_ms=(time.time() - start_time) * 1000 / len(records),
+                    inputs=variant_vars if 'variant_vars' in dir() else {},
                     execution_type="llm_processing (batch)",
                 )
 
-                error_record = record.model_copy(update={"error": [*(record.error or []), result.error]})
-                output_batch.append(error_record)
-            else:
-                logger.warning(f"No result found for {custom_id}")
-                output_batch.append(record)
+                # Add error to record
+                error_record = record.model_copy(
+                    update={"error": [*(record.error or []), str(e)]}
+                )
+                output_records.append(error_record)
 
-        yield output_batch
+        logger.info(
+            f"VertexBatchProcessor processed {len(records)} records",
+            model=self.model,
+            duration_ms=(time.time() - start_time) * 1000,
+        )
 
-    def _is_claude_model(self) -> bool:
-        """Check if the configured model is a Claude model.
+        return output_records
+
+    async def _call_llm(self, prompt: str) -> str:
+        """Call the LLM with the given prompt.
+
+        Args:
+            prompt: The full prompt to send to the LLM
 
         Returns:
-            True if model is Claude/Anthropic
+            The LLM response text
         """
-        return "claude" in self.model.lower() or "anthropic" in self.model.lower()
+        from google.genai import types
+
+        # Build the request
+        contents = [types.Content(role="user", parts=[types.Part(text=prompt)])]
+
+        config = types.GenerateContentConfig(
+            max_output_tokens=self.max_tokens,
+        )
+
+        if self.system_instruction:
+            config.system_instruction = self.system_instruction
+
+        # Call the API
+        response = await self._client.aio.models.generate_content(
+            model=self.model,
+            contents=contents,
+            config=config,
+        )
+
+        # Extract text from response
+        if response.candidates and response.candidates[0].content.parts:
+            return response.candidates[0].content.parts[0].text
+        return ""
 
     async def finalize(self) -> None:
-        """Clean up resources after processing.
-
-        Cleans up any expired caches from the local registry.
-        """
-        if self._cache_manager:
-            self._cache_manager.cleanup_expired()
-
+        """Clean up resources after processing."""
+        self._cached_criteria.clear()
         logger.info("VertexBatchProcessor finalized")

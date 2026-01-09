@@ -16,7 +16,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from buttermilk._core.processing_context import ProcessingContext
-from buttermilk._core.processor_core import BatchProcessorCore
+from buttermilk._core.processor_core import ProcessorCore
+from buttermilk._core.protocols import BatchProcessor
 from buttermilk._core.types import BaseRecord
 from buttermilk.processors.unified_processors import EmbeddingProcessor
 
@@ -39,16 +40,16 @@ class TestEmbeddingProcessorPydantic:
         # Verify required fields
         assert processor.embedding_model == "gemini-embedding-001"
 
-    def test_embedding_processor_inherits_from_batch_processor_core(self):
-        """Verify EmbeddingProcessor inherits from BatchProcessorCore."""
+    def test_embedding_processor_inherits_from_processor_core(self):
+        """Verify EmbeddingProcessor inherits from ProcessorCore."""
         processor = EmbeddingProcessor(
             embedding_model="gemini-embedding-001",
             batch_size=64,
         )
 
-        # Should have batch_size from parent
+        # Should have batch_size field
         assert processor.batch_size == 64
-        assert isinstance(processor, BatchProcessorCore)
+        assert isinstance(processor, ProcessorCore)
 
     def test_embedding_processor_has_optional_fields(self):
         """Verify EmbeddingProcessor has optional configuration fields."""
@@ -76,20 +77,10 @@ class TestEmbeddingProcessorProtocol:
         # Verify class exists
         assert EmbeddingProcessor is not None
 
-    def test_embedding_processor_inherits_from_batch_processor_core(self):
-        """Test inheritance from BatchProcessorCore."""
-        assert issubclass(EmbeddingProcessor, BatchProcessorCore)
-        # EmbeddingProcessor no longer inherits from ProcessorCore directly, but via BatchProcessorCore which might inherit from it?
-        # BatchProcessorCore inherits from ObservabilityMixin and ABC.
-        # ProcessorCore inherits from ObservabilityMixin and ABC.
-        # They are siblings.
-        # Wait, Step 801 failure showed "name 'BatchProcessorCore' is not defined" error?
-        # I imported it in Step 684.
-        # Let's verify import.
-        # Also need to check if BatchProcessorCore inherits ProcessorCore. It does NOT.
-        # So "issubclass(EmbeddingProcessor, ProcessorCore)" will fail if it's not a subclass.
-        # EmbeddingProcessor(BatchProcessorCore).
-        pass
+    def test_embedding_processor_inherits_from_processor_core(self):
+        """Test inheritance from ProcessorCore."""
+        assert issubclass(EmbeddingProcessor, ProcessorCore)
+        # EmbeddingProcessor extends ProcessorCore and implements BatchProcessor protocol
 
     def test_embedding_processor_implements_batch_processor_protocol(self):
         """Test implementation of BatchProcessor protocol."""
@@ -109,18 +100,15 @@ class TestEmbeddingProcessorBatchProcessing:
             batch_size=10,
         )
 
-        # Create test records with chunks
-        contexts = [
-            ProcessingContext(
-                session_id="test-session",
-                record=BaseRecord(
-                    record_id=f"record-{i}",
-                    content=f"content-{i}",
-                    chunks=[
-                        {"text": f"chunk-{i}-0", "chunk_index": 0},
-                        {"text": f"chunk-{i}-1", "chunk_index": 1},
-                    ],
-                ),
+        # Create test records with chunks (now uses BaseRecord directly, not ProcessingContext)
+        records = [
+            BaseRecord(
+                record_id=f"record-{i}",
+                content=f"content-{i}",
+                chunks=[
+                    {"text": f"chunk-{i}-0", "chunk_index": 0},
+                    {"text": f"chunk-{i}-1", "chunk_index": 1},
+                ],
             )
             for i in range(3)
         ]
@@ -134,10 +122,8 @@ class TestEmbeddingProcessorBatchProcessing:
             mock_response.embeddings = [MagicMock(values=emb) for emb in mock_embeddings]
             mock_genai.Client.return_value.models.embed_content.return_value = mock_response
 
-            # Process batch
-            outputs = []
-            async for output in processor.process_batch(contexts):
-                outputs.append(output)
+            # Process batch - now returns list, not async generator
+            outputs = await processor.process_batch(records)
 
             # Verify all records processed
             assert len(outputs) == 3
@@ -161,22 +147,17 @@ class TestEmbeddingProcessorBatchProcessing:
         )
 
         # Create record without chunks
-        contexts = [
-            ProcessingContext(
-                session_id="test-session",
-                record=BaseRecord(
-                    record_id="no-chunks",
-                    content="content without chunks",
-                ),
+        records = [
+            BaseRecord(
+                record_id="no-chunks",
+                content="content without chunks",
             )
         ]
 
         # Process batch (should pass through without error)
-        outputs = []
-        async for output in processor.process_batch(contexts):
-            outputs.append(output)
+        outputs = await processor.process_batch(records)
 
-        # Should yield the record unchanged
+        # Should return the record unchanged
         assert len(outputs) == 1
         assert outputs[0].record_id == "no-chunks"
         # Record should not have chunks or embeddings added
@@ -192,17 +173,14 @@ class TestEmbeddingProcessorBatchProcessing:
         )
 
         # Create 5 records, each with 2 chunks = 10 chunks total
-        contexts = [
-            ProcessingContext(
-                session_id="test-session",
-                record=BaseRecord(
-                    record_id=f"record-{i}",
-                    content=f"content-{i}",
-                    chunks=[
-                        {"text": f"chunk-{i}-0"},
-                        {"text": f"chunk-{i}-1"},
-                    ],
-                ),
+        records = [
+            BaseRecord(
+                record_id=f"record-{i}",
+                content=f"content-{i}",
+                chunks=[
+                    {"text": f"chunk-{i}-0"},
+                    {"text": f"chunk-{i}-1"},
+                ],
             )
             for i in range(5)
         ]
@@ -223,9 +201,7 @@ class TestEmbeddingProcessorBatchProcessing:
             mock_genai.Client.return_value.models.embed_content.side_effect = mock_embed_content
 
             # Process batch
-            outputs = []
-            async for output in processor.process_batch(contexts):
-                outputs.append(output)
+            outputs = await processor.process_batch(records)
 
             # Verify all records processed
             assert len(outputs) == 5
@@ -234,46 +210,11 @@ class TestEmbeddingProcessorBatchProcessing:
             # Exact call count depends on batching implementation
             assert api_call_count > 0
 
+    @pytest.mark.skip(reason="Context metadata tracking removed with ProcessingContext -> BaseRecord change")
     @pytest.mark.anyio
     async def test_embedding_processor_enriches_context_metadata(self):
         """Verify processor adds embedding metadata to context."""
-        # Create processor directly as Pydantic model
-        processor = EmbeddingProcessor(
-            embedding_model="gemini-embedding-001",
-        )
-
-        # Create record with chunks
-        context = ProcessingContext(
-            session_id="test-session",
-            record=BaseRecord(
-                record_id="metadata-test",
-                content="test content",
-                chunks=[{"text": "chunk 1"}, {"text": "chunk 2"}],
-            ),
-        )
-
-        # Mock embedding API
-        with patch("buttermilk.processors.unified_processors.genai") as mock_genai:
-            mock_response = MagicMock()
-            mock_response.embeddings = [
-                MagicMock(values=[0.1] * 768),
-                MagicMock(values=[0.2] * 768),
-            ]
-            mock_genai.Client.return_value.models.embed_content.return_value = mock_response
-
-            # Process batch
-            outputs = []
-            async for output in processor.process_batch([context]):
-                outputs.append(output)
-
-            # Verify context metadata was updated
-            assert "embedding_stats" in context.metadata
-            stats = context.metadata["embedding_stats"]
-
-            # Verify stats contain useful information
-            assert stats["chunks_embedded"] == 2
-            assert stats["embedding_model"] == "gemini-embedding-001"
-            assert "processing_time_ms" in stats
+        pass
 
 
 class TestEmbeddingProcessorErrorHandling:
@@ -288,15 +229,14 @@ class TestEmbeddingProcessorErrorHandling:
             embedding_max_retries=3,
         )
 
-        # Create test context
-        context = ProcessingContext(
-            session_id="test-session",
-            record=BaseRecord(
+        # Create test record
+        records = [
+            BaseRecord(
                 record_id="retry-test",
                 content="test content",
                 chunks=[{"text": "chunk 1"}],
-            ),
-        )
+            )
+        ]
 
         # Mock API to fail twice, then succeed
         call_count = 0
@@ -315,9 +255,7 @@ class TestEmbeddingProcessorErrorHandling:
             mock_genai.Client.return_value.models.embed_content.side_effect = mock_embed_content
 
             # Process should succeed after retries
-            outputs = []
-            async for output in processor.process_batch([context]):
-                outputs.append(output)
+            outputs = await processor.process_batch(records)
 
             # Verify processing succeeded
             assert len(outputs) == 1
@@ -332,15 +270,14 @@ class TestEmbeddingProcessorErrorHandling:
             embedding_max_retries=2,
         )
 
-        # Create test context
-        context = ProcessingContext(
-            session_id="test-session",
-            record=BaseRecord(
+        # Create test record
+        records = [
+            BaseRecord(
                 record_id="fail-test",
                 content="test content",
                 chunks=[{"text": "chunk 1"}],
-            ),
-        )
+            )
+        ]
 
         # Mock API to always fail
         with patch("buttermilk.processors.unified_processors.genai") as mock_genai:
@@ -348,20 +285,14 @@ class TestEmbeddingProcessorErrorHandling:
 
             # Processing should raise after max retries (fail-fast)
             with pytest.raises(Exception, match="Persistent API error"):
-                async for _ in processor.process_batch([context]):
-                    pass
+                await processor.process_batch(records)
 
 
 class TestEmbeddingProcessorFinalization:
     """Test finalization and cleanup logic."""
 
+    @pytest.mark.skip(reason="EmbeddingProcessor no longer has finalize method - cleanup handled by BatchAccumulator")
     @pytest.mark.anyio
     async def test_embedding_processor_finalize_method_exists(self):
         """Verify finalize method exists and can be called."""
-        # Create processor directly as Pydantic model
-        processor = EmbeddingProcessor(
-            embedding_model="gemini-embedding-001",
-        )
-
-        # Finalize should not raise
-        await processor.finalize()
+        pass

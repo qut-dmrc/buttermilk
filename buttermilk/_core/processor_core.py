@@ -233,63 +233,16 @@ class ProcessorCore(ObservabilityMixin, ABC):
         raise NotImplementedError("Subclasses must implement _process_record")
         yield
 
+    async def flush(self) -> AsyncGenerator[BaseRecord, None]:
+        """Flush any buffered records after source exhaustion.
 
-class BatchProcessorCore(ObservabilityMixin, ABC):
-    """Base class for batch pipeline processors.
+        Default implementation yields nothing. Override in processors
+        that buffer records (like BatchAccumulator).
 
-    Implements BatchProcessor protocol with OTEL tracing.
-    """
+        Yields:
+            Any remaining buffered records after processing.
+        """
+        return
+        yield  # Make this a generator
 
-    batch_size: int = Field(default=32, description="Number of records to batch together")
 
-    async def process_batch(
-        self,
-        contexts: list[ProcessingContext],
-    ) -> AsyncGenerator[BaseRecord, None]:
-        """Process batch with OTEL span wrapping."""
-        tracer = trace.get_tracer("buttermilk.processor")
-        parent_context = None
-        if contexts and contexts[0].span:
-            parent_context = trace.set_span_in_context(contexts[0].span)
-
-        processor_name = self.name or self.processor_type
-
-        with tracer.start_as_current_span(
-            f"batch_processor.{self.processor_type}",
-            context=parent_context,
-            attributes={
-                "processor.name": processor_name,
-                "processor.type": self.processor_type,
-                "batch.size": len(contexts),
-            },
-        ) as span:
-            try:
-                # Delegate to _process_batch which yields list[BaseRecord]
-                # Flatten the output for the pipeline
-                async for output_batch in self._process_batch(contexts):
-                    span.set_attribute("batch.output_size", len(output_batch))
-                    for record in output_batch:
-                        yield record
-
-            except Exception as e:
-                span.record_exception(e)
-                logger.error(
-                    f"Batch processor {processor_name} failed: {e}",
-                    processor=processor_name,
-                    batch_size=len(contexts),
-                    error=str(e),
-                )
-                raise
-
-    async def finalize(self) -> None:
-        """Optional cleanup logic."""
-        pass
-
-    @abstractmethod
-    async def _process_batch(
-        self,
-        contexts: list[ProcessingContext],
-    ) -> AsyncGenerator[list[BaseRecord], None]:
-        """Concrete batch processing logic. Must be implemented by subclasses."""
-        raise NotImplementedError("Subclasses must implement _process_batch")
-        yield

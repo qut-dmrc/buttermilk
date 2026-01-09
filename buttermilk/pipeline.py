@@ -747,6 +747,10 @@ class PipelineOrchestrator(BaseModel):
                 if pending_tasks:
                     await asyncio.gather(*pending_tasks, return_exceptions=True)
 
+                # Flush buffered records from processors after source exhaustion
+                # Records from flush() flow through remaining processors
+                await self._flush_all_processors(completed_records)
+
                 # Signal completion by putting None
                 await completed_records.put(None)
 
@@ -1016,6 +1020,128 @@ class PipelineOrchestrator(BaseModel):
                 processor_stage=processor_stage_name,
                 error=str(e),
             )
+
+    async def _flush_all_processors(self, completed_queue: asyncio.Queue) -> None:
+        """Flush buffered records from all processors after source exhaustion.
+
+        For processors that buffer records (like BatchAccumulator), this calls
+        flush() and routes the resulting records through remaining processors.
+
+        Args:
+            completed_queue: Queue to put completed records
+        """
+        logger.debug(
+            f"🔄 Flushing processors in stage '{self.pipeline_name}'",
+            processor_count=len(self.processors),
+            pipeline_name=self.pipeline_name,
+        )
+
+        flush_tasks = []
+
+        for i, processor in enumerate(self.processors):
+            if hasattr(processor, "flush"):
+                try:
+                    flushed_count = 0
+                    async for flushed_record in processor.flush():
+                        flushed_count += 1
+                        self._summary.increment_attempted()
+
+                        # Process flushed record through remaining processors
+                        task = asyncio.create_task(
+                            self._process_flushed_record(
+                                flushed_record, i + 1, completed_queue
+                            )
+                        )
+                        flush_tasks.append(task)
+
+                    if flushed_count > 0:
+                        logger.info(
+                            f"🔄 Flushed {flushed_count} records from {type(processor).__name__}",
+                            processor_index=i,
+                            processor_name=type(processor).__name__,
+                            flushed_count=flushed_count,
+                        )
+                except Exception as e:
+                    logger.error(
+                        f"❌ Failed to flush processor {i} ({type(processor).__name__}): {e}",
+                        processor_index=i,
+                        processor_name=type(processor).__name__,
+                        error=str(e),
+                    )
+
+        # Wait for all flush tasks to complete
+        if flush_tasks:
+            await asyncio.gather(*flush_tasks, return_exceptions=True)
+
+    async def _process_flushed_record(
+        self,
+        record: BaseRecord,
+        start_index: int,
+        completed_queue: asyncio.Queue,
+    ) -> None:
+        """Process a flushed record through remaining processors.
+
+        Args:
+            record: The flushed record to process
+            start_index: Index of first processor to use (skip earlier ones)
+            completed_queue: Queue to put completed records
+        """
+        tracer = trace.get_tracer("buttermilk.pipeline")
+        record_id = getattr(record, "record_id", "unknown")
+
+        if start_index >= len(self.processors):
+            # No more processors, yield directly
+            self._summary.increment_processed()
+            await completed_queue.put(("success", record))
+            return
+
+        # Process through remaining processors only
+        async with self._semaphore:
+            with tracer.start_as_current_span(
+                "pipeline.flush_process",
+                attributes={"record.id": record_id, "start_index": start_index},
+            ) as span:
+                try:
+                    # Start with the flushed record
+                    processing_queue = [record]
+
+                    # Only process through processors[start_index:]
+                    for processor_index in range(start_index, len(self.processors)):
+                        processor = self.processors[processor_index]
+                        next_queue = []
+
+                        for current_record in processing_queue:
+                            context = ProcessingContext(
+                                session_id=self.pipeline_name,
+                                record=current_record,
+                                batch_id=self.pipeline_name,
+                                span=span,
+                            )
+                            async for output_record in processor.process(context):
+                                next_queue.append(output_record)
+
+                        if not next_queue:
+                            # Filtered out
+                            self._summary.increment_skipped()
+                            return
+
+                        processing_queue = next_queue
+
+                    # Yield all final outputs
+                    self._summary.increment_processed()
+                    for final_record in processing_queue:
+                        await completed_queue.put(("success", final_record))
+
+                    span.set_status(trace.Status(trace.StatusCode.OK))
+
+                except Exception as e:
+                    self._summary.increment_failed()
+                    span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
+                    logger.error(
+                        f"Failed to process flushed record: {e}",
+                        record_id=record_id,
+                        error=str(e),
+                    )
 
     async def _finalize_all_processors(self) -> None:
         """Call finalize_processing on all processors that support it.
