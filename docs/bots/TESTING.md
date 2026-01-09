@@ -111,6 +111,12 @@ async def test_with_real_config(real_bm):
 - NO mocks except truly unavoidable external systems
 - Run with `pytest -m endtoend`
 
+**Demo Tests** (`tests/demo/`):
+
+- Full demonstration
+- Live data
+- Curated output to prove functionality to human operators
+
 ## When to Mock (Rare)
 
 **Mock ONLY**:

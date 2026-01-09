@@ -52,6 +52,8 @@ def pytest_collection_modifyitems(items):
         p = Path(str(item.path))
         if "endtoend" in p.parts:
             item.add_marker(pytest.mark.endtoend)
+        if "demo" in p.parts:
+            item.add_marker(pytest.mark.demo)
         if "integration" in p.parts:
             item.add_marker(pytest.mark.integration)
 

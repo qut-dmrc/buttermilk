@@ -240,7 +240,7 @@ buttermilk_search_path_plugin = "hydra_plugins.buttermilk_search_path_plugin:But
 [tool.pytest.ini_options]
 markers = [
   "integration: integration tests (slower, mocked and faked at the edges)",
-  "endtoend: tests that require real API calls with valid credentials",
+  "demo: slow, expensive tests with external dependencies and full human verification",
   "scheduled: mark tests to run in scheduled testing",
   "slow: mark tests as slow (deselect with '-m \"not slow\"')",
 ]
