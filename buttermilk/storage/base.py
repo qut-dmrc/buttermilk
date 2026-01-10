@@ -91,6 +91,14 @@ class Storage(ABC):
         """
         pass
 
+    def load_from_uri(self, source_uri: str) -> None:
+        """Load data from a URI (e.g., GCS path) into storage.
+
+        Args:
+            source_uri: The URI of the source data to load.
+        """
+        raise NotImplementedError(f"{self.__class__.__name__} does not support loading from URI.")
+
     def get_record_by_id(self, record_id: str) -> BaseRecord | None:
         """Get a single record by its ID.
 
@@ -142,9 +150,7 @@ class Storage(ABC):
         except Exception:
             return 0
 
-    async def iterate_async(
-        self, batch_size: Optional[int] = None, filter: Optional[RecordFilter] = None
-    ) -> AsyncGenerator[dict[str, Any], None]:
+    async def iterate_async(self, batch_size: Optional[int] = None, filter: Optional[RecordFilter] = None) -> AsyncGenerator[dict[str, Any], None]:
         """Async generator that yields record dictionaries from storage with optional filtering.
 
         This method enables Storage objects to be used directly as DataSource
@@ -170,9 +176,7 @@ class Storage(ABC):
             yield record
             count += 1
 
-    def __call__(
-        self, batch_size: Optional[int] = None, filter: Optional[RecordFilter] = None
-    ) -> AsyncGenerator[BaseRecord, None]:
+    def __call__(self, batch_size: Optional[int] = None, filter: Optional[RecordFilter] = None) -> AsyncGenerator[BaseRecord, None]:
         """Make Storage objects callable as DataSource for pipelines.
 
         This allows Storage objects to be used directly in simple pipelines:
@@ -245,16 +249,12 @@ class Storage(ABC):
 
         try:
             # Use the general utility function to import the class
-            cls = import_class_from_path(
-                self.config.record_class, expected_base_class=BaseRecord
-            )
+            cls = import_class_from_path(self.config.record_class, expected_base_class=BaseRecord)
             self._record_class = cls
             logger.debug(f"Using record class: {self.config.record_class}")
 
         except (ImportError, AttributeError, ValueError) as e:
-            logger.warning(
-                f"Failed to import record_class '{self.config.record_class}': {e}. Falling back to BaseRecord."
-            )
+            logger.warning(f"Failed to import record_class '{self.config.record_class}': {e}. Falling back to BaseRecord.")
             self._record_class = BaseRecord
 
         return self._record_class
@@ -307,19 +307,13 @@ class StorageClient:
                 bq_client = self.get_bq_client()
                 if not Path(self.config.schema_path).exists():
                     if (BQ_SCHEMA_DIR / self.config.schema_path).exists():
-                        self.config.schema_path = str(
-                            BQ_SCHEMA_DIR / self.config.schema_path
-                        )
+                        self.config.schema_path = str(BQ_SCHEMA_DIR / self.config.schema_path)
                     else:
-                        raise FatalError(
-                            f"Schema file not found: {self.config.schema_path}"
-                        )
+                        raise FatalError(f"Schema file not found: {self.config.schema_path}")
                 self._schema_cache = bq_client.schema_from_json(self.config.schema_path)
             except Exception as e:
                 self._schema_cache = None
-                raise FatalError(
-                    f"Failed to load schema from {self.config.schema_path}: {e}"
-                ) from e
+                raise FatalError(f"Failed to load schema from {self.config.schema_path}: {e}") from e
         return self._schema_cache
 
     def get_table_ref(self) -> str:
@@ -341,7 +335,5 @@ class StorageClient:
                 missing_parts.append("dataset_id")
             if not self.config.table_id:
                 missing_parts.append("table_id")
-            raise ValueError(
-                f"Missing required fields for BigQuery operations: {', '.join(missing_parts)}"
-            )
+            raise ValueError(f"Missing required fields for BigQuery operations: {', '.join(missing_parts)}")
         return self.config.full_table_id

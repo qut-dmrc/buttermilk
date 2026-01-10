@@ -45,14 +45,10 @@ class BigQueryStorage(Storage, StorageClient):
         StorageClient.__init__(self, config)
 
         if config.type != "bigquery":
-            raise ValueError(
-                f"BigQueryStorage requires type='bigquery', got '{config.type}'"
-            )
+            raise ValueError(f"BigQueryStorage requires type='bigquery', got '{config.type}'")
 
         if not config.dataset_name and not config.dataset_id:
-            raise ValueError(
-                "BigQuery storage requires either dataset_name or dataset_id"
-            )
+            raise ValueError("BigQuery storage requires either dataset_name or dataset_id")
 
         # Store read_only flag
         self.read_only = config.read_only
@@ -61,8 +57,7 @@ class BigQueryStorage(Storage, StorageClient):
         # Exception: read_only mode doesn't need schema since it won't write
         if not self.read_only and not config.schema_path:
             raise StorageError(
-                "BigQuery storage requires explicit schema_path in the configuration. "
-                "Use read_only=True if you only need to read data.",
+                "BigQuery storage requires explicit schema_path in the configuration. Use read_only=True if you only need to read data.",
             )
 
         # Validate that we have the required components for BigQuery table operations
@@ -74,9 +69,7 @@ class BigQueryStorage(Storage, StorageClient):
                 missing_parts.append("dataset_id")
             if not config.table_id:
                 missing_parts.append("table_id")
-            raise ValueError(
-                f"BigQuery storage requires all table components: {', '.join(missing_parts)}"
-            )
+            raise ValueError(f"BigQuery storage requires all table components: {', '.join(missing_parts)}")
 
         self._client = None
         self._table = None
@@ -122,17 +115,13 @@ class BigQueryStorage(Storage, StorageClient):
         try:
             # Use custom query if provided
             if self.config.custom_query:
-                query = self.config.custom_query.replace(
-                    "{table}", f"{self.get_table_ref()}"
-                )
+                query = self.config.custom_query.replace("{table}", f"{self.get_table_ref()}")
                 job_config = None  # Custom query handles its own parameters
             else:
                 query = self._build_select_query()
                 job_config = self._build_query_job_config()
 
-            logger.info(
-                f"Loading records from {self.get_table_ref()} for dataset '{self.config.dataset_name}'"
-            )
+            logger.info(f"Loading records from {self.get_table_ref()} for dataset '{self.config.dataset_name}'")
 
             query_job = self.client.query(query, job_config=job_config)
 
@@ -161,8 +150,7 @@ class BigQueryStorage(Storage, StorageClient):
         # Fail fast if in read-only mode
         if self.read_only:
             raise StorageError(
-                "Storage is in read-only mode and cannot save records. "
-                "To enable writes, remove read_only from your storage configuration."
+                "Storage is in read-only mode and cannot save records. To enable writes, remove read_only from your storage configuration."
             )
 
         # Validate schema on first use
@@ -207,13 +195,9 @@ class BigQueryStorage(Storage, StorageClient):
             )
 
             if result:
-                logger.debug(
-                    f"Successfully saved {len(rows_to_insert)} records to {self.get_table_ref()}"
-                )
+                logger.debug(f"Successfully saved {len(rows_to_insert)} records to {self.get_table_ref()}")
             else:
-                raise StorageError(
-                    "Upload failed - no result returned from upload_rows"
-                )
+                raise StorageError("Upload failed - no result returned from upload_rows")
 
         except Exception as e:
             logger.error(
@@ -227,8 +211,52 @@ class BigQueryStorage(Storage, StorageClient):
                 exc_info=True,
             )
             raise StorageError(
-                f"Failed to save to BigQuery table {self.get_table_ref()}: {e}"
+                f"Failed to save to BigQuery table {self.get_table_ref()}: {e}Failed to save to BigQuery table {self.get_table_ref()}: {e}"
             ) from e
+
+    def load_from_uri(self, source_uri: str) -> None:
+        """Load data from a GCS URI into BigQuery table.
+
+        Uses client.load_table_from_uri for efficient batch loading.
+
+        Args:
+            source_uri: GCS URI (e.g. gs://bucket/file.jsonl)
+
+        Raises:
+            StorageError: If load job fails.
+        """
+        # Fail fast if in read-only mode
+        if self.read_only:
+            raise StorageError(
+                "Storage is in read-only mode and cannot load data. To enable writes, remove read_only from your storage configuration."
+            )
+
+        # Validate schema on first use
+        self._validate_schema()
+
+        # Ensure table exists (auto-create)
+        if self.config.auto_create:
+            self.create()
+
+        try:
+            job_config = bigquery.LoadJobConfig(
+                source_format=bigquery.SourceFormat.NEWLINE_DELIMITED_JSON,
+                schema=self.get_schema(),
+                write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
+            )
+
+            # TODO: Handle uri wildcard if needed, but load_table_from_uri supports it
+            logger.info(f"Starting BigQuery load job from {source_uri} to {self.get_table_ref()}")
+
+            load_job = self.client.load_table_from_uri(source_uri, self.get_table_ref(), job_config=job_config)
+
+            load_job.result()  # Waits for the job to complete.
+
+            logger.info(f"BigQuery load job finished. Loaded {load_job.output_rows} rows from {source_uri}.")
+
+        except Exception as e:
+            logger.error(f"Failed to load data from URI {source_uri} to BigQuery: {e}")
+            raise StorageError(f"BigQuery load job failed: {e}") from e
 
     def get_record_by_id(self, record_id: str) -> BaseRecord | None:
         """Get a single record by ID using a parameterized BigQuery query.
@@ -252,30 +280,22 @@ class BigQueryStorage(Storage, StorageClient):
         available_cols = self._available_columns()
 
         if available_cols and record_col not in available_cols:
-            raise StorageError(
-                f"BigQuery table {self.get_table_ref()} has no column '{record_col}' required for record lookup."
-            )
+            raise StorageError(f"BigQuery table {self.get_table_ref()} has no column '{record_col}' required for record lookup.")
 
         # Compose query
         where_parts = [f"{record_col} = @record_id"]
         use_dataset = (dataset_col in available_cols) or (not available_cols)
-        use_split = bool(self.config.split_type) and (
-            (split_col in available_cols) or (not available_cols)
-        )
+        use_split = bool(self.config.split_type) and ((split_col in available_cols) or (not available_cols))
 
         if use_dataset:
             where_parts.append(f"{dataset_col} = @dataset_name")
         else:
-            logger.warning(
-                f"BigQuery table {self.get_table_ref()} has no column '{dataset_col}'. Skipping dataset filter in get_record_by_id()."
-            )
+            logger.warning(f"BigQuery table {self.get_table_ref()} has no column '{dataset_col}'. Skipping dataset filter in get_record_by_id().")
 
         if use_split:
             where_parts.append(f"{split_col} = @split_type")
         elif self.config.split_type and available_cols:
-            logger.warning(
-                f"BigQuery table {self.get_table_ref()} has no column '{split_col}'. Skipping split filter in get_record_by_id()."
-            )
+            logger.warning(f"BigQuery table {self.get_table_ref()} has no column '{split_col}'. Skipping split filter in get_record_by_id().")
 
         query = f"""
         SELECT *
@@ -289,17 +309,9 @@ class BigQueryStorage(Storage, StorageClient):
             bigquery.ScalarQueryParameter("record_id", "STRING", record_id),
         ]
         if use_dataset:
-            params.append(
-                bigquery.ScalarQueryParameter(
-                    "dataset_name", "STRING", self.config.dataset_name
-                )
-            )
+            params.append(bigquery.ScalarQueryParameter("dataset_name", "STRING", self.config.dataset_name))
         if use_split:
-            params.append(
-                bigquery.ScalarQueryParameter(
-                    "split_type", "STRING", self.config.split_type
-                )
-            )
+            params.append(bigquery.ScalarQueryParameter("split_type", "STRING", self.config.split_type))
 
         job_config = bigquery.QueryJobConfig(query_parameters=params)
 
@@ -338,17 +350,13 @@ class BigQueryStorage(Storage, StorageClient):
             if dataset_col in available_cols or not available_cols:
                 where_clauses.append(f"{dataset_col} = @dataset_name")
             else:
-                logger.warning(
-                    f"BigQuery table {self.get_table_ref()} has no column '{dataset_col}'. Skipping dataset filter in count()."
-                )
+                logger.warning(f"BigQuery table {self.get_table_ref()} has no column '{dataset_col}'. Skipping dataset filter in count().")
 
             if self.config.split_type:
                 if split_col in available_cols or not available_cols:
                     where_clauses.append(f"{split_col} = @split_type")
                 else:
-                    logger.warning(
-                        f"BigQuery table {self.get_table_ref()} has no column '{split_col}'. Skipping split filter in count()."
-                    )
+                    logger.warning(f"BigQuery table {self.get_table_ref()} has no column '{split_col}'. Skipping split filter in count().")
 
             for key, value in self.config.filter.items():
                 if isinstance(value, str):
@@ -394,8 +402,7 @@ class BigQueryStorage(Storage, StorageClient):
         # Fail fast if in read-only mode
         if self.read_only:
             raise StorageError(
-                "Storage is in read-only mode and cannot create tables. "
-                "To enable table creation, remove read_only from your storage configuration."
+                "Storage is in read-only mode and cannot create tables. To enable table creation, remove read_only from your storage configuration."
             )
 
         # Validate schema on first use
@@ -423,15 +430,9 @@ class BigQueryStorage(Storage, StorageClient):
             # Use configured clustering fields if provided, otherwise determine based on schema
             if self.config.clustering_fields:
                 # Validate configured clustering fields exist in schema
-                valid_clustering_fields = [
-                    field
-                    for field in self.config.clustering_fields
-                    if field in schema_field_names
-                ]
+                valid_clustering_fields = [field for field in self.config.clustering_fields if field in schema_field_names]
                 if valid_clustering_fields != self.config.clustering_fields:
-                    invalid_fields = set(self.config.clustering_fields) - set(
-                        valid_clustering_fields
-                    )
+                    invalid_fields = set(self.config.clustering_fields) - set(valid_clustering_fields)
                     logger.warning(
                         "Some clustering fields not found in schema",
                         extra={
@@ -441,9 +442,7 @@ class BigQueryStorage(Storage, StorageClient):
                             "invalid_fields": list(invalid_fields),
                         },
                     )
-                table.clustering_fields = (
-                    valid_clustering_fields if valid_clustering_fields else None
-                )
+                table.clustering_fields = valid_clustering_fields if valid_clustering_fields else None
             else:
                 # Auto-determine clustering fields based on common fields in schema
                 default_clustering = []
@@ -452,13 +451,9 @@ class BigQueryStorage(Storage, StorageClient):
                     if resolved_field in schema_field_names:
                         default_clustering.append(resolved_field)
 
-                table.clustering_fields = (
-                    default_clustering if default_clustering else None
-                )
+                table.clustering_fields = default_clustering if default_clustering else None
 
-            table.description = (
-                f"Buttermilk table for dataset '{self.config.dataset_name}'"
-            )
+            table.description = f"Buttermilk table for dataset '{self.config.dataset_name}'"
 
             table = self.client.create_table(table, exists_ok=True)
             logger.info(
@@ -503,9 +498,7 @@ class BigQueryStorage(Storage, StorageClient):
         elif order_col in available_cols or not available_cols:
             query += f" ORDER BY {order_col}"
         else:
-            logger.debug(
-                f"BigQuery table {self.get_table_ref()} has no column '{order_col}'. Skipping ORDER BY."
-            )
+            logger.debug(f"BigQuery table {self.get_table_ref()} has no column '{order_col}'. Skipping ORDER BY.")
 
         # Limit
         if self.config.limit:
@@ -544,9 +537,7 @@ class BigQueryStorage(Storage, StorageClient):
         split_col = self._resolve_column("split_type")
 
         # Dataset filter only if column exists
-        if self.config.dataset_name and (
-            dataset_col in available_cols or not available_cols
-        ):
+        if self.config.dataset_name and (dataset_col in available_cols or not available_cols):
             clauses.append(f"{dataset_col} = @dataset_name")
         else:
             logger.warning(
@@ -556,20 +547,14 @@ class BigQueryStorage(Storage, StorageClient):
             )
 
         # Split filter only if requested and column exists
-        if self.config.split_type and (
-            split_col in available_cols or not available_cols
-        ):
+        if self.config.split_type and (split_col in available_cols or not available_cols):
             clauses.append(f"{split_col} = @split_type")
         elif self.config.split_type and available_cols:
-            logger.warning(
-                f"BigQuery table {self.get_table_ref()} has no column '{split_col}'. Skipping split filter."
-            )
+            logger.warning(f"BigQuery table {self.get_table_ref()} has no column '{split_col}'. Skipping split filter.")
 
         # Additional literal filters (assumed to be physical column names)
         for key, value in self.config.filter.items():
-            clauses.append(
-                f"{key} = '{value}'" if isinstance(value, str) else f"{key} = {value}"
-            )
+            clauses.append(f"{key} = '{value}'" if isinstance(value, str) else f"{key} = {value}")
 
         # Add custom WHERE clause if provided
         if self.config.custom_where:
@@ -581,16 +566,12 @@ class BigQueryStorage(Storage, StorageClient):
     def _build_query_job_config(self) -> bigquery.QueryJobConfig:
         """Build BigQuery job configuration."""
         parameters = [
-            bigquery.ScalarQueryParameter(
-                "dataset_name", "STRING", self.config.dataset_name
-            ),
+            bigquery.ScalarQueryParameter("dataset_name", "STRING", self.config.dataset_name),
         ]
 
         if self.config.split_type:
             parameters.append(
-                bigquery.ScalarQueryParameter(
-                    "split_type", "STRING", self.config.split_type
-                ),
+                bigquery.ScalarQueryParameter("split_type", "STRING", self.config.split_type),
             )
 
         return bigquery.QueryJobConfig(query_parameters=parameters)
@@ -626,12 +607,8 @@ class BigQueryStorage(Storage, StorageClient):
             logger.warning(f"Failed to create record from row data: {e}")
             return Record(
                 record_id=str(row_dict.get("record_id", shortuuid.uuid())),
-                dataset_name=str(
-                    row_dict.get("dataset_name", self.config.dataset_name or "default")
-                ),
-                split_type=str(
-                    row_dict.get("split_type", self.config.split_type or "default")
-                ),
+                dataset_name=str(row_dict.get("dataset_name", self.config.dataset_name or "default")),
+                split_type=str(row_dict.get("split_type", self.config.split_type or "default")),
                 metadata={"parse_error": str(e), "raw_data": str(row_dict)[:1000]},
                 content=f"Failed to parse record: {e}",
             )

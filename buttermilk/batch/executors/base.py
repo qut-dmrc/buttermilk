@@ -2,7 +2,7 @@ from typing import Protocol, runtime_checkable
 
 from buttermilk._core.processor_core import BatchProcessorCore
 from buttermilk._core.types import BaseRecord
-from buttermilk.batch.result import BatchJobStatus
+from buttermilk.batch.result import BatchExecutionResult, BatchJobStatus
 
 
 @runtime_checkable
@@ -13,7 +13,7 @@ class BatchExecutor(Protocol):
         self,
         records: list[BaseRecord],
         processor: BatchProcessorCore,
-    ) -> list[BaseRecord]:
+    ) -> BatchExecutionResult:
         """Execute batch processing and return results.
 
         Args:
@@ -21,10 +21,10 @@ class BatchExecutor(Protocol):
             processor: The batch processor to use
 
         Returns:
-            List of processed records
+            BatchExecutionResult containing records (if sync) or job ID (if async)
         """
         ...
 
-    async def get_status(self) -> BatchJobStatus:
+    async def get_status(self, job_id: str) -> BatchJobStatus:
         """Get current execution status."""
         ...

@@ -28,18 +28,19 @@ from __future__ import annotations
 
 import hashlib
 import time
+import uuid
 from typing import Any
 
 from pydantic import BaseModel, Field, PrivateAttr
 
 from buttermilk import logger
-from buttermilk._core.processor_core import ObservabilityMixin
+from buttermilk._core.processor_core import BatchProcessorCore
 from buttermilk._core.types import BaseRecord
 from buttermilk.utils.import_utils import load_class
 from buttermilk.utils.templating import load_template
 
 
-class VertexBatchProcessor(ObservabilityMixin):
+class VertexBatchProcessor(BatchProcessorCore):
     """Batch processor using Vertex AI with criteria caching.
 
     Implements SimpleBatchProcessor protocol for use inside BatchAccumulator.
@@ -102,6 +103,7 @@ class VertexBatchProcessor(ObservabilityMixin):
         """Lazily initialize the LLM client via buttermilk infrastructure."""
         if self._client is None:
             from buttermilk import bm
+
             # Use buttermilk's LLM infrastructure for proper model routing
             self._client = bm.llms[self.model]
 
@@ -121,6 +123,75 @@ class VertexBatchProcessor(ObservabilityMixin):
         rendered, unfilled, template_hash = load_template(self.template, merged_vars)
         return rendered, template_hash
 
+    def prepare_batch_requests(
+        self,
+        records: list[BaseRecord],
+    ) -> list[Any]:
+        """Prepare batch requests for Vertex AI.
+
+        Used by VertexBatchExecutor to construct batch jobs.
+
+        Args:
+            records: List of BaseRecord objects
+
+        Returns:
+            List of BatchRequest objects (as Any to avoid circular imports if possible,
+            but better to import BatchRequest if we can)
+        """
+        from buttermilk._core.vertex_batch import BatchRequest
+
+        requests: list[BatchRequest] = []
+
+        for record in records:
+            # Get template variables from record
+            if hasattr(record, "model_dump"):
+                record_dict = record.model_dump()
+                template_vars = {
+                    **record_dict.get("metadata", {}),
+                    **{k: v for k, v in record_dict.items() if k != "metadata"},
+                }
+            else:
+                template_vars = record.metadata if record.metadata else {}
+
+            # Render criteria and get hash
+            criteria_key = self._get_criteria_key(template_vars)
+
+            # NOTE: For true batch usage with caching, we might need to pre-create the cache
+            # and pass the cache name.
+            # Currently VertexBatchProcessor logic caches IN-MEMORY (self._cached_criteria).
+            # For Vertex Batch API, we need "context caching" resource if we use it.
+            # Or we inline the criteria.
+            #
+            # If we rely on in-context caching (ephemeral), for Claude we inline it.
+            # For Gemini we might need to create a resource.
+            #
+            # Reusing existing logic: _render_criteria returns (rendered, hash).
+            # We can use this to populate `cache_name` if we have a way to map hash -> resource name.
+            # For now, let's assume we pass Empty `cache_name` and let BatchJobManager handle inlining
+            # for Claude or just including text.
+            #
+            # BUT BatchJobManager.build_jsonl expects `criteria_contents` map if inlining for Claude.
+            # And `prepare_batch_requests` needs to return requests with `criteria_key` set.
+
+            if criteria_key not in self._cached_criteria:
+                self._cached_criteria[criteria_key] = self._render_criteria(template_vars)
+
+            # Create request
+            req = BatchRequest(
+                custom_id=str(uuid.uuid4()),  # Generate unique ID for this request within batch
+                record_id=record.record_id,
+                criteria_key=criteria_key,
+                content=record.content or "",
+                cache_name=None,  # TODO: Support persistent cache resources
+            )
+            requests.append(req)
+
+        return requests
+
+    def get_criteria_contents(self) -> dict[str, str]:
+        """Get mapping of criteria_key to rendered content for all cached criteria."""
+        return {k: v[0] for k, v in self._cached_criteria.items()}
+
     def _get_criteria_key(self, variant_vars: dict[str, Any]) -> str:
         """Generate a unique key for a criteria variant.
 
@@ -135,13 +206,13 @@ class VertexBatchProcessor(ObservabilityMixin):
         key_str = "|".join(key_parts) if key_parts else "default"
         return hashlib.md5(key_str.encode()).hexdigest()[:8]
 
-    async def process_batch(
+    async def _process_batch(
         self,
         records: list[BaseRecord],
     ) -> list[BaseRecord]:
         """Process a batch of records through Vertex AI.
 
-        Implements SimpleBatchProcessor protocol.
+        Implements BatchProcessorCore.
 
         Args:
             records: List of BaseRecord objects to process
@@ -236,14 +307,12 @@ class VertexBatchProcessor(ObservabilityMixin):
                     processor_stage=self.name or "vertex_batch",
                     parent_trace_id=None,
                     duration_ms=(time.time() - start_time) * 1000 / len(records),
-                    inputs=template_vars if 'template_vars' in dir() else {},
+                    inputs=template_vars if "template_vars" in dir() else {},
                     execution_type="llm_processing (batch)",
                 )
 
                 # Add error to record
-                error_record = record.model_copy(
-                    update={"error": [*(record.error or []), str(e)]}
-                )
+                error_record = record.model_copy(update={"error": [*(record.error or []), str(e)]})
                 output_records.append(error_record)
 
         logger.info(
