@@ -26,7 +26,6 @@ from buttermilk.processors.image_generation import ImageGenerationProcessor
 
 
 @pytest.mark.anyio
-@pytest.mark.endtoend
 async def test_image_generation_pipeline_end_to_end(real_bm, tmp_path):
     """Test complete image generation pipeline with real Vertex AI APIs.
 
@@ -152,7 +151,6 @@ async def test_image_generation_pipeline_end_to_end(real_bm, tmp_path):
 
 
 @pytest.mark.anyio
-@pytest.mark.endtoend
 async def test_pipeline_with_single_character(real_bm, tmp_path):
     """Test pipeline with minimal configuration (single character, single model).
 

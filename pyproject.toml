@@ -261,7 +261,7 @@ addopts = [
   "-rfEX", # show extra summary info for failed/errors only
   "--tb=short",
   "-m",
-  "not endtoend and not slow",
+  "not demo and not slow",
 ]
 
 filterwarnings = [

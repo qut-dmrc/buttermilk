@@ -6,11 +6,8 @@ when given real-world scorer input data from production BigQuery traces.
 
 import pytest
 from autogen_core.models import SystemMessage, UserMessage
-from jinja2 import Template
 
 from buttermilk.agents.evaluators.scorer import QualScore
-from buttermilk.utils.utils import read_file
-
 
 # Real input data from BigQuery traces
 REAL_TEMPLATE_VARS = {
@@ -93,7 +90,6 @@ DAVENPORT, IA—In the wake of growing controversy surrounding transgender bathr
 }
 
 
-@pytest.mark.endtoend
 @pytest.mark.anyio
 @pytest.mark.parametrize(
     "model_name",
@@ -178,7 +174,6 @@ async def test_scorer_structured_output_with_real_data(
     assert len(parsed_response.summary) > 0
 
 
-@pytest.mark.endtoend
 @pytest.mark.anyio
 @pytest.mark.parametrize(
     "model_name",
@@ -200,8 +195,8 @@ async def test_scorer_agent_with_real_data(
         session_runner: Session-scoped async fixture for single event loop
         model_name: Name of the model to test (parametrized across lite models)
     """
-    from buttermilk.agents.evaluators.scorer import LLMScorer, QualScore
     from buttermilk._core.contract import AgentInput
+    from buttermilk.agents.evaluators.scorer import LLMScorer, QualScore
 
     # Instantiate scorer agent with config matching flow config (scorer.yaml)
     # LLMAgent expects config fields as **kwargs, not an AgentConfig object

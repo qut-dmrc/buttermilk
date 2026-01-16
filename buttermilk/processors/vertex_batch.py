@@ -253,7 +253,7 @@ class VertexBatchProcessor(BatchProcessorCore):
                 full_prompt = f"{rendered_prompt}\n\n{record.content or ''}"
 
                 # Call the LLM with schema for structured output
-                response = await self._call_llm(full_prompt, schema=self._output_class)
+                response, llm_messages = await self._call_llm(full_prompt, schema=self._output_class)
 
                 # Parse output if output_model is set
                 final_output = response
@@ -277,6 +277,7 @@ class VertexBatchProcessor(BatchProcessorCore):
                     processor_stage=self.name or "vertex_batch",
                     parent_trace_id=None,
                     duration_ms=duration_ms / len(records),
+                    messages=llm_messages,
                     inputs=template_vars,
                     extra_metadata={
                         "llm_config": {
@@ -323,7 +324,7 @@ class VertexBatchProcessor(BatchProcessorCore):
 
         return output_records
 
-    async def _call_llm(self, prompt: str, schema: type | None = None) -> str:
+    async def _call_llm(self, prompt: str, schema: type | None = None) -> tuple[str, list]:
         """Call the LLM with the given prompt via buttermilk infrastructure.
 
         Args:
@@ -331,12 +332,12 @@ class VertexBatchProcessor(BatchProcessorCore):
             schema: Optional Pydantic model for structured JSON output
 
         Returns:
-            The LLM response text
+            Tuple of (response_text, messages) for tracing
         """
-        from autogen_core.models import SystemMessage, UserMessage
+        from autogen_core.models import AssistantMessage, SystemMessage, UserMessage
 
         # Build messages for the LLM
-        messages = []
+        messages: list = []
         if self.system_instruction:
             messages.append(SystemMessage(content=self.system_instruction))
         messages.append(UserMessage(content=prompt, source="user"))
@@ -346,7 +347,12 @@ class VertexBatchProcessor(BatchProcessorCore):
         response = await self._client.create(messages=messages, schema=schema)
 
         # Extract text from response - if schema was used, content is the JSON string
-        return response.content if response.content else ""
+        response_text = response.content if response.content else ""
+
+        # Add assistant response to messages for complete trace
+        messages.append(AssistantMessage(content=response_text, source="assistant"))
+
+        return response_text, messages
 
     async def finalize(self) -> None:
         """Clean up resources after processing."""

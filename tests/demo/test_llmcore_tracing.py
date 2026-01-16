@@ -124,24 +124,19 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
         results.append(result)
 
     # Step 3: Validate LLM response - should be structured CapitalCityResponse
+    # LLMCore.process() yields content directly (not wrapped in BaseRecord)
     assert len(results) == 1, "Expected exactly one result from process()"
     result = results[0]
 
-    assert isinstance(result, BaseRecord), "Result should be a BaseRecord"
-    assert hasattr(result, "output"), "Result should have output field"
-    assert result.output is not None, "Output should not be None"
-
     # Validate structured output - should be CapitalCityResponse instance
-    assert isinstance(result.output, CapitalCityResponse), (
-        f"Output should be CapitalCityResponse, got {type(result.output).__name__}: {result.output}"
-    )
+    assert isinstance(result, CapitalCityResponse), f"Output should be CapitalCityResponse, got {type(result).__name__}: {result}"
 
     # Validate the structured fields
-    assert result.output.city.lower() == "paris", f"Expected city='Paris', got '{result.output.city}'"
-    assert result.output.country.lower() == "france", f"Expected country='France', got '{result.output.country}'"
-    assert len(result.output.explanation) > 0, "Explanation should not be empty"
+    assert result.city.lower() == "paris", f"Expected city='Paris', got '{result.city}'"
+    assert result.country.lower() == "france", f"Expected country='France', got '{result.country}'"
+    assert len(result.explanation) > 0, "Explanation should not be empty"
 
-    logger.info(f"✅ LLM Structured Response valid: city={result.output.city}, country={result.output.country}")
+    logger.info(f"✅ LLM Structured Response valid: city={result.city}, country={result.country}")
 
     # Step 4: Get the trace writer and force flush
     trace_writer = get_trace_writer()
@@ -245,9 +240,7 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
     assert inputs["split_type"] == "test", "inputs should preserve split_type value"
 
     logger.info(
-        f"✅ Record structure validated: record_id={inputs['record_id']}, "
-        f"dataset_name={inputs['dataset_name']}, "
-        f"split_type={inputs['split_type']}"
+        f"✅ Record structure validated: record_id={inputs['record_id']}, dataset_name={inputs['dataset_name']}, split_type={inputs['split_type']}"
     )
 
     # Validate outputs contain structured response with Paris
@@ -366,56 +359,41 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
 
     logger.info(f"✅ Messages field validated: {len(messages)} messages with roles {roles}")
 
-    # Validate parameters field contains model hyperparameters
-    # Query for parameters field from BigQuery
-    query_with_parameters = f"""
-        SELECT
-            call_id,
-            parameters
-        FROM `{real_bm.bq.project}.testing.traces`
-        WHERE call_id = '{trace.call_id}'
-        LIMIT 1
-    """
-    df_parameters = real_bm.run_query(query_with_parameters)
+    # Validate LLM config is stored in metadata.llm_config
+    # (Note: There is no separate 'parameters' field in the trace schema;
+    #  LLM config is stored in metadata.llm_config)
+    assert "llm_config" in metadata, f"Metadata should contain 'llm_config'. Got keys: {metadata.keys()}"
+    llm_config_metadata = metadata["llm_config"]
+    if isinstance(llm_config_metadata, str):
+        llm_config_metadata = json.loads(llm_config_metadata)
 
-    assert df_parameters.shape[0] == 1, "Should retrieve the trace with parameters"
-    parameters = df_parameters.iloc[0].parameters
+    assert isinstance(llm_config_metadata, dict), f"llm_config should be a dict, got {type(llm_config_metadata).__name__}"
 
-    # FAIL-FAST: Parameters must exist and be parseable
-    assert parameters is not None, "Parameters field should not be None"
-
-    # Parse if JSON string
-    if isinstance(parameters, str):
-        parameters = json.loads(parameters)
-
-    assert isinstance(parameters, dict), f"Parameters should be a dict, got {type(parameters).__name__}"
-
-    # Validate core LLMCore parameters are present
-    assert "model" in parameters, f"Parameters should contain 'model'. Got keys: {parameters.keys()}"
-    assert "template" in parameters, f"Parameters should contain 'template'. Got keys: {parameters.keys()}"
+    # Validate core LLMCore config is present
+    assert "model" in llm_config_metadata, f"llm_config should contain 'model'. Got keys: {llm_config_metadata.keys()}"
+    assert "template" in llm_config_metadata, f"llm_config should contain 'template'. Got keys: {llm_config_metadata.keys()}"
 
     # Validate model configs are captured (temperature, api_version, etc. from models.json)
-    # The configs dict is stored in LLMConfig.configs, NOT in ModelParameters
     if real_model_name_expensive in real_bm.llms.connections:
-        llm_config = real_bm.llms.connections[real_model_name_expensive]
-        model_configs = llm_config.configs if llm_config.configs else {}
+        llm_connection = real_bm.llms.connections[real_model_name_expensive]
+        model_configs = llm_connection.configs if llm_connection.configs else {}
 
         if "temperature" in model_configs:
-            assert "temperature" in parameters, (
-                f"Parameters should contain 'temperature' from model configs. Model configs: {model_configs}, got parameters: {parameters}"
+            assert "temperature" in llm_config_metadata, (
+                f"llm_config should contain 'temperature' from model configs. Model configs: {model_configs}, got llm_config: {llm_config_metadata}"
             )
-            assert parameters["temperature"] == model_configs["temperature"], (
-                f"Temperature should match model config: expected {model_configs['temperature']}, got {parameters.get('temperature')}"
+            assert llm_config_metadata["temperature"] == model_configs["temperature"], (
+                f"Temperature should match model config: expected {model_configs['temperature']}, got {llm_config_metadata.get('temperature')}"
             )
-            logger.info(f"✅ Hyperparameter 'temperature' logged correctly: {parameters['temperature']}")
+            logger.info(f"✅ Hyperparameter 'temperature' logged correctly: {llm_config_metadata['temperature']}")
 
         if "api_version" in model_configs:
-            assert "api_version" in parameters, (
-                f"Parameters should contain 'api_version' from model configs. Model configs: {model_configs}, got parameters: {parameters}"
+            assert "api_version" in llm_config_metadata, (
+                f"llm_config should contain 'api_version' from model configs. Model configs: {model_configs}, got llm_config: {llm_config_metadata}"
             )
-            logger.info(f"✅ Config 'api_version' logged correctly: {parameters['api_version']}")
+            logger.info(f"✅ Config 'api_version' logged correctly: {llm_config_metadata['api_version']}")
 
-    logger.info(f"✅ Parameters field validated: {list(parameters.keys())}")
+    logger.info(f"✅ LLM config validated: {list(llm_config_metadata.keys())}")
 
     # ==========================================================================
     # RECORD FIELD VALIDATION: Verify trace.record is filled from BigQuery
@@ -465,29 +443,23 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
 
     # Validate NEW REQUIRED fields per BQ schema (traces.schema.json)
     # record_hash is REQUIRED - must exist and be valid SHA256
-    assert "record_hash" in trace_record, (
-        f"trace.record should contain 'record_hash' (REQUIRED per BQ schema). Got keys: {trace_record.keys()}"
-    )
+    assert "record_hash" in trace_record, f"trace.record should contain 'record_hash' (REQUIRED per BQ schema). Got keys: {trace_record.keys()}"
     assert trace_record["record_hash"] is not None, "trace.record.record_hash should not be None"
-    assert len(trace_record["record_hash"]) == 64, (
-        f"trace.record.record_hash should be 64-char SHA256, got {len(trace_record['record_hash'])} chars"
-    )
+    assert len(trace_record["record_hash"]) == 64, f"trace.record.record_hash should be 64-char SHA256, got {len(trace_record['record_hash'])} chars"
 
     # content is REQUIRED - must exist and match input record
-    assert "content" in trace_record, (
-        f"trace.record should contain 'content' (REQUIRED per BQ schema). Got keys: {trace_record.keys()}"
-    )
+    assert "content" in trace_record, f"trace.record should contain 'content' (REQUIRED per BQ schema). Got keys: {trace_record.keys()}"
     assert trace_record["content"] is not None, "trace.record.content should not be None"
 
     # Verify record_hash matches recomputed hash from sample_record
     expected_record_hash = compute_record_hash(sample_record.as_markdown())
     assert trace_record["record_hash"] == expected_record_hash, (
-        f"trace.record.record_hash should match recomputed hash.\n"
-        f"Trace:    {trace_record['record_hash']}\n"
-        f"Expected: {expected_record_hash}"
+        f"trace.record.record_hash should match recomputed hash.\nTrace:    {trace_record['record_hash']}\nExpected: {expected_record_hash}"
     )
 
-    logger.info(f"✅ trace.record validated: record_id={trace_record['record_id']}, record_hash={trace_record['record_hash'][:16]}..., keys={list(trace_record.keys())}")
+    logger.info(
+        f"✅ trace.record validated: record_id={trace_record['record_id']}, record_hash={trace_record['record_hash'][:16]}..., keys={list(trace_record.keys())}"
+    )
 
     # ==========================================================================
     # HASH VALIDATION: Verify hashes exist and match recomputed values
@@ -542,11 +514,11 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
     )
     logger.info(f"✅ record_hash validated: {logged_record_hash[:16]}...")
 
-    # 3. Validate config hash can be computed from parameters
-    # The parameters field contains the LLMCore config that should be hashable
-    config_hash = hash_dict(parameters)
+    # 3. Validate config hash can be computed from llm_config
+    # The llm_config contains the LLMCore config that should be hashable
+    config_hash = hash_dict(llm_config_metadata)
     assert len(config_hash) == 64, f"config_hash should be 64-char SHA256, got {len(config_hash)} chars"
-    logger.info(f"✅ config_hash computed from parameters: {config_hash[:16]}...")
+    logger.info(f"✅ config_hash computed from llm_config: {config_hash[:16]}...")
 
     logger.info("✅ All hash validations passed")
     logger.info(f"Trace metadata: {metadata}")
@@ -574,7 +546,6 @@ CRITERIA_VARIANTS = [
 
 
 @pytest.mark.anyio
-@pytest.mark.endtoend
 async def test_template_filling_with_criteria_variants(real_bm, sample_record: BaseRecord):
     """Test that template variables are correctly filled for each criteria variant.
 
@@ -686,9 +657,7 @@ async def test_template_filling_with_criteria_variants(real_bm, sample_record: B
 
         # Inputs are now flattened (no template_vars wrapper)
         assert "criteria" in inputs, f"inputs should contain 'criteria' for {criteria_name}. Got keys: {inputs.keys()}"
-        assert inputs["criteria"] == criteria_name, (
-            f"inputs.criteria should be '{criteria_name}', got '{inputs.get('criteria')}'"
-        )
+        assert inputs["criteria"] == criteria_name, f"inputs.criteria should be '{criteria_name}', got '{inputs.get('criteria')}'"
 
         logger.info(f"✅ Criteria '{criteria_name}' correctly filled in template")
         logger.info(f"   - Identifying text found: '{identifying_text[:50]}...'")
@@ -1141,7 +1110,6 @@ async def test_warning_raised_on_record_mismatch(real_bm, caplog):
     assert any("mismatch" in msg.lower() for msg in warning_messages), f"Expected warning about record mismatch, got: {warning_messages}"
 
 
-@pytest.mark.endtoend
 @pytest.mark.anyio
 async def test_no_duplicate_record_in_resolved_inputs(real_bm, sample_record: BaseRecord, real_model_name_expensive: str, llm_wrapper_type):
     """Test that record data is NOT duplicated between inputs and trace.record.
@@ -1232,14 +1200,10 @@ async def test_no_duplicate_record_in_resolved_inputs(real_bm, sample_record: Ba
     # - Bulky fields (text, content, metadata) are stripped when derived from record
 
     # Verify no nested template_vars wrapper
-    assert "template_vars" not in inputs, (
-        f"inputs should NOT have nested 'template_vars' key. Structure should be flat. Got keys: {inputs.keys()}"
-    )
+    assert "template_vars" not in inputs, f"inputs should NOT have nested 'template_vars' key. Structure should be flat. Got keys: {inputs.keys()}"
 
     # Verify no record key in inputs (record is only in trace.record)
-    assert "record" not in inputs, (
-        f"inputs should NOT have 'record' key. Record lives only in trace.record. Got keys: {inputs.keys()}"
-    )
+    assert "record" not in inputs, f"inputs should NOT have 'record' key. Record lives only in trace.record. Got keys: {inputs.keys()}"
 
     logger.info(f"inputs keys: {inputs.keys()}")
 

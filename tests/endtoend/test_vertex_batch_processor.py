@@ -22,7 +22,6 @@ from buttermilk._core.types import Record
 from tests.conftest import CHEAP_CHAT_MODELS
 
 
-@pytest.mark.endtoend
 class TestVertexBatchProcessorIntegration:
     """Integration tests verifying VertexBatchProcessor with real models."""
 
@@ -46,7 +45,6 @@ class TestVertexBatchProcessorIntegration:
         assert response.content
 
 
-@pytest.mark.endtoend
 class TestBatchAccumulatorWithVertexBatch:
     """Test BatchAccumulator wrapping VertexBatchProcessor."""
 

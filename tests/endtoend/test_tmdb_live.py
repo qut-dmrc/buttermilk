@@ -33,7 +33,6 @@ from buttermilk.tools.catalog_test import (
 # Pytest markers for conditional test execution
 pytestmark = [
     pytest.mark.integration,
-    pytest.mark.endtoend,
     pytest.mark.skipif(
         not THEMOVIEDB_AVAILABLE,
         reason="themoviedb package not installed - install with: pip install themoviedb.py",

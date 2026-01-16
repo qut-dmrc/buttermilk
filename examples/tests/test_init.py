@@ -8,12 +8,24 @@ import pytest
 
 
 @pytest.fixture(scope="module")
-def bm_instance(real_bm):
-    """Module-scoped BM instance reusing the session-scoped real_bm.
+def bm_instance():
+    """Module-scoped BM instance using testing.yaml config.
 
-    This avoids re-running init() which triggers logging configuration errors.
+    Handles potential logging configuration conflicts if other tests ran before this.
     """
-    return real_bm
+    from buttermilk import init
+
+    try:
+        return init(config_name="testing")
+    except RuntimeError as e:
+        if "Console logging has already been configured" in str(e):
+            # Logging module was left configured (possibly by other tests) but Context wasn't initialized.
+            # Reset logging state and try again.
+            from buttermilk._core.log import reset_logging_configuration
+
+            reset_logging_configuration()
+            return init(config_name="testing")
+        raise e
 
 
 def test_sync(bm_instance):

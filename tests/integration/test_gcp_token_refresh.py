@@ -13,7 +13,7 @@ No mocks of internal code - this is a TRUE integration test.
 
 import pytest
 
-pytestmark = pytest.mark.endtoend
+pytestmark = pytest.mark.integration
 
 
 @pytest.mark.anyio

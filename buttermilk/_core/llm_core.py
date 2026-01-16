@@ -176,6 +176,7 @@ class LLMCore(ObservabilityMixin):
             span_attributes["parent_trace_id"] = parent_trace_id
 
         with tracer.start_as_current_span("llm_core.unified_process", attributes=span_attributes) as span:
+            result = None  # Initialize for error handling
             try:
                 # Build template_vars: if kwargs provided, merge with record fields
                 # Record content is separately handled by make_messages at {{ record }} placeholders
@@ -249,13 +250,17 @@ class LLMCore(ObservabilityMixin):
 
                 # Emit error trace using inherited helper
                 # inputs contains template variables (criteria, instructions, etc.)
+                # Use kwargs as fallback if result was never assigned
+                inputs_for_trace = kwargs
+                if result is not None and result.resolved_inputs:
+                    inputs_for_trace = result.resolved_inputs
                 await self._emit_error_trace(
                     record=record,
                     error=e,
                     processor_stage=processor_stage,
                     parent_trace_id=parent_trace_id,
                     duration_ms=duration_ms,
-                    inputs=result.resolved_inputs if result.resolved_inputs else kwargs,
+                    inputs=inputs_for_trace,
                     execution_type="llm_processing",
                     component_name=component_name,
                 )
@@ -483,9 +488,8 @@ class LLMCore(ObservabilityMixin):
 
         logger.debug(f"LLMCore: Using template '{template_name}'")
 
-        # Merge template variables: config defaults, then runtime overrides, then parameters
-        # Parameters take highest precedence (can control fail_on_unfilled_parameters, etc.)
-        merged_vars = {**self.template_vars, **(template_vars or {}), **self.parameters}
+        # Merge template variables: config defaults, then runtime overrides
+        merged_vars = {**self.template_vars, **(template_vars or {})}
         filtered_vars = clean_empty_values(merged_vars) if merged_vars else {}
 
         # Load and render template

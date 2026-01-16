@@ -9,22 +9,21 @@ due to Azure rate limits on gpt-nano. This minimal test serves as the
 reliable CI test.
 """
 
-import re
 import json
+import re
 from typing import Any
 
 import pytest
 
-from buttermilk import init
 from buttermilk._core.contract import ExecutionTrace
 from buttermilk._core.types import RunRequest
 from buttermilk.runner.flowrunner import FlowRunner
 
 
 @pytest.fixture(scope="module")
-def debug_bm():
+def debug_bm(real_bm):
     """BM instance with debug LLM config (gemini-flash only)."""
-    return init(config_name="testing", overrides=["llms=debug"])
+    return real_bm
 
 
 @pytest.fixture(scope="module")
@@ -49,8 +48,7 @@ def check_object_serialization(obj: Any, path: str = "root") -> list[str]:
     if isinstance(obj, str):
         # Check if this string looks like it should be JSON
         stripped = obj.strip()
-        if (stripped.startswith('{') and stripped.endswith('}')) or \
-           (stripped.startswith('[') and stripped.endswith(']')):
+        if (stripped.startswith("{") and stripped.endswith("}")) or (stripped.startswith("[") and stripped.endswith("]")):
             try:
                 json.loads(stripped)
                 # If it parses, it's a JSON string that might should be an object
@@ -64,7 +62,7 @@ def check_object_serialization(obj: Any, path: str = "root") -> list[str]:
     elif isinstance(obj, list):
         for i, v in enumerate(obj):
             issues.extend(check_object_serialization(v, f"{path}[{i}]"))
-    elif hasattr(obj, 'model_dump'):
+    elif hasattr(obj, "model_dump"):
         # Pydantic model - check its dict representation
         issues.extend(check_object_serialization(obj.model_dump(), path))
 
@@ -145,20 +143,12 @@ async def test_flow_e2e_minimal(
     if error_messages:
         print(f"\n=== {len(error_messages)} ERRORS FOUND ===")
         for i, err in enumerate(error_messages[:5]):
-            print(f"Error {i+1}: {err.agent_info.get('agent_id', 'unknown')} - {err.error}")
+            print(f"Error {i + 1}: {err.agent_info.get('agent_id', 'unknown')} - {err.error}")
 
-    assert not error_messages, (
-        f"Flow produced {len(error_messages)} errors. "
-        f"First: {error_messages[0].error if error_messages else 'N/A'}"
-    )
+    assert not error_messages, f"Flow produced {len(error_messages)} errors. First: {error_messages[0].error if error_messages else 'N/A'}"
 
     # === VERIFICATION 4: VARIANTS - Multiple JUDGE agents for different criteria ===
-    judge_traces = [
-        msg for msg in messages
-        if isinstance(msg, ExecutionTrace)
-        and msg.agent_info.get("role") == "JUDGE"
-        and not msg.error
-    ]
+    judge_traces = [msg for msg in messages if isinstance(msg, ExecutionTrace) and msg.agent_info.get("role") == "JUDGE" and not msg.error]
 
     # Should have multiple judge traces (one per criteria variant)
     print(f"\n=== JUDGE TRACES: {len(judge_traces)} ===")
@@ -180,19 +170,13 @@ async def test_flow_e2e_minimal(
 
     # Verify all expected criteria were used
     missing_criteria = expected_criteria - judge_criteria
-    assert not missing_criteria, (
-        f"Missing criteria in JUDGE variants: {missing_criteria}. "
-        f"Found: {judge_criteria}"
-    )
+    assert not missing_criteria, f"Missing criteria in JUDGE variants: {missing_criteria}. Found: {judge_criteria}"
     print(f"  ✓ All {len(expected_criteria)} criteria variants present: {sorted(judge_criteria)}")
 
     # === VERIFICATION 5: Template expansion ===
-    traces_with_messages = [
-        msg for msg in messages
-        if isinstance(msg, ExecutionTrace) and msg.messages and len(msg.messages) > 0
-    ]
+    traces_with_messages = [msg for msg in messages if isinstance(msg, ExecutionTrace) and msg.messages and len(msg.messages) > 0]
 
-    print(f"\n=== TEMPLATE EXPANSION CHECK ===")
+    print("\n=== TEMPLATE EXPANSION CHECK ===")
     unfilled_pattern = re.compile(r"\{\{\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\}\}")
 
     for trace in traces_with_messages:
@@ -201,41 +185,36 @@ async def test_flow_e2e_minimal(
         content = first_msg.content if hasattr(first_msg, "content") else str(first_msg)
 
         # Check length
-        assert len(content) > 100, (
-            f"Template too short for {role}: {len(content)} chars"
-        )
+        assert len(content) > 100, f"Template too short for {role}: {len(content)} chars"
 
         # Check for unfilled variables
         for i, msg in enumerate(trace.messages):
             msg_content = msg.content if hasattr(msg, "content") else str(msg)
             unfilled = unfilled_pattern.findall(msg_content)
-            assert not unfilled, (
-                f"Unfilled vars in {role} message[{i}]: {unfilled}"
-            )
+            assert not unfilled, f"Unfilled vars in {role} message[{i}]: {unfilled}"
 
         print(f"  ✓ {role}: {len(content)} chars, no unfilled vars")
 
     # === VERIFICATION 6: Record context in traces ===
-    traces_with_record = [
-        msg for msg in messages
-        if isinstance(msg, ExecutionTrace) and msg.record is not None
-    ]
+    traces_with_record = [msg for msg in messages if isinstance(msg, ExecutionTrace) and msg.record is not None]
 
     print(f"\n=== RECORD CONTEXT CHECK: {len(traces_with_record)} traces ===")
     for trace in traces_with_record[:3]:  # Show first 3
         role = trace.agent_info.get("role", "unknown")
         record = trace.record
-        record_dict = record if isinstance(record, dict) else (
-            record.model_dump() if hasattr(record, "model_dump") else {}
-        )
+        record_dict = record if isinstance(record, dict) else (record.model_dump() if hasattr(record, "model_dump") else {})
         record_id_val = record_dict.get("record_id", "missing")
         record_hash = record_dict.get("record_hash", "missing")
-        print(f"  - {role}: record_id={record_id_val}, hash={record_hash[:16]}..." if record_hash != "missing" else f"  - {role}: record_id={record_id_val}")
+        print(
+            f"  - {role}: record_id={record_id_val}, hash={record_hash[:16]}..."
+            if record_hash != "missing"
+            else f"  - {role}: record_id={record_id_val}"
+        )
 
         assert "record_id" in record_dict, f"Missing record_id in {role} trace"
 
     # === VERIFICATION 7: No duplication of record in inputs ===
-    print(f"\n=== CHECKING FOR RECORD DUPLICATION ===")
+    print("\n=== CHECKING FOR RECORD DUPLICATION ===")
     duplication_issues = []
     for trace in traces_with_record:
         role = trace.agent_info.get("role", "unknown")
@@ -252,7 +231,7 @@ async def test_flow_e2e_minimal(
                     duplication_issues.append(f"{role}: full record text duplicated in both trace.record and trace.inputs.record")
 
     if duplication_issues:
-        print(f"  ⚠ Duplication issues found:")
+        print("  ⚠ Duplication issues found:")
         for issue in duplication_issues:
             print(f"    - {issue}")
     else:
@@ -262,14 +241,14 @@ async def test_flow_e2e_minimal(
     # Note: LLM message content (messages[N].content) is expected to be JSON strings
     # when using structured output. We only check for unexpected JSON strings in
     # trace.inputs, trace.outputs (excluding message content), trace.record, etc.
-    print(f"\n=== OBJECT SERIALIZATION CHECK ===")
+    print("\n=== OBJECT SERIALIZATION CHECK ===")
     serialization_issues = []
     for trace in messages:
         if isinstance(trace, ExecutionTrace):
             role = trace.agent_info.get("role", "unknown")
             # Check inputs (excluding messages which contain LLM responses)
             if trace.inputs and isinstance(trace.inputs, dict):
-                inputs_to_check = {k: v for k, v in trace.inputs.items() if k != 'context'}
+                inputs_to_check = {k: v for k, v in trace.inputs.items() if k != "context"}
                 issues = check_object_serialization(inputs_to_check, f"trace({role}).inputs")
                 serialization_issues.extend(issues)
             # Check record
@@ -287,7 +266,7 @@ async def test_flow_e2e_minimal(
         print("  ✓ No unexpected JSON string serialization issues")
 
     # === VERIFICATION 9: Answers are complete ===
-    print(f"\n=== ANSWER COMPLETENESS CHECK ===")
+    print("\n=== ANSWER COMPLETENESS CHECK ===")
     for trace in messages:
         if isinstance(trace, ExecutionTrace) and trace.outputs:
             role = trace.agent_info.get("role", "unknown")
@@ -296,15 +275,13 @@ async def test_flow_e2e_minimal(
             # For JUDGE outputs, check if prediction/conclusion are present
             if role == "JUDGE":
                 if isinstance(outputs, dict):
-                    assert "prediction" in outputs or "conclusion" in outputs, (
-                        f"JUDGE output missing prediction/conclusion"
-                    )
+                    assert "prediction" in outputs or "conclusion" in outputs, "JUDGE output missing prediction/conclusion"
                     print(f"  ✓ JUDGE: has prediction={outputs.get('prediction')}, conclusion present={bool(outputs.get('conclusion'))}")
                 elif hasattr(outputs, "prediction"):
                     print(f"  ✓ JUDGE: prediction={outputs.prediction}")
 
     # === SUMMARY ===
-    print(f"\n=== TEST SUMMARY ===")
+    print("\n=== TEST SUMMARY ===")
     print(f"✓ Flow '{flow_name}' completed successfully")
     print(f"✓ Agents executed: {sorted(executed_roles)}")
     print(f"✓ Messages produced: {len(messages)}")
