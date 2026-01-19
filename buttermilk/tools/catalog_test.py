@@ -569,16 +569,29 @@ class TMDBTool:
     ) -> AsyncGenerator[Observation, None]:
         """Get availability observations for a TMDB record_id across all regions.
 
+        Treats each title as an atomic chunk - if any error occurs during processing,
+        all partial results are discarded and only an error observation is yielded.
+        This ensures we never have incomplete data for a title.
+
         Args:
             record_id: TMDB numeric movie ID
             title: Optional title string for metadata enrichment
             year: Optional year for metadata enrichment
 
         Yields:
-            Observation records with availability data for all regions returned by TMDB
+            Observation records with availability data for all regions returned by TMDB,
+            OR a single error observation if processing failed
         """
+        # Collect all observations first - only yield if fully successful
+        collected_observations: list[Observation] = []
 
         try:
+            logger.debug(
+                f"Starting availability fetch for movie {record_id}",
+                record_id=record_id,
+                title=title,
+            )
+
             # Get watch providers for all regions (TMDB returns whatever regions it has)
             async def do_get_providers():
                 return await self._tmdb_client.movie(int(record_id)).watch_providers()
@@ -586,7 +599,11 @@ class TMDBTool:
             response = await self._retry._execute_with_retry(do_get_providers)
 
             if not response.results:
-                # No results for any regions
+                # No results for any regions - this is valid, not an error
+                logger.debug(
+                    f"No region results for movie {record_id}",
+                    record_id=record_id,
+                )
                 obs = Observation(
                     record_id=str(record_id),
                     title=title,
@@ -606,106 +623,99 @@ class TMDBTool:
                     },
                 )
                 yield obs
+                return  # Early return - nothing more to process
+
+            region_count = len(response.results)
+            logger.debug(
+                f"Processing {region_count} regions for movie {record_id}",
+                record_id=record_id,
+                region_count=region_count,
+                regions=list(response.results.keys()),
+            )
 
             # Process each region returned by TMDB
             for region_code, region_data in response.results.items():
                 # Convert dataclass to dict for easier processing
                 providers_raw = asdict(region_data)
-                try:
-                    normalized_region = self._normalize_region(region_code)
+                normalized_region = self._normalize_region(region_code)
 
-                    # Process each provider type (flatrate, rent, buy)
-                    for provider_type, providers in providers_raw.items():
-                        if provider_type == "link":
-                            continue  # Skip the link field
+                # Process each provider type (flatrate, rent, buy, ads, free)
+                for provider_type, providers in providers_raw.items():
+                    if provider_type == "link":
+                        continue  # Skip the link field
 
-                        if (
-                            not providers
-                            or not isinstance(providers, list)
-                            or len(providers) == 0
-                        ):
-                            # If region exists but has no providers at all, log a null observation
-                            obs = Observation(
-                                record_id=str(record_id),
-                                title=title,
-                                year=year,
-                                provider_name=None,
-                                provider_id=None,
-                                provider_type=provider_type,
-                                region=normalized_region,
-                                price=None,
-                                currency=None,
-                                format=None,
-                                available=False,
-                                source="TMDB",
-                                metadata={
-                                    "movie_id": str(record_id),
-                                    "note": "No offers for this provider type in this region",
-                                },
-                            )
-                            yield obs
-                            continue
+                    if (
+                        not providers
+                        or not isinstance(providers, list)
+                        or len(providers) == 0
+                    ):
+                        # If region exists but has no providers for this type
+                        obs = Observation(
+                            record_id=str(record_id),
+                            title=title,
+                            year=year,
+                            provider_name=None,
+                            provider_id=None,
+                            provider_type=provider_type,
+                            region=normalized_region,
+                            price=None,
+                            currency=None,
+                            format=None,
+                            available=False,
+                            source="TMDB",
+                            metadata={
+                                "movie_id": str(record_id),
+                                "note": "No offers for this provider type in this region",
+                            },
+                        )
+                        collected_observations.append(obs)
+                        continue
 
-                        for provider in providers:
-                            obs = Observation(
-                                record_id=str(record_id),
-                                title=title,
-                                year=year,
-                                provider_id=str(provider.get("provider_id"))
-                                if provider.get("provider_id") is not None
-                                else None,
-                                provider_name=provider.get("provider_name"),
-                                provider_type=provider_type,
-                                region=normalized_region,
-                                price=None,
-                                currency=None,
-                                format=None,
-                                available=True,
-                                source="TMDB",
-                                metadata={
-                                    "movie_id": str(record_id),
-                                },
-                            )
-                            yield obs
+                    for provider in providers:
+                        obs = Observation(
+                            record_id=str(record_id),
+                            title=title,
+                            year=year,
+                            provider_id=str(provider.get("provider_id"))
+                            if provider.get("provider_id") is not None
+                            else None,
+                            provider_name=provider.get("provider_name"),
+                            provider_type=provider_type,
+                            region=normalized_region,
+                            price=None,
+                            currency=None,
+                            format=None,
+                            available=True,
+                            source="TMDB",
+                            metadata={
+                                "movie_id": str(record_id),
+                            },
+                        )
+                        collected_observations.append(obs)
 
-                except Exception as e:
-                    # Error processing a specific region
-                    logger.error(
-                        f"Error processing region {region_code} for movie {record_id}: {e}"
-                    )
-                    safe_message = self._sanitize_rate_limit_message(str(e))
-                    error_event = ErrorEvent(
-                        content=f"Region processing error: {safe_message}",
-                        source="TMDB",
-                    )
-
-                    error_obs = Observation(
-                        record_id=str(record_id),
-                        title=title,
-                        year=year,
-                        provider_name=None,
-                        provider_id=None,
-                        provider_type=None,
-                        region=self._normalize_region(region_code),
-                        price=None,
-                        currency=None,
-                        format=None,
-                        available=False,
-                        source="TMDB",
-                        metadata={
-                            "movie_id": str(record_id),
-                            "error_type": "region_processing_failure",
-                        },
-                        error=[error_event],
-                    )
-                    yield error_obs
+            # All processing succeeded - now yield all collected observations
+            logger.info(
+                f"Successfully processed movie {record_id}: {len(collected_observations)} observations from {region_count} regions",
+                record_id=record_id,
+                observation_count=len(collected_observations),
+                region_count=region_count,
+            )
+            for obs in collected_observations:
+                yield obs
 
         except Exception as e:
-            # Error outside of region loop - couldn't get providers at all
-            logger.error(f"Error getting providers for movie {record_id}: {e}")
+            # Any error discards all partial results
+            discarded_count = len(collected_observations)
+            logger.error(
+                f"Error processing movie {record_id}, discarding {discarded_count} partial observations: {e}",
+                record_id=record_id,
+                discarded_count=discarded_count,
+                error=str(e),
+            )
             safe_message = self._sanitize_rate_limit_message(str(e))
             error_event = ErrorEvent(
-                content=f"Provider fetch error: {safe_message}", source="TMDB"
+                content=f"Availability fetch failed: {safe_message}",
+                source="TMDB",
             )
 
             error_obs = Observation(
@@ -715,7 +725,7 @@ class TMDBTool:
                 provider_name=None,
                 provider_id=None,
                 provider_type=None,
-                region=None,  # No region since we couldn't even get the data
+                region=None,
                 price=None,
                 currency=None,
                 format=None,
@@ -724,6 +734,7 @@ class TMDBTool:
                 metadata={
                     "movie_id": str(record_id),
                     "error_type": "availability_check_failure",
+                    "discarded_observations": discarded_count,
                 },
                 error=[error_event],
             )

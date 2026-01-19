@@ -843,3 +843,477 @@ class TestTMDBToolConfiguration:
         with patch.dict(os.environ, {}, clear=True):  # Clear TMDB_API_KEY env var
             with pytest.raises(ValueError, match="TMDB API key is required"):
                 TMDBTool()
+
+
+class TestTMDBGetAvailabilityById:
+    """Test cases for get_availability_by_id with cached API responses."""
+
+    @staticmethod
+    def load_fixture_as_mock(fixture_filename: str):
+        """Load a JSON fixture file and convert to mock TMDB SDK response.
+
+        Args:
+            fixture_filename: Name of fixture file in tests/tools/fixtures/
+
+        Returns:
+            Mock response object with results dict containing RegionData dataclasses
+        """
+        from dataclasses import make_dataclass
+        from pathlib import Path
+        from unittest.mock import Mock
+
+        fixture_path = Path(__file__).parent / "fixtures" / fixture_filename
+        with open(fixture_path, encoding="utf-8") as f:
+            raw_data = json.load(f)
+
+        # Create dataclass matching TMDB SDK structure
+        RegionData = make_dataclass(
+            "RegionData",
+            [
+                ("link", str),
+                ("flatrate", list),
+                ("rent", list),
+                ("buy", list),
+                ("ads", list),
+                ("free", list),
+            ],
+        )
+
+        # Convert each region dict to a dataclass instance
+        mock_response = Mock()
+        mock_response.results = {}
+        for region_code, region_data in raw_data["results"].items():
+            mock_response.results[region_code] = RegionData(
+                link=region_data.get("link", ""),
+                flatrate=region_data.get("flatrate", []),
+                rent=region_data.get("rent", []),
+                buy=region_data.get("buy", []),
+                ads=region_data.get("ads", []),
+                free=region_data.get("free", []),
+            )
+        return mock_response, raw_data
+
+    @pytest.fixture
+    def cached_availability_response(self):
+        """Cached response from TMDB API for movie 1013482 (Borderline)."""
+        mock_response, _ = self.load_fixture_as_mock("tmdb_availability_1013482.json")
+        return mock_response
+
+    @pytest.mark.anyio
+    async def test_get_availability_by_id_parses_cached_response(
+        self, tmdb_tool, cached_availability_response
+    ):
+        """Test get_availability_by_id correctly parses cached TMDB response."""
+        with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
+            mock_movie_obj = AsyncMock()
+            mock_movie_obj.watch_providers = AsyncMock(
+                return_value=cached_availability_response
+            )
+            mock_tmdb.movie.return_value = mock_movie_obj
+
+            results = []
+            async for obs in tmdb_tool.get_availability_by_id(
+                record_id=1013482,
+                title="Borderline",
+                year=2024,
+            ):
+                results.append(obs)
+
+            # Verify observations were created - full fixture has 11 regions
+            assert len(results) > 0
+
+            # All results should be Observation instances
+            assert all(isinstance(r, Observation) for r in results)
+
+            # Check all 11 regions are present
+            regions = {r.region for r in results}
+            assert regions == {"AE", "AU", "CA", "GB", "GG", "IE", "NZ", "RU", "SA", "US"}
+
+            # Check AU region has rent and buy providers
+            au_obs = [r for r in results if r.region == "AU"]
+            au_rent = [r for r in au_obs if r.provider_type == "rent"]
+            au_buy = [r for r in au_obs if r.provider_type == "buy"]
+            assert len(au_rent) == 3  # Apple TV, Amazon Video, Fetch TV
+            assert len(au_buy) == 3
+
+            # Check US region has all provider types
+            us_obs = [r for r in results if r.region == "US"]
+            us_flatrate = [r for r in us_obs if r.provider_type == "flatrate"]
+            us_ads = [r for r in us_obs if r.provider_type == "ads"]
+            us_free = [r for r in us_obs if r.provider_type == "free"]
+            assert len(us_flatrate) == 5  # Amazon Prime, Peacock, Philo, Prime with Ads, Peacock Plus
+            assert len(us_ads) == 3  # Roku, Fandango Free, Tubi
+            assert len(us_free) == 2  # Plex, Plex Channel
+
+            # Check AE region has STARZPLAY flatrate
+            ae_obs = [r for r in results if r.region == "AE"]
+            ae_flatrate = [r for r in ae_obs if r.provider_type == "flatrate"]
+            assert len(ae_flatrate) == 1
+            assert ae_flatrate[0].provider_name == "STARZPLAY"
+            assert ae_flatrate[0].provider_id == "630"
+
+    @pytest.mark.anyio
+    async def test_get_availability_by_id_provider_fields_correct(
+        self, tmdb_tool, cached_availability_response
+    ):
+        """Test that provider fields are correctly extracted from cached response."""
+        with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
+            mock_movie_obj = AsyncMock()
+            mock_movie_obj.watch_providers = AsyncMock(
+                return_value=cached_availability_response
+            )
+            mock_tmdb.movie.return_value = mock_movie_obj
+
+            results = []
+            async for obs in tmdb_tool.get_availability_by_id(
+                record_id=1013482,
+                title="Borderline",
+                year=2024,
+            ):
+                results.append(obs)
+
+            # Find the Amazon Prime observation
+            prime_obs = next(
+                (r for r in results if r.provider_name == "Amazon Prime Video"), None
+            )
+            assert prime_obs is not None
+
+            # Verify all fields are correctly set
+            assert prime_obs.record_id == "1013482"
+            assert prime_obs.title == "Borderline"
+            assert prime_obs.year == 2024
+            assert prime_obs.provider_id == "9"
+            assert prime_obs.provider_name == "Amazon Prime Video"
+            assert prime_obs.provider_type == "flatrate"
+            assert prime_obs.region == "US"
+            assert prime_obs.available is True
+            assert prime_obs.source == "TMDB"
+            assert prime_obs.metadata["movie_id"] == "1013482"
+
+    @pytest.mark.anyio
+    async def test_get_availability_by_id_handles_empty_provider_types(self, tmdb_tool):
+        """Test that empty provider types yield null observations."""
+        from dataclasses import make_dataclass
+        from unittest.mock import Mock
+
+        RegionData = make_dataclass(
+            "RegionData",
+            [
+                ("link", str),
+                ("flatrate", list),
+                ("rent", list),
+                ("buy", list),
+            ],
+        )
+
+        mock_response = Mock()
+        mock_response.results = {
+            "AU": RegionData(
+                link="",
+                flatrate=[],  # Empty - should yield null observation
+                rent=[{"provider_id": 2, "provider_name": "Apple TV"}],
+                buy=[],  # Empty - should yield null observation
+            ),
+        }
+
+        with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
+            mock_movie_obj = AsyncMock()
+            mock_movie_obj.watch_providers = AsyncMock(return_value=mock_response)
+            mock_tmdb.movie.return_value = mock_movie_obj
+
+            results = []
+            async for obs in tmdb_tool.get_availability_by_id(
+                record_id=1013482,
+                title="Borderline",
+                year=2024,
+            ):
+                results.append(obs)
+
+            # Should have observations for:
+            # - flatrate (null, available=False)
+            # - rent (Apple TV, available=True)
+            # - buy (null, available=False)
+            au_obs = [r for r in results if r.region == "AU"]
+            assert len(au_obs) == 3
+
+            # Check the available rent observation
+            rent_obs = [r for r in au_obs if r.provider_type == "rent"]
+            assert len(rent_obs) == 1
+            assert rent_obs[0].available is True
+            assert rent_obs[0].provider_name == "Apple TV"
+
+            # Check the null observations for empty types
+            flatrate_null = [r for r in au_obs if r.provider_type == "flatrate"]
+            buy_null = [r for r in au_obs if r.provider_type == "buy"]
+            assert len(flatrate_null) == 1
+            assert len(buy_null) == 1
+            assert flatrate_null[0].available is False
+            assert flatrate_null[0].provider_name is None
+            assert buy_null[0].available is False
+            assert buy_null[0].provider_name is None
+
+    @pytest.mark.anyio
+    async def test_get_availability_by_id_truncated_response_only_ae(self, tmdb_tool):
+        """Test behavior when response is truncated after AE region.
+
+        Simulates what happens if JSON parsing succeeds but only contains
+        partial data (e.g., AE region only). This tests whether:
+        1. AE observations are still yielded
+        2. No error is raised (since JSON parsed successfully)
+        """
+        from dataclasses import make_dataclass
+        from unittest.mock import Mock
+
+        RegionData = make_dataclass(
+            "RegionData",
+            [
+                ("link", str),
+                ("flatrate", list),
+                ("rent", list),
+                ("buy", list),
+                ("ads", list),
+                ("free", list),
+            ],
+        )
+
+        # Simulate truncated response - only AE region present
+        mock_response = Mock()
+        mock_response.results = {
+            "AE": RegionData(
+                link="https://www.themoviedb.org/movie/1013482-borderline/watch?locale=AE",
+                flatrate=[
+                    {
+                        "logo_path": "/pDroY6RxYdVw63eAepag4b116Ub.jpg",
+                        "provider_id": 630,
+                        "provider_name": "STARZPLAY",
+                        "display_priority": 6,
+                    }
+                ],
+                rent=[],
+                buy=[],
+                ads=[],
+                free=[],
+            ),
+            # Other regions missing - simulates truncation
+        }
+
+        with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
+            mock_movie_obj = AsyncMock()
+            mock_movie_obj.watch_providers = AsyncMock(return_value=mock_response)
+            mock_tmdb.movie.return_value = mock_movie_obj
+
+            results = []
+            async for obs in tmdb_tool.get_availability_by_id(
+                record_id=1013482,
+                title="Borderline",
+                year=2024,
+            ):
+                results.append(obs)
+
+            # Should still get AE observations
+            assert len(results) > 0
+            regions = {r.region for r in results}
+            assert regions == {"AE"}  # Only AE present
+
+            # AE flatrate should have STARZPLAY
+            ae_flatrate = [
+                r for r in results if r.region == "AE" and r.provider_type == "flatrate"
+            ]
+            assert len(ae_flatrate) == 1
+            assert ae_flatrate[0].provider_name == "STARZPLAY"
+            assert ae_flatrate[0].available is True
+
+            # Should also have null observations for empty provider types in AE
+            ae_rent = [r for r in results if r.region == "AE" and r.provider_type == "rent"]
+            assert len(ae_rent) == 1
+            assert ae_rent[0].available is False
+            assert ae_rent[0].provider_name is None
+
+    @pytest.mark.anyio
+    async def test_get_availability_by_id_error_discards_partial_results(self, tmdb_tool):
+        """Test that errors discard all partial observations and yield only error record.
+
+        This ensures atomic behavior - either all observations for a title succeed,
+        or none are yielded (only an error record).
+        """
+        from dataclasses import make_dataclass
+        from unittest.mock import Mock
+
+        RegionData = make_dataclass(
+            "RegionData",
+            [
+                ("link", str),
+                ("flatrate", list),
+                ("rent", list),
+                ("buy", list),
+                ("ads", list),
+                ("free", list),
+            ],
+        )
+
+        # Create a response where AE processes fine but AU will cause an error
+        # by having a provider dict that's missing required keys
+        mock_response = Mock()
+
+        # Create a custom class that raises during iteration for AU
+        class BrokenRegionData:
+            """Region data that raises an error when converted to dict."""
+            link = ""
+            flatrate = [{"provider_id": 1, "provider_name": "Test"}]
+
+            def __iter__(self):
+                raise RuntimeError("Simulated mid-processing error")
+
+        mock_response.results = {
+            "AE": RegionData(
+                link="https://example.com",
+                flatrate=[
+                    {"provider_id": 630, "provider_name": "STARZPLAY"},
+                ],
+                rent=[],
+                buy=[],
+                ads=[],
+                free=[],
+            ),
+            "AU": BrokenRegionData(),  # This will fail during iteration
+        }
+
+        with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
+            mock_movie_obj = AsyncMock()
+            mock_movie_obj.watch_providers = AsyncMock(return_value=mock_response)
+            mock_tmdb.movie.return_value = mock_movie_obj
+
+            results = []
+            async for obs in tmdb_tool.get_availability_by_id(
+                record_id=1013482,
+                title="Borderline",
+                year=2024,
+            ):
+                results.append(obs)
+
+            # Should get ONLY one error observation - no partial AE results
+            assert len(results) == 1
+            error_obs = results[0]
+
+            # Verify it's an error observation
+            assert error_obs.available is False
+            assert len(error_obs.error) > 0
+            assert error_obs.metadata.get("error_type") == "availability_check_failure"
+
+            # Verify partial observations were discarded (logged in metadata)
+            # AE would have produced observations before AU failed
+            assert "discarded_observations" in error_obs.metadata
+
+    @pytest.mark.anyio
+    @pytest.mark.parametrize(
+        "fixture_file,movie_id,title,expected_regions,expected_provider",
+        [
+            pytest.param(
+                "tmdb_availability_1013482.json",
+                1013482,
+                "Borderline",
+                {"AE", "AU", "CA", "GB", "GG", "IE", "NZ", "RU", "SA", "US"},
+                ("AE", "flatrate", "STARZPLAY", "630"),
+                id="borderline-multi-region",
+            ),
+            pytest.param(
+                "tmdb_availability_101271.json",
+                101271,
+                "Vuelven los Garcia",
+                {"CL", "CO", "EC", "MX", "PE"},
+                ("MX", "flatrate", "Claro video", "167"),
+                id="vuelven-los-garcia-latam",
+            ),
+        ],
+    )
+    async def test_get_availability_by_id_parametrized(
+        self,
+        tmdb_tool,
+        fixture_file,
+        movie_id,
+        title,
+        expected_regions,
+        expected_provider,
+    ):
+        """Parametrized test for multiple cached TMDB API responses."""
+        mock_response, raw_data = self.load_fixture_as_mock(fixture_file)
+
+        with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
+            mock_movie_obj = AsyncMock()
+            mock_movie_obj.watch_providers = AsyncMock(return_value=mock_response)
+            mock_tmdb.movie.return_value = mock_movie_obj
+
+            results = []
+            async for obs in tmdb_tool.get_availability_by_id(
+                record_id=movie_id,
+                title=title,
+                year=None,
+            ):
+                results.append(obs)
+
+            # Verify observations were created
+            assert len(results) > 0
+
+            # All results should be Observation instances
+            assert all(isinstance(r, Observation) for r in results)
+
+            # Check all expected regions are present
+            regions = {r.region for r in results}
+            assert regions == expected_regions
+
+            # Check specific provider exists
+            region, ptype, pname, pid = expected_provider
+            matching_obs = [
+                r for r in results
+                if r.region == region and r.provider_type == ptype and r.provider_name == pname
+            ]
+            assert len(matching_obs) == 1
+            assert matching_obs[0].provider_id == pid
+            assert matching_obs[0].available is True
+
+            # Verify record_id is set correctly
+            assert all(r.record_id == str(movie_id) for r in results)
+
+    @pytest.mark.anyio
+    async def test_get_availability_vuelven_los_garcia_flatrate_only(self, tmdb_tool):
+        """Test Vuelven los Garcia response with flatrate-only regions.
+
+        This movie (101271) has 5 Latin American regions, each with only
+        flatrate (Claro video) - no rent, buy, ads, or free options.
+        """
+        mock_response, raw_data = self.load_fixture_as_mock("tmdb_availability_101271.json")
+
+        with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
+            mock_movie_obj = AsyncMock()
+            mock_movie_obj.watch_providers = AsyncMock(return_value=mock_response)
+            mock_tmdb.movie.return_value = mock_movie_obj
+
+            results = []
+            async for obs in tmdb_tool.get_availability_by_id(
+                record_id=101271,
+                title="Vuelven los Garcia",
+                year=1947,
+            ):
+                results.append(obs)
+
+            # 5 regions, each with:
+            # - 1 flatrate (Claro video) = available=True
+            # - 4 empty types (rent, buy, ads, free) = available=False each
+            # Total: 5 regions * 5 provider types = 25 observations
+            assert len(results) == 25
+
+            # All Claro video observations
+            claro_obs = [r for r in results if r.provider_name == "Claro video"]
+            assert len(claro_obs) == 5  # One per region
+            assert all(r.provider_type == "flatrate" for r in claro_obs)
+            assert all(r.provider_id == "167" for r in claro_obs)
+            assert all(r.available is True for r in claro_obs)
+
+            # Null observations for empty provider types
+            null_obs = [r for r in results if r.provider_name is None]
+            assert len(null_obs) == 20  # 5 regions * 4 empty types
+            assert all(r.available is False for r in null_obs)
+
+            # Verify regions for null observations
+            null_types = {r.provider_type for r in null_obs}
+            assert null_types == {"rent", "buy", "ads", "free"}

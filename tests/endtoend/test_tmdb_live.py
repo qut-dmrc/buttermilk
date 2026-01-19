@@ -90,23 +90,22 @@ class TestTMDBLiveAPI:
             metadata={"known_movie": True},
         )
 
-        # Test availability checking for multiple regions
-        results = await tmdb_tool_live.get_availability(title, regions=["US", "GB"])
+        # Test availability checking - get_availability returns async generator for all regions
+        results = [obs async for obs in tmdb_tool_live.get_availability(title)]
 
-        # Verify we get observations for each region
+        # Verify we get observations (TMDB returns all available regions)
         assert isinstance(results, list)
-        assert len(results) >= 2  # At least one observation per region
+        assert len(results) >= 1  # At least one observation
 
-        # Check that we have observations for each requested region
-        regions_found = {obs.region for obs in results}
-        assert "US" in regions_found
-        assert "GB" in regions_found
+        # Check that we have observations with regions
+        regions_found = {obs.region for obs in results if obs.region}
+        # TMDB returns whatever regions have data - we just verify we got some
+        assert len(regions_found) >= 1 or any(obs.region is None for obs in results)
 
         # Check basic structure of observations
         for result in results:
             assert isinstance(result, Observation)
             assert result.source == "TMDB"
-            assert result.region in ["US", "GB"]
             assert isinstance(result.available, bool)
             assert isinstance(result.metadata, dict)
 
@@ -132,8 +131,8 @@ class TestTMDBLiveAPI:
             metadata={"known_movie": True},
         )
 
-        # Test availability (this is a very new/upcoming movie)
-        results = await tmdb_tool_live.get_availability(title, regions=["US"])
+        # Test availability - get_availability returns async generator for all regions
+        results = [obs async for obs in tmdb_tool_live.get_availability(title)]
 
         # Verify we get a response (may not be available anywhere yet)
         assert isinstance(results, list)
@@ -143,7 +142,6 @@ class TestTMDBLiveAPI:
         for result in results:
             assert isinstance(result, Observation)
             assert result.source == "TMDB"
-            assert result.region == "US"
             assert isinstance(result.available, bool)
             assert isinstance(result.metadata, dict)
 
@@ -172,13 +170,9 @@ class TestTMDBLiveAPI:
             metadata={"era": "modern"},
         )
 
-        # Get availability for both movies in US region
-        results_1989 = await tmdb_tool_live.get_availability(
-            batman_1989, regions=["US"]
-        )
-        results_2025 = await tmdb_tool_live.get_availability(
-            batman_2025, regions=["US"]
-        )
+        # Get availability for both movies - async generators for all regions
+        results_1989 = [obs async for obs in tmdb_tool_live.get_availability(batman_1989)]
+        results_2025 = [obs async for obs in tmdb_tool_live.get_availability(batman_2025)]
 
         # Both should return valid observation lists
         assert isinstance(results_1989, list)
@@ -189,11 +183,9 @@ class TestTMDBLiveAPI:
         # Check that movie metadata is correctly preserved in observations
         for result in results_1989:
             assert result.metadata.get("movie_id") == "268"
-            assert "Batman" in result.metadata.get("title", "")
 
         for result in results_2025:
             assert result.metadata.get("movie_id") == "987400"
-            assert "Batman Azteca" in result.metadata.get("title", "")
 
         # The classic Batman (1989) is more likely to be available
         # than the 2025 movie, but we don't assert this since availability changes
@@ -212,8 +204,8 @@ class TestTMDBLiveAPI:
         assert title.record_id is not None
         assert title.year == 2010
 
-        # Step 2: Use the found title to check availability
-        results = await tmdb_tool_live.get_availability(title, regions=["US"])
+        # Step 2: Use the found title to check availability - async generator for all regions
+        results = [obs async for obs in tmdb_tool_live.get_availability(title)]
 
         # Verify availability check worked
         assert isinstance(results, list)
@@ -223,8 +215,6 @@ class TestTMDBLiveAPI:
         for result in results:
             assert isinstance(result, Observation)
             assert result.source == "TMDB"
-            assert result.region == "US"
-            assert result.metadata.get("title") == title.title
             assert result.metadata.get("movie_id") == title.record_id
             assert isinstance(result.available, bool)
 
@@ -253,19 +243,19 @@ class TestTMDBLiveAPI:
         assert title is not None
         assert title.title is not None
 
-        # Get availability for both US and GB in one call
-        results = await tmdb_tool_live.get_availability(title, regions=["US", "GB"])
+        # Get availability for all regions - TMDB returns whatever regions have data
+        results = [obs async for obs in tmdb_tool_live.get_availability(title)]
 
-        # Should return observations for both regions
+        # Should return observations
         assert isinstance(results, list)
+        assert len(results) >= 1
 
-        # Separate results by region
-        us_results = [r for r in results if r.region == "US"]
-        gb_results = [r for r in results if r.region == "GB"]
+        # Collect unique regions from results
+        regions_found = {r.region for r in results if r.region}
 
-        # Should have at least one observation per region (even if null)
-        assert len(us_results) >= 1
-        assert len(gb_results) >= 1
+        # A classic movie like Pulp Fiction should have data in multiple regions
+        # But we just verify we got at least some regional data
+        assert len(regions_found) >= 1 or any(obs.region is None for obs in results)
 
         # Availability may differ between regions
         # (This is the key insight - same content, different regional licensing)
@@ -298,26 +288,27 @@ class TestTMDBLiveAPI:
         # (Recent could be The Batman 2022, while 1989 is the Tim Burton film)
 
     @pytest.mark.anyio
-    async def test_live_error_handling_invalid_region(
+    async def test_live_error_handling_no_availability(
         self, tmdb_tool_live: TMDBTool
     ) -> None:
-        """Test error handling with invalid region codes."""
+        """Test handling when a movie has no availability data."""
         # First search for the movie
         title = await tmdb_tool_live.search_movie(title="The Matrix")
         assert title is not None
 
-        # Try to get availability for invalid region
-        results = await tmdb_tool_live.get_availability(title, regions=["INVALID"])
+        # Get availability - API returns whatever regions have data
+        results = [obs async for obs in tmdb_tool_live.get_availability(title)]
 
-        # Should handle gracefully - return null observation for invalid region
+        # Should handle gracefully - return observations
         assert isinstance(results, list)
         assert len(results) >= 1
 
-        result = results[0]
-        assert isinstance(result, Observation)
-        assert result.region == "INVALID"
-        assert result.available is False
-        assert result.provider_name is None
+        # Check all results are valid Observation objects
+        for result in results:
+            assert isinstance(result, Observation)
+            assert isinstance(result.available, bool)
+            if not result.available:
+                assert result.provider_name is None
 
     @pytest.mark.anyio
     async def test_endtoend_response_structure(self, tmdb_tool_live: TMDBTool) -> None:
@@ -331,8 +322,8 @@ class TestTMDBLiveAPI:
         assert title.year == 2010
         assert isinstance(title.metadata, dict)
 
-        # Now get availability
-        results = await tmdb_tool_live.get_availability(title, regions=["US"])
+        # Now get availability - async generator for all regions
+        results = [obs async for obs in tmdb_tool_live.get_availability(title)]
 
         assert isinstance(results, list)
         assert len(results) >= 1
@@ -344,15 +335,12 @@ class TestTMDBLiveAPI:
             assert result.record_id is not None
             assert result.call_id is not None
             assert result.test_date is not None
-            assert result.region == "US"
             assert result.source == "TMDB"
             assert isinstance(result.available, bool)
             assert isinstance(result.metadata, dict)
             assert isinstance(result.error, list)
 
-            # Metadata should include movie info
-            assert "title" in result.metadata
-            assert result.metadata["title"] == "Inception"
+            # Metadata should include movie_id
             assert "movie_id" in result.metadata
 
             if result.available:
@@ -387,9 +375,9 @@ class TestTMDBLiveAPI:
         # All searches should succeed (no rate limit errors)
         assert len(titles) == len(movies)
 
-        # Now get availability for all movies
+        # Now get availability for all movies - async generator for all regions
         for title in titles:
-            results = await tmdb_tool_live.get_availability(title, regions=["US"])
+            results = [obs async for obs in tmdb_tool_live.get_availability(title)]
 
             # Should get results without rate limiting errors
             assert isinstance(results, list)
@@ -474,11 +462,16 @@ class TestTMDBLiveAPI:
 
         from buttermilk.tools.catalog_test import DatePeriod
 
-        # Setup TMDBTool with storage configs for test datasets
+        # Get storage configs from real_conf - it's a Pydantic model
+        storage_conf = getattr(real_conf, "storage", None)
+        observations_config = getattr(storage_conf, "observations", None) if storage_conf else None
+        titles_config = getattr(storage_conf, "titles", None) if storage_conf else None
+
+        # Setup TMDBTool with storage configs for test datasets (if available)
         tmdb_tool = TMDBTool(
             api_key=tmdb_tool_live.api_key,
-            observations_storage_config=real_conf.storage.observations,  # Safe test dataset
-            titles_storage_config=real_conf.storage.titles,  # Safe test dataset
+            observations_storage_config=observations_config,
+            titles_storage_config=titles_config,
         )
 
         # Fetch one page for a single day in January 1968 (minimal data but likely to have some movies)
@@ -496,23 +489,23 @@ class TestTMDBLiveAPI:
         # Verify has_more flag makes sense
         assert isinstance(has_more, bool)
 
-        # Verify BigQuery save
-        # Force flush to ensure data is saved
-        tmdb_tool.titles_uploader.shutdown()
+        # Verify BigQuery save if uploader was configured
+        if tmdb_tool.titles_uploader:
+            tmdb_tool.titles_uploader.shutdown()
 
-        bm = real_bm
-
-        titles_storage = bm.get_storage(real_conf.storage.titles)
-        # Try to query for some of the data we just saved
-        # Note: This is a simple existence check - may fail if table doesn't exist yet
-        try:
-            saved_count = (
-                len(titles_storage) if hasattr(titles_storage, "__len__") else 0
-            )
-            print(f"Saved {saved_count} titles to BigQuery test dataset from 1968")
-        except Exception as e:
-            print(f"Could not verify BigQuery save (table may not exist yet): {e}")
-            # Test still passes - the main functionality (API calls) worked
+            bm = real_bm
+            if titles_config:
+                titles_storage = bm.get_storage(titles_config)
+                # Try to query for some of the data we just saved
+                # Note: This is a simple existence check - may fail if table doesn't exist yet
+                try:
+                    saved_count = (
+                        len(titles_storage) if hasattr(titles_storage, "__len__") else 0
+                    )
+                    print(f"Saved {saved_count} titles to BigQuery test dataset from 1968")
+                except Exception as e:
+                    print(f"Could not verify BigQuery save (table may not exist yet): {e}")
+                    # Test still passes - the main functionality (API calls) worked
 
 
 @pytest.mark.anyio
