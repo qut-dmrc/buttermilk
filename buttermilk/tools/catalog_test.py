@@ -48,9 +48,7 @@ class Title(BaseRecord):
     # Title-specific fields
     title: str = Field(..., description="Movie title")
     year: int | None = Field(None, description="Release year if available")
-    type: TitleType = Field(
-        default=TitleType.MOVIE, description="Type of title (movie or tv)"
-    )
+    type: TitleType = Field(default=TitleType.MOVIE, description="Type of title (movie or tv)")
 
     def __init__(self, **data):
         # Set default values for BaseRecord fields if not provided
@@ -82,35 +80,21 @@ class Observation(Title):
         description="Timestamp when the observation was made",
     )
 
-    provider_id: str | None = Field(
-        default=None, description="Unique ID of the streaming/availability provider"
-    )
-    provider_name: str | None = Field(
-        default=None, description="Name of the streaming/availability provider"
-    )
-    provider_type: str | None = Field(
-        default=None, description="Type of availability (flatrate, rent, buy)"
-    )
+    provider_id: str | None = Field(default=None, description="Unique ID of the streaming/availability provider")
+    provider_name: str | None = Field(default=None, description="Name of the streaming/availability provider")
+    provider_type: str | None = Field(default=None, description="Type of availability (flatrate, rent, buy)")
     region: str | None = Field(
         default=None,
         description="Geographical region of the observation (e.g., US, UK), None if unknown",
     )
-    price: float | None = Field(
-        None, description="Price for renting or buying, if applicable"
-    )
-    currency: str | None = Field(
-        None, description="Currency of the price, if applicable"
-    )
-    format: str | None = Field(
-        None, description="Format of the content (e.g., HD, SD, 4K)"
-    )
+    price: float | None = Field(None, description="Price for renting or buying, if applicable")
+    currency: str | None = Field(None, description="Currency of the price, if applicable")
+    format: str | None = Field(None, description="Format of the content (e.g., HD, SD, 4K)")
     available: bool = Field(..., description="Whether the title is available")
     source: str = Field(..., description="Source of the observation data")
 
     # error field is inherited from Title (which inherits from BaseRecord)
-    _ensure_error_list: classmethod = field_validator("error", mode="before")(
-        make_list_validator()
-    )  # type: ignore
+    _ensure_error_list: classmethod = field_validator("error", mode="before")(make_list_validator())  # type: ignore
 
     model_config = ConfigDict(
         extra="forbid",
@@ -210,9 +194,7 @@ class FetchProgress:
             {
                 "last_completed_page": page,
                 "total_movies": movies_count,
-                "last_updated": datetime.datetime.now(
-                    datetime.timezone.utc
-                ).isoformat(),
+                "last_updated": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             }
         )
         self._save_progress()
@@ -302,14 +284,10 @@ class TMDBTool:
         self.region = (region or "").upper() or "AU"
 
         if not self.api_key:
-            raise ValueError(
-                "TMDB API key is required. Please set TMDB_API_KEY environment variable or pass api_key parameter."
-            )
+            raise ValueError("TMDB API key is required. Please set TMDB_API_KEY environment variable or pass api_key parameter.")
 
         # Underlying client + retry wrapper
-        self._tmdb_client = aioTMDb(
-            key=self.api_key, language=language, region=self.region
-        )
+        self._tmdb_client = aioTMDb(key=self.api_key, language=language, region=self.region)
         self._retry = RetryWrapper(client=self._tmdb_client)
 
         # Initialize storage uploaders if configs provided
@@ -326,16 +304,12 @@ class TMDBTool:
         """Set up storage for observations data."""
 
         storage = bm.get_storage(config)
-        self.observations_uploader = AsyncDataUploader(
-            storage=storage, buffer_size=batch_size
-        )
+        self.observations_uploader = AsyncDataUploader(storage=storage, buffer_size=batch_size)
 
     def _setup_titles_storage(self, config: StorageConfig, batch_size: int):
         """Set up storage for titles data."""
         storage = bm.get_storage(config)
-        self.titles_uploader = AsyncDataUploader(
-            storage=storage, buffer_size=batch_size
-        )
+        self.titles_uploader = AsyncDataUploader(storage=storage, buffer_size=batch_size)
 
     async def cleanup(self):
         """Gracefully shutdown uploaders and ensure all data is flushed."""
@@ -466,9 +440,7 @@ class TMDBTool:
             return "Temporary TMDB throttling encountered; retry budget exceeded"
         return msg
 
-    async def search_movie(
-        self, title: str, year: Optional[int] = None
-    ) -> Optional[Title]:
+    async def search_movie(self, title: str, year: Optional[int] = None) -> Optional[Title]:
         """Search for a movie and return Title object with metadata.
 
         Args:
@@ -525,9 +497,7 @@ class TMDBTool:
             # Remove None values from metadata
             metadata = {k: v for k, v in metadata.items() if v is not None}
 
-            return Title(
-                record_id=movie_id, title=movie_title, year=year, metadata=metadata
-            )
+            return Title(record_id=movie_id, title=movie_title, year=year, metadata=metadata)
         except Exception as e:
             # Log error and return None for graceful degradation in agent use
             logger.error(f"Error searching for movie '{title}': {e}")
@@ -648,11 +618,7 @@ class TMDBTool:
                     if provider_type == "link":
                         continue  # Skip the link field
 
-                    if (
-                        not providers
-                        or not isinstance(providers, list)
-                        or len(providers) == 0
-                    ):
+                    if not providers or not isinstance(providers, list) or len(providers) == 0:
                         # If region exists but has no providers for this type
                         obs = Observation(
                             record_id=str(record_id),
@@ -680,9 +646,7 @@ class TMDBTool:
                             record_id=str(record_id),
                             title=title,
                             year=year,
-                            provider_id=str(provider.get("provider_id"))
-                            if provider.get("provider_id") is not None
-                            else None,
+                            provider_id=str(provider.get("provider_id")) if provider.get("provider_id") is not None else None,
                             provider_name=provider.get("provider_name"),
                             provider_type=provider_type,
                             region=normalized_region,
@@ -698,7 +662,7 @@ class TMDBTool:
                         collected_observations.append(obs)
 
             # All processing succeeded - now yield all collected observations
-            logger.info(
+            logger.debug(
                 f"Successfully processed movie {record_id}: {len(collected_observations)} observations from {region_count} regions",
                 record_id=record_id,
                 observation_count=len(collected_observations),
@@ -884,26 +848,20 @@ class TMDBTool:
                 pass
 
         # Create progress tracking for this period
-        period_pbar = tqdm(
-            desc=f"Fetching {period}", unit="page", leave=False, initial=start_page - 1
-        )
+        period_pbar = tqdm(desc=f"Fetching {period}", unit="page", leave=False, initial=start_page - 1)
 
         try:
             page = start_page
             while page <= 500:  # TMDB limit per query
                 # Fetch single page
-                page_movies, has_more = await self.fetch_single_page(
-                    period, page, include_adult, include_video
-                )
+                page_movies, has_more = await self.fetch_single_page(period, page, include_adult, include_video)
 
                 # Add to our collection
                 period_movies.extend(page_movies)
 
                 # Update progress
                 period_pbar.update(1)
-                period_pbar.set_postfix(
-                    {"movies": len(period_movies), "page": f"{page}/500"}
-                )
+                period_pbar.set_postfix({"movies": len(period_movies), "page": f"{page}/500"})
 
                 # Update progress tracking
                 if progress:
@@ -911,18 +869,11 @@ class TMDBTool:
 
                 # Save checkpoint every 10 pages
                 if page % 10 == 0 or not has_more:
-                    checkpoint_file = (
-                        progress.get_checkpoint_file(period)
-                        if progress
-                        else backup_dir / f"checkpoint_{period}.json"
-                    )
+                    checkpoint_file = progress.get_checkpoint_file(period) if progress else backup_dir / f"checkpoint_{period}.json"
                     backup_dir.mkdir(parents=True, exist_ok=True)
                     with open(checkpoint_file, "w", encoding="utf-8") as f:
                         json.dump(
-                            [
-                                scrub_serializable(movie.model_dump())
-                                for movie in period_movies
-                            ],
+                            [scrub_serializable(movie.model_dump()) for movie in period_movies],
                             f,
                             indent=2,
                             default=str,
@@ -986,9 +937,7 @@ class TMDBTool:
         all_movies = []
 
         # Create overall progress bar
-        overall_pbar = tqdm(
-            total=len(periods), desc="Processing periods", unit="period"
-        )
+        overall_pbar = tqdm(total=len(periods), desc="Processing periods", unit="period")
 
         async def fetch_single_period(period: DatePeriod) -> list[Title]:
             """Fetch a single period with semaphore control."""
@@ -996,9 +945,7 @@ class TMDBTool:
                 try:
                     # Check if already completed
                     if progress.is_completed(period):
-                        overall_pbar.set_postfix(
-                            {"status": f"Skipping {period} (completed)"}
-                        )
+                        overall_pbar.set_postfix({"status": f"Skipping {period} (completed)"})
                         overall_pbar.update(1)
                         # Load from backup file
                         backup_file = progress.get_period_backup_file(period)
@@ -1013,15 +960,11 @@ class TMDBTool:
 
                     # Fetch the period
                     overall_pbar.set_postfix({"status": f"Fetching {period}"})
-                    period_movies = await self._fetch_period_movies(
-                        period, include_adult, include_video, backup_dir, progress
-                    )
+                    period_movies = await self._fetch_period_movies(period, include_adult, include_video, backup_dir, progress)
 
                     # Mark as completed
                     progress.mark_completed(period)
-                    overall_pbar.set_postfix(
-                        {"status": f"Completed {period}", "movies": len(period_movies)}
-                    )
+                    overall_pbar.set_postfix({"status": f"Completed {period}", "movies": len(period_movies)})
                     overall_pbar.update(1)
 
                     return period_movies
@@ -1097,9 +1040,7 @@ class TMDBTool:
         # Filter out completed periods if resuming
         if resume and progress:
             remaining_periods = [p for p in all_periods if not progress.is_completed(p)]
-            print(
-                f"Total periods: {len(all_periods)}, Remaining: {len(remaining_periods)}"
-            )
+            print(f"Total periods: {len(all_periods)}, Remaining: {len(remaining_periods)}")
         else:
             remaining_periods = all_periods
             progress = FetchProgress(backup_dir)
@@ -1117,20 +1058,14 @@ class TMDBTool:
 
             # Load previously completed movies if resuming
             if resume and progress:
-                completed_periods = [
-                    p
-                    for p in all_periods
-                    if progress.is_completed(p) and p not in remaining_periods
-                ]
+                completed_periods = [p for p in all_periods if progress.is_completed(p) and p not in remaining_periods]
                 for period in completed_periods:
                     backup_file = progress.get_period_backup_file(period)
                     if backup_file.exists():
                         try:
                             with open(backup_file, "r", encoding="utf-8") as f:
                                 movie_data = json.load(f)
-                                completed_movies = [
-                                    Title(**movie) for movie in movie_data
-                                ]
+                                completed_movies = [Title(**movie) for movie in movie_data]
                                 all_movies.extend(completed_movies)
                         except (json.JSONDecodeError, OSError):
                             pass
