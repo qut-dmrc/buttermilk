@@ -361,7 +361,7 @@ class TMDBTool:
             Observation records for each region/provider combination
         """
         # Extract record from ProcessingContext
-        record = context.record if hasattr(context, 'record') else context
+        record = context.record if hasattr(context, "record") else context
 
         try:
             # Stream availability data for all regions
@@ -597,6 +597,10 @@ class TMDBTool:
                 return await self._tmdb_client.movie(int(record_id)).watch_providers()
 
             response = await self._retry._execute_with_retry(do_get_providers)
+            # Check for TMDB API error responses
+            if hasattr(response, "status_code") or not hasattr(response, "results"):
+                # API returned an error, not watch provider data
+                raise RuntimeError(f"TMDB API error: {getattr(response, 'status_message', 'Unknown error')}")
 
             if not response.results:
                 # No results for any regions - this is valid, not an error
