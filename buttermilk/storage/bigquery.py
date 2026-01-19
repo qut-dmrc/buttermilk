@@ -116,6 +116,16 @@ class BigQueryStorage(Storage, StorageClient):
             # Use custom query if provided
             if self.config.custom_query:
                 query = self.config.custom_query.replace("{table}", f"{self.get_table_ref()}")
+
+                # Replace {n} placeholder with limit if present
+                if "{n}" in query:
+                    if self.config.limit is None:
+                        raise StorageError(
+                            "custom_query uses {n} placeholder but no limit is configured. "
+                            "Set 'limit' in storage config or remove {n} from custom_query."
+                        )
+                    query = query.replace("{n}", str(self.config.limit))
+
                 job_config = None  # Custom query handles its own parameters
             else:
                 query = self._build_select_query()

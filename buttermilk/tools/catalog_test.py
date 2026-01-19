@@ -345,21 +345,24 @@ class TMDBTool:
             self.titles_uploader.shutdown()
 
     # -------------------------
-    # Pipeline method: TMDBTool processor that accepts Title records
+    # Pipeline method: TMDBTool processor that accepts ProcessingContext
     # and yields Observation records for each region/provider combination.
     # -------------------------
-    async def process(self, record: Title):
+    async def process(self, context):
         """Process a Title record and yield Observation records.
 
-        Works with Title records and yields separate Observation records
-        for each region/provider combination found.
+        Works with ProcessingContext containing Title records and yields
+        separate Observation records for each region/provider combination found.
 
         Args:
-            record: Title record to check availability for
+            context: ProcessingContext containing the Title record
 
         Yields:
             Observation records for each region/provider combination
         """
+        # Extract record from ProcessingContext
+        record = context.record if hasattr(context, 'record') else context
+
         try:
             # Stream availability data for all regions
             async for obs in self.get_availability(record):

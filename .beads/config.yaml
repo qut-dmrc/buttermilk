@@ -3,6 +3,10 @@
 # All settings can also be set via environment variables (BD_* prefix)
 # or overridden with command-line flags
 
+# Issue prefix for this repository (used by bd init)
+# If not set, bd init will auto-detect from directory name
+# Example: issue-prefix: "myproject" creates issues like "myproject-1", "myproject-2", etc.
+# issue-prefix: ""
 
 # Use no-db mode: load from JSONL, no SQLite, write back after each command
 # When true, bd will use .beads/issues.jsonl as the source of truth
@@ -40,13 +44,14 @@
 # If not set, bd sync will require you to run 'bd config set sync.branch <branch>'.
 # sync-branch: "beads-sync"
 
+# Multi-repo configuration (experimental - bd-307)
+# Allows hydrating from multiple repositories and routing writes to the correct JSONL
+# repos:
+#   primary: "."  # Primary repo (where this database lives)
+#   additional:   # Additional repos to hydrate from (read-only)
+#     - ~/beads-planning  # Personal planning repo
+#     - ~/work-planning   # Work planning repo
 
-issue-prefix: "bm"
-repos:
-  primary: "~/writing"  # Primary repo (where this database lives)
-  additional:   # Additional repos to hydrate from (read-only)
-    - ~/src/buttermilk        
-    
 # Integration settings (access with 'bd config get/set')
 # These are stored in the database, not in this file:
 # - jira.url
