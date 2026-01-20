@@ -16,8 +16,8 @@ run:
     description: "Enrich titles with TMDB streaming availability data"
     concurrency: 20
     max_records: null # null = process all
-    enable_record_cache: true
-    force_reprocess: false
+    enable_record_cache: false
+    force_reprocess: false 
     # Number of samples to collect from database (will be distributed across decades)
     sample_size: 10000 # ~700 records per decade
     # Source: BigQuery with decade-based sampling

@@ -11,18 +11,11 @@ Usage:
 """
 
 import os
-from typing import Any
 
 import pytest
 
-from buttermilk.tools.catalog_test import (
-    THEMOVIEDB_AVAILABLE,
-    Observation,
-    Title,
-    TitleType,
-    TMDBTool,
-)
 from buttermilk.pipeline import PipelineOrchestrator
+from buttermilk.tools.catalog_test import THEMOVIEDB_AVAILABLE, Observation, Title, TitleType, TMDBTool
 
 pytestmark = [
     pytest.mark.integration,
@@ -48,10 +41,12 @@ class ObservationCapture:
         record = context.record if hasattr(context, "record") else context
         self.call_count += 1
         self.captured.append(record)
-        print(f"  [Capture #{self.call_count}] {type(record).__name__} record_id={record.record_id} "
-              f"provider={getattr(record, 'provider_name', 'N/A')} "
-              f"region={getattr(record, 'region', 'N/A')} "
-              f"type={getattr(record, 'provider_type', 'N/A')}")
+        print(
+            f"  [Capture #{self.call_count}] {type(record).__name__} record_id={record.record_id} "
+            f"provider={getattr(record, 'provider_name', 'N/A')} "
+            f"region={getattr(record, 'region', 'N/A')} "
+            f"type={getattr(record, 'provider_type', 'N/A')}"
+        )
         yield record
 
     def shutdown(self):
@@ -72,20 +67,30 @@ def api_key() -> str:
     return key
 
 
+@pytest.mark.parametrize(
+    "record_id,enable_record_cache,force_reprocess,expected_results",
+    [
+        pytest.param("56599", True, False, 5, id="cache_enabled_use_cache"),
+        pytest.param("56599", False, True, 5, id="cache_disabled_force_reprocess"),
+        pytest.param("56599", True, True, 5, id="cache_enabled_force_reprocess"),
+        pytest.param("56599", False, False, 5, id="cache_disabled_no_force"),
+    ],
+)
 @pytest.mark.anyio
-async def test_mmtmdb_single_record_caching(api_key: str, real_bm, tmp_path):
-    """Run record 56599 through mmtmdb pipeline and capture all observations.
+async def test_mmtmdb_single_record_caching(api_key: str, record_id, enable_record_cache, force_reprocess, expected_results, real_bm, tmp_path):
+    """Run record  through mmtmdb pipeline and capture all observations.
 
     This test demonstrates caching behavior within a single pipeline run.
     It uses production-like settings (enable_record_cache=True) to show
     whether caching is affecting observation capture.
     """
+
     # Create the source - single Title with record_id 56599
     async def source():
         # Record 56599 - we just need the ID, TMDB API will look it up
         title = Title(
-            record_id="56599",
-            title="Test Title 56599",  # Will be enriched by TMDB
+            record_id=record_id,
+            title=f"Test Title {record_id}",  # Will be enriched by TMDB
             year=None,  # Let TMDB fill in
             type=TitleType.MOVIE,
         )
@@ -104,16 +109,16 @@ async def test_mmtmdb_single_record_caching(api_key: str, real_bm, tmp_path):
         source=source(),
         processors=[tmdb_tool, capture],
         concurrency=1,  # Single record, no need for concurrency
-        enable_record_cache=True,  # PRODUCTION SETTING - caching enabled
-        force_reprocess=False,  # PRODUCTION SETTING - use cache if available
+        enable_record_cache=enable_record_cache,  # PRODUCTION SETTING - caching enabled
+        force_reprocess=force_reprocess,  # PRODUCTION SETTING - use cache if available
     )
 
     print("\n" + "=" * 70)
     print("MMTMDB PIPELINE CACHING DEMO")
     print("=" * 70)
-    print(f"Record ID: 56599")
-    print(f"Caching: ENABLED (production setting)")
-    print(f"Force Reprocess: False")
+    print("Record ID: 56599")
+    print("Caching: ENABLED (production setting)")
+    print("Force Reprocess: False")
     print(f"Cache Dir: {orchestrator._record_cache.base_dir if orchestrator._record_cache else 'N/A'}")
     print("=" * 70)
 
@@ -145,8 +150,7 @@ async def test_mmtmdb_single_record_caching(api_key: str, real_bm, tmp_path):
         print(f"\n  {ptype.upper()} ({len(obs_list)} records):")
         for obs in obs_list:
             available = "✓" if obs.available else "✗"
-            print(f"    {available} {obs.provider_name or 'N/A':20} | region={obs.region or 'N/A':4} | "
-                  f"provider_id={obs.provider_id or 'N/A'}")
+            print(f"    {available} {obs.provider_name or 'N/A':20} | region={obs.region or 'N/A':4} | provider_id={obs.provider_id or 'N/A'}")
 
     # Summary stats
     print("\n" + "-" * 70)
@@ -169,6 +173,7 @@ async def test_mmtmdb_single_record_caching(api_key: str, real_bm, tmp_path):
         print(f"Cache directory: {cache_dir}")
         # Check if cache files exist for this record
         import glob
+
         cache_pattern = str(cache_dir / "**" / "*56599*")
         cache_files = glob.glob(cache_pattern, recursive=True)
         print(f"Cache files for record 56599: {len(cache_files)}")
@@ -178,80 +183,15 @@ async def test_mmtmdb_single_record_caching(api_key: str, real_bm, tmp_path):
             print(f"  ... and {len(cache_files) - 5} more")
 
     # Assertions
-    assert len(capture.captured) > 0, "Expected at least one observation"
+    assert len(capture.captured) >= expected_results, f"Expected {expected_results} observations"
 
     # Return captured data for further inspection
     return {
-        "record_id": "56599",
+        "record_id": record_id,
         "observations": capture.captured,
         "by_type": by_type,
         "regions": regions,
         "providers": providers,
-    }
-
-
-@pytest.mark.anyio
-async def test_mmtmdb_no_cache_comparison(api_key: str, real_bm, tmp_path):
-    """Run the same record with caching DISABLED for comparison.
-
-    This test runs with enable_record_cache=False to compare results
-    against the cached version.
-    """
-    async def source():
-        title = Title(
-            record_id="56599",
-            title="Test Title 56599",
-            year=None,
-            type=TitleType.MOVIE,
-        )
-        print(f"\n📥 Source yielding: record_id={title.record_id}")
-        yield title
-
-    tmdb_tool = TMDBTool(api_key=api_key, region="AU")
-    capture = ObservationCapture()
-
-    # Create pipeline with caching DISABLED
-    orchestrator = PipelineOrchestrator(
-        pipeline_name="tmdb_observations_nocache",
-        source=source(),
-        processors=[tmdb_tool, capture],
-        concurrency=1,
-        enable_record_cache=False,  # DISABLED for comparison
-        force_reprocess=True,
-    )
-
-    print("\n" + "=" * 70)
-    print("MMTMDB PIPELINE - NO CACHE (COMPARISON)")
-    print("=" * 70)
-    print(f"Record ID: 56599")
-    print(f"Caching: DISABLED")
-    print("=" * 70)
-
-    print("\n🚀 Running pipeline...\n")
-    results = []
-    async for record in orchestrator():
-        results.append(record)
-
-    print("\n" + "=" * 70)
-    print("RESULTS SUMMARY (NO CACHE)")
-    print("=" * 70)
-    print(f"Pipeline yielded: {len(results)} records")
-    print(f"Capture received: {len(capture.captured)} observations")
-
-    # Quick summary
-    regions = set(obs.region for obs in capture.captured if obs.region)
-    providers = set(obs.provider_name for obs in capture.captured if obs.provider_name)
-
-    print(f"Unique regions: {len(regions)}")
-    print(f"Unique providers: {len(providers)}")
-    print(f"Total observations: {len(capture.captured)}")
-
-    assert len(capture.captured) > 0, "Expected at least one observation"
-
-    return {
-        "record_id": "56599",
-        "observations": capture.captured,
-        "observation_count": len(capture.captured),
     }
 
 
