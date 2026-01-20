@@ -26,6 +26,7 @@ The BatchAccumulator:
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any, AsyncGenerator
 
 from pydantic import Field, PrivateAttr
@@ -57,10 +58,14 @@ class BatchAccumulator(ProcessorCore):
     # Internal buffer
     _buffer: list[ProcessingContext] = PrivateAttr(default_factory=list)
     _batch_count: int = PrivateAttr(default=0)
+    _lock: asyncio.Lock = PrivateAttr(default=None)
 
     def model_post_init(self, __context: Any) -> None:
         """Validate batch_processors implement BatchProcessor."""
         super().model_post_init(__context)
+        # Initialize asyncio lock for thread-safe buffer access
+        # Required because pipeline concurrency allows multiple tasks to access this processor
+        self._lock = asyncio.Lock()
         for i, bp in enumerate(self.batch_processors):
             if not hasattr(bp, "process_batch"):
                 raise TypeError(
@@ -80,24 +85,43 @@ class BatchAccumulator(ProcessorCore):
         Yields:
             BaseRecord: Individual records after batch processing (when batch is full)
         """
-        self._buffer.append(context)
+        # Use lock to protect buffer operations from concurrent access
+        # This prevents race conditions where multiple tasks see len >= batch_size
+        # and process the same batch multiple times
+        batch_to_process: list[ProcessingContext] | None = None
 
-        if len(self._buffer) >= self.batch_size:
-            async for record in self._process_and_yield_batch():
+        async with self._lock:
+            self._buffer.append(context)
+
+            if len(self._buffer) >= self.batch_size:
+                # Take ownership of buffer contents and reset
+                # Other concurrent tasks will append to fresh buffer
+                batch_to_process = self._buffer
+                self._buffer = []
+
+        if batch_to_process is not None:
+            # Process outside lock to allow concurrent buffer appends
+            async for record in self._process_batch_from_contexts(batch_to_process):
                 yield record
+        # If batch not full, generator completes without yielding (record is buffered)
 
-    async def _process_and_yield_batch(self) -> AsyncGenerator[BaseRecord, None]:
-        """Process buffered records through batch processors and yield results.
+    async def _process_batch_from_contexts(
+        self, contexts: list[ProcessingContext]
+    ) -> AsyncGenerator[BaseRecord, None]:
+        """Process a batch of contexts through batch processors and yield results.
+
+        Args:
+            contexts: List of ProcessingContext objects to process
 
         Yields:
             BaseRecord: Individual records after batch processing
         """
-        if not self._buffer:
+        if not contexts:
             return
 
         self._batch_count += 1
         batch_num = self._batch_count
-        input_count = len(self._buffer)
+        input_count = len(contexts)
 
         logger.info(
             f"BatchAccumulator processing batch {batch_num}",
@@ -106,7 +130,7 @@ class BatchAccumulator(ProcessorCore):
         )
 
         # Extract records from contexts
-        records = [ctx.record for ctx in self._buffer]
+        records = [ctx.record for ctx in contexts]
 
         # Run each batch processor in sequence
         for i, bp in enumerate(self.batch_processors):
@@ -132,9 +156,6 @@ class BatchAccumulator(ProcessorCore):
             output_count=len(records),
         )
 
-        # Clear buffer
-        self._buffer = []
-
         # Demux: yield individual records
         for record in records:
             yield record
@@ -147,11 +168,19 @@ class BatchAccumulator(ProcessorCore):
         Yields:
             BaseRecord: Individual records from the remaining batch
         """
-        if self._buffer:
-            logger.info(
-                f"BatchAccumulator flushing remaining {len(self._buffer)} records",
-            )
-            async for record in self._process_and_yield_batch():
+        # Take ownership of remaining buffer under lock
+        batch_to_process: list[ProcessingContext] | None = None
+
+        async with self._lock:
+            if self._buffer:
+                logger.info(
+                    f"BatchAccumulator flushing remaining {len(self._buffer)} records",
+                )
+                batch_to_process = self._buffer
+                self._buffer = []
+
+        if batch_to_process:
+            async for record in self._process_batch_from_contexts(batch_to_process):
                 yield record
 
     async def finalize_processing(self) -> bool:
