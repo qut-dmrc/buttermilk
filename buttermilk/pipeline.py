@@ -458,17 +458,21 @@ class PipelineOrchestrator(BaseModel):
                                     )
 
                                 # Cache the processor outputs (unless processor opts out)
+                                # IMPORTANT: _save_processor_cache returns outputs with cache_key
+                                # metadata added for 1:N transformations. We MUST use the returned
+                                # outputs so cache_key propagates to downstream processors.
                                 if getattr(processor, "skip_cache", False):
                                     logger.debug(
                                         f"🚫 Skipping cache save for {processor_class} (skip_cache=True)",
                                         processor_class=processor_class,
                                     )
+                                    outputs_for_queue = outputs
                                 else:
-                                    await self._save_processor_cache(
+                                    outputs_for_queue = await self._save_processor_cache(
                                         current_record, outputs, processor_stage_name
                                     )
                                 # Add all outputs to the next processing queue
-                                next_queue.extend(outputs)
+                                next_queue.extend(outputs_for_queue)
 
                         # Set processor span attributes for outputs
                         processor_span.set_attribute("outputs.count", len(next_queue))
@@ -863,7 +867,15 @@ class PipelineOrchestrator(BaseModel):
     async def _check_processor_cache(
         self, record: BaseRecord, processor_stage_name: str
     ) -> list[BaseRecord] | None:
-        """Check cache for processor-specific outputs."""
+        """Check cache for processor-specific outputs.
+
+        Cache key strategy:
+        - If record has metadata.cache_key (from prior 1:N transformation), use that
+        - Otherwise use record_id (original record or 1:1 transformation chain)
+
+        This ensures records from 1:N expansions (which share record_id but have
+        unique cache_keys) are cached/loaded correctly.
+        """
         if (
             not self.enable_record_cache
             or not self._record_cache
@@ -872,22 +884,30 @@ class PipelineOrchestrator(BaseModel):
         ):
             return None
 
+        # Determine the cache lookup key:
+        # - Records from 1:N transformations have metadata.cache_key (e.g., "56599_output_0")
+        # - Original records just use record_id
+        record_metadata = getattr(record, "metadata", None) or {}
+        lookup_key = record_metadata.get("cache_key", record.record_id)
+
         logger.debug(
             "🔍 Checking processor cache",
             record_id=record.record_id,
+            lookup_key=lookup_key,
+            has_cache_key=("cache_key" in record_metadata),
             processor_stage=processor_stage_name,
         )
 
-        # Try 1:1 cached result first
-        cached_record = self._record_cache.load(record.record_id, processor_stage_name)
+        # Try 1:1 cached result first (using the appropriate lookup key)
+        cached_record = self._record_cache.load(lookup_key, processor_stage_name)
         if cached_record and self._validate_cached_record(cached_record):
             return [cached_record]
 
-        # Try 1:N cached results
+        # Try 1:N cached results (for when this processor also does 1:N)
         cached_outputs = []
         output_index = 0
         while True:
-            cache_key = f"{record.record_id}_output_{output_index}"
+            cache_key = f"{lookup_key}_output_{output_index}"
             cached_output = self._record_cache.load(cache_key, processor_stage_name)
             if not cached_output:
                 break
@@ -975,32 +995,52 @@ class PipelineOrchestrator(BaseModel):
         input_record: BaseRecord,
         outputs: list[BaseRecord],
         processor_stage_name: str,
-    ) -> None:
-        """Save processor outputs to cache."""
+    ) -> list[BaseRecord]:
+        """Save processor outputs to cache and return records with cache metadata.
+
+        Cache key strategy matches _check_processor_cache:
+        - If input has metadata.cache_key (from prior 1:N), use that as base
+        - Otherwise use record_id as base
+
+        Returns:
+            List of records with cache_key metadata added (for 1:N transformations).
+            For 1:1, returns original outputs unchanged.
+            IMPORTANT: Caller must use returned records to ensure cache_key propagates
+            to downstream processors.
+        """
         if (
             not self.enable_record_cache
             or not self._record_cache
             or not outputs
             or not hasattr(input_record, "record_id")
         ):
-            return
+            return outputs  # Return unchanged if caching disabled
+
+        # Determine base key for caching (matches lookup logic in _check_processor_cache)
+        input_metadata = getattr(input_record, "metadata", None) or {}
+        base_key = input_metadata.get("cache_key", input_record.record_id)
 
         logger.debug(
             "💾 Saving processor outputs to cache",
             record_id=input_record.record_id,
+            base_key=base_key,
+            has_cache_key=("cache_key" in input_metadata),
             processor_stage=processor_stage_name,
             outputs_count=len(outputs),
         )
 
         try:
             if len(outputs) == 1:
-                # 1:1 transformation - use input record_id as cache key
-                self._record_cache.save(outputs[0], processor_stage_name)
+                # 1:1 transformation - use base_key as cache key
+                # No need to add cache_key metadata for 1:1 (lookup uses record_id)
+                self._record_cache.save(outputs[0], processor_stage_name, cache_key=base_key)
+                return outputs  # Return unchanged for 1:1
             else:
-                # 1:N transformation - use indexed cache keys
+                # 1:N transformation - use indexed cache keys based on base_key
                 # IMPORTANT: record_id is immutable - use cache_key for cache indexing only
+                updated_outputs = []
                 for output_index, output_record in enumerate(outputs):
-                    cache_key = f"{input_record.record_id}_output_{output_index}"
+                    cache_key = f"{base_key}_output_{output_index}"
 
                     # Store cache key in metadata for cache lookup, but preserve original record_id
                     updated_metadata = (
@@ -1013,6 +1053,8 @@ class PipelineOrchestrator(BaseModel):
                         update={"metadata": updated_metadata}
                     )
                     self._record_cache.save(cache_record, processor_stage_name, cache_key=cache_key)
+                    updated_outputs.append(cache_record)  # Return record WITH cache metadata
+                return updated_outputs
         except Exception as e:
             logger.debug(
                 "💥 Failed to save processor cache",
@@ -1020,6 +1062,7 @@ class PipelineOrchestrator(BaseModel):
                 processor_stage=processor_stage_name,
                 error=str(e),
             )
+            return outputs  # Return original outputs on cache failure
 
     async def _flush_all_processors(self, completed_queue: asyncio.Queue) -> None:
         """Flush buffered records from all processors after source exhaustion.
