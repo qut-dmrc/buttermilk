@@ -183,7 +183,14 @@ async def test_mmtmdb_single_record_caching(api_key: str, record_id, enable_reco
             print(f"  ... and {len(cache_files) - 5} more")
 
     # Assertions
-    assert len(capture.captured) >= expected_results, f"Expected {expected_results} observations"
+    # Note: With warm cache, ObservationCapture may not be called (outputs served from cache).
+    # So we check pipeline output (results) which represents actual data that would be saved.
+    # capture.captured only has items when the processor is actually invoked (cold cache or force_reprocess).
+    assert len(results) >= expected_results, f"Expected pipeline to yield {expected_results} records, got {len(results)}"
+
+    # For non-cached runs, also verify capture received the records
+    if not enable_record_cache or force_reprocess:
+        assert len(capture.captured) >= expected_results, f"Expected capture to receive {expected_results} observations"
 
     # Return captured data for further inspection
     return {
