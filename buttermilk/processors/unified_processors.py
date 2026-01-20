@@ -55,6 +55,9 @@ class LLMProcessor(ProcessorCore):
     output_model: str | None = Field(default=None, description="Pydantic model path for structured output")
     fail_on_unfilled_parameters: bool = Field(default=True, description="Fail if template parameters are unfilled")
 
+    # LLM outputs are non-deterministic (unless temperature=0), so skip caching
+    skip_cache: bool = Field(default=True, description="Skip pipeline caching for non-deterministic LLM outputs")
+
     _llm_core: Any = PrivateAttr(default=None)
 
     def model_post_init(self, __context: Any) -> None:
@@ -142,6 +145,9 @@ class GroupchatProcessor(ProcessorCore):
     flow_config: Any = Field(..., description="Flow configuration")
     parameters: dict[str, Any] = Field(default_factory=dict, description="Parameters for orchestrator")
     collect_traces: bool = Field(default=True, description="Collect ExecutionTrace outputs")
+
+    # Multi-agent conversations involve LLM calls, so outputs are non-deterministic
+    skip_cache: bool = Field(default=True, description="Skip pipeline caching for non-deterministic orchestrator outputs")
 
     async def _process_record(
         self,

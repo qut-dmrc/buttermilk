@@ -68,12 +68,12 @@ class TestParameterExpansionProcessorLogic:
             assert "criteria" in r.metadata
             assert "model" in r.metadata
             assert r.metadata["original_key"] == "original_value"  # Preserved
-            assert "expansion_source_id" in r.metadata
-            assert r.metadata["expansion_source_id"] == "test-001"
+            assert "variant_suffix" in r.metadata  # For tracking/deduplication
 
-        # Verify unique record_ids
+        # record_id stays IMMUTABLE (same source data, different processing variants)
+        # This is intentional - see design decision in memory: record_id represents source data identity
         record_ids = [r.record_id for r in results]
-        assert len(set(record_ids)) == 4  # All unique
+        assert all(rid == "test-001" for rid in record_ids)  # All same record_id
 
     @pytest.mark.anyio
     async def test_single_variant_expansion(self):
@@ -117,8 +117,13 @@ class TestParameterExpansionProcessorLogic:
         assert results[0].metadata["model"] == "X"
 
     @pytest.mark.anyio
-    async def test_unique_record_ids_generated(self):
-        """Verify record_ids follow pattern and are unique."""
+    async def test_record_id_immutable_variant_suffix_in_metadata(self):
+        """Verify record_id stays immutable and variant_suffix is in metadata.
+
+        Design decision: record_id represents source data identity and must not change.
+        Variant tracking is done via metadata.variant_suffix instead.
+        Pipeline caching uses cache_key (added by pipeline) for 1:N differentiation.
+        """
         from buttermilk._core.types import BaseRecord
         from buttermilk._core.processing_context import ProcessingContext
 
@@ -130,8 +135,12 @@ class TestParameterExpansionProcessorLogic:
 
         results = [r async for r in processor._process_record(context)]
 
+        # record_id stays IMMUTABLE (same source data, different processing variants)
         record_ids = [r.record_id for r in results]
-        assert len(set(record_ids)) == 4  # All unique
-        # Verify pattern: original_a=value_b=value (sorted keys)
-        assert all(r.record_id.startswith("orig_") for r in results)
-        assert all("a=" in r.record_id and "b=" in r.record_id for r in results)
+        assert all(rid == "orig" for rid in record_ids)  # All same record_id
+
+        # Variant info is in metadata, not record_id
+        variant_suffixes = [r.metadata["variant_suffix"] for r in results]
+        assert len(set(variant_suffixes)) == 4  # All unique variant_suffix values
+        # Verify pattern: a=value_b=value (sorted keys)
+        assert all("a=" in vs and "b=" in vs for vs in variant_suffixes)

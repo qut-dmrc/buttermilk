@@ -79,6 +79,9 @@ class VertexBatchProcessor(BatchProcessorCore):
         description="Maximum tokens for response",
     )
 
+    # LLM outputs are non-deterministic, so skip pipeline caching
+    skip_cache: bool = Field(default=True, description="Skip pipeline caching for non-deterministic LLM outputs")
+
     # Internal components
     _output_class: type[BaseModel] | None = PrivateAttr(default=None)
     _client: Any = PrivateAttr(default=None)
