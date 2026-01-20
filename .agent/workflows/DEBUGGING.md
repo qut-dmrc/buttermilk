@@ -1,7 +1,5 @@
 # Buttermilk Debugging Instructions
 
-**Load framework DEBUGGING.md for generic debugging methodology** (`@$ACADEMICOPS/core/DEBUGGING.md`).
-
 This file contains Buttermilk-specific debugging tools and workflows.
 
 ## Context Management for LLM Debugging

@@ -1,7 +1,5 @@
 # Buttermilk Style Guide
 
-**Load framework STYLE.md for generic code conventions** (`@$ACADEMICOPS/core/STYLE.md`).
-
 This file contains Buttermilk-specific style requirements.
 
 ## Mission-Driven Conventions

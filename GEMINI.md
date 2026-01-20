@@ -1,5 +1,4 @@
-# Gemini Instructions
+@.agent/CORE.md
 
-READ @CLAUDE.md first.
-
-This repository does not have custom skills defined.
+- Rules are in .agent/rules/
+- Workflows in .agent/workflows/

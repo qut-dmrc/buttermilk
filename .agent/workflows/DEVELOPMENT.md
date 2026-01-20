@@ -1,7 +1,5 @@
 # Buttermilk Development Instructions
 
-**Load framework DEVELOPMENT.md for generic TDD methodology** (`@$ACADEMICOPS/core/DEVELOPMENT.md`).
-
 This file contains Buttermilk-specific development patterns.
 
 ## Mission
