@@ -1430,16 +1430,14 @@ class ChromaDBEmbeddings(VectorStorageConfig):
 
                 # Ensure chunk_metadata is a plain dict (handle dict_items, dict-like objects, etc.)
                 if not isinstance(chunk_metadata, dict):
-                    if hasattr(chunk_metadata, "items"):
-                        # Convert dict-like objects (including dict_items) to dict
-                        try:
-                            chunk_metadata = dict(chunk_metadata)
-                        except (TypeError, ValueError):
-                            logger.warning(
-                                f"Could not convert chunk metadata to dict: {type(chunk_metadata)}"
-                            )
-                            chunk_metadata = {}
-                    else:
+                    # Try to convert dict-like objects and dict_items to dict
+                    # dict_items doesn't have .items() but can be converted with dict()
+                    try:
+                        chunk_metadata = dict(chunk_metadata)
+                    except (TypeError, ValueError):
+                        logger.warning(
+                            f"Could not convert chunk metadata to dict: {type(chunk_metadata)}"
+                        )
                         chunk_metadata = {}
 
                 enhanced_metadata = {

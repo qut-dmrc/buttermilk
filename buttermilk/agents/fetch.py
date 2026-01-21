@@ -111,6 +111,11 @@ class FetchAgent(Agent):
         """Process the message and return an AgentOutput or ErrorEvent."""
         result = None
 
+        # DEBUG: Log what we receive for RFC #311 debugging
+        logger.debug(f"FETCH {self.agent_id} received inputs keys: {list(message.inputs.keys()) if message.inputs else []}")
+        logger.debug(f"FETCH {self.agent_id} received parameters keys: {list(message.parameters.keys()) if message.parameters else []}")
+        logger.debug(f"FETCH {self.agent_id} required_inputs config: {self.required_inputs}")
+
         # Check both inputs and parameters for record_id, uri, url
         uri = (
             message.inputs.get("url")
@@ -131,8 +136,21 @@ class FetchAgent(Agent):
         if not record_id and message.record:
             record_id = getattr(message.record, "record_id", None)
 
+        # DEBUG: Log what we found
+        logger.debug(f"FETCH {self.agent_id} found uri={uri!r}, record_id={record_id!r}")
+
         if uri and record_id:
             raise ProcessingError("Cannot provide both uri and record_id.")
+
+        # If message.record already has content, use it directly (no need to re-fetch)
+        # This handles the case where records are pre-loaded via ParameterExpansionProcessor
+        if message.record and hasattr(message.record, "content") and message.record.content:
+            logger.debug(f"FETCH {self.agent_id}: Using pre-loaded record, skipping fetch")
+            return AgentOutput(
+                agent_id=self.agent_id,
+                outputs=message.record,
+                metadata=message.record.metadata if hasattr(message.record, "metadata") else {},
+            )
 
         try:
             if uri:

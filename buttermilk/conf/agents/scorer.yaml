@@ -1,16 +1,17 @@
 scorer:
   role: SCORERS
-  name_components: ["📊", "role", "model", "unique_identifier"]
+  name_components: ["role", "model", "unique_identifier"]
   agent_obj: LLMScorer
   num_runs: 2
   description: Checks and scores answers against our expected ground truth.
   variants:
     model: ${llms.judgers}
+  required: [expected, source, instructions, answers]  # RFC #311: template vars (no criteria needed)
   parameters:
     output_model: "buttermilk.agents.evaluators.scorer.QualScore"
     template: score
   inputs:
-    instructions: "[JUDGE,SYNTHESISER].messages[0].content"
-    source: "[FETCH.outputs]||*.record||*.inputs.record"
-    expected: "[FETCH.outputs].ground_truth||*.record.ground_truth||*.inputs.record.ground_truth"
+    expected: "FETCH.outputs.ground_truth"
+    source: "FETCH.outputs.content"
+    instructions: "JUDGE.messages[0].content || SYNTHESISER.messages[0].content"
     answers: "[JUDGE,SYNTHESISER][].{agent_id: agent_info.agent_id, result: outputs, answer_id: call_id, error: error }"

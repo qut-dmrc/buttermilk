@@ -14,6 +14,8 @@ TRUE E2E test:
 Add flows to testing.yaml flows: section to test them here.
 """
 
+import re
+
 import pytest
 
 from buttermilk._core.contract import ExecutionTrace
@@ -144,7 +146,70 @@ async def test_flow_execution_e2e(
         f"First error: {error_messages[0] if error_messages else 'N/A'}"
     )
 
+    # VERIFY: Template variables are filled in messages
+    # Get traces that have LLM messages (from agents that call LLMs)
+    traces_with_messages = [
+        msg for msg in messages
+        if isinstance(msg, ExecutionTrace) and msg.messages and len(msg.messages) > 0
+    ]
+
+    for trace in traces_with_messages:
+        # Check messages[0] (typically system prompt with template) has substantial content
+        first_message = trace.messages[0]
+        content = first_message.content if hasattr(first_message, "content") else str(first_message)
+
+        # Template-filled prompts should have substantial content (> 100 chars at minimum)
+        # Real prompts with filled variables are typically 500+ chars
+        assert len(content) > 100, (
+            f"First message content too short ({len(content)} chars). "
+            f"Template variables may not be filled. Agent: {trace.agent_info.get('role', 'unknown')}. "
+            f"Content preview: {content[:200]}..."
+        )
+
+        # VERIFY: No unfilled Jinja2 template variables in any message
+        # Unfilled variables look like: {{variable_name}} or {{ variable_name }}
+        unfilled_pattern = re.compile(r"\{\{\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\}\}")
+
+        for i, msg in enumerate(trace.messages):
+            msg_content = msg.content if hasattr(msg, "content") else str(msg)
+            unfilled_vars = unfilled_pattern.findall(msg_content)
+            assert not unfilled_vars, (
+                f"Unfilled template variables found in message[{i}]: {unfilled_vars}. "
+                f"Agent: {trace.agent_info.get('role', 'unknown')}. "
+                f"Content preview: {msg_content[:300]}..."
+            )
+
+    # VERIFY: trace.record is filled for traces that process records
+    traces_with_record = [
+        msg for msg in messages
+        if isinstance(msg, ExecutionTrace) and msg.record is not None
+    ]
+
+    # At least some traces should have record context (agents processing the input record)
+    # Note: Not all agents may have record (e.g., orchestrator traces)
+    if traces_with_messages:
+        # For flows that process records, we expect at least one trace to have record filled
+        assert len(traces_with_record) > 0 or not any(
+            "record" in str(trace.inputs).lower() for trace in traces_with_messages
+        ), (
+            f"Expected at least one trace with record context filled. "
+            f"Found {len(traces_with_record)} traces with record out of {len(traces_with_messages)} "
+            f"traces with messages."
+        )
+
+    for trace in traces_with_record:
+        record = trace.record
+        record_dict = record if isinstance(record, dict) else record.model_dump() if hasattr(record, "model_dump") else {}
+
+        # Record should have essential fields
+        assert "record_id" in record_dict or hasattr(record, "record_id"), (
+            f"trace.record missing record_id. Agent: {trace.agent_info.get('role', 'unknown')}. "
+            f"Record type: {type(record).__name__}"
+        )
+
     # SUCCESS: Flow executed all agents and completed without errors
     print(f"✓ Flow '{flow_name}' completed successfully")
     print(f"✓ Agents executed: {sorted(executed_roles)}")
     print(f"✓ Messages produced: {len(messages)}")
+    print(f"✓ Traces with filled messages: {len(traces_with_messages)}")
+    print(f"✓ Traces with record context: {len(traces_with_record)}")

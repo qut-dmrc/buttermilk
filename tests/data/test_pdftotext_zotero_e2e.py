@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 
+@pytest.mark.slow
 @pytest.mark.anyio
 async def test_pdftotext_extracts_from_real_zotero_pdf(real_bm):
     """E2E test: Download PDF from Zotero and extract text with pdftotext.

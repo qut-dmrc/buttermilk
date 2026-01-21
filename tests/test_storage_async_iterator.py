@@ -43,9 +43,9 @@ async def test_storage_async_iterator_protocol():
         temp_path = f.name
 
     try:
-        # Create storage
+        # Create storage with randomize=False to preserve order for testing
         config = FileStorageConfig(
-            type="file", path=temp_path, dataset_name="test", split_type="train"
+            type="file", path=temp_path, dataset_name="test", split_type="train", randomize=False
         )
         storage = FileStorage(config)
 

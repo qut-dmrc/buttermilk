@@ -15,6 +15,9 @@ import pytest
 from buttermilk._core.llm_core import LLMCore
 from buttermilk._core.types import BaseRecord
 
+import pytest
+
+pytestmark = pytest.mark.slow
 
 @pytest.mark.anyio
 async def test_actual_model_logging():

@@ -34,6 +34,7 @@ from buttermilk import (
     bm,
     logger,
 )
+from buttermilk.api.services.session_storage import SessionStorageService
 from buttermilk._core.agent import Agent
 from buttermilk._core.constants import MANAGER
 from buttermilk._core.contract import (
@@ -139,6 +140,8 @@ class AutogenOrchestrator(Orchestrator):
         default_factory=list
     )
     _is_initialized: bool = PrivateAttr(default=False)
+    _storage_service: SessionStorageService | None = PrivateAttr(default=None)
+    _session_id: str | None = PrivateAttr(default=None)
 
     # Dynamically generates a unique topic ID for this specific orchestrator run.
     # Ensures messages within this run don't interfere with other concurrent runs.
@@ -150,8 +153,15 @@ class AutogenOrchestrator(Orchestrator):
         """Initializes the Autogen runtime and registers all configured agents."""
         # Initialize the topic ID if not already set
         if self._topic is None:
+            # Import execution context for slug extraction
+            from buttermilk._core.execution_context import get_execution_context
+
+            exec_ctx = get_execution_context()
+            # Format: {project}-{exec_slug}-{session_slug}-{suffix}
+            # Example: TJA-cge7b5Fi-dda43ff9-a3b2
+            suffix = shortuuid.uuid()[:4]  # Unique suffix for multiple groupchats in same session
             self._topic = DefaultTopicId(
-                type=f"{bm.session_info.project_name}-{bm.session_info.job}-{shortuuid.uuid()[:8]}"
+                type=f"{bm.session_info.project_name}-{exec_ctx.slug}-{bm.session_info.slug}-{suffix}"
             )
 
         msg = f"Setting up AutogenOrchestrator for topic: {self._topic.type}"
@@ -170,6 +180,7 @@ class AutogenOrchestrator(Orchestrator):
         self._runtime = SingleThreadedAgentRuntime(
             tracer_provider=NoOpTracerProvider(),
             intervention_handlers=[termination_handler, interrupt_handler],
+            ignore_unhandled_exceptions=False,
         )
 
         # Start the Autogen runtime's processing loop in the background.
@@ -179,6 +190,8 @@ class AutogenOrchestrator(Orchestrator):
         await self._register_agents(params=request)
 
         await self.register_ui(callback_to_ui=request.callback_to_ui)
+
+        await self._register_session_collector()
 
         # Send a broadcast message to initialize all agents subscribed to the group chat
         logger.info(
@@ -208,10 +221,10 @@ class AutogenOrchestrator(Orchestrator):
             participants={v.role: v.description for k, v in self.agents.items()},
         )
         logger.debug(
-            f"ConductorRequest details - participants: {conductor_request.participants}",
+            f"ConductorRequest details - participants: {list(conductor_request.participants.keys())}",
             agents=list(self.agents.keys()),
             observers=list(self.observers.keys()),
-            **conductor_request.model_dump(),
+            input_keys=list(conductor_request.inputs.keys()) if conductor_request.inputs else [],
         )
         await self._runtime.publish_message(
             conductor_request,
@@ -324,8 +337,11 @@ class AutogenOrchestrator(Orchestrator):
             # Define a factory function required by Autogen's registration.
             # Check if this is a Buttermilk Agent subclass
             if issubclass(agent_cls, Agent):
+                dumped_config = variant_config.model_dump()
+                # DEBUG RFC #311: Check if required field is in config
+                logger.debug(f"Agent {variant_config.role}: model_dump required field = {dumped_config.get('required')!r}")
                 config_with_session = {
-                    **variant_config.model_dump(),
+                    **dumped_config,
                     "session_id": params.session_id,
                     "topic_id": self._topic,
                 }
@@ -446,6 +462,32 @@ class AutogenOrchestrator(Orchestrator):
             f"[AutogenOrchestrator.register_ui] ClosureAgent registered successfully for type: {MANAGER}"
         )
 
+    async def _register_session_collector(self) -> None:
+        """Register a ClosureAgent to persist messages via SessionStorageService."""
+        from buttermilk.api.services.message_service import MessageService
+
+        async def persist_message(
+            _ctx: ClosureContext, message: AllMessages, ctx: MessageContext
+        ) -> None:
+            if self._storage_service is None or self._session_id is None:
+                return
+            try:
+                formatted = MessageService.format_message_for_client(message)
+                if formatted and self._storage_service.should_persist_message(formatted):
+                    self._storage_service.save_message(self._session_id, formatted)
+            except Exception as e:
+                logger.warning(f"Failed to persist session message: {e}")
+
+        collector_type = f"SESSION_COLLECTOR_{shortuuid.uuid()[:6]}"
+        await ClosureAgent.register_closure(
+            runtime=self._runtime,
+            type=collector_type,
+            closure=persist_message,
+            subscriptions=lambda: [
+                TypeSubscription(topic_type=self._topic.type, agent_type=collector_type),
+            ],
+        )
+
     async def _run(self, request: RunRequest, flow_name: str = "") -> None:
         """Simplified main execution loop for the orchestrator.
 
@@ -465,6 +507,10 @@ class AutogenOrchestrator(Orchestrator):
             request: An optional RunRequest containing initial data.
 
         """
+        # Initialize session storage before setup (ensures it's available in finally block)
+        self._session_id = request.session_id
+        self._storage_service = SessionStorageService()
+
         try:
             # 1. Setup the runtime and agents
             try:
@@ -501,7 +547,6 @@ class AutogenOrchestrator(Orchestrator):
                             TaskProcessingComplete(
                                 agent_id="orchestrator",
                                 role="orchestrator",
-                                more_tasks_remain=False,
                             ),
                             topic_id=DefaultTopicId(type=MANAGER),
                         )
@@ -535,8 +580,18 @@ class AutogenOrchestrator(Orchestrator):
             )
             raise
         finally:
-            # Cleanup is now handled by the orchestrator lifecycle management
-            pass
+            # Stop the runtime gracefully to avoid "Task was destroyed but it is pending!" errors
+            if hasattr(self, "_runtime") and self._runtime:
+                try:
+                    await self._runtime.stop()
+                except Exception as e:
+                    logger.warning(f"Failed to stop runtime: {e}")
+
+            if self._storage_service and self._session_id:
+                try:
+                    self._storage_service.finalize_session(self._session_id, "completed")
+                except Exception as e:
+                    logger.warning(f"Failed to finalize session: {e}")
 
     def make_publish_callback(self) -> Callable[[FlowMessage], Awaitable[None]]:
         """Creates an asynchronous callback function for the UI to use.

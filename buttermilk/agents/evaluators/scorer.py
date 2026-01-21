@@ -94,13 +94,9 @@ class CriticalErrorEvidence(BaseModel):
     model_config = {"extra": "forbid"}  # Required for Azure OpenAI structured output
 
     error_type: ErrorType = Field(..., description="The type of error found")
-    analyst_reasoning: str = Field(
-        ..., description="Specific quoted string from reasons list"
-    )
+    analyst_reasoning: str = Field(..., description="Specific quoted string from reasons list")
     explanation: str = Field(..., description="Why this is an error")
-    source_excerpt: str = Field(
-        ..., description="Relevant article excerpt showing the error"
-    )
+    source_excerpt: str = Field(..., description="Relevant article excerpt showing the error")
     rule_excerpt: str = Field(..., description="Which rule was misapplied")
 
 
@@ -121,24 +117,12 @@ class CriticalErrors(BaseModel):
 
     model_config = {"extra": "forbid"}  # Required for Azure OpenAI structured output
 
-    hallucinated_rule: bool = Field(
-        default=False, description="Analyst invented a rule that doesn't exist"
-    )
-    hallucinated_fact: bool = Field(
-        default=False, description="Analyst invented facts not in the article"
-    )
-    misinterpreted_fact: bool = Field(
-        default=False, description="Analyst misunderstood facts in the article"
-    )
-    misapplied_rule: bool = Field(
-        default=False, description="Analyst applied a rule incorrectly"
-    )
-    logical_error: bool = Field(
-        default=False, description="Analyst made a logical error in reasoning"
-    )
-    abuse_of_discretion: bool = Field(
-        default=False, description="Analyst's discretion was unreasonable"
-    )
+    hallucinated_rule: bool = Field(default=False, description="Analyst invented a rule that doesn't exist")
+    hallucinated_fact: bool = Field(default=False, description="Analyst invented facts not in the article")
+    misinterpreted_fact: bool = Field(default=False, description="Analyst misunderstood facts in the article")
+    misapplied_rule: bool = Field(default=False, description="Analyst applied a rule incorrectly")
+    logical_error: bool = Field(default=False, description="Analyst made a logical error in reasoning")
+    abuse_of_discretion: bool = Field(default=False, description="Analyst's discretion was unreasonable")
     reasons: list[CriticalErrorEvidence] = Field(
         default_factory=list,
         description="Evidence array, only populated if errors found",
@@ -158,15 +142,9 @@ class GroundTruthAlignment(BaseModel):
     model_config = {"extra": "forbid"}  # Required for Azure OpenAI structured output
 
     key_point: str = Field(..., description="The ground truth key point being assessed")
-    key_point_type: KeyPointType = Field(
-        ..., description="Whether this point is prohibited, required, or optional"
-    )
-    key_point_mentioned: bool = Field(
-        ..., description="Whether the analyst mentioned this key point"
-    )
-    alignment: QualityRating = Field(
-        ..., description="Quality rating for alignment with this point"
-    )
+    key_point_type: KeyPointType = Field(..., description="Whether this point is prohibited, required, or optional")
+    key_point_mentioned: bool = Field(..., description="Whether the analyst mentioned this key point")
+    alignment: QualityRating = Field(..., description="Quality rating for alignment with this point")
 
 
 class QualScore(BaseModel):
@@ -184,18 +162,10 @@ class QualScore(BaseModel):
 
     model_config = {"extra": "forbid"}  # Required for Azure OpenAI structured output
 
-    critical_errors: CriticalErrors = Field(
-        ..., description="Binary flags and evidence for critical reasoning errors"
-    )
-    ground_truth_alignment: list[GroundTruthAlignment] = Field(
-        ..., description="Assessment of alignment with each ground truth key point"
-    )
-    confidence: Confidence = Field(
-        ..., description="Scorer's self-assessment of confidence"
-    )
-    summary: str = Field(
-        ..., description="1-2 sentence explanation of the overall assessment"
-    )
+    critical_errors: CriticalErrors = Field(..., description="Binary flags and evidence for critical reasoning errors")
+    ground_truth_alignment: list[GroundTruthAlignment] = Field(..., description="Assessment of alignment with each ground truth key point")
+    confidence: Confidence = Field(..., description="Scorer's self-assessment of confidence")
+    summary: str = Field(..., description="1-2 sentence explanation of the overall assessment")
 
 
 class QualResults(QualScore):
@@ -214,9 +184,7 @@ class QualResults(QualScore):
 
     """
 
-    assessed_agent_id: str = Field(
-        ..., description="The ID of the agent whose output was assessed."
-    )
+    assessed_agent_id: str = Field(..., description="The ID of the agent whose output was assessed.")
     assessed_call_id: str = Field(
         ...,
         description="A unique identifier for the specific answer/output being assessed.",
@@ -234,7 +202,7 @@ class LLMScorer(LLMAgent):
     triggers its own Language Model to perform an evaluation.
 
     The LLM is guided by a scoring-specific prompt template (configured via
-    `AgentConfig.parameters.prompt_template`) to produce a structured score
+    `AgentConfig.parameters.template`) to produce a structured score
     conforming to the `QualScore` Pydantic model. This structured score is then
     wrapped in a `QualResults` model, adding metadata about the assessed item,
     and included in the `ExecutionTrace` produced by this scorer.
@@ -244,7 +212,7 @@ class LLMScorer(LLMAgent):
 
     Key Configuration Parameters (from `AgentConfig.parameters`):
         - `model` (str): **Required**. The LLM to use for scoring.
-        - `prompt_template` (str): **Required**. Template guiding the LLM to score.
+        - `template` (str): **Required**. Template guiding the LLM to score.
           The output of this template should be parsable into `QualScore`.
 
     Attributes:
@@ -255,7 +223,12 @@ class LLMScorer(LLMAgent):
 
     def __init__(self, **kwargs):
         """Initializes the Scorer agent with its specific configuration and output model."""
-        # Pass output_model to super() so LLMCore is created with correct schema
+        # Fail explicitly if config tries to override output_model - Scorer requires QualScore
+        if "output_model" in kwargs and kwargs["output_model"] is not None:
+            raise ValueError(
+                f"Scorer agent requires output_model=QualScore. Cannot override with {kwargs['output_model']}. Remove 'output_model' from config."
+            )
+        kwargs.pop("output_model", None)  # Remove None values to avoid duplicate kwarg
         super().__init__(output_model=QualScore, **kwargs)
 
     @message_handler(match=lambda msg, ctx: isinstance(msg.outputs, JudgeReasons))
@@ -295,11 +268,7 @@ class LLMScorer(LLMAgent):
 
         """
         # Validate the incoming message type and content
-        if (
-            not isinstance(message, ExecutionTrace)
-            or not isinstance(message.outputs, JudgeReasons)
-            or not message.inputs
-        ):  # Ensure inputs exist
+        if not isinstance(message, ExecutionTrace) or not isinstance(message.outputs, JudgeReasons) or not message.inputs:  # Ensure inputs exist
             logger.debug(
                 "Scorer received message that is not a suitable ExecutionTrace with JudgeReasons and inputs. Skipping.",
                 agent_id=self.agent_id,

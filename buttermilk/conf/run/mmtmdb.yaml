@@ -1,27 +1,30 @@
 # @package _global_
 
 defaults:
-  - pipeline: mmtmdb
-  - /storage@pipeline.source: tmdbtitles
-  - /storage@pipeline.output: observations
+  - /storage@run.pipeline.source: tmdbtitles
+  - /storage@run.pipeline.output: observations
+
+project_name: mediamarkets
+job: observations_tmdb
+
 run:
   mode: pipeline
-  name: mediamarkets
-  job: observations_tmdb
+  limit: 10000
   pipeline:
     # Pipeline execution parameters
     pipeline_name: "tmdb_observations"
     description: "Enrich titles with TMDB streaming availability data"
     concurrency: 20
     max_records: null # null = process all
-    enable_record_cache: true
-    force_reprocess: false
+    enable_record_cache: false
+    force_reprocess: false 
     # Number of samples to collect from database (will be distributed across decades)
     sample_size: 10000 # ~700 records per decade
     # Source: BigQuery with decade-based sampling
     source:
       type: bigquery
-      # Defaults from /storage@pipeline.source: tmdbtitles will fill in project_id, dataset_id, etc.
+      # Defaults from /storage@run.pipeline.source: tmdbtitles will fill in project_id, dataset_id, etc.
+      limit: ${run.pipeline.sample_size}  # Passes sample_size to storage for {n} substitution
       custom_query: |
         WITH decade_samples AS (
           SELECT *,
@@ -44,7 +47,7 @@ run:
         # TMDB config (empty = use defaults)
       # Step 2: Upload results to output storage
       - _target_: buttermilk.utils.uploader.AsyncDataUploader
-        storage: ${pipeline.output}
+        storage: ${run.pipeline.output}
         buffer_size: 500
         flush_interval: 30
     # Output: Storage for processed observations (filled by defaults)

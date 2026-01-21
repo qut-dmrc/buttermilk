@@ -16,15 +16,14 @@ import json
 import time
 import uuid
 from abc import abstractmethod
-from typing import Any, AsyncGenerator
+from typing import Any, AsyncGenerator, Self
 
 import pydantic
 from autogen_core.models import AssistantMessage, SystemMessage, UserMessage
 from opentelemetry import trace
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 
 from buttermilk import logger
-from buttermilk._core.contract import ExecutionTrace
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.processor_core import ProcessorCore
 from buttermilk._core.types import BaseRecord
@@ -39,19 +38,13 @@ class ClassifierResult(BaseModel):
     """
 
     content: Any = Field(..., description="The classification output - structured object")
-    metadata: dict[str, Any] = Field(
-        default_factory=dict, description="API response, timing, model info"
-    )
+    metadata: dict[str, Any] = Field(default_factory=dict, description="API response, timing, model info")
     trace_id: str = Field(
         default_factory=lambda: str(uuid.uuid4()),
         description="Unique ID for correlation",
     )
-    template_metadata: dict[str, Any] = Field(
-        default_factory=dict, description="Template name, hash, etc"
-    )
-    rendered_prompt: str = Field(
-        default="", description="The rendered prompt/criteria sent to the classification API"
-    )
+    template_metadata: dict[str, Any] = Field(default_factory=dict, description="Template name, hash, etc")
+    rendered_prompt: str = Field(default="", description="The rendered prompt/criteria sent to the classification API")
     error: str | None = Field(None, description="Error message if processing failed")
 
 
@@ -85,48 +78,57 @@ class ClassifierCore(ProcessorCore):
         ```
     """
 
-    def __init__(
-        self,
-        *,
-        template: str,
-        output_model: type[pydantic.BaseModel] | str,
-        output_col: str = "output",
-        **kwargs: Any,
-    ) -> None:
-        """Initialize classifier with configuration.
+    model_config = {"extra": "forbid"}
 
-        Args:
-            template: Name of the prompt template to use.
-            output_model: Pydantic model class or string path for structured output.
-            output_col: Name of the output column in the record (default: "output").
-            **kwargs: Additional configuration (stored in self.parameters).
+    # Required fields
+    template: str
+    output_model: str | type[BaseModel]  # Will be converted to string path for serialization
 
-        Raises:
-            ValueError: If template or output_model is not specified or cannot be resolved.
-        """
-        # Initialize ProcessorCore with kwargs as parameters
-        super().__init__(**kwargs)
+    # Optional fields with defaults
+    # Optional fields with defaults
 
-        if not template:
+    # Private attrs for runtime objects
+    _resolved_output_model: type[BaseModel] | None = PrivateAttr(default=None)
+
+    @field_validator("template")
+    @classmethod
+    def _validate_template(cls, v: str) -> str:
+        """Validate that template is not empty."""
+        if not v:
             raise ValueError("'template' is required for ClassifierCore")
-        if not output_model:
+        return v
+
+    @field_validator("output_model")
+    @classmethod
+    def _validate_output_model(cls, v: str | type[BaseModel]) -> str | type[BaseModel]:
+        """Validate that output_model is not None."""
+        if v is None:
             raise ValueError("'output_model' is required for ClassifierCore")
+        return v
 
-        self.template = template
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_output_model(cls, data: Any) -> Any:
+        """Convert class to string path for storage."""
+        if isinstance(data, dict) and "output_model" in data:
+            output_model = data["output_model"]
+            # If it's a class, convert to string path for storage
+            if isinstance(output_model, type) and issubclass(output_model, BaseModel):
+                data["output_model"] = f"{output_model.__module__}.{output_model.__name__}"
+        return data
 
-        # Resolve output_model if it's a string path
-        if isinstance(output_model, str):
+    @model_validator(mode="after")
+    def _resolve_config(self) -> Self:
+        """Resolve output_model string to class."""
+        if isinstance(self.output_model, str) and self.output_model:
             try:
-                self.output_model = import_class_from_path(output_model)
-            except Exception as e:
-                raise ValueError(f"Failed to resolve output_model '{output_model}': {e}") from e
-        else:
-            self.output_model = output_model
-
-        self.output_col = output_col
-        # Note: self.parameters is set by ProcessorCore.__init__
-        # Add template to parameters for tracing
-        self.parameters["template"] = template
+                self._resolved_output_model = import_class_from_path(self.output_model, expected_base_class=pydantic.BaseModel)
+            except (ImportError, AttributeError, ValueError) as e:
+                raise ValueError(f"Failed to resolve output_model '{self.output_model}': {e}")
+        elif isinstance(self.output_model, type) and issubclass(self.output_model, BaseModel):
+            # If it's already a class (shouldn't happen after before validator, but handle it)
+            self._resolved_output_model = self.output_model
+        return self
 
     async def process(
         self,
@@ -145,7 +147,7 @@ class ClassifierCore(ProcessorCore):
             **kwargs: Additional arguments passed to template rendering
 
         Yields:
-            BaseRecord: Enriched record with classification output and metadata
+            Any: The classification output directly (typed object or dict)
         """
         tracer = trace.get_tracer("buttermilk.classifier")
         start_time = time.time()
@@ -158,9 +160,7 @@ class ClassifierCore(ProcessorCore):
             "record.id": record_id,
         }
 
-        with tracer.start_as_current_span(
-            f"classifier.{self.__class__.__name__}", attributes=span_attributes
-        ) as span:
+        with tracer.start_as_current_span(f"classifier.{self.__class__.__name__}", attributes=span_attributes) as span:
             try:
                 result = await self._classify_record(record, **kwargs)
 
@@ -180,16 +180,10 @@ class ClassifierCore(ProcessorCore):
                 if hasattr(output_content, "model_dump"):
                     output_content = output_content.model_dump()
 
-                # Enrich record
-                enriched_record = record.model_copy(
-                    update={
-                        self.output_col: output_content,
-                        "metadata": {
-                            **(record.metadata or {}),
-                            processor_stage: stage_metadata,
-                        },
-                    }
-                )
+                # Extract structured output
+                output_content = result.content
+                if hasattr(output_content, "model_dump"):
+                    output_content = output_content.model_dump()
 
                 span.set_attribute("processing.time_ms", processing_time_ms)
                 span.set_status(trace.Status(trace.StatusCode.OK))
@@ -202,82 +196,38 @@ class ClassifierCore(ProcessorCore):
                     AssistantMessage(content=response_content, source=self.__class__.__name__),
                 ]
 
-                # Build metadata: merge input metadata (from record) with output metadata
-                input_metadata = {}
-                if record is not None and hasattr(record, "metadata") and record.metadata:
-                    input_metadata = {"input": record.metadata}
-
-                execution_trace = ExecutionTrace(
-                    call_id=result.trace_id,
-                    agent_info={
-                        "component_name": self.__class__.__name__,
-                        "execution_type": "classification",
-                        "config": {"template": self.template, **self.parameters},
-                        "processor_stage": processor_stage,
-                    },
-                    # inputs = template variables only (record stored separately in record field)
-                    inputs=kwargs if kwargs else None,
-                    outputs=output_content,
-                    messages=trace_messages,
-                    parameters={"template": self.template, **self.parameters},
-                    # metadata merges: input metadata (under 'input' key) + stage metadata + duration
-                    metadata={
-                        **input_metadata,
-                        **stage_metadata,
-                        "duration_ms": processing_time_ms,
-                    },
-                    parent_call_id=parent_trace_id,
+                # Emit success trace using inherited helper
+                await self._emit_success_trace(
                     record=record,
+                    outputs=output_content,
+                    processor_stage=processor_stage,
+                    parent_trace_id=parent_trace_id,
+                    duration_ms=processing_time_ms,
+                    messages=trace_messages,
+                    inputs=kwargs if kwargs else None,
+                    extra_metadata=stage_metadata,
+                    execution_type="classification",
+                    trace_id=result.trace_id,
                 )
 
-                if self.trace_writer:
-                    try:
-                        await self.trace_writer.add(execution_trace)
-                    except Exception as e:
-                        logger.warning(f"Failed to emit classifier trace: {e}")
-
-                yield enriched_record
+                yield result.content
 
             except Exception as e:
-                # Build error metadata with input metadata if available
-                error_input_metadata = {}
-                if record is not None and hasattr(record, "metadata") and record.metadata:
-                    error_input_metadata = {"input": record.metadata}
-
-                # Write error trace
-                error_trace = ExecutionTrace(
-                    agent_info={
-                        "component_name": self.__class__.__name__,
-                        "execution_type": "classification",
-                        "config": {"template": self.template, **self.parameters},
-                        "processor_stage": processor_stage,
-                    },
-                    # inputs = template variables only (record stored separately)
-                    inputs=kwargs if kwargs else None,
-                    error={
-                        "event": str(e),
-                        "details": {"error_type": type(e).__name__},
-                    },
-                    metadata={
-                        **error_input_metadata,
-                        "duration_ms": int((time.time() - start_time) * 1000),
-                    },
-                    parent_call_id=parent_trace_id,
+                # Emit error trace using inherited helper
+                await self._emit_error_trace(
                     record=record,
+                    error=e,
+                    processor_stage=processor_stage,
+                    parent_trace_id=parent_trace_id,
+                    duration_ms=int((time.time() - start_time) * 1000),
+                    inputs=kwargs if kwargs else None,
+                    execution_type="classification",
                 )
-
-                if self.trace_writer:
-                    try:
-                        await self.trace_writer.add(error_trace)
-                    except Exception as te:
-                        logger.warning(f"Failed to emit classifier error trace: {te}")
 
                 span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                 raise ProcessingError(f"Classification failed {processor_stage} for record {record_id}: {e}") from e
 
-    async def _classify_record(
-        self, record: BaseRecord, **kwargs: Any
-    ) -> ClassifierResult:
+    async def _classify_record(self, record: BaseRecord, **kwargs: Any) -> ClassifierResult:
         """Internal method to classify a record.
 
         Args:
@@ -292,15 +242,13 @@ class ClassifierCore(ProcessorCore):
         inputs.update(kwargs)
 
         try:
+            # Merge inputs with parameters (parameters take precedence)
+            merged_vars = {**inputs, **self.parameters}
             rendered_text, unfilled_vars, template_hash = load_template(
                 template=self.template,
-                parameters=self.parameters,
-                untrusted_inputs=inputs,
+                template_vars=merged_vars,
             )
-            logger.debug(
-                f"Classifier rendered template '{self.template}', "
-                f"unfilled vars: {unfilled_vars}, hash: {template_hash}"
-            )
+            logger.debug(f"Classifier rendered template '{self.template}', unfilled vars: {unfilled_vars}, hash: {template_hash}")
         except Exception as e:
             raise ProcessingError(f"Template rendering failed: {e}") from e
 
@@ -313,12 +261,10 @@ class ClassifierCore(ProcessorCore):
 
         # Step 3: Map to schema
         try:
-            structured_output = self._map_to_schema(api_response, self.output_model)
+            structured_output = self._map_to_schema(api_response, self._resolved_output_model)
             logger.debug(f"Classifier mapped to schema: {type(structured_output).__name__}")
         except Exception as e:
-            raise ProcessingError(
-                f"Failed to map response to {self.output_model.__name__}: {e}"
-            ) from e
+            raise ProcessingError(f"Failed to map response to {self._resolved_output_model.__name__}: {e}") from e
 
         return ClassifierResult(
             content=structured_output,
@@ -349,9 +295,7 @@ class ClassifierCore(ProcessorCore):
         raise NotImplementedError("Subclasses must implement _classify()")
 
     @abstractmethod
-    def _map_to_schema(
-        self, response: dict[str, Any], schema: type[pydantic.BaseModel]
-    ) -> pydantic.BaseModel:
+    def _map_to_schema(self, response: dict[str, Any], schema: type[pydantic.BaseModel]) -> pydantic.BaseModel:
         """Map API response to Pydantic output schema.
 
         Subclasses MUST implement this to convert API response to schema.
@@ -390,36 +334,23 @@ class HuggingFaceClassifier(ClassifierCore):
         ```
     """
 
-    def __init__(self, *, model: str, **kwargs: Any) -> None:
-        """Initialize HuggingFaceClassifier.
+    # Required field for HuggingFaceClassifier
+    model: str
 
-        Args:
-            model: Name of the HuggingFace model to use.
-            **kwargs: Passed to ClassifierCore.
+    # Private attr for LLM wrapper
+    _llm_wrapper: Any = PrivateAttr(default=None)
 
-        Raises:
-            ValueError: If model is not found in LLM connections.
-        """
-        super().__init__(**kwargs)
-
-        if not model:
-            raise ValueError("'model' is required for HuggingFaceClassifier")
-
-        self.model = model
-        # Add model to parameters so it appears in trace as parameters.model (not agent_name)
-        self.parameters["model"] = model
-
-        # Get LLM wrapper from buttermilk connections
+    @model_validator(mode="after")
+    def _initialize_llm_wrapper(self) -> Self:
+        """Initialize LLM wrapper after validation."""
         from buttermilk import bm
 
         try:
             self._llm_wrapper = bm.llms.get_autogen_chat_client(self.model)
             logger.debug(f"HuggingFaceClassifier initialized with model: {self.model}")
         except AttributeError as e:
-            raise ValueError(
-                f"Model '{self.model}' not found in LLM connections. "
-                f"Available: {list(bm.llms.connections.keys())}"
-            ) from e
+            raise ValueError(f"Model '{self.model}' not found in LLM connections. Available: {list(bm.llms.connections.keys())}") from e
+        return self
 
     @staticmethod
     def _parse_template_messages(rendered_text: str) -> list[tuple[str, str]]:
@@ -474,14 +405,12 @@ class HuggingFaceClassifier(ClassifierCore):
             # Pass schema to wrapper - it will use structured output or function calling
             result = await self._llm_wrapper.create(
                 messages=messages,
-                schema=self.output_model,
+                schema=self._resolved_output_model,
             )
 
             # If wrapper returned a ModelOutput with parsed_object, use it directly
             if isinstance(result, ModelOutput) and result.parsed_object is not None:
-                logger.debug(
-                    f"HuggingFace returned parsed {type(result.parsed_object).__name__} via structured output"
-                )
+                logger.debug(f"HuggingFace returned parsed {type(result.parsed_object).__name__} via structured output")
                 return result.parsed_object
 
             # Fallback: parse raw content manually
@@ -502,9 +431,7 @@ class HuggingFaceClassifier(ClassifierCore):
             logger.error(f"HuggingFace classification failed: {e}")
             raise ProcessingError(f"HuggingFace classification failed: {e}") from e
 
-    def _map_to_schema(
-        self, response: dict[str, Any], schema: type[pydantic.BaseModel]
-    ) -> pydantic.BaseModel:
+    def _map_to_schema(self, response: dict[str, Any], schema: type[pydantic.BaseModel]) -> pydantic.BaseModel:
         """Map HuggingFace classification response to output schema."""
         schema_fields = schema.model_fields.keys()
 
@@ -546,9 +473,7 @@ class HuggingFaceClassifier(ClassifierCore):
             logger.error(f"Failed to map HuggingFace response to {schema.__name__}: {e}")
             raise
 
-    async def _classify_record(
-        self, record: BaseRecord, **kwargs: Any
-    ) -> ClassifierResult:
+    async def _classify_record(self, record: BaseRecord, **kwargs: Any) -> ClassifierResult:
         """Override to parse template into proper LLM messages.
 
         Parses template with role prefixes (system:, user:, assistant:) into
@@ -566,15 +491,13 @@ class HuggingFaceClassifier(ClassifierCore):
         inputs.update(kwargs)
 
         try:
+            # Merge inputs with parameters (parameters take precedence)
+            merged_vars = {**inputs, **self.parameters}
             rendered_text, unfilled_vars, template_hash = load_template(
                 template=self.template,
-                parameters=self.parameters,
-                untrusted_inputs=inputs,
+                template_vars=merged_vars,
             )
-            logger.debug(
-                f"HuggingFaceClassifier rendered template '{self.template}', "
-                f"unfilled vars: {unfilled_vars}, hash: {template_hash}"
-            )
+            logger.debug(f"HuggingFaceClassifier rendered template '{self.template}', unfilled vars: {unfilled_vars}, hash: {template_hash}")
         except Exception as e:
             raise ProcessingError(f"Template rendering failed: {e}") from e
 
@@ -603,24 +526,20 @@ class HuggingFaceClassifier(ClassifierCore):
             raise ProcessingError(f"HuggingFace API call failed: {e}") from e
 
         # Step 4: Use parsed result or map to schema
-        if isinstance(api_response, self.output_model):
+        if isinstance(api_response, self._resolved_output_model):
             # Wrapper already parsed and validated - use directly
             structured_output = api_response
             logger.debug(f"HuggingFaceClassifier using pre-parsed {type(structured_output).__name__}")
         else:
             # Fallback: manual mapping for raw dict responses
             try:
-                structured_output = self._map_to_schema(api_response, self.output_model)
+                structured_output = self._map_to_schema(api_response, self._resolved_output_model)
                 logger.debug(f"HuggingFaceClassifier mapped to schema: {type(structured_output).__name__}")
             except Exception as e:
-                raise ProcessingError(
-                    f"Failed to map response to {self.output_model.__name__}: {e}"
-                ) from e
+                raise ProcessingError(f"Failed to map response to {self._resolved_output_model.__name__}: {e}") from e
 
         # Store raw response for debugging (convert Pydantic to dict if needed)
-        raw_response = (
-            api_response.model_dump() if hasattr(api_response, "model_dump") else api_response
-        )
+        raw_response = api_response.model_dump() if hasattr(api_response, "model_dump") else api_response
 
         return ClassifierResult(
             content=structured_output,
@@ -660,14 +579,12 @@ class ZentropiClassifier(ClassifierCore):
         ```
     """
 
-    def __init__(self, **kwargs: Any) -> None:
-        """Initialize ZentropiClassifier with API credentials.
+    # Private attr for API client config
+    _client: dict[str, str] = PrivateAttr(default_factory=dict)
 
-        Raises:
-            ValueError: If ZENTROPI_API_KEY is not in environment.
-        """
-        super().__init__(**kwargs)
-
+    @model_validator(mode="after")
+    def _initialize_client(self) -> Self:
+        """Initialize Zentropi client with API credentials."""
         import os
 
         api_key = os.environ.get("ZENTROPI_API_KEY")
@@ -677,9 +594,8 @@ class ZentropiClassifier(ClassifierCore):
         base_url = os.environ.get("ZENTROPI_BASE_URL", "https://api.zentropi.ai/v1/label")
 
         self._client = {"api_key": api_key, "base_url": base_url}
-        # Add model to parameters for consistent trace format (parameters.model)
-        self.parameters["model"] = "zentropi"
         logger.debug(f"ZentropiClassifier initialized with base_url: {base_url}")
+        return self
 
     async def _classify(self, text: str, *, content: str) -> dict[str, Any]:
         """Call Zentropi API with criteria and content, with retry logic.
@@ -776,9 +692,7 @@ class ZentropiClassifier(ClassifierCore):
 
         return criteria
 
-    async def _classify_record(
-        self, record: BaseRecord, **kwargs: Any
-    ) -> ClassifierResult:
+    async def _classify_record(self, record: BaseRecord, **kwargs: Any) -> ClassifierResult:
         """Override to extract content separately for Zentropi API.
 
         Zentropi requires two separate fields:
@@ -812,15 +726,13 @@ class ZentropiClassifier(ClassifierCore):
         inputs["content"] = ""  # Don't include content in template render
 
         try:
+            # Merge inputs with parameters (parameters take precedence)
+            merged_vars = {**inputs, **self.parameters}
             rendered_text, unfilled_vars, template_hash = load_template(
                 template=self.template,
-                parameters=self.parameters,
-                untrusted_inputs=inputs,
+                template_vars=merged_vars,
             )
-            logger.debug(
-                f"ZentropiClassifier rendered template '{self.template}', "
-                f"unfilled vars: {unfilled_vars}, hash: {template_hash}"
-            )
+            logger.debug(f"ZentropiClassifier rendered template '{self.template}', unfilled vars: {unfilled_vars}, hash: {template_hash}")
         except Exception as e:
             raise ProcessingError(f"Template rendering failed: {e}") from e
 
@@ -836,12 +748,10 @@ class ZentropiClassifier(ClassifierCore):
 
         # Step 4: Map to schema
         try:
-            structured_output = self._map_to_schema(api_response, self.output_model)
+            structured_output = self._map_to_schema(api_response, self._resolved_output_model)
             logger.debug(f"ZentropiClassifier mapped to schema: {type(structured_output).__name__}")
         except Exception as e:
-            raise ProcessingError(
-                f"Failed to map response to {self.output_model.__name__}: {e}"
-            ) from e
+            raise ProcessingError(f"Failed to map response to {self._resolved_output_model.__name__}: {e}") from e
 
         return ClassifierResult(
             content=structured_output,
@@ -854,9 +764,7 @@ class ZentropiClassifier(ClassifierCore):
             rendered_prompt=criteria,
         )
 
-    def _map_to_schema(
-        self, response: dict[str, Any], schema: type[pydantic.BaseModel]
-    ) -> pydantic.BaseModel:
+    def _map_to_schema(self, response: dict[str, Any], schema: type[pydantic.BaseModel]) -> pydantic.BaseModel:
         """Map Zentropi API response to output schema.
 
         Zentropi returns:

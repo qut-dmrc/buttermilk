@@ -48,6 +48,7 @@ class ChatMessage(BaseModel):
         "differences",
         "judge_reasons",
         "start_flow",
+        "agent_output",  # Generic fallback for external BaseModel types
     ] = Field(..., description="Type of message")
     message_id: str = Field(default_factory=lambda: uuid())
     preview: str | None = Field(
@@ -231,6 +232,9 @@ class MessageService:
                 # Handle string messages (like StructuredLLMHost summaries) as chat messages
                 message_type = "chat_message"
                 preview = message[:PREVIEW_LENGTH]
+            elif isinstance(message, BaseModel):
+                # Fallback for any Pydantic model not explicitly handled (e.g., QualScore from external packages)
+                message_type = "agent_output"
             else:
                 return None
 
@@ -295,15 +299,6 @@ class MessageService:
                         inputs=data,
                     )
                     return run_request
-                case "pull_task":
-                    from buttermilk.api.job_queue import JobQueueClient
-
-                    task, ack_id = await JobQueueClient().pull_single_task()
-                    return task
-                case "pull_tox":
-                    from buttermilk.api.job_queue import JobQueueClient
-
-                    return await JobQueueClient().pull_tox_example()
                 case "system_prompt":
                     return SystemPromptMessage(**data)
                 case "user_response":

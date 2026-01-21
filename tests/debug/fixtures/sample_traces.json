@@ -1,0 +1,71 @@
+[
+  {
+    "timestamp": "2025-12-20T10:00:00+00:00",
+    "call_id": "trace-001",
+    "session_id": "session-test",
+    "session_info": {
+      "job": "batch",
+      "project_name": "test"
+    },
+    "agent_info": {
+      "component_name": "FETCH",
+      "role": "FETCH",
+      "execution_type": "agent"
+    },
+    "inputs": {
+      "record_id": "test-record-1"
+    },
+    "outputs": {
+      "content": "Test content fetched"
+    }
+  },
+  {
+    "timestamp": "2025-12-20T10:00:05+00:00",
+    "call_id": "trace-002",
+    "parent_call_id": "trace-001",
+    "session_id": "session-test",
+    "session_info": {
+      "job": "batch",
+      "project_name": "test"
+    },
+    "agent_info": {
+      "component_name": "JUDGE gemini tja",
+      "role": "JUDGE",
+      "execution_type": "agent"
+    },
+    "inputs": {
+      "record": {
+        "record_id": "test-record-1",
+        "content": "Test content"
+      }
+    },
+    "outputs": {
+      "conclusion": "Content complies with guidelines",
+      "prediction": "ALLOW"
+    }
+  },
+  {
+    "timestamp": "2025-12-20T10:00:10+00:00",
+    "call_id": "trace-003",
+    "parent_call_id": "trace-002",
+    "session_id": "session-test",
+    "session_info": {
+      "job": "batch",
+      "project_name": "test"
+    },
+    "agent_info": {
+      "component_name": "SCORER",
+      "role": "SCORER",
+      "execution_type": "agent"
+    },
+    "inputs": {
+      "trace_id": "trace-002"
+    },
+    "error": {
+      "event": "ScoringError",
+      "details": {
+        "message": "Missing required field: criteria"
+      }
+    }
+  }
+]

@@ -20,7 +20,7 @@ def flow_request_data():
     # Return raw dict for flow request data
     return {
         "flow": "test_minimal",
-        "model": "claude45haiku",
+        "model": "claude-haiku",
         "template": "judge",
         "template_vars": {"formatting": "json_rules", "criteria": "criteria_ordinary"},
         "text": "Sample text",

@@ -15,30 +15,38 @@ class TestProjectNameCapture:
     ):
         """Verify project name appears as span attribute."""
         # Arrange: Set up BM with specific project name
-        real_bm.session_info.project_name = "test_project_name"
+        # Note: span_with_session uses the global bm singleton, so we need to
+        # set the project name on the actual global bm instance
+        from buttermilk import bm
+        original_project_name = bm.session_info.project_name
+        bm.session_info.project_name = "test_project_name"
 
-        # Act: Create span with session context
-        with span_with_session(
-            session_id=real_bm.session_info.session_id,
-            name="test.operation",
-            attributes={"test.key": "test.value"},
-            kind="internal",
-        ):
-            pass
+        try:
+            # Act: Create span with session context
+            with span_with_session(
+                session_id=bm.session_info.session_id,
+                name="test.operation",
+                attributes={"test.key": "test.value"},
+                kind="internal",
+            ):
+                pass
 
-        # Assert: Project name captured in span
-        spans = get_recorded_spans()
-        assert len(spans) == 1, "Should create exactly one span"
+            # Assert: Project name captured in span
+            spans = get_recorded_spans()
+            assert len(spans) == 1, "Should create exactly one span"
 
-        span = spans[0]
-        # Span exists (ReadableSpan from exporter)
-        assert span is not None
+            span = spans[0]
+            # Span exists (ReadableSpan from exporter)
+            assert span is not None
 
-        # Verify attributes
-        assert "buttermilk.project.name" in span.attributes, (
-            "Project name attribute missing"
-        )
-        assert span.attributes["buttermilk.project.name"] == "test_project_name"
+            # Verify attributes
+            assert "buttermilk.project.name" in span.attributes, (
+                "Project name attribute missing"
+            )
+            assert span.attributes["buttermilk.project.name"] == "test_project_name"
+        finally:
+            # Restore original project name
+            bm.session_info.project_name = original_project_name
 
     def test_project_name_propagates_to_child_spans(
         self, real_bm, tracer_provider, get_recorded_spans
@@ -70,8 +78,12 @@ class TestProjectNameCapture:
     def test_project_name_fallback_when_bm_unavailable(
         self, tracer_provider, get_recorded_spans
     ):
-        """Verify graceful handling when BM not available."""
-        # Act: Create span without BM context (session_id but no BM)
+        """Verify graceful handling when BM not available.
+
+        When span_with_session is called with a session_id but BM is not available,
+        the project name should default to "unknown" as a graceful fallback.
+        """
+        # Act: Create span without BM context (session_id provided but BM not initialized)
         with span_with_session(
             session_id="test-session-123",
             name="test.operation",
@@ -82,11 +94,11 @@ class TestProjectNameCapture:
         spans = get_recorded_spans()
         assert len(spans) == 1
 
-        # Should either have "unknown" or omit the attribute
-        # (implementation decision - using "unknown" as fallback)
+        # When session_id is provided, project_name is always set
+        # Falls back to "unknown" when BM is not available
         project_name = spans[0].attributes.get("buttermilk.project.name")
-        assert project_name in ["unknown", None], (
-            f"Unexpected project name: {project_name}"
+        assert project_name == "unknown", (
+            f"Expected project name to be 'unknown' when BM not available, got: {project_name}"
         )
 
 

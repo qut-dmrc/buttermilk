@@ -33,7 +33,7 @@ defaults:
 
 flows:
   test_flow:
-    _target_: buttermilk.orchestrators.groupchat.GroupChatOrchestrator
+    _target_: buttermilk.orchestrators.groupchat.AutogenOrchestrator
     name: test_flow
     agents: {}
     parameters: {}
@@ -75,33 +75,18 @@ flows: ${flows}
         # Call the config snapshot method
         flow_runner._save_config_snapshot(run_request)
 
-        # Verify snapshot files were created
+        # Verify snapshot file was created
+        # Implementation saves to /tmp/runs/{session_id}/{session_id}_config.json
         expected_session_dir = Path(f"/tmp/runs/{run_request.session_id}")
-        config_snapshot_dir = expected_session_dir / "config_snapshot"
+        config_file = expected_session_dir / f"{run_request.session_id}_config.json"
 
-        assert config_snapshot_dir.exists(), (
-            "Config snapshot directory should be created"
+        assert expected_session_dir.exists(), (
+            "Session directory should be created"
         )
+        assert config_file.exists(), "Config file should be created"
 
-        # Check latest.json was created
-        latest_file = config_snapshot_dir / "latest.json"
-        assert latest_file.exists(), "latest.json should be created"
-
-        # Verify latest.json content
-        with open(latest_file) as f:
-            latest_data = json.load(f)
-
-        assert latest_data["flow_name"] == "test_flow"
-        assert latest_data["session_id"] == "test_session_123"
-        assert "config_file" in latest_data
-        assert "timestamp" in latest_data
-
-        # Check flow-specific config file was created
-        config_file_path = Path(latest_data["config_file"])
-        assert config_file_path.exists(), "Flow-specific config file should be created"
-
-        # Verify flow config content
-        with open(config_file_path) as f:
+        # Verify config file content
+        with open(config_file) as f:
             config_data = json.load(f)
 
         assert config_data["flow_name"] == "test_flow"
@@ -111,6 +96,7 @@ flows: ${flows}
         assert config_data["run_parameters"] == {"param1": "value1"}
         assert config_data["run_inputs"] == {"input1": "data1"}
         assert "flow_config" in config_data
+        assert "timestamp" in config_data
 
     @pytest.mark.skip(
         reason="Requires comprehensive mocking of Hydra config loading - needs refactoring"
@@ -198,10 +184,11 @@ flows: ${flows}
         # session_id will be auto-generated if not provided
         assert run_request.session_id is not None
         expected_session_dir = Path(f"/tmp/runs/{run_request.session_id}")
-        config_snapshot_dir = expected_session_dir / "config_snapshot"
+        config_file = expected_session_dir / f"{run_request.session_id}_config.json"
 
-        # Should create directory even with minimal request
-        assert config_snapshot_dir.exists()
+        # Should create directory and config file even with minimal request
+        assert expected_session_dir.exists()
+        assert config_file.exists()
 
 
 @pytest.mark.integration

@@ -1,0 +1,122 @@
+{
+  "description": "Fixture data representing agent outputs that scorer would receive. Contains FETCH and JUDGE agent outputs with realistic TJA dataset data.",
+  "FETCH": {
+    "call_id": "0198314c-3fb2-7cca-8313-fetch-001",
+    "agent_id": "FETCH-ABC123",
+    "agent_info": {
+      "agent_id": "FETCH-ABC123",
+      "role": "FETCH"
+    },
+    "outputs": {
+      "record_id": "transgender_paralympian_skynewsau",
+      "dataset_name": "tja",
+      "split_type": "train",
+      "content": "Italian sprinter Valentina Petrillo is set to become the first openly transgender athlete to compete at the Paralympic Games. The visually impaired competitor, 50, was selected to represent the European country in the women's 200 and 400 metre races the Games in Paris from August 28 to September 8. Petrillo last year won bronze medals in both events at the World Paris athletics championships in France's capital. She was diagnosed with Stargardt's syndrome at 14 years old, a degenerative disease which causes progressive vision loss.",
+      "metadata": {
+        "title": "Visually impaired sprinter Valentina Petrillo of Italy set to become first transgender athlete to compete at Paralympic Games",
+        "date": "2024-08-16T00:00:00",
+        "outlet": "Sky News Australia",
+        "fetch_source_id": "transgender_paralympian_skynewsau",
+        "fetch_timestamp_utc": "2025-07-22T08:42:13.302192+00:00"
+      },
+      "ground_truth": {
+        "reasons": [
+          "This article discusses the inclusion of Valentina Petrillo as the first transgender athlete to compete in the Paralympic games",
+          "The article uses correct pronouns throughout and gender identity is relevant to the story",
+          "The article acknowledges opposing views that are held in regards to the inclusion of transgender people in sports",
+          "Perspectives that both support and criticise Petrillo's inclusion in the Paralympics are included",
+          "The article does not contribute to false or harmful narratives about transgender people and overall aligns with best practice guidelines on reporting on transgender people and issues."
+        ],
+        "violating": false
+      }
+    },
+    "messages": [],
+    "session_id": "43a39cde-2c9d-4e6a-963c-e654fb4fd06e",
+    "is_error": false,
+    "error": []
+  },
+  "JUDGE": {
+    "call_id": "0198314c-3fb2-7cca-8313-4bafbc56c49a",
+    "agent_id": "JUDGE-CbQUWY",
+    "agent_info": {
+      "agent_id": "JUDGE-CbQUWY",
+      "role": "JUDGE"
+    },
+    "outputs": {
+      "conclusion": "The provided text largely adheres to the Human Rights Campaign (HRC) Foundation's guidelines for covering transgender people. It uses appropriate terminology, accurately describes the process of transition, respects the individual's name and pronouns, and focuses on the athlete as a whole person.",
+      "reasons": [
+        "The text correctly uses 'transgender athlete' and 'transgender woman,' aligning with HRC's preferred usage.",
+        "It accurately describes Valentina Petrillo's transition as a process, stating she 'began living as a woman in 2018 before commencing hormone therapy in 2019.'",
+        "The article consistently uses Valentina Petrillo's chosen name and 'she/her' pronouns, demonstrating respect for her identity and avoiding deadnaming.",
+        "It refrains from contrasting transgender women with 'real' or 'biological' women.",
+        "The story focuses on Valentina Petrillo as a complete person, highlighting her achievements as a sprinter, her visual impairment, and her personal feelings."
+      ],
+      "prediction": false,
+      "uncertainty": "low"
+    },
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are an expert media analyst evaluating news coverage of transgender people against the Trans Journalists Association Stylebook guidelines."
+      },
+      {
+        "role": "user",
+        "content": "Please evaluate the following article for compliance with the TJA Stylebook guidelines:\n\nItalian sprinter Valentina Petrillo is set to become the first openly transgender athlete to compete at the Paralympic Games..."
+      }
+    ],
+    "session_id": "43a39cde-2c9d-4e6a-963c-e654fb4fd06e",
+    "inputs": {
+      "inputs": {"query": "hrc", "prompt": "hrc"},
+      "parameters": {
+        "human_in_loop": false,
+        "criteria": "hrc",
+        "template": "judge",
+        "model": "gemini25flash"
+      },
+      "record": {
+        "record_id": "transgender_paralympian_skynewsau",
+        "content": "Italian sprinter Valentina Petrillo is set to become the first openly transgender athlete to compete at the Paralympic Games...",
+        "ground_truth": {
+          "reasons": [
+            "This article discusses the inclusion of Valentina Petrillo as the first transgender athlete to compete in the Paralympic games",
+            "The article uses correct pronouns throughout and gender identity is relevant to the story"
+          ],
+          "violating": false
+        }
+      },
+      "is_error": false
+    },
+    "is_error": false,
+    "error": []
+  },
+  "SYNTHESISER": {
+    "call_id": "0198314c-3fb2-7cca-8313-synth-001",
+    "agent_id": "SYNTHESISER-XYZ789",
+    "agent_info": {
+      "agent_id": "SYNTHESISER-XYZ789",
+      "role": "SYNTHESISER"
+    },
+    "outputs": {
+      "conclusion": "After synthesizing multiple judge evaluations, the article is found to be compliant with transgender coverage guidelines.",
+      "reasons": [
+        "All judges agreed on appropriate pronoun usage",
+        "Coverage focuses on the athlete's achievements rather than sensationalizing gender identity"
+      ],
+      "prediction": false,
+      "uncertainty": "low"
+    },
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are a synthesizer agent that combines multiple judge evaluations into a final assessment."
+      },
+      {
+        "role": "user",
+        "content": "Please synthesize the following judge evaluations..."
+      }
+    ],
+    "session_id": "43a39cde-2c9d-4e6a-963c-e654fb4fd06e",
+    "is_error": false,
+    "error": []
+  }
+}

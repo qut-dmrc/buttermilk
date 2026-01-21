@@ -100,7 +100,7 @@ def test_template_detects_missing_required_variable(
         # Render template WITHOUT the required variable
         # (minimal_inputs contains everything EXCEPT the var we're testing)
         rendered, unfilled_vars, _ = load_template(
-            template=template_name, parameters={}, untrusted_inputs=minimal_inputs
+            template=template_name, template_vars=minimal_inputs
         )
 
         # CRITICAL ASSERTION: Missing variable MUST be detected
@@ -124,8 +124,7 @@ def test_score_template_expected_variable_comprehensive():
     # Provide all required variables EXCEPT 'expected'
     rendered, unfilled_vars, _ = load_template(
         template="score",
-        parameters={},
-        untrusted_inputs={
+        template_vars={
             "answers": [
                 {
                     "agent_id": "judge_1",
@@ -162,8 +161,7 @@ def test_template_with_all_variables_provided_has_no_unfilled():
     # Provide ALL required variables for score template
     rendered, unfilled_vars, _ = load_template(
         template="score",
-        parameters={},
-        untrusted_inputs={
+        template_vars={
             "answers": [{"agent_id": "test", "result": "test result"}],
             "criteria": ["test criterion"],
             "expected": {"reasons": ["reason 1", "reason 2"], "violating": False},
@@ -237,7 +235,7 @@ def test_template_with_wrong_type_fails_or_warns(
     # First, verify the CORRECT type works
     correct_inputs = {**other_inputs, var_name: correct_value}
     rendered_correct, unfilled_correct, _ = load_template(
-        template=template_name, parameters={}, untrusted_inputs=correct_inputs
+        template=template_name, template_vars=correct_inputs
     )
 
     # Baseline: correct type should work without issues
@@ -249,7 +247,7 @@ def test_template_with_wrong_type_fails_or_warns(
     # Now test with WRONG type (dict as string or string as dict)
     wrong_inputs = {**other_inputs, var_name: wrong_value}
     rendered_wrong, unfilled_wrong, _ = load_template(
-        template=template_name, parameters={}, untrusted_inputs=wrong_inputs
+        template=template_name, template_vars=wrong_inputs
     )
 
     # Check how template handles wrong type
@@ -342,7 +340,7 @@ TEMPLATE_PASSING_TEST_CASES = [
         {
             "answers": [
                 {
-                    "agent_id": "synth_claude45sonnet",
+                    "agent_id": "synth_claude-sonnet",
                     "result": "This is a synthesized answer",
                     "answer_id": "call_456",
                 }
@@ -353,7 +351,7 @@ TEMPLATE_PASSING_TEST_CASES = [
             "source": "Original question text that needs answering",
         },
         [
-            "synth_claude45sonnet",
+            "synth_claude-sonnet",
             "This is a synthesized answer",
             "key points X, Y, and Z",
         ],
@@ -365,7 +363,7 @@ TEMPLATE_PASSING_TEST_CASES = [
             "criteria": ["No violence", "No hate speech", "Be constructive"],
             "record": "This is a test comment that should be judged against the criteria.",
         },
-        ["No violence", "No hate speech", "This is a test comment"],
+        ["No violence", "No hate speech"],  # Don't expect 'record' content (placeholder variable)
     ),
     # ra template - with all required variables
     (
@@ -375,7 +373,7 @@ TEMPLATE_PASSING_TEST_CASES = [
             "context": "The text discusses climate change and its impact on coastal communities.",
             "record": "Climate change causes sea level rise affecting millions living on coasts.",
         },
-        ["What are the main themes", "climate change", "coastal communities"],
+        ["What are the main themes"],  # Don't expect 'context'/'record' content (placeholder variables)
     ),
     # synthesise template - with all required variables
     (
@@ -404,7 +402,7 @@ TEMPLATE_PASSING_TEST_CASES = [
             "criteria": ["Accuracy", "Completeness", "Clarity"],
             "record": "This is the content to analyze against the criteria.",
         },
-        ["Accuracy", "Completeness", "This is the content to analyze"],
+        ["Accuracy", "Completeness"],  # Don't expect 'record' content (placeholder variable)
     ),
     # rag template - with all required variables
     (
@@ -413,7 +411,7 @@ TEMPLATE_PASSING_TEST_CASES = [
             "prompt": "Explain the concept of photosynthesis",
             "context": "Photosynthesis is the process by which plants convert light into chemical energy. It occurs in chloroplasts and requires water, CO2, and sunlight.",
         },
-        ["photosynthesis", "chloroplasts", "sunlight"],
+        ["photosynthesis"],  # Don't expect 'context' content (placeholder variable)
     ),
 ]
 
@@ -437,13 +435,16 @@ def test_template_renders_successfully_with_all_parameters(
     """
     # Render template with complete inputs
     rendered, unfilled_vars, _ = load_template(
-        template=template_name, parameters={}, untrusted_inputs=complete_inputs
+        template=template_name, template_vars=complete_inputs
     )
 
     # Assertion 1: No unfilled variables (all were provided)
-    # Note: Some templates may have optional variables that could appear in unfilled_vars,
-    # but NONE of the required variables (those in complete_inputs) should be unfilled
+    # Note: 'record' and 'context' are placeholder variables handled by make_messages(),
+    # not Jinja2 variables. They are intentionally kept unfilled by load_template().
+    PLACEHOLDER_VARS = {"record", "context"}
     for var_name in complete_inputs.keys():
+        if var_name in PLACEHOLDER_VARS:
+            continue  # Placeholder vars are expected to be in unfilled_vars
         assert var_name not in unfilled_vars, (
             f"Template '{template_name}' reported '{var_name}' as unfilled even though it was provided!\n"
             f"Provided: {type(complete_inputs[var_name]).__name__} = {str(complete_inputs[var_name])[:100]}\n"
@@ -605,7 +606,7 @@ def test_template_detects_empty_values_as_unfilled(
 
     # Render template with empty value
     rendered, unfilled_vars, _ = load_template(
-        template=template_name, parameters={}, untrusted_inputs=all_inputs
+        template=template_name, template_vars=all_inputs
     )
 
     # CRITICAL ASSERTION: Empty value should be detected as unfilled
@@ -621,16 +622,16 @@ def test_template_detects_empty_values_as_unfilled(
 
 @pytest.mark.anyio
 async def test_llmcore_raises_error_on_empty_expected():
-    """Test that LLMCore raises ProcessingError when expected is empty (fail-fast).
+    """Test that LLMCore raises FatalError when expected is empty (fail-fast).
 
     This validates the complete fail-fast chain:
     1. clean_empty_values removes empty 'expected' from inputs
     2. load_template marks 'expected' as unfilled
-    3. LLMCore raises ProcessingError for unfilled required parameters
+    3. load_template raises FatalError for unfilled required parameters (when fail_on_unfilled_parameters=True)
 
     This is the real-world usage pattern - not just load_template in isolation.
     """
-    from buttermilk._core.exceptions import ProcessingError
+    from buttermilk._core.exceptions import FatalError, ProcessingError
     from buttermilk._core.llm_core import LLMCore
 
     # Create LLMCore with score template
@@ -641,41 +642,45 @@ async def test_llmcore_raises_error_on_empty_expected():
     )
 
     # Test Case 1: Empty string expected
-    with pytest.raises(ProcessingError, match="unfilled parameters.*expected"):
+    with pytest.raises(FatalError, match="unfilled parameters.*expected"):
         await llm_core._fill_template(
-            inputs={
+            {
                 "answers": [{"agent_id": "test", "result": "test"}],
-                "criteria": ["test"],
+                "instructions": "Test instructions",
+                "source": "Test source content",
                 "expected": "",  # Empty string - should be cleaned and marked unfilled
             }
         )
 
     # Test Case 2: Empty dict expected
-    with pytest.raises(ProcessingError, match="unfilled parameters.*expected"):
+    with pytest.raises(FatalError, match="unfilled parameters.*expected"):
         await llm_core._fill_template(
-            inputs={
+            {
                 "answers": [{"agent_id": "test", "result": "test"}],
-                "criteria": ["test"],
+                "instructions": "Test instructions",
+                "source": "Test source content",
                 "expected": {},  # Empty dict - should be cleaned and marked unfilled
             }
         )
 
     # Test Case 3: Dict with empty reasons list
-    with pytest.raises(ProcessingError, match="unfilled parameters.*expected"):
+    with pytest.raises(FatalError, match="unfilled parameters.*expected"):
         await llm_core._fill_template(
-            inputs={
+            {
                 "answers": [{"agent_id": "test", "result": "test"}],
-                "criteria": ["test"],
+                "instructions": "Test instructions",
+                "source": "Test source content",
                 "expected": {"reasons": []},  # Empty nested value - should be cleaned
             }
         )
 
     # Test Case 4: Whitespace-only expected
-    with pytest.raises(ProcessingError, match="unfilled parameters.*expected"):
+    with pytest.raises(FatalError, match="unfilled parameters.*expected"):
         await llm_core._fill_template(
-            inputs={
+            {
                 "answers": [{"agent_id": "test", "result": "test"}],
-                "criteria": ["test"],
+                "instructions": "Test instructions",
+                "source": "Test source content",
                 "expected": "   ",  # Whitespace only - should be cleaned
             }
         )
@@ -700,7 +705,7 @@ def test_score_template_comprehensive_passing():
                 "answer_id": "call_abc123",
             },
             {
-                "agent_id": "judge_claude45sonnet",
+                "agent_id": "judge_claude-sonnet",
                 "result": {
                     "prediction": "yes",
                     "reasoning": "Clear violation of community standards regarding respectful discourse.",
@@ -728,7 +733,7 @@ def test_score_template_comprehensive_passing():
 
     # Render template
     rendered, unfilled_vars, _ = load_template(
-        template="score", parameters={}, untrusted_inputs=complete_inputs
+        template="score", template_vars=complete_inputs
     )
 
     # Validate rendering success
@@ -744,7 +749,7 @@ def test_score_template_comprehensive_passing():
 
     # Validate output contains all key elements
     assert "judge_gemini25pro" in rendered, "Should contain first judge's agent_id"
-    assert "judge_claude45sonnet" in rendered, "Should contain second judge's agent_id"
+    assert "judge_claude-sonnet" in rendered, "Should contain second judge's agent_id"
     assert "hate speech" in rendered.lower(), (
         "Should reference hate speech from reasoning"
     )

@@ -8,5 +8,5 @@ owl:
     template: owl
   variants:
     model: ${llms.general}
-  inputs:
-    context: context
+  # Context mapping: conversation history from flow state
+  context: context

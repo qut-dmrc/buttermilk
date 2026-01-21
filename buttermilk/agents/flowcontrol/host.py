@@ -25,6 +25,7 @@ from buttermilk._core.contract import (
     UserResponseMessage,
 )
 from buttermilk._core.exceptions import FatalError, ProcessingError
+from buttermilk._core.types import BaseRecord
 
 TRUNCATE_LEN = 1000  # characters per history message
 
@@ -56,6 +57,9 @@ class HostAgent(Agent):
         self._failed_tasks_by_agent: defaultdict[str, int] = defaultdict(int)
         self._total_tasks_in_step: int = 0
         self._conductor_task: asyncio.Task | None = None
+
+        # Record propagation - stores latest record from agent outputs
+        self._current_record: BaseRecord | None = None
 
         # Agent registry attributes
         self._agent_registry: dict[str, AgentAnnouncement] = {}
@@ -208,7 +212,7 @@ class HostAgent(Agent):
                 )
                 self._tasks_condition.notify_all()
             else:
-                logger.warning(
+                logger.debug(
                     "Host received TaskComplete from agent but it was not in pending tasks.",
                     agent_id=agent_id_to_update,
                     role=message.role,
@@ -253,13 +257,27 @@ class HostAgent(Agent):
         message: ExecutionTrace,
         ctx: MessageContext,
     ) -> None:
-        """Handle ExecutionTrace messages and add to conversation history."""
+        """Handle ExecutionTrace messages and add to conversation history.
+
+        Also captures any BaseRecord in message.outputs for propagation to subsequent steps.
+        This ensures records flow through the pipeline (e.g., FETCH -> JUDGE -> SYNTHESISER).
+        """
         content_to_log = str(message.content)[:TRUNCATE_LEN]
         await self._model_context.add_message(
             AssistantMessage(
                 content=content_to_log, source=ctx.sender.key if ctx.sender else ""
             ),
         )
+
+        # Capture record output for propagation to next steps
+        if message.outputs is not None and isinstance(message.outputs, BaseRecord):
+            self._current_record = message.outputs
+            logger.debug(
+                "Host captured record from agent trace for propagation",
+                agent_name=self.agent_name,
+                record_id=self._current_record.record_id,
+                source_agent=ctx.sender.key if ctx.sender else "unknown",
+            )
 
     @message_handler
     async def handle_manager_message(
@@ -591,6 +609,10 @@ class HostAgent(Agent):
     async def _sequence(self) -> AsyncGenerator[StepRequest, None]:
         """Generate a sequence of steps to execute.
 
+        Uses captured record from previous agent outputs to propagate data through the flow.
+        The first step uses the record from initial inputs, subsequent steps use the
+        most recent record captured from agent ExecutionTrace outputs.
+
         Yields:
             StepRequest: The next step request in the sequence.
 
@@ -601,12 +623,13 @@ class HostAgent(Agent):
 
             # Separate record from inputs dict - record should be in the record field, not inputs
             step_inputs = self._host_initial_inputs.copy()
-            record = step_inputs.pop("record", None)
+            initial_record = step_inputs.pop("record", None)
+
+            # Use the most recent captured record from agent outputs, or fall back to initial record
+            record = self._current_record or initial_record
 
             # Reconstruct record if needed
             if record:
-                from buttermilk._core.types import BaseRecord
-
                 # If it's a list, take the last item (most recent)
                 if isinstance(record, list):
                     record = record[-1] if record else None
@@ -637,7 +660,7 @@ class HostAgent(Agent):
 
         """
         try:
-            logger.info(
+            logger.debug(
                 "Host starting flow execution",
                 agent_name=self.agent_name,
                 num_participants=len(self._participants),
@@ -676,7 +699,7 @@ class HostAgent(Agent):
 
             # Initialize generator now that participants are known
             self._step_generator = self._sequence()
-            logger.info(
+            logger.debug(
                 "Host participants initialized",
                 participants=list(self._participants.keys()),
             )
@@ -685,7 +708,7 @@ class HostAgent(Agent):
             early_stop_reason = ""
 
             async for next_step in self._step_generator:
-                logger.info(
+                logger.debug(
                     f"Host processing step {next_step.role}",
                     agent_name=self.agent_name,
                     step_role=next_step.role,
@@ -708,7 +731,7 @@ class HostAgent(Agent):
                 # Skip this check for END steps since they don't generate tasks
                 if next_step.role != END:
                     if not await self.wait_check_current_step_completions():
-                        logger.info(
+                        logger.debug(
                             "Step completion check failed - stopping flow",
                             agent_name=self.agent_name,
                         )
@@ -719,7 +742,7 @@ class HostAgent(Agent):
                         break
 
             # --- Sequence finished ---
-            logger.info("Host flow execution finished.", agent_name=self.agent_name)
+            logger.debug("Host flow execution finished.", agent_name=self.agent_name)
 
             # Send END message if we stopped early
             if flow_stopped_early:
@@ -729,6 +752,16 @@ class HostAgent(Agent):
                     reason=early_stop_reason,
                 )
                 await self._publish(StepRequest(role=END, content=early_stop_reason))
+                # Signal flow failure to pipeline via TaskProcessingComplete
+                await self._publish(
+                    TaskProcessingComplete(
+                        agent_id=self.agent_id,
+                        role=self.role,
+                        is_error=True,
+                        error=early_stop_reason,
+                    ),
+                    topic_id=self._topic_id,
+                )
 
             # Send final progress update before any cleanup begins
             final_progress_message = FlowProgressUpdate(
@@ -785,7 +818,7 @@ class HostAgent(Agent):
                     await self._progress_reporter_task  # Await cancellation
                 except asyncio.CancelledError:
                     pass  # Expected
-        logger.info("Host shutdown complete.", agent_name=self.agent_name)
+        logger.debug("Host shutdown complete.", agent_name=self.agent_name)
 
     async def wait_check_current_step_completions(self) -> bool:
         """Wait for tasks from the current step to complete and check for errors."""

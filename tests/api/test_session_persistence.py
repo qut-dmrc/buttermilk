@@ -51,47 +51,45 @@ class TestSessionStorageService:
         self.storage_service.save_message(session_id, message)
 
         # Verify file was created
-        session_file = self.temp_storage_dir / f"{session_id}.json"
+        session_file = self.temp_storage_dir / f"{session_id}.jsonl"
         assert session_file.exists()
 
-        # Verify content
+        # Verify content - JSONL format
         with open(session_file) as f:
-            data = json.load(f)
-            assert data["session_id"] == session_id
-            assert len(data["messages"]) == 1
-            assert data["messages"][0]["message_id"] == "msg-001"
-            assert data["messages"][0]["type"] == "record"
+            lines = f.readlines()
+            assert len(lines) == 1
+            entry = json.loads(lines[0])
+            assert entry["_type"] == "message"
+            assert entry["message_id"] == "msg-001"
+            assert entry["type"] == "record"
+            assert "_timestamp" in entry
 
     def test_get_session_messages(self):
         """Test retrieving messages from session storage."""
         session_id = "test-session-456"
 
-        # Create a session file with test data
-        session_data = {
-            "session_id": session_id,
-            "created_at": "2024-01-01T10:00:00Z",
-            "last_updated": "2024-01-01T10:30:00Z",
-            "messages": [
-                {
-                    "type": "record",
-                    "message_id": "msg-001",
-                    "preview": "First message",
-                    "outputs": {"content": "Hello"},
-                    "timestamp": "2024-01-01T10:05:00Z",
-                },
-                {
-                    "type": "record",
-                    "message_id": "msg-002",
-                    "preview": "Second message",
-                    "outputs": {"content": "World"},
-                    "timestamp": "2024-01-01T10:10:00Z",
-                },
-            ],
-        }
-
-        session_file = self.temp_storage_dir / f"{session_id}.json"
+        # Create a session file with test data in JSONL format
+        session_file = self.temp_storage_dir / f"{session_id}.jsonl"
         with open(session_file, "w") as f:
-            json.dump(session_data, f)
+            # Write two message entries
+            msg1 = {
+                "_type": "message",
+                "_timestamp": "2024-01-01T10:05:00Z",
+                "type": "record",
+                "message_id": "msg-001",
+                "preview": "First message",
+                "outputs": {"content": "Hello"},
+            }
+            msg2 = {
+                "_type": "message",
+                "_timestamp": "2024-01-01T10:10:00Z",
+                "type": "record",
+                "message_id": "msg-002",
+                "preview": "Second message",
+                "outputs": {"content": "World"},
+            }
+            f.write(json.dumps(msg1) + "\n")
+            f.write(json.dumps(msg2) + "\n")
 
         # Retrieve messages
         messages = self.storage_service.get_session_messages(session_id)
@@ -107,9 +105,12 @@ class TestSessionStorageService:
         # Session doesn't exist yet
         assert not self.storage_service.session_exists(session_id)
 
-        # Create session file
-        session_file = self.temp_storage_dir / f"{session_id}.json"
-        session_file.write_text(json.dumps({"session_id": session_id, "messages": []}))
+        # Create session file in JSONL format
+        session_file = self.temp_storage_dir / f"{session_id}.jsonl"
+        session_file.write_text(
+            json.dumps({"_type": "session_init", "_timestamp": "2024-01-01T10:00:00Z"})
+            + "\n"
+        )
 
         # Now it should exist
         assert self.storage_service.session_exists(session_id)
@@ -154,7 +155,19 @@ class TestSessionStorageService:
         )
         self.storage_service.save_message(session_id, msg2)
 
-        # Verify both messages are in the file
+        # Verify file has 2 lines (JSONL append)
+        session_file = self.temp_storage_dir / f"{session_id}.jsonl"
+        with open(session_file) as f:
+            lines = f.readlines()
+            assert len(lines) == 2
+            entry1 = json.loads(lines[0])
+            entry2 = json.loads(lines[1])
+            assert entry1["_type"] == "message"
+            assert entry1["message_id"] == "msg-001"
+            assert entry2["_type"] == "message"
+            assert entry2["message_id"] == "msg-002"
+
+        # Verify both messages are retrieved
         messages = self.storage_service.get_session_messages(session_id)
         assert len(messages) == 2
         assert messages[0].message_id == "msg-001"
@@ -164,15 +177,15 @@ class TestSessionStorageService:
         """Test graceful handling of corrupted session files."""
         session_id = "corrupted-session"
 
-        # Create a corrupted file
-        session_file = self.temp_storage_dir / f"{session_id}.json"
-        session_file.write_text("{ invalid json }")
+        # Create a corrupted file with invalid JSON on a line
+        session_file = self.temp_storage_dir / f"{session_id}.jsonl"
+        session_file.write_text("{ invalid json }\n")
 
-        # Should return empty list and log warning
+        # Should return empty list and log warning (corrupted line is skipped)
         messages = self.storage_service.get_session_messages(session_id)
         assert messages == []
 
-        # Should still be able to save new messages (overwrite corrupted file)
+        # Should still be able to save new messages (append to file)
         msg = ChatMessage(
             type="record",
             message_id="msg-recovery",
@@ -181,7 +194,7 @@ class TestSessionStorageService:
         )
         self.storage_service.save_message(session_id, msg)
 
-        # Verify we can now read the session
+        # Verify we can now read the session (corrupted line skipped, valid message read)
         messages = self.storage_service.get_session_messages(session_id)
         assert len(messages) == 1
         assert messages[0].message_id == "msg-recovery"
@@ -306,16 +319,44 @@ class TestSessionStorageHelperMethods:
         """Test _get_or_create_session_data loads existing session data."""
         session_id = "existing-session-456"
 
-        # Create existing session data
-        session_file = self.temp_storage_dir / f"{session_id}.json"
-        existing_data = {
-            "session_id": session_id,
-            "flow_status": "running",
-            "messages": [{"test": "message"}],
-            "created_at": "2023-01-01T00:00:00",
-        }
+        # Create existing session data in JSONL format
+        session_file = self.temp_storage_dir / f"{session_id}.jsonl"
         with open(session_file, "w") as f:
-            json.dump(existing_data, f)
+            # Write parameter update entry
+            f.write(
+                json.dumps(
+                    {
+                        "_type": "parameter_update",
+                        "_timestamp": "2023-01-01T00:00:00",
+                        "parameters": {"test": "param"},
+                    }
+                )
+                + "\n"
+            )
+            # Write status update entry
+            f.write(
+                json.dumps(
+                    {
+                        "_type": "status_update",
+                        "_timestamp": "2023-01-01T00:05:00",
+                        "status": "running",
+                    }
+                )
+                + "\n"
+            )
+            # Write message entry
+            f.write(
+                json.dumps(
+                    {
+                        "_type": "message",
+                        "_timestamp": "2023-01-01T00:10:00",
+                        "type": "record",
+                        "message_id": "test-msg",
+                        "preview": "test",
+                    }
+                )
+                + "\n"
+            )
 
         # Should load existing data
         session_data = self.storage_service._get_or_create_session_data(session_id)
@@ -323,17 +364,17 @@ class TestSessionStorageHelperMethods:
         assert session_data["session_id"] == session_id
         assert session_data["flow_status"] == "running"
         assert len(session_data["messages"]) == 1
-        assert session_data["messages"][0]["test"] == "message"
+        assert session_data["messages"][0]["message_id"] == "test-msg"
 
     def test_get_or_create_session_data_corrupted_file(self):
         """Test _get_or_create_session_data handles corrupted files."""
         session_id = "corrupted-session-789"
 
-        # Create corrupted file
-        session_file = self.temp_storage_dir / f"{session_id}.json"
-        session_file.write_text("{ invalid json ")
+        # Create corrupted file with invalid JSON on a line
+        session_file = self.temp_storage_dir / f"{session_id}.jsonl"
+        session_file.write_text("{ invalid json \n")
 
-        # Should create new session data for corrupted file
+        # Should skip corrupted line and return session data with no messages
         session_data = self.storage_service._get_or_create_session_data(session_id)
 
         assert session_data["session_id"] == session_id
@@ -391,7 +432,7 @@ class TestSessionGCSArchival:
         # Verify BM save was called with correct parameters
         real_bm.save.assert_called_once()
         call_args = real_bm.save.call_args
-        assert "sessions/session_test-session_archived.json" in call_args[1]["basename"]
+        assert call_args[1]["basename"] == f"session-{session_id}"
 
     def test_finalize_session(self, real_bm):
         """Test session finalization with completion metadata."""
@@ -532,7 +573,7 @@ class TestConfigurableSessionsDirectory:
         service.save_message(session_id, message)
 
         # Verify file was created in configured directory
-        session_file = temp_storage_dir / f"{session_id}.json"
+        session_file = temp_storage_dir / f"{session_id}.jsonl"
         assert session_file.exists()
 
         # Verify we can retrieve the message

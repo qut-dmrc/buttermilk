@@ -14,6 +14,7 @@ import pytest
 from pydantic import BaseModel, Field
 
 from buttermilk._core.hashing import compute_processor_config_hash
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.record_cache import RecordCache
 from buttermilk._core.types import BaseRecord
 from buttermilk.pipeline import PipelineOrchestrator
@@ -28,11 +29,11 @@ class MockProcessor(BaseModel):
     temperature: float = Field(default=0.7, description="Temperature")
 
     async def process(
-        self, record: BaseRecord, *, processor_stage: str, **kwargs
+        self, context: ProcessingContext
     ) -> AsyncGenerator[BaseRecord, None]:
         """Process record by adding a field based on config."""
         # Add a field that depends on processor config
-        updated = record.model_copy(
+        updated = context.record.model_copy(
             update={"output": f"Processed with {self.model} at {self.temperature}"}
         )
         yield updated
@@ -289,7 +290,7 @@ class TestCacheInvalidationIntegration:
         record = BaseRecord(record_id="test_003", content="test content")
 
         # Simulate LLM with model parameter
-        processor1 = MockProcessor(model="claude45sonnet", template="default")
+        processor1 = MockProcessor(model="claude-sonnet", template="default")
         hash1 = compute_processor_config_hash(processor1.model_dump())
 
         async def source1():

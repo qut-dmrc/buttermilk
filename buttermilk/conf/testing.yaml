@@ -1,7 +1,5 @@
 defaults:
-  - llms: debug
-  - flows:
-      - trans
+  - llms: lite
   - _self_
 project_name: buttermilk
 job: testing
@@ -50,12 +48,6 @@ infrastructure:
         _target_: buttermilk._core.cloud_config.LoggingServiceConfig
         enabled: true
         verbose: true
-      pubsub:
-        _target_: buttermilk._core.cloud_config.PubSubServiceConfig
-        jobs_topic: jobs
-        jobs_subscription: jobs-sub
-        status_topic: flow
-        status_subscription: flow-sub
       vertex:
         enabled: true
   # Unified tracing configuration (weave/wandb removed - use Google Cloud Trace)

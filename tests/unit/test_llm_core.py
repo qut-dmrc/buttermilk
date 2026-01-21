@@ -6,7 +6,7 @@ import pytest
 from autogen_core.models import RequestUsage, SystemMessage, UserMessage
 from pydantic import BaseModel
 
-from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk._core.llm_core import LLMCore, LLMResult
 from buttermilk._core.llms import CreateResult, ModelOutput
 from buttermilk._core.types import BaseRecord
@@ -39,7 +39,7 @@ class TestLLMCore:
 
         assert core.model == "gpt-4"
         assert core.template == "test_template"
-        assert core._fail_on_unfilled_parameters is False
+        assert core.fail_on_unfilled_parameters is False
         assert core.output_model is None
         assert core.tools == []
 
@@ -65,7 +65,9 @@ class TestLLMCore:
             output_model=OutputModelForTesting,
         )
 
-        assert core.output_model == OutputModelForTesting
+        # output_model is stored as string path, resolved class is in _resolved_output_model
+        assert core.output_model == "test_llm_core.OutputModelForTesting"
+        assert core._resolved_output_model == OutputModelForTesting
 
     @pytest.mark.anyio
     async def test_fill_template_basic(self):
@@ -98,7 +100,7 @@ class TestLLMCore:
         )
 
         # Only provide required_var, leave missing_var undefined
-        with pytest.raises(ProcessingError, match="unfilled parameters"):
+        with pytest.raises(FatalError, match="unfilled parameters"):
             await core._fill_template(
                 template_vars={"required_var": "value", "context": [], "records": []}
             )
@@ -297,10 +299,14 @@ class TestLLMCore:
 
     @pytest.mark.anyio
     async def test_template_metadata_preserved_in_result(self):
-        """Test that template metadata (including template_hash) is preserved in LLMResult.
+        """Test that template metadata is preserved in LLMResult.
 
         Regression test for bug where template_hash was calculated but then
         overwritten when metadata dict was replaced instead of updated.
+
+        Template info is stored at:
+        - metadata["template"]["template_name"] and ["unfilled_vars"]
+        - metadata["hashes"]["template_hash"]
 
         This test uses REAL template loading to verify the actual bug is fixed.
         """
@@ -326,15 +332,74 @@ class TestLLMCore:
                 "Template metadata should be present in result"
             )
             assert result.metadata["template"]["template_name"] == "test/simple"
-            assert "template_hash" in result.metadata["template"]
-            assert (
-                result.metadata["template"]["template_hash"] != ""
-            )  # Should have a hash
             assert result.metadata["template"]["unfilled_vars"] == []
+
+            # Template hash is consolidated in metadata.hashes
+            assert "hashes" in result.metadata, (
+                "Hashes should be present in result metadata"
+            )
+            assert "template_hash" in result.metadata["hashes"]
+            assert result.metadata["hashes"]["template_hash"] != ""  # Should have a hash
 
             # Also verify other metadata is still there (wasn't overwritten)
             assert result.metadata["model"] == "gpt-4"
             assert result.metadata["finish_reason"] == "stop"
+
+    @pytest.mark.anyio
+    async def test_record_metadata_preserved_in_result(self):
+        """Test that record metadata (including record_hash) is stored in LLMResult.
+
+        Similar to template_metadata test, this verifies that when a record is
+        provided, its metadata is preserved:
+        - record_id at result.metadata["record_id"]
+        - record_hash at result.metadata["hashes"]["record_hash"]
+        """
+        core = LLMCore(model="gpt-4", template="test/simple")
+
+        # Create a test record
+        record = BaseRecord(
+            record_id="test_record_123",
+            dataset_name="test_dataset",
+            split_type="train",
+        )
+
+        # Mock ONLY the external LLM boundary
+        mock_bm = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.call_chat.return_value = CreateResult(
+            content="LLM response",
+            finish_reason="stop",
+            usage=RequestUsage(prompt_tokens=25, completion_tokens=15),
+            cached=False,
+        )
+        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+
+        with patch("buttermilk._core.llm_core.bm", mock_bm):
+            result = await core.process_with_llm(
+                template_vars={"var": "test input"}, record=record
+            )
+
+            # Verify record metadata is present in result.metadata
+            assert "record_id" in result.metadata, (
+                "Record ID should be present in result metadata"
+            )
+            assert result.metadata["record_id"] == "test_record_123"
+
+            # Verify hashes are consolidated in metadata.hashes
+            assert "hashes" in result.metadata, (
+                "Hashes should be present in result metadata"
+            )
+            assert "record_hash" in result.metadata["hashes"]
+            assert result.metadata["hashes"]["record_hash"] != ""  # Should have a hash
+            assert len(result.metadata["hashes"]["record_hash"]) == 64  # SHA256 length
+
+            # Verify the hash matches the record's computed hash
+            assert result.metadata["hashes"]["record_hash"] == record.record_hash
+
+            # Also verify other metadata is still there (wasn't overwritten)
+            assert result.metadata["model"] == "gpt-4"
+            assert result.metadata["finish_reason"] == "stop"
+            assert "template" in result.metadata
 
     @pytest.mark.anyio
     async def test_undefined_string_literal_vs_truly_undefined(self):
@@ -360,7 +425,7 @@ class TestLLMCore:
         )
 
         # Test 1: Truly undefined variable MUST fail
-        with pytest.raises(ProcessingError, match="unfilled parameters"):
+        with pytest.raises(FatalError, match="unfilled parameters"):
             await core._fill_template(
                 template_vars={"required_var": "value", "context": [], "records": []}
                 # missing_var is NOT provided - truly undefined
@@ -407,14 +472,14 @@ class TestLLMCore:
         )
 
         # Should fail because default is strict mode
-        with pytest.raises(ProcessingError, match="unfilled parameters"):
+        with pytest.raises(FatalError, match="unfilled parameters"):
             await core._fill_template(
                 template_vars={"required_var": "value", "context": [], "records": []}
                 # missing_var is NOT provided
             )
 
-        # Verify the internal flag is set to True
-        assert core._fail_on_unfilled_parameters is True
+        # Verify the flag is set to True
+        assert core.fail_on_unfilled_parameters is True
 
     def test_parameters_includes_model_and_template(self):
         """Test that self.parameters captures model and template for trace writing.
@@ -448,44 +513,34 @@ class TestLLMCore:
         assert core.parameters["max_tokens"] == 1000
 
     @pytest.mark.anyio
-    async def test_process_with_llm_derives_vars_from_record(self):
-        """Test that template_vars=None derives variables from record.
+    async def test_template_vars_not_derived_from_record(self):
+        """Test that template_vars=None does NOT derive variables from record.
 
-        When template_vars is None, process_with_llm should use record.model_dump()
-        to derive template variables. This is the processor mode pattern.
+        When template_vars is None, it should become an empty dict {}.
+        Record content is handled separately via {{record}} placeholder in
+        make_messages, not by deriving template vars from record.model_dump().
         """
-        core = LLMCore(model="gpt-4", template="test/simple")
+        core = LLMCore(model="gpt-4", template="test/record_placeholder")
 
-        # Create a record with a field that matches the template variable
         record = BaseRecord(
             record_id="test",
             dataset_name="test_dataset",
             split_type="train",
-            var="test value from record",  # This should be used as template var
+            content="Test content from record",
         )
 
-        # Mock ONLY the external LLM boundary
-        mock_bm = MagicMock()
-        mock_client = AsyncMock()
-        mock_client.call_chat.return_value = CreateResult(
-            content="Success",
-            finish_reason="stop",
-            usage=RequestUsage(prompt_tokens=10, completion_tokens=10),
-            cached=False,
+        # Test that _fill_template works with empty template_vars and a record
+        # The {{record}} placeholder should NOT cause an unfilled parameter error
+        messages = await core._fill_template(
+            template_vars={},  # Empty - record handled via placeholder, not template vars
+            record=record,
         )
-        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
 
-        with patch("buttermilk._core.llm_core.bm", mock_bm):
-            result = await core.process_with_llm(
-                template_vars=None,  # Should derive from record
-                record=record,
-            )
-
-            assert result.content == "Success"
-            # Verify record fields were used as template vars
-            assert result.resolved_inputs["template_vars"]["var"] == "test value from record"
-            assert result.resolved_inputs["template_vars"]["record_id"] == "test"
-            assert result.resolved_inputs["template_vars"]["dataset_name"] == "test_dataset"
+        # Verify messages were generated (record was inserted at placeholder)
+        assert len(messages) > 0
+        # The record content should appear in one of the messages
+        record_found = any("Test content from record" in str(m.content) for m in messages)
+        assert record_found, "Record content should be inserted at {{record}} placeholder"
 
     @pytest.mark.anyio
     async def test_process_with_llm_none_vars_none_record(self):
@@ -517,6 +572,7 @@ class TestLLMCore:
                 record=None,
             )
 
-            # Should have empty template_vars
-            assert result.resolved_inputs["template_vars"] == {}
-            assert result.resolved_inputs["record"] is None
+            # Should have only context key (no template vars, no record)
+            # With flat structure, empty template_vars means only "context" key is present
+            assert "context" in result.resolved_inputs
+            assert "record" not in result.resolved_inputs  # record is only in trace.record

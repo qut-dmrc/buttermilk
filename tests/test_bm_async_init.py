@@ -13,6 +13,8 @@ import pytest
 
 from buttermilk._core.bm_init import BM, SessionInfo, create_session_bm_async
 
+pytestmark = pytest.mark.slow
+
 
 class TestBMAsyncInitialization:
     """Test BM async initialization behavior."""

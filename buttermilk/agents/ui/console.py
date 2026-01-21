@@ -550,14 +550,11 @@ class CLIUserAgent(UIAgent):
                 # Skip all TaskProcessingStarted messages to reduce noise
                 return None
 
-            elif isinstance(message, TaskProcessingComplete) or (
-                hasattr(message, "task_index") and hasattr(message, "is_error")
-            ):
+            elif isinstance(message, TaskProcessingComplete):
                 # Hide task progress messages to reduce noise - only show errors
                 is_error = getattr(message, "is_error", False)
                 if is_error:
-                    task_index = getattr(message, "task_index", "?")
-                    result.append(f"TASK {task_index} FAILED", style="red")
+                    result.append("TASK FAILED", style="red")
                     content_added = True
                 else:
                     # Skip successful task completion messages

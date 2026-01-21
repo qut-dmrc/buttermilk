@@ -80,7 +80,7 @@ class AsyncDataUploader:
 
     async def process(
         self,
-        record: BaseRecord,
+        context,
         processor_stage: str = "save",
         **kwargs,  # Accept extra args like parent_trace_id from pipeline
     ):
@@ -89,13 +89,15 @@ class AsyncDataUploader:
         Adds the record to the upload queue and passes it through unchanged.
 
         Args:
-            record: BaseRecord to upload
+            context: ProcessingContext containing the record, or BaseRecord directly
             processor_stage: Name of this processing stage (unused)
             **kwargs: Additional arguments from pipeline (ignored)
 
         Yields:
             The same record (pass-through behavior)
         """
+        # Extract record from ProcessingContext if needed
+        record = context.record if hasattr(context, 'record') else context
         await self.add(record)
         yield record  # Pass through unchanged
 
@@ -270,6 +272,7 @@ class AsyncDataUploader:
                 # Use timestamped storage if configured
                 target_storage = self._create_timestamped_storage()
                 target_storage.save(self.buffer)
+                self.buffer = []  # Clear buffer to prevent double-flush by worker
             except Exception as e:
                 logger.error(
                     f"Error during final sync flush: {e}. Falling back to emergency save."

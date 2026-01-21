@@ -19,27 +19,25 @@ import datetime
 import os
 import platform
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import psutil
 import shortuuid
 from pydantic import BaseModel, Field, PrivateAttr
 
-from buttermilk._core.cloud import CloudManager
 from buttermilk._core.cloud_config import CloudProvider
 from buttermilk._core.config import LoggerConfig, Tracing
-from buttermilk._core.constants import (
-    CONFIG_CACHE_FILENAME,
-    MODELS_CFG_KEY,
-    SHARED_CREDENTIALS_KEY,
-    cache,
-    get_base_cache_dir,
-)
-from buttermilk._core.keys import SecretsManager
-from buttermilk._core.llms import LLMs
+from buttermilk._core.constants import CONFIG_CACHE_FILENAME, MODELS_CFG_KEY, SHARED_CREDENTIALS_KEY, cache, get_base_cache_dir
 from buttermilk._core.log import logger, setup_console_logging, setup_file_logging
-from buttermilk._core.query import QueryRunner
 from buttermilk._core.storage_config import BaseStorageConfig
+
+# Lazy imports for heavy dependencies (google.cloud.*, litellm)
+# These are only imported when their properties are first accessed
+if TYPE_CHECKING:
+    from buttermilk._core.cloud import CloudManager
+    from buttermilk._core.keys import SecretsManager
+    from buttermilk._core.llms import LLMs
+    from buttermilk._core.query import QueryRunner
 from buttermilk.utils.utils import load_json_flexi
 
 # Global variable to store the execution context ID
@@ -68,7 +66,7 @@ def _make_execution_context_id() -> str:
     context_time = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%MZ")
 
     execution_context_id = (
-        f"exec-{context_time}-{shortuuid.uuid()[:4]}-{node_name}-{username}"
+        f"exec-{context_time}-{shortuuid.uuid()[:8]}-{node_name}-{username}"
     )
     _global_execution_context_id = execution_context_id
     return execution_context_id
@@ -115,13 +113,29 @@ class ExecutionContext(BaseModel):
         default_factory=dict, description="Shared dataset configurations."
     )
     default_llm_wrapper: str = Field(
-        default="autogen",
+        default="litellm",
         description="Default LLM wrapper type (autogen or litellm). Passed to LLMs instance.",
     )
     llm_model_parameters: dict[str, Any] = Field(
         default_factory=dict,
         description="Per-model parameter overrides from YAML config. Passed to LLMs instance.",
     )
+
+    @property
+    def slug(self) -> str:
+        """Extract 8-char slug from execution_context_id.
+
+        The execution_context_id format is: exec-{timestamp}-{slug}-{node}-{user}
+        This extracts the {slug} portion for use in topic IDs and path construction.
+
+        Returns:
+            str: The 8-character slug portion of the execution_context_id.
+        """
+        # Format: exec-20241224T1430Z-cge7b5Fi-hostname-user
+        # Split by '-' and get the 3rd component (index 2)
+        parts = self.execution_context_id.split("-")
+        # Parts: ['exec', '20241224T1430Z', 'cge7b5Fi', 'hostname', 'user']
+        return parts[2] if len(parts) >= 3 else self.execution_context_id[:8]
 
     # Private attributes for lazy-loaded infrastructure
     _cloud_manager: CloudManager | None = PrivateAttr(default=None)
@@ -288,9 +302,10 @@ class ExecutionContext(BaseModel):
             return self.project_name
 
     @property
-    def cloud_manager(self) -> CloudManager:
+    def cloud_manager(self) -> "CloudManager":
         """Provides access to the CloudManager instance."""
         if self._cloud_manager is None:
+            from buttermilk._core.cloud import CloudManager
             self._cloud_manager = CloudManager(clouds=self.clouds)
             self._ensure_cloud_authentication()
         return self._cloud_manager
@@ -321,7 +336,7 @@ class ExecutionContext(BaseModel):
         return None
 
     @property
-    def secret_manager(self) -> SecretsManager:
+    def secret_manager(self) -> "SecretsManager":
         """Provides access to the SecretsManager instance."""
         if self._secret_manager is None:
             # Use service-aware cloud provider pattern
@@ -340,9 +355,10 @@ class ExecutionContext(BaseModel):
         return self._secret_manager
 
     @property
-    def llms(self) -> LLMs:
+    def llms(self) -> "LLMs":
         """Provides access to the LLMs manager instance."""
         if self._llms_instance is None:
+            from buttermilk._core.llms import LLMs
             connections_data: dict[str, Any] | None = None
             # Use centralized cache directory
             cache_dir = get_base_cache_dir() / cache.MODELS
@@ -427,9 +443,10 @@ class ExecutionContext(BaseModel):
         cache_path.write_text(json.dumps(connections_data), encoding="utf-8")
 
     @property
-    def query_runner(self) -> QueryRunner:
+    def query_runner(self) -> "QueryRunner":
         """Provides access to the QueryRunner instance."""
         if self._query_runner is None:
+            from buttermilk._core.query import QueryRunner
             self._query_runner = QueryRunner(bq_client=self.bq)
         return self._query_runner
 
@@ -706,8 +723,8 @@ def get_or_create_execution_context(**kwargs) -> ExecutionContext:
 
 async def from_config_async(
     infrastructure,
+    default_llm_wrapper: str,
     project_name: str | None = None,
-    default_llm_wrapper: str = "autogen",
     llms_config: dict[str, Any] | None = None,
 ):
     """Create ExecutionContext from typed infrastructure config.
@@ -718,7 +735,7 @@ async def from_config_async(
     Args:
         infrastructure: Typed InfrastructureConfig from ButtermilkConfig
         project_name: Optional project name
-        default_llm_wrapper: Default LLM wrapper type (autogen or litellm). Defaults to "autogen" for backward compatibility.
+        default_llm_wrapper: Default LLM wrapper type (autogen or litellm).
         llms_config: Optional root-level llms config dict (for extracting model_parameters when llms is at config root instead of infrastructure.llms)
 
     Returns:
@@ -756,11 +773,11 @@ async def from_config_async(
     if llms_config is not None and isinstance(llms_config, dict):
         llms_dict = llms_config
     # Priority 2: Check infrastructure.llms (new structure)
-    elif hasattr(infrastructure, 'llms') and isinstance(infrastructure.llms, dict) and infrastructure.llms:
+    elif hasattr(infrastructure, "llms") and isinstance(infrastructure.llms, dict) and infrastructure.llms:
         llms_dict = infrastructure.llms
 
     if llms_dict:
-        llm_model_parameters = llms_dict.get('model_parameters', {})
+        llm_model_parameters = llms_dict.get("model_parameters", {})
 
     # Extract components from typed config
     context = await get_or_create_execution_context_async(
@@ -817,6 +834,7 @@ async def create_session_from_context_async(
         batch_id=session.batch_id,
         platform=session.platform,
         template_paths=session.template_paths,
+        save_dir_base=getattr(session, "save_dir_base", None),
         cloud_manager=execution_context.cloud_manager
         if execution_context.clouds
         else None,

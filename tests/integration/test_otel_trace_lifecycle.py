@@ -20,9 +20,11 @@ import pytest
 from buttermilk import logger
 from buttermilk.runner.flowrunner import FlowRunner, RunRequest
 
+pytestmark = pytest.mark.slow
+
 
 @pytest.fixture(scope="function")
-def bm_function():
+def bm_function(real_bm):
     """Create a fresh Buttermilk instance for each test (function-scoped).
 
     Use this fixture when tests need to control session_id independently.
@@ -31,9 +33,7 @@ def bm_function():
 
     Returns a real BM instance from testing.yaml configuration.
     """
-    from buttermilk import init
-
-    return init(config_name="testing")
+    return real_bm
 
 
 @pytest.fixture
@@ -47,11 +47,7 @@ async def real_flow_runner_instance(real_bm):
     Uses session-scoped real_bm fixture for performance.
     """
     # Get real flows from configuration
-    flows = (
-        real_bm.cfg.run.flows
-        if hasattr(real_bm.cfg, "run") and hasattr(real_bm.cfg.run, "flows")
-        else {}
-    )
+    flows = real_bm.cfg.run.flows if hasattr(real_bm.cfg, "run") and hasattr(real_bm.cfg.run, "flows") else {}
 
     runner = FlowRunner(bm=real_bm, flows=flows, mode="test")
 
@@ -76,11 +72,7 @@ async def flow_runner_function(bm_function):
     real_flow_runner_instance (session-scoped) for better performance.
     """
     # Get real flows from configuration
-    flows = (
-        bm_function.cfg.run.flows
-        if hasattr(bm_function.cfg, "run") and hasattr(bm_function.cfg.run, "flows")
-        else {}
-    )
+    flows = bm_function.cfg.run.flows if hasattr(bm_function.cfg, "run") and hasattr(bm_function.cfg.run, "flows") else {}
 
     runner = FlowRunner(bm=bm_function, flows=flows, mode="test")
 
@@ -155,9 +147,7 @@ async def test_batch_runs_create_independent_traces(real_flow_runner_instance, c
         f"This indicates flows may be sharing traces instead of being independent."
     )
 
-    logger.info(
-        f"✅ Found {len(trace_ids)} unique trace_ids, confirming independent traces"
-    )
+    logger.info(f"✅ Found {len(trace_ids)} unique trace_ids, confirming independent traces")
     logger.info(f"Trace IDs: {trace_ids}")
 
 
@@ -189,11 +179,7 @@ async def test_session_id_consistency(bm_function, caplog):
     test_session_id = bm_function.session_info.session_id
 
     # Create FlowRunner with this BM
-    flows = (
-        bm_function.cfg.run.flows
-        if hasattr(bm_function.cfg, "run") and hasattr(bm_function.cfg.run, "flows")
-        else {}
-    )
+    flows = bm_function.cfg.run.flows if hasattr(bm_function.cfg, "run") and hasattr(bm_function.cfg.run, "flows") else {}
     runner = FlowRunner(bm=bm_function, flows=flows, mode="test")
 
     request = RunRequest(
@@ -232,9 +218,7 @@ async def test_session_id_consistency(bm_function, caplog):
 
     # All session_ids found in logs should match the requested session_id
     # (ignoring any session_ids from previous tests or unrelated logs)
-    assert test_session_id in session_ids, (
-        f"Expected session_id '{test_session_id}' not found in logs. Found session_ids: {session_ids}"
-    )
+    assert test_session_id in session_ids, f"Expected session_id '{test_session_id}' not found in logs. Found session_ids: {session_ids}"
 
     # Note: We may find other session_ids from previous tests or setup,
     # so we just verify our test_session_id is present and used
@@ -261,11 +245,7 @@ async def test_session_id_mismatch_raises_error(bm_function):
     NOTE: Uses function-scoped BM fixture to get fresh instance.
     """
     # ARRANGE: Create FlowRunner with BM
-    flows = (
-        bm_function.cfg.run.flows
-        if hasattr(bm_function.cfg, "run") and hasattr(bm_function.cfg.run, "flows")
-        else {}
-    )
+    flows = bm_function.cfg.run.flows if hasattr(bm_function.cfg, "run") and hasattr(bm_function.cfg.run, "flows") else {}
     runner = FlowRunner(bm=bm_function, flows=flows, mode="test")
 
     # Get the BM's current session_id
@@ -286,15 +266,11 @@ async def test_session_id_mismatch_raises_error(bm_function):
 
     # ASSERT: Flow completed without error
     # No exception raised means session ID mismatch is correctly allowed
-    logger.info(
-        "✅ Session ID mismatch correctly allowed (jobs independent of worker sessions)"
-    )
+    logger.info("✅ Session ID mismatch correctly allowed (jobs independent of worker sessions)")
 
 
 @pytest.mark.anyio
-async def test_trace_attributes_include_session_metadata(
-    real_flow_runner_instance, caplog
-):
+async def test_trace_attributes_include_session_metadata(real_flow_runner_instance, caplog):
     """Verify session metadata is captured in trace attributes.
 
     Beyond just session_id, traces should include:

@@ -552,6 +552,7 @@ class TestFileStorageIntegration:
             **{
                 "type": "file",
                 "path": temp_file.name,
+                "randomize": False,  # Preserve order for testing
                 "columns": {
                     "content": "fulltext",
                     "metadata": {"title": "title", "summary": "description"},

@@ -1,17 +1,13 @@
-host: gemini25flash
+host: gemini-flash-lite
 cheap:
-  - sonnet
-  - gemini25flash
-  - gpt5nano
+  - claude-haiku
+  - gemini-flash-lite
 general:
-  - gemini25flash
-  - gpt5mini
-  - sonnet
+  - gemini-flash-lite
+  - claude-haiku
 judgers:
-  - sonnet
-  - gemini25flash
-  - gpt5mini
+  - claude-haiku
+  - gemini-flash-lite
 synthesisers:
-  - gemini25flash
-  - gpt5mini
-  - sonnet
+  - gemini-flash-lite
+  - claude-haiku

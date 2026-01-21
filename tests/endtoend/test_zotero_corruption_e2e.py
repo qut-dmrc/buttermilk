@@ -15,8 +15,8 @@ pytest.importorskip("pyzotero", reason="pyzotero is optional (install with: uv s
 
 from buttermilk.libs.zotero import ZoteroDownloadProcessor, ZoteroSource
 
-# Mark all tests in this file as endtoend and anyio
-pytestmark = [pytest.mark.endtoend, pytest.mark.anyio]
+# Mark all tests in this file as integration and anyio
+pytestmark = [pytest.mark.integration, pytest.mark.anyio]
 
 
 async def test_corruption_quality_gate_on_real_zotero_records(real_bm):

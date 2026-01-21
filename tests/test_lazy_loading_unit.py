@@ -179,17 +179,33 @@ class TestLLMManagerLazyLoading:
         # Should store connections
         assert llms.connections == test_connections
 
-    def test_llm_client_lazy_initialization(self):
-        """Test that LLM clients are not created until first use."""
-        from buttermilk._core.llms import LLMs
 
-        test_connections = {"gemini": {"api_key": "test_key", "model": "gemini-pro"}}
+class TestLLMManagerLazyLoadingReal:
+    """Test LLM manager lazy loading with real behavior (no mocks)."""
 
-        with patch("google.generativeai.configure") as mock_configure:
-            LLMs(connections=test_connections)
+    def test_llm_client_lazy_initialization_real(self, real_bm):
+        """Test lazy loading using real behavior, no mocks.
 
-            # Configuration should not happen during LLMs creation
-            mock_configure.assert_not_called()
+        Verifies acceptance criterion: LLM clients are not instantiated
+        until first access, and are cached after access.
+        """
+        from buttermilk._core.llms import CHEAP_CHAT_MODELS
+
+        llms = real_bm.llms
+        model_name = CHEAP_CHAT_MODELS[0]
+
+        # VERIFY: Cache empty before access
+        assert model_name not in llms.cached_clients
+
+        # ACT: First access
+        client1 = llms[model_name]
+
+        # VERIFY: Now cached
+        assert model_name in llms.cached_clients
+
+        # VERIFY: Same instance returned
+        client2 = llms[model_name]
+        assert client1 is client2
 
 
 @pytest.mark.skip(

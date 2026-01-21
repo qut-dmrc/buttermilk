@@ -22,10 +22,9 @@ class GoogleModerate(ToxicityClassifierCore):
     model: str = "PaLM 2"
     standard: str = "Google Moderate Text v2"
     process_chain: str = "LanguageServiceClient"
-    client: Any = None
 
     def init_client(self) -> None:
-        self.client = language_v2.LanguageServiceClient()
+        self._client = language_v2.LanguageServiceClient()
 
     def make_prompt(self, content: str) -> str:
         return content
@@ -35,7 +34,7 @@ class GoogleModerate(ToxicityClassifierCore):
             content=prompt,
             type_=language_v2.Document.Type.PLAIN_TEXT,
         )
-        return self.client.moderate_text(document=document)
+        return self._client.moderate_text(document=document)
 
     def interpret(self, response: language_v2.ModerateTextResponse) -> EvalRecord:
         outcome = EvalRecord()

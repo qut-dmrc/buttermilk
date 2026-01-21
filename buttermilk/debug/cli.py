@@ -11,6 +11,16 @@ from .config_validator import validate_configuration
 from .error_capture import analyze_type_checking_errors
 from .gcp_logs import GCPLogAnalyzer
 from .models import StartupTestResult
+from .trace_analysis import (
+    load_trace_file,
+    get_errors,
+    get_timeline,
+    get_traces_by_agent,
+    get_trace,
+    summarize,
+    get_llm_conversation,
+    get_inputs_outputs,
+)
 
 
 @click.group()
@@ -649,6 +659,112 @@ def validate_config(config_path, output, verbose):
 
 
 @debug.command()
+@click.argument("path", type=click.Path(exists=True, path_type=Path))
+@click.option("--summary", is_flag=True, help="Show trace summary")
+@click.option("--errors", is_flag=True, help="Show all errors with context")
+@click.option("--timeline", is_flag=True, help="Show execution timeline")
+@click.option("--agent", help="Filter to specific agent (role or name)")
+@click.option("--call-id", help="Show specific trace by call_id")
+@click.option("--messages", is_flag=True, help="Show LLM messages for --call-id")
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def trace(path, summary, errors, timeline, agent, call_id, messages, output_json):
+    """Analyze execution trace files.
+
+    PATH is the path to a trace file (JSON or JSONL format).
+
+    Examples:
+
+        buttermilk debug trace /tmp/bm_test.jsonl --summary
+
+        buttermilk debug trace /tmp/bm_test.jsonl --errors
+
+        buttermilk debug trace /tmp/bm_test.jsonl --timeline
+
+        buttermilk debug trace /tmp/bm_test.jsonl --agent JUDGE
+
+        buttermilk debug trace /tmp/bm_test.jsonl --call-id abc123
+    """
+    import json as json_module
+
+    try:
+        tf = load_trace_file(path)
+    except Exception as e:
+        click.echo(f"Error loading trace file: {e}", err=True)
+        sys.exit(1)
+
+    # Default to summary if no specific option given
+    if not any([summary, errors, timeline, agent, call_id]):
+        summary = True
+
+    # Handle specific trace lookup
+    if call_id:
+        trace_obj = get_trace(tf.traces, call_id)
+        if not trace_obj:
+            click.echo(f"Trace not found: {call_id}", err=True)
+            sys.exit(1)
+
+        if messages:
+            msgs = get_llm_conversation(trace_obj)
+            if output_json:
+                click.echo(json_module.dumps(msgs, indent=2, default=str))
+            else:
+                for msg in msgs:
+                    click.echo(f"[{msg.get('type', 'unknown')}] {str(msg.get('content', ''))[:500]}")
+        else:
+            io = get_inputs_outputs(trace_obj)
+            if output_json:
+                click.echo(json_module.dumps(io, indent=2, default=str))
+            else:
+                click.echo(f"Call ID: {trace_obj.call_id}")
+                click.echo(f"Agent: {trace_obj.agent_info.get('component_name')} ({trace_obj.agent_info.get('role')})")
+                click.echo(f"Error: {trace_obj.is_error}")
+                if trace_obj.is_error and trace_obj.error:
+                    click.echo(f"Error details: {trace_obj.error}")
+        return
+
+    # Filter by agent if specified
+    traces = tf.traces
+    if agent:
+        traces = get_traces_by_agent(traces, agent)
+        click.echo(f"Filtered to {len(traces)} traces for agent: {agent}")
+
+    if summary:
+        s = summarize(traces)
+        if output_json:
+            click.echo(s.model_dump_json(indent=2))
+        else:
+            click.echo(f"Total traces: {s.total_traces}")
+            click.echo(f"Errors: {s.error_count}")
+            click.echo(f"Agents: {', '.join(s.agents)}")
+            if s.time_range:
+                click.echo(f"Time range: {s.time_range[0]} to {s.time_range[1]}")
+            click.echo(f"Session: {s.session_id}")
+
+    if errors:
+        errs = get_errors(traces)
+        if output_json:
+            click.echo(json_module.dumps([e.model_dump() for e in errs], indent=2, default=str))
+        else:
+            if not errs:
+                click.echo("No errors found.")
+            for e in errs:
+                click.echo(f"\n[{e.agent_role}] {e.agent_name}")
+                click.echo(f"  Error: {e.error_message}")
+                click.echo(f"  Time: {e.timestamp}")
+                if e.error_details:
+                    click.echo(f"  Details: {e.error_details}")
+
+    if timeline:
+        events = get_timeline(traces)
+        if output_json:
+            click.echo(json_module.dumps([e.model_dump() for e in events], indent=2, default=str))
+        else:
+            for e in events:
+                status = "X" if e.event_type == "error" else "+"
+                click.echo(f"[{status}] {e.timestamp.strftime('%H:%M:%S')} {e.agent_role}: {e.summary}")
+
+
+@debug.command()
 @click.option("--host", default="localhost", help="WebSocket server host")
 @click.option("--port", default=8000, type=int, help="WebSocket server port")
 def websocket(host, port):
@@ -661,17 +777,9 @@ def websocket(host, port):
         buttermilk debug websocket --host localhost --port 8000
 
     """
-    import asyncio
-
-    client = InteractiveDebugClient(host, port)
-
-    try:
-        asyncio.run(client.run_interactive())
-    except KeyboardInterrupt:
-        click.echo("\nExiting...")
-    except Exception as e:
-        click.echo(f"Error: {e}")
-        sys.exit(1)
+    click.echo("WebSocket client not yet implemented.")
+    click.echo(f"Would connect to {host}:{port}")
+    sys.exit(1)
 
 
 if __name__ == "__main__":

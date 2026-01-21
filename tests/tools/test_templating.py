@@ -15,20 +15,23 @@ from buttermilk.utils.utils import read_json
 
 def test_template_synth():
     flow_data = read_json("tests/data/template_synth_01.json")
-    # Add the missing record parameter to the flow_data
-    flow_data["record"] = "Test record content for template synthesis"
     parameters = {
         "template": "synthesise",
         "instructions": "Carefully apply EACH of the CRITERIA in order and provide a COMPLETE and SPECIFIC explanation about whether the particular rule has been violated and how. Use quotes from the content where necessary to support your analysis.",
         "criteria": "criteria_ordinary",
         "formatting": "json_rules",
     }
+    # Merge parameters with flow_data (parameters take precedence)
+    merged_vars = {**flow_data, **parameters}
     rendered, unfilled, template_hash = load_template(
         template="synthesise",
-        parameters=parameters,
-        untrusted_inputs=flow_data,
+        template_vars=merged_vars,
     )
-    assert not unfilled
+    # Placeholder variables (record, context) are intentionally kept unfilled
+    # by load_template() - they're processed by make_messages() later
+    placeholder_vars = {"record", "context"}
+    actual_unfilled = unfilled - placeholder_vars
+    assert not actual_unfilled, f"Unexpected unfilled template variables: {actual_unfilled}"
     assert "RULE 1, TARGETS A MARGINALIZED GROUP" in rendered
     assert "Prompt is a jinja2 template that generates prompt for LLM" not in rendered
     # Template content may vary, just check that we got a non-empty rendered output
@@ -78,8 +81,7 @@ def test_load_template_hash_consistency():
     # Get hash from load_template
     _, _, template_hash = load_template(
         template="synthesise",
-        parameters={"test": "value"},
-        untrusted_inputs={},
+        template_vars={"test": "value"},
     )
 
     # Should be the same

@@ -24,8 +24,7 @@ def test_score_template_with_missing_expected_shows_placeholder():
     # Provide answers and criteria (required), but NOT expected (triggers bug)
     rendered, unfilled_vars, _ = load_template(
         template="score",
-        parameters={},
-        untrusted_inputs={
+        template_vars={
             "answers": [{"agent_id": "test", "result": "test result"}],
             "criteria": ["test criterion"],
             # 'expected' is MISSING - this should trigger fail-fast

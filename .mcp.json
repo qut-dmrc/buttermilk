@@ -8,10 +8,6 @@
       ],
       "env": {}
     },
-    "github": {
-      "type": "http",
-      "url": "https://api.githubcopilot.com/mcp/"
-    },
     "gemini-cli": {
       "command": "npx",
       "args": [

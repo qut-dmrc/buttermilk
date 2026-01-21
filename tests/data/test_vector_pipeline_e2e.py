@@ -181,6 +181,7 @@ class TestVectorPipelineE2E:
 
         print("\n🎉 Complete end-to-end pipeline test PASSED!")
 
+    @pytest.mark.slow
     @pytest.mark.anyio
     async def test_pipeline_with_minimal_record(self, real_bm):
         """Test pipeline with minimal content (edge case)."""

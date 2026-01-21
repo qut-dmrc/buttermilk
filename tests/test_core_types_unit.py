@@ -72,9 +72,6 @@ def test_record_hash_computation():
     assert len(hash_value) == 64
     assert all(c in "0123456789abcdef" for c in hash_value)
 
-    # Verify hash is stored in metadata
-    assert record.metadata["record_hash"] == hash_value
-
     # Verify hash is consistent - same content should produce same hash
     record2 = Record(
         content="Test content for hashing",
@@ -93,8 +90,6 @@ def test_record_hash_uniqueness():
     hash2 = record2.record_hash
 
     assert hash1 != hash2
-    assert record1.metadata["record_hash"] == hash1
-    assert record2.metadata["record_hash"] == hash2
 
 
 def test_record_hash_changes_with_content():
@@ -107,7 +102,27 @@ def test_record_hash_changes_with_content():
     new_hash = record2.record_hash
 
     assert original_hash != new_hash
-    assert record2.metadata["record_hash"] == new_hash
+
+
+def test_record_hash_idempotent():
+    """Test that record_hash returns same value on multiple accesses.
+
+    This test demonstrates the circular dependency bug where:
+    1. First call computes hash without record_hash in metadata
+    2. Side effect stores hash in metadata["record_hash"]
+    3. Second call includes metadata["record_hash"] in as_markdown() output
+    4. This produces a DIFFERENT hash
+    """
+    record = Record(content="Test content", metadata={"key": "value"})
+
+    h1 = record.record_hash
+    h2 = record.record_hash
+    h3 = record.record_hash
+
+    # All three should be identical - THIS WILL FAIL with current code
+    assert (
+        h1 == h2 == h3
+    ), f"record_hash must be idempotent. Got h1={h1[:16]}..., h2={h2[:16]}..., h3={h3[:16]}..."
 
 
 def test_ground_truth_hash_none():
@@ -118,7 +133,6 @@ def test_ground_truth_hash_none():
     gt_hash = record.ground_truth_hash
 
     assert gt_hash is None
-    assert record.metadata["ground_truth_hash"] is None
 
 
 def test_ground_truth_hash_computation():
@@ -132,9 +146,6 @@ def test_ground_truth_hash_computation():
     # Verify hash is a valid SHA256 hex string
     assert len(gt_hash) == 64
     assert all(c in "0123456789abcdef" for c in gt_hash)
-
-    # Verify hash is stored in metadata
-    assert record.metadata["ground_truth_hash"] == gt_hash
 
 
 def test_ground_truth_hash_consistency():
@@ -188,11 +199,10 @@ def test_ground_truth_hash_complex_data():
 
     # Should handle complex data without errors
     assert len(gt_hash) == 64
-    assert record.metadata["ground_truth_hash"] == gt_hash
 
 
-def test_hash_fields_metadata_accessibility():
-    """Test that hash values are easily accessible via metadata."""
+def test_hash_fields_are_pure_properties():
+    """Test that hash properties are pure and don't mutate metadata."""
     record = Record(
         content="Test content",
         ground_truth={"test": "data"},
@@ -203,30 +213,40 @@ def test_hash_fields_metadata_accessibility():
     record_hash = record.record_hash
     gt_hash = record.ground_truth_hash
 
-    # Verify both hashes are accessible via metadata
-    assert record.metadata["record_hash"] == record_hash
-    assert record.metadata["ground_truth_hash"] == gt_hash
+    # Verify hashes are NOT stored in metadata (properties should be pure)
+    assert "record_hash" not in record.metadata
+    assert "ground_truth_hash" not in record.metadata
 
     # Verify existing metadata is preserved
     assert record.metadata["existing"] == "data"
 
 
-def test_hash_fields_excluded_from_dump():
-    """Test that computed hash fields are excluded from model_dump by default."""
+def test_record_hash_included_ground_truth_hash_excluded_from_dump():
+    """Test that computed hash fields follow BigQuery schema requirements.
+
+    - record_hash: INCLUDED (required by traces.schema.json for BigQuery)
+    - ground_truth_hash: EXCLUDED (not needed in BQ schema)
+    - Hash values are NOT stored in metadata (pure properties)
+    """
     record = Record(content="Test content", ground_truth={"test": "data"})
 
     # Trigger hash computation
     _ = record.record_hash
     _ = record.ground_truth_hash
 
-    # Dump should exclude computed fields
+    # Dump behavior per BQ requirements
     dumped = record.model_dump()
-    assert "record_hash" not in dumped
+
+    # record_hash MUST be included for BigQuery tracing
+    assert "record_hash" in dumped, "record_hash is required by traces.schema.json"
+    assert len(dumped["record_hash"]) == 64, "record_hash should be valid SHA256"
+
+    # ground_truth_hash should be excluded (not in BQ schema)
     assert "ground_truth_hash" not in dumped
 
-    # But metadata should contain the hash values
-    assert "record_hash" in dumped["metadata"]
-    assert "ground_truth_hash" in dumped["metadata"]
+    # Metadata should NOT contain hash values (properties are pure)
+    assert "record_hash" not in dumped["metadata"]
+    assert "ground_truth_hash" not in dumped["metadata"]
 
 
 # ProcessingSummary tests

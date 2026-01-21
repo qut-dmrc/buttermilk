@@ -20,6 +20,8 @@ pytest.importorskip("pyzotero", reason="pyzotero is optional (install with: uv s
 from buttermilk._core.types import BaseRecord, Record
 from buttermilk.libs.zotero import ZoteroDownloadProcessor, ZoteroSource
 
+pytestmark = pytest.mark.slow
+
 
 class TestCitationKeyExtraction:
     """Test citation key extraction from Zotero 'extra' field.
@@ -105,6 +107,7 @@ class TestZoteroSourceCitationKeys:
     2. ZoteroSource is updated to call extract_citation_key()
     """
 
+    @pytest.mark.slow
     @pytest.mark.integration
     @pytest.mark.anyio
     async def test_zotero_source_extracts_citation_keys(self, real_bm):
@@ -419,6 +422,7 @@ class TestZoteroAPIDataFormat:
 
         print(f"\n✅ All {items_checked} items passed structure validation")
 
+    @pytest.mark.slow
     @pytest.mark.integration
     @pytest.mark.anyio
     async def test_extra_field_is_always_string(self, real_bm):
@@ -712,6 +716,7 @@ class TestMetadataUpdateBehavior:
         # This behavior is correct and intentional for safety
         print("✅ Second-highest version safety working as expected")
 
+    @pytest.mark.slow
     @pytest.mark.integration
     @pytest.mark.anyio
     async def test_incremental_sync_fetches_updated_items(self, real_bm):

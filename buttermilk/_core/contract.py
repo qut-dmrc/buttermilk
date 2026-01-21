@@ -303,6 +303,22 @@ def _get_session_id() -> str:
     return f"unknown-session-{shortuuid.uuid()}"
 
 
+def _get_execution_context_id() -> str | None:
+    """Get execution_context_id from ExecutionContext if available.
+
+    Returns:
+        str | None: Execution context ID or None if not available.
+    """
+    try:
+        from buttermilk._core.execution_context import get_execution_context
+
+        exec_ctx = get_execution_context()
+        return exec_ctx.execution_context_id
+    except (ImportError, RuntimeError):
+        # ExecutionContext not initialized yet
+        return None
+
+
 # --- Core Step Execution ---
 
 
@@ -562,6 +578,10 @@ class ExecutionTrace(BaseModel):
         default_factory=_get_session_info,
         description="Information about the current run/session, from `bm.session_info`.",
     )
+    execution_context_id: str | None = Field(
+        default_factory=_get_execution_context_id,
+        description="Process-level execution context identifier.",
+    )
 
     # Component info (will be stored as JSON in agent_info field)
     agent_info: dict[str, Any] = Field(
@@ -569,13 +589,9 @@ class ExecutionTrace(BaseModel):
         description="Component configuration and metadata (component_name, execution_type, config, etc.).",
     )
 
-    # Runtime parameters
-    parameters: dict[str, Any] | None = Field(
-        default=None,
-        description="Runtime parameters that override default configuration.",
-    )
-
     # Input/Output (flexible types for any component)
+    # Note: Template variables (criteria, instructions, etc.) are in `inputs`.
+    # Static config (model, template, temperature) is in `agent_info`.
     inputs: Any | None = Field(
         default=None,
         description="The input data (AgentInput, BaseRecord, dict, etc.).",
@@ -704,21 +720,23 @@ class ExecutionTrace(BaseModel):
         agent_info: dict[str, Any] | None = None,
         call_id: str | None = None,
         parent_call_id: str | None = None,
-        parameters: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
         tracing: dict[str, Any] | None = None,
+        record: Any = None,
     ) -> "ExecutionTrace":
         """Create an ExecutionTrace instance from an existing AgentOutput.
 
         Args:
             output: The output from which to create the trace.
             inputs: The input that was processed to produce this output.
+                    Should include template variables (criteria, instructions, etc.).
             agent_info: Component configuration and metadata.
+                    Should include static config (model, template, temperature).
             call_id: Optional override for call_id.
             parent_call_id: ID of the parent call for tracing nested operations.
-            parameters: Runtime parameters.
             metadata: Additional metadata to include.
             tracing: Tracing information.
+            record: Optional record data. If provided, used directly; otherwise extracted from inputs.
 
         Returns:
             ExecutionTrace: A new instance of ExecutionTrace populated with data from the output and inputs.
@@ -740,12 +758,9 @@ class ExecutionTrace(BaseModel):
         if metadata:
             combined_metadata.update(metadata)
 
-        # Extract record information from inputs if available
-        record_obj = None
-        if inputs and hasattr(inputs, "record") and inputs.record:
-            record_obj = inputs.record
-            inputs = dict(inputs)
-            _ = inputs.pop("record", None)
+        # Strict contract: record must be provided explicitly
+        # No fallback extraction from inputs - caller is responsible for providing record
+        record_obj = record
 
         return cls(
             call_id=call_id or output.call_id,
@@ -753,7 +768,6 @@ class ExecutionTrace(BaseModel):
             outputs=output.outputs,
             messages=output.messages,
             inputs=inputs,
-            parameters=parameters,
             error=error_dict,
             metadata=combined_metadata if combined_metadata else None,
             parent_call_id=parent_call_id,
@@ -1023,36 +1037,25 @@ class TaskProcessingStarted(BaseModel):
     Attributes:
         agent_id (str): The unique identifier of the agent that has started the task.
         role (str): The role of the agent starting the task.
-        task_index (int): An optional index for the task, particularly if an agent
-            is performing multiple sequential tasks for a single input. Defaults to -1.
 
     """
 
     agent_id: str = Field(..., description="ID of the agent that has started the task.")
     role: str = Field(..., description="Role of the agent starting the task.")
-    task_index: int = Field(
-        default=-1,
-        description="Index of the task being started (for multi-task steps by a single agent).",
-    )
 
 
 class TaskProcessingComplete(TaskProcessingStarted):
     """A signal message indicating that an agent has completed processing a task.
 
-    Inherits `agent_id`, `role`, and `task_index` from `TaskProcessingStarted`.
+    Inherits `agent_id` and `role` from `TaskProcessingStarted`.
 
     Attributes:
-        more_tasks_remain (bool): If `True`, indicates that the agent has more
-            sequential tasks to perform for the current input/context. Defaults to `False`.
         is_error (bool): If `True`, indicates that the task ended with an error.
             Defaults to `False`.
+        error (str): Error message if the task ended with an error.
 
     """
 
-    more_tasks_remain: bool = Field(
-        default=False,
-        description="True if the agent has more sequential tasks for the current input.",
-    )
     is_error: bool = Field(
         default=False,
         description="True if the task completed with an error.",
@@ -1060,28 +1063,6 @@ class TaskProcessingComplete(TaskProcessingStarted):
     error: str = Field(
         default="", description="Error message if the task ended with an error."
     )
-
-
-class ProceedToNextTaskSignal(BaseModel):
-    """A control signal, typically from a controller or orchestrator.
-
-    Instructs an agent to proceed with its next internal task or step.
-
-    The exact usage context for this signal might depend on specific orchestrator
-    implementations.
-
-    Attributes:
-        target_agent_id (str): The unique identifier of the agent that should
-            proceed to its next task.
-        model_config (dict): Pydantic model configuration allowing extra fields.
-
-    """
-
-    # TODO: Clarify usage context if this is actively used.
-    target_agent_id: str = Field(
-        ..., description="ID of the agent that should proceed to its next task."
-    )
-    model_config = {"extra": "allow"}  # Allows extra fields if needed
 
 
 class HeartBeat(BaseModel):
@@ -1177,7 +1158,6 @@ OOBMessages = Union[
     ConductorRequest,
     ErrorEvent,
     StepRequest,
-    ProceedToNextTaskSignal,
     HeartBeat,
     AgentAnnouncement,
     FlowEvent,

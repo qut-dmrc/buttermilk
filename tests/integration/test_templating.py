@@ -114,7 +114,7 @@ class TestOSBTemplate:
 
         rendered, undefined_vars, template_hash = load_template(
             template="osb",
-            parameters=parameters,
+            template_vars=parameters,
         )
 
         # Should have rendered successfully
@@ -134,7 +134,7 @@ class TestOSBTemplate:
 
         rendered, _, _ = load_template(
             template="osb",
-            parameters=parameters,
+            template_vars=parameters,
         )
 
         assert "What is the main issue in these cases?" in rendered
@@ -150,7 +150,7 @@ class TestOSBTemplate:
 
         rendered, _, _ = load_template(
             template="osb",
-            parameters=parameters,
+            template_vars=parameters,
         )
 
         # Parse into messages - the osb template has just system instructions
@@ -172,19 +172,18 @@ class TestAnalystTemplate:
 
     def test_analyst_template_loads(self):
         """Test that analyst template loads correctly."""
-        parameters = {
-            "record": "Here is the record to analyze",
-            "context": "Some additional context",
-        }
+        parameters = {}
 
         rendered, undefined_vars, _ = load_template(
             template="analyst",
-            parameters=parameters,
+            template_vars=parameters,
         )
 
         assert "You are a careful analyst" in rendered
-        assert "Here is the record to analyze" in rendered
-        assert "Some additional context" in rendered
+        # record and context are placeholders, not template variables
+        # They should remain as {{record}} and {{context}} in rendered output
+        assert "{{record}}" in rendered
+        assert "{{context}}" in rendered
 
     def test_analyst_template_with_expertise(self):
         """Test analyst template with expertise section."""
@@ -196,7 +195,7 @@ class TestAnalystTemplate:
 
         rendered, _, _ = load_template(
             template="analyst",
-            parameters=parameters,
+            template_vars=parameters,
         )
 
         assert "BEGIN EXPERTISE" in rendered
@@ -206,22 +205,33 @@ class TestAnalystTemplate:
     def test_analyst_template_messages(self):
         """Test analyst template creates proper messages."""
         # Analyst template has "# Placeholder:" followed by {{record}} and {{context}}
-        # These are variable substitutions, not special placeholder processing
-        parameters = {
-            "record": "Test record content",
-            "context": "Test context content",
-        }
+        # record is a placeholder that gets replaced by make_messages()
+
+        # Create a mock record
+        class MockRecord(BaseRecord):
+            text: str = "Test record content"
+
+            def as_message(self):
+                return UserMessage(content=self.text, source="record")
+
+        record = MockRecord()
+
+        # Don't pass record to load_template - it's a placeholder
+        parameters = {}
 
         rendered, _, _ = load_template(
             template="analyst",
-            parameters=parameters,
+            template_vars=parameters,
         )
 
-        messages, _ = make_messages(rendered)
+        # Pass record to make_messages instead
+        messages, placeholders = make_messages(rendered, record=record)
 
         # Should have system message
         assert any(isinstance(msg, SystemMessage) for msg in messages)
-        # The variables should be rendered into placeholders
+        # Should have replaced record placeholder
+        assert "record" in placeholders or "records" in placeholders
+        # The record content should appear in messages
         assert any(
             "Test record content" in msg.content
             for msg in messages
@@ -241,7 +251,7 @@ class TestRAGTemplate:
 
         rendered, _, _ = load_template(
             template="rag",
-            parameters=parameters,
+            template_vars=parameters,
         )
 
         assert "You are a research assistant" in rendered
@@ -257,7 +267,7 @@ class TestRAGTemplate:
 
         rendered, _, _ = load_template(
             template="rag",
-            parameters=parameters,
+            template_vars=parameters,
         )
 
         # Create context messages
@@ -283,7 +293,7 @@ class TestRAGTemplate:
 
         rendered, _, _ = load_template(
             template="rag",
-            parameters=parameters,
+            template_vars=parameters,
         )
 
         # Should still render successfully
@@ -423,22 +433,34 @@ class TestTemplateIntegration:
 
     def test_full_workflow_analyst(self):
         """Test complete workflow with analyst template."""
-        # Analyst template variables are rendered, not processed as placeholders
+        # Create a mock record for the placeholder
+        class MockRecord(BaseRecord):
+            text: str = "Case details content"
+
+            def as_message(self):
+                return UserMessage(content=self.text, source="record")
+
+        record = MockRecord()
+
+        # record is a placeholder, not a template parameter
+        # Only pass non-placeholder parameters to load_template
         parameters = {
-            "record": "Case details content",
-            "context": "Background info content",
             "expertise": "Legal expert",
             "criteria": "Apply these rules...",
         }
 
         rendered, _, _ = load_template("analyst", parameters)
-        messages, _ = make_messages(rendered)
+
+        # Pass record to make_messages instead
+        messages, placeholders = make_messages(rendered, record=record)
 
         # Should have properly formatted messages
         assert len(messages) > 0
         system_msgs = [msg for msg in messages if isinstance(msg, SystemMessage)]
         assert len(system_msgs) > 0
-        # Verify rendered content appears
+        # Should have replaced record placeholder
+        assert "record" in placeholders or "records" in placeholders
+        # Verify record content appears in messages
         assert any(
             "Case details content" in msg.content
             for msg in messages

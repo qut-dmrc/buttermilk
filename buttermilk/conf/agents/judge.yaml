@@ -4,10 +4,9 @@ judge:
   agent_obj: Judge
   name_components: ["role", "model", "criteria", "unique_identifier"]
   num_runs: 2
+  required: [criteria]  # RFC #311: criteria comes from record.metadata via inputs
   parameters:
     template: judge
   variants:
     model: ${llms.judgers}
-    criteria: ${....parameters.criteria}
-  inputs:
-    record: "[FETCH.outputs]||*.record"
+  record: "FETCH.outputs"

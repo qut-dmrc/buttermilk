@@ -176,19 +176,12 @@ class TestVariantProcessorIntegration:
         ):
             outputs.append(output)
 
-        # Should get 3 outputs: 2 successful + 1 error record
-        assert len(outputs) == 3
+        # Should get 2 successful outputs (failed variant is logged but doesn't yield)
+        assert len(outputs) == 2
 
         # Check successful outputs
-        successful = [o for o in outputs if not o.error]
-        assert len(successful) == 2
-        contents = {o.content for o in successful}
+        contents = {o.content for o in outputs}
         assert contents == {"hello_OK1", "hello_OK2"}
-
-        # Check error record
-        error_records = [o for o in outputs if o.error]
-        assert len(error_records) == 1
-        assert "configured to fail" in str(error_records[0].error)
 
     @pytest.mark.anyio
     async def test_fail_on_error_raises(self):
@@ -270,15 +263,22 @@ class TestProcessorVariantsConfig:
         # 2 expressions × 2 output_fields = 4 combinations
         assert len(configs) == 4
 
-    def test_num_runs_multiplies(self):
-        """Test that num_runs replicates configurations."""
+    def test_num_runs_does_not_multiply_configs(self):
+        """Test that num_runs doesn't multiply configs (it's handled at source level).
+
+        NOTE: For repeated runs (num_runs), use ReplicatingSource at the pipeline
+        source level instead of replicating processors. This prevents exponential
+        API call multiplication.
+        """
         from buttermilk._core.pipeline_config import ProcessorVariants
 
         cfg = ProcessorVariants(
             processor_obj="buttermilk.processors.JMESPathTransform",
             variants={"expression": ["content"]},
-            num_runs=3,
+            num_runs=3,  # This is intentionally NOT used in get_configs
         )
 
         configs = cfg.get_configs()
-        assert len(configs) == 3
+        # num_runs doesn't multiply configs - only variants do
+        # Replication is handled at the source level instead
+        assert len(configs) == 1

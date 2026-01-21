@@ -54,7 +54,7 @@ from buttermilk._core.contract import (
     TaskProcessingStarted,
     UserResponseMessage,  # Messages from the user
 )
-from buttermilk._core.exceptions import ProcessingError  # Custom exceptions
+from buttermilk._core.exceptions import FatalError, ProcessingError  # Custom exceptions
 from buttermilk._core.message_data import extract_message_data
 from buttermilk._core.types import BaseRecord  # Data record structure
 from buttermilk.utils.templating import (
@@ -91,12 +91,14 @@ def create_agent_trace_info(
 ) -> dict[str, Any]:
     """Create comprehensive agent info for ExecutionTrace.
 
-    Captures all critical parameters for reproducibility and debugging:
+    Captures agent identity and static config for reproducibility:
     - Agent identity (type, name, role)
     - Template name and hash
     - Model configuration
-    - Full parameter set
     - Optional hash collection for systematic tracing
+
+    Note: Template variables (criteria, instructions, etc.) go in trace.inputs,
+    not in agent_info. This function captures only static agent configuration.
 
     Args:
         agent: Agent instance
@@ -120,12 +122,10 @@ def create_agent_trace_info(
         "agent_class": f"{agent.__class__.__module__}.{agent.__class__.__name__}",  # Full
         "agent_name": agent.agent_name,
         "agent_role": agent.role,
-        # Critical parameters for reproducibility
+        # Static config for reproducibility (template vars go in trace.inputs)
         "template": agent.parameters.get("template"),
         "template_hash": template_hash or agent.parameters.get("template_hash"),
         "model": agent.parameters.get("model"),
-        # Full config for reference
-        "parameters": agent.parameters,
         # Additional metadata
         "description": agent.description,
     }
@@ -205,9 +205,28 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         return self._config.inputs
 
     @property
+    def record_mapping(self) -> str | None:
+        """Get the record JMESPath mapping from config."""
+        return self._config.record
+
+    @property
+    def context_mapping(self) -> str | None:
+        """Get the context JMESPath mapping from config."""
+        return self._config.context
+
+    @property
     def session_id(self) -> str:
         """Get session_id from config if available."""
         return getattr(self._config, "session_id", "")
+
+    @property
+    def required_inputs(self) -> list[str] | None:
+        """Get the list of required input keys from config.
+
+        Returns None if not set (no filtering), empty list if explicitly
+        set to filter all inputs, or a list of keys to whitelist.
+        """
+        return self._config.required
 
     def get_effective_bm(self) -> Any:
         """Get the effective BM instance (session-scoped if available, otherwise global singleton).
@@ -438,34 +457,21 @@ class Agent(RoutedAgent):  # noqa: PLR0904
 
         """
         await self._publish(
-            TaskProcessingStarted(agent_id=self.agent_id, role=self.role, task_index=0),
+            TaskProcessingStarted(agent_id=self.agent_id, role=self.role),
             topic_id=self._topic_id,
         )
 
         # --- Prepare the input state for processing ---
         try:
-            # Backward compatibility: allow direct string prompt + optional context
-            if isinstance(message, str):
-                message = AgentInput(
-                    inputs={"prompt": message, "context": context or ""}
-                )
-            # Fallback: if an unexpected type is provided, coerce to AgentInput using string representation
-            elif not isinstance(message, (AgentInput, StepRequest)):
-                message = AgentInput(
-                    inputs={"prompt": str(message), "context": context or ""}
-                )
-
             final_input = await self._add_state_to_input(message)
         except Exception as e:
             logger.error(f"Error preparing data for Agent {self.agent_id}: {e}")
-            # Create an ErrorEvent to capture the error
-            err_result = ErrorEvent(source=self.agent_id, content=f"Invoke error: {e}")
             await self._publish(
                 TaskProcessingComplete(
                     agent_id=self.agent_id,
                     role=self.role,
                     is_error=True,
-                    error=[err_result],
+                    error=str(e),  # TaskProcessingComplete.error expects string
                 ),
                 topic_id=self._topic_id,
             )
@@ -479,18 +485,12 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 return None
         except Exception as e:
             logger.error(f"Agent {self.agent_id} error during invoke: {e}")
-            # Create an ErrorEvent to capture the error
-            err_result = ErrorEvent(source=self.agent_id, content=f"Invoke error: {e}")
-
-            logger.error(f"Error preparing data for Agent {self.agent_id}: {e}")
-            # Create an ErrorEvent to capture the error
-            err_result = ErrorEvent(source=self.agent_id, content=f"Invoke error: {e}")
             await self._publish(
                 TaskProcessingComplete(
                     agent_id=self.agent_id,
                     role=self.role,
                     is_error=True,
-                    error=[err_result],
+                    error=str(e),  # TaskProcessingComplete.error expects string
                 ),
                 topic_id=self._topic_id,
             )
@@ -516,8 +516,6 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             TaskProcessingComplete(
                 agent_id=self.agent_id,
                 role=self.role,
-                task_index=0,
-                more_tasks_remain=False,
                 is_error=trace_object.is_error,
             ),
             topic_id=self._topic_id,
@@ -662,15 +660,12 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             inputs=trace_inputs,
             agent_info={
                 "component_name": self.agent_name,
-                "execution_type": "agent",
+                "agent_class": self.__class__.__name__,
                 "agent_id": self.agent_id,
                 "role": self.role,
-                "config": self._config.model_dump()
-                if hasattr(self._config, "model_dump")
-                else self._config,
             },
-            parameters=message.parameters if hasattr(message, "parameters") else None,
             tracing={"tracing_link": tracing_link} if tracing_link else None,
+            record=message.record if hasattr(message, "record") else None,
         )
 
         return trace_object
@@ -803,12 +798,20 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         """
         source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
 
+        # Build complete input mappings including record and context
+        # Start with regular inputs, then add record/context if configured
+        all_mappings: dict[str, str] = dict(self.inputs) if self.inputs else {}
+        if self.record_mapping:
+            all_mappings["record"] = self.record_mapping
+        if self.context_mapping:
+            all_mappings["context"] = self.context_mapping
+
         # Extract data based on input mappings
-        if self.inputs:  # Only extract if input mappings are defined
+        if all_mappings:  # Only extract if any mappings are defined
             extracted = extract_message_data(
                 message=message,
                 source=source,
-                input_mappings=self.inputs,
+                input_mappings=all_mappings,
             )
             # Add extracted data to self._data
             found_keys = []
@@ -893,13 +896,16 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             (`self.parameters`) are used as a base.
         2.  **Message Parameters**: Parameters from the incoming `inputs.parameters`
             override any defaults.
-        3.  **Resolved Input Mappings**: Data from `self._data` (which is populated
+        3.  **Record Mapping**: If `self.record_mapping` is configured (via config.record),
+            extract record from `self._data` and set `updated_inputs.record`.
+        4.  **Context Mapping**: If `self.context_mapping` is configured (via config.context),
+            extract context from `self._data` (currently handled via _model_context).
+        5.  **Resolved Input Mappings**: Data from `self._data` (which is populated
             by `_listen` based on `self.inputs` mappings) is resolved and added to
             `updated_inputs.inputs`. Incoming `inputs.inputs` can override these.
-        4.  **Conversation History**: Messages from `self._model_context` are prepended
+            Note: 'record' and 'context' keys in inputs are skipped (handled explicitly above).
+        6.  **Conversation History**: Messages from `self._model_context` are prepended
             to `updated_inputs.context`.
-        5.  **Records**: If `updated_inputs.record` is empty, the most recent record(s)
-            from `self._records` are used.
 
         Args:
             inputs: The original `AgentInput` message.
@@ -922,7 +928,32 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         merged_params = {**(self.parameters or {}), **updated_inputs.parameters}
         updated_inputs.parameters = merged_params
 
-        # 2. Resolve input mappings using data stored in self._data.
+        # 2. Handle record mapping explicitly using config.record field
+        # This happens BEFORE processing regular inputs to avoid special-case logic in the loop
+        if self.record_mapping and not updated_inputs.record:
+            try:
+                # Extract record from self._data using the configured mapping key
+                # The mapping value (JMESPath expression) was already used by _listen to populate _data
+                # Here we just need to check if the key exists in _data and extract the value
+                # For backward compatibility: if config.record is set, we look for 'record' in _data
+                record_values = self._data.get("record", [])
+                if record_values:
+                    record_data = record_values[-1]  # Get most recent
+                    if isinstance(record_data, dict):
+                        updated_inputs.record = BaseRecord.from_dict(record_data)
+                    else:
+                        updated_inputs.record = record_data
+            except Exception as e:
+                raise ProcessingError(
+                    f"Error resolving record mapping for agent {self.agent_id}: {e!s}"
+                ) from e
+
+        # 3. Handle context mapping explicitly using config.context field
+        # Note: Currently context comes from _model_context.get_messages(), but if explicit
+        # context mapping is configured, we should handle it here
+        # For now, keeping existing behavior (context handled in step 5 below)
+
+        # 4. Resolve regular input mappings using data stored in self._data.
         if updated_inputs.inputs is None:
             updated_inputs.inputs = {}
         if self.inputs:  # self.inputs is the mapping configuration from AgentConfig
@@ -931,19 +962,16 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                 for (
                     key
                 ) in self.inputs.keys():  # Iterate over configured input mapping keys
-                    # Retrieve data from self._data; note that KeyValueCollector stores values in lists
-                    data_values = self._data.get(key, [])
-
-                    # Special handling for 'record': extract most recent and reconstruct as BaseRecord
-                    if key == "record" and data_values and not updated_inputs.record:
-                        record_data = data_values[-1]  # Get most recent
-                        if isinstance(record_data, dict):
-                            updated_inputs.record = BaseRecord.from_dict(record_data)
-                        else:
-                            updated_inputs.record = record_data
-                        # Don't add to inputs dict - record goes in the record field
+                    # Skip 'record' - handled explicitly above via self.record_mapping
+                    if key == "record":
                         continue
 
+                    # Skip 'context' - handled separately below
+                    if key == "context":
+                        continue
+
+                    # Retrieve data from self._data; note that KeyValueCollector stores values in lists
+                    data_values = self._data.get(key, [])
                     extracted_data[key] = data_values
 
                 # Merge resolved mappings, letting original message inputs override
@@ -954,7 +982,7 @@ class Agent(RoutedAgent):  # noqa: PLR0904
                     f"Error resolving input mappings for agent {self.agent_id}: {e!s}"
                 ) from e
 
-        # 4. Prepend conversation history from agent's context.
+        # 5. Prepend conversation history from agent's context.
         if updated_inputs.context is None:
             updated_inputs.context = []
         try:
@@ -966,20 +994,35 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             )
             # Decide handling: continue without history or raise? For now, log and continue.
 
-        # 5. Use most recent record from data if not provided in input
-        if not updated_inputs.record:
-            record_list = self._data.get("record", [])
-            if record_list:
-                record_data = record_list[-1]  # Get most recent
-
-                # Reconstruct as proper BaseRecord subclass if it's a dict
-                if isinstance(record_data, dict):
-                    updated_inputs.record = BaseRecord.from_dict(record_data)
-                else:
-                    # Already an object
-                    updated_inputs.record = record_data
-
+        # 6. Cleanup and validation
         # TODO: @nicsuzor decide if we need to remove inputs that are not in the Agent's input schema.
+
+        # Remove empty lists from inputs (JMESPath returns [] when no match)
+        if updated_inputs.inputs:
+            updated_inputs.inputs = {
+                k: v for k, v in updated_inputs.inputs.items()
+                if not (isinstance(v, list) and len(v) == 0)
+            }
+
+        # Filter inputs to only include keys in required list
+        if self.required_inputs is not None and updated_inputs.inputs:
+            filtered_inputs = {
+                k: v for k, v in updated_inputs.inputs.items()
+                if k in self.required_inputs
+            }
+            updated_inputs.inputs = filtered_inputs
+
+        # Validate all required inputs are present (fail-fast)
+        # Only validate if required is set and non-empty
+        if self.required_inputs:
+            available_keys = set(updated_inputs.inputs.keys()) if updated_inputs.inputs else set()
+            missing_keys = set(self.required_inputs) - available_keys
+            if missing_keys:
+                raise FatalError(
+                    f"Agent {self.agent_id} is missing required inputs: {sorted(missing_keys)}. "
+                    f"Available inputs: {sorted(available_keys)}. "
+                    f"Ensure the pipeline provides all required inputs."
+                )
 
         logger.debug(
             f"Agent {self.agent_id}: Added state to input. "
@@ -987,6 +1030,11 @@ class Agent(RoutedAgent):  # noqa: PLR0904
             f"Context length: {len(updated_inputs.context)}, "
             f"Has record: {updated_inputs.record is not None}.",
         )
+        # DEBUG: Log actual values to diagnose template unfilled issue
+        if updated_inputs.inputs:
+            for k, v in updated_inputs.inputs.items():
+                val_preview = str(v)[:100] if v else "<EMPTY>"
+                logger.debug(f"Agent {self.agent_id}: input[{k}] = {val_preview}")
 
         return updated_inputs
 

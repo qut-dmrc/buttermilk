@@ -12,22 +12,25 @@ The design intentionally avoids Agent-specific concepts to maintain
 flexibility while preserving full observability through metadata tracking.
 """
 
+from __future__ import annotations
+
 import time
 import uuid
-from typing import Any, AsyncGenerator, Optional
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Optional, Self
 
 import pydantic
 from autogen_core import CancellationToken
 from autogen_core.models import LLMMessage
-from autogen_core.tools import Tool
 from opentelemetry import trace
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 from buttermilk import bm, logger
-from buttermilk._core.contract import ErrorEvent, ExecutionTrace
+from buttermilk._core.contract import ErrorEvent
 from buttermilk._core.exceptions import ProcessingError
-from buttermilk._core.llms import CreateResult, ModelOutput
-from buttermilk._core.processor_core import ProcessorCore
+from buttermilk._core.processor_core import ObservabilityMixin
+
+if TYPE_CHECKING:
+    from buttermilk._core.llms import CreateResult, ModelOutput
 from buttermilk._core.types import BaseRecord
 from buttermilk.utils.templating import load_template, make_messages
 from buttermilk.utils.utils import clean_empty_values, scrub_serializable
@@ -42,29 +45,21 @@ class LLMResult(BaseModel):
     """
 
     content: Any = Field(..., description="The LLM output - string or parsed object")
-    metadata: dict[str, Any] = Field(
-        default_factory=dict, description="Usage, pricing, model info"
-    )
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Usage, pricing, model info")
     trace_id: str = Field(
         default_factory=lambda: str(uuid.uuid4()),
         description="Unique ID for correlation",
     )
-    template_metadata: dict[str, Any] = Field(
-        default_factory=dict, description="Template name, hash, etc"
-    )
-    messages: list[LLMMessage] = Field(
-        default_factory=list, description="Messages exchanged with LLM"
-    )
-    error: str | ErrorEvent | None = Field(
-        None, description="Error message if processing failed"
-    )
+    template_metadata: dict[str, Any] = Field(default_factory=dict, description="Template name, hash, etc")
+    messages: list[LLMMessage] = Field(default_factory=list, description="Messages exchanged with LLM")
+    error: str | ErrorEvent | None = Field(None, description="Error message if processing failed")
     resolved_inputs: dict[str, Any] = Field(
         default_factory=dict,
         description="All resolved inputs used for template rendering",
     )
 
 
-class LLMCore(ProcessorCore):
+class LLMCore(ObservabilityMixin):
     """Core LLM functionality shared between agents and processors.
 
     Extends ProcessorCore to share common infrastructure with ClassifierCore
@@ -79,67 +74,68 @@ class LLMCore(ProcessorCore):
     - Metadata tracking for observability
     """
 
-    def __init__(  # noqa: PLR0913
-        self,
-        model: str,
-        template: str,
-        output_model: Optional[type[pydantic.BaseModel] | str] = None,
-        tools: Optional[list[Tool]] = None,
-        fail_on_unfilled_parameters: bool = True,
-        output_col: str = "output",
-        **kwargs: Any,
-    ):
-        """Initialize the LLM core with configuration.
+    model_config = {"extra": "forbid"}
 
-        Args:
-            parameters: Configuration dict containing at minimum:
-                - model: Name of the LLM model to use
-                - template: Name of the template to render
-                - temperature: Optional temperature setting
-                - fail_on_unfilled_parameters: Whether to fail on missing template vars
-            output_model: Optional Pydantic model for structured output (class or string path)
-            tools: Optional list of tools the LLM can use
-        """
-        # CRITICAL: Include model and template in parameters for trace writing
-        # Issue #280: Traces need these fields for observability/analysis
-        # Initialize ProcessorCore with model and template in kwargs
-        super().__init__(model=model, template=template, **kwargs)
+    # Required fields
+    model: str
+    template: str
 
-        # Resolve output_model if it's a string
-        if isinstance(output_model, str):
+    # Optional fields with defaults
+    output_model: str | type[BaseModel] | None = None  # String path or class for config
+    tools: list[Any] = Field(default_factory=list)
+    fail_on_unfilled_parameters: bool = True
+    fail_on_unfilled_parameters: bool = True
+    human_in_loop: bool = False  # Whether to require human approval before LLM calls
+
+    # LLM inference parameters (all optional)
+    temperature: float | None = None
+    max_tokens: int | None = None
+    top_p: float | None = None
+    top_k: int | None = None
+    frequency_penalty: float | None = None
+    presence_penalty: float | None = None
+    stop_sequences: list[str] | None = None
+    seed: int | None = None
+
+    # Template variables - user-defined variables for Jinja2 rendering
+    # Separate from LLM config to maintain strict validation on config fields
+    template_vars: dict[str, Any] = Field(
+        default_factory=dict,
+        description="User-defined template variables (e.g., criteria, instructions)",
+    )
+
+    # Private attrs for runtime objects
+    _resolved_output_model: type[BaseModel] | None = PrivateAttr(default=None)
+    _template_metadata: dict[str, Any] = PrivateAttr(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_output_model(cls, data: Any) -> Any:
+        """Convert class to string path for storage."""
+        if isinstance(data, dict) and "output_model" in data:
+            output_model = data["output_model"]
+            # If it's a class, convert to string path for storage
+            if isinstance(output_model, type) and issubclass(output_model, BaseModel):
+                data["output_model"] = f"{output_model.__module__}.{output_model.__name__}"
+        return data
+
+    @model_validator(mode="after")
+    def _resolve_config(self) -> Self:
+        """Resolve output_model string to class."""
+        if isinstance(self.output_model, str) and self.output_model:
             try:
-                self.output_model = import_class_from_path(
-                    output_model, expected_base_class=pydantic.BaseModel
-                )
+                self._resolved_output_model = import_class_from_path(self.output_model, expected_base_class=pydantic.BaseModel)
             except (ImportError, AttributeError, ValueError) as e:
-                raise ProcessingError(
-                    f"Failed to resolve output_model '{output_model}': {e}"
-                )
-        else:
-            self.output_model = output_model
-
-        self.tools = tools or []
-        self.output_col = output_col
-
-        # Extract commonly used parameters
-        self.model = model
-        self.template = template
-        self._fail_on_unfilled_parameters = fail_on_unfilled_parameters
-
-        # Template metadata for tracking
-        self.template_metadata: dict[str, Any] = {}
-
-        # Initialize trace writer (lazy loading)
-        self._trace_writer = None
+                raise ValueError(f"Failed to resolve output_model '{self.output_model}': {e}")
+        elif isinstance(self.output_model, type) and issubclass(self.output_model, BaseModel):
+            # If it's already a class (shouldn't happen after before validator, but handle it)
+            self._resolved_output_model = self.output_model
+        return self
 
     @property
-    def trace_writer(self) -> Any:
-        """Lazy load trace writer."""
-        if self._trace_writer is None:
-            from buttermilk.utils.trace_writer import get_trace_writer
-
-            self._trace_writer = get_trace_writer()
-        return self._trace_writer
+    def template_metadata(self) -> dict[str, Any]:
+        """Backward compatibility property for template_metadata."""
+        return self._template_metadata
 
     async def process(
         self,
@@ -161,7 +157,7 @@ class LLMCore(ProcessorCore):
             **kwargs: Additional input variables passed as keyword arguments
 
         Yields:
-            BaseRecord: Enriched record with LLM output in self.output_col and metadata
+            BaseRecord: The LLM output directly (typed model or string)
 
         Raises:
             ProcessingError: If processing fails (fail-fast semantics)
@@ -179,21 +175,29 @@ class LLMCore(ProcessorCore):
         if parent_trace_id:
             span_attributes["parent_trace_id"] = parent_trace_id
 
-        with tracer.start_as_current_span(
-            "llm_core.unified_process", attributes=span_attributes
-        ) as span:
+        with tracer.start_as_current_span("llm_core.unified_process", attributes=span_attributes) as span:
+            result = None  # Initialize for error handling
             try:
                 # Build template_vars: if kwargs provided, merge with record fields
-                # Otherwise let process_with_llm derive from record
-                template_vars = (
-                    {**(record.model_dump() if record and hasattr(record, "model_dump") else {}), **kwargs} if kwargs else None
-                )
+                # Record content is separately handled by make_messages at {{ record }} placeholders
+                # Exclude computed hashes to prevent duplication in trace
+                template_vars_derived_from_record = False
+                if kwargs:
+                    # Merge record fields with kwargs to create template_vars
+                    template_vars = {
+                        **(record.model_dump(exclude={"record_hash", "ground_truth_hash"}) if record and hasattr(record, "model_dump") else {}),
+                        **kwargs,
+                    }
+                    template_vars_derived_from_record = bool(record)
+                else:
+                    template_vars = None
 
                 result = await self.process_with_llm(
                     template_vars=template_vars,
                     record=record,
                     parent_trace_id=parent_trace_id,
                     cancellation_token=cancellation_token,
+                    _template_vars_derived_from_record=template_vars_derived_from_record,
                 )
                 # Create ExecutionTrace for observability
                 duration_ms = (time.time() - start_time) * 1000
@@ -205,101 +209,61 @@ class LLMCore(ProcessorCore):
                     llm_config = bm.llms.connections[self.model]
                     model_configs = llm_config.configs.copy() if llm_config.configs else {}
 
-                # Build trace parameters: LLMCore params + model configs (no duplication)
-                # - self.parameters has: model (alias), template, and any runtime kwargs
-                # - model_configs has: temperature, api_version, safety_settings, etc.
-                trace_parameters = {**self.parameters, **model_configs}
+                # Add model config to extra_metadata for traceability
+                # (model, template, temperature etc. are static config, not template vars)
+                config_metadata = {
+                    "llm_config": {
+                        "model": self.model,
+                        "template": self.template,
+                        **model_configs,
+                    }
+                }
+                combined_metadata = {**result.metadata, **config_metadata}
 
-                # Build metadata: merge input metadata (from record) with output metadata
-                # Input metadata comes from record.metadata if available
-                input_metadata = {}
-                if record is not None and hasattr(record, "metadata") and record.metadata:
-                    input_metadata = {"input": record.metadata}
-
-                execution_trace = ExecutionTrace(
-                    call_id=result.trace_id,
-                    agent_info={
-                        "component_name": component_name,
-                        "execution_type": "llm_processing",
-                        "processor_stage": processor_stage,
-                    },
-                    # inputs = template variables only (record/context stored separately)
-                    inputs=result.resolved_inputs if result.resolved_inputs else kwargs,
-                    outputs=result.content,
-                    messages=result.messages,
-                    parameters=trace_parameters,
-                    # metadata merges: input metadata (under 'input' key) + output metadata + duration
-                    metadata={
-                        **input_metadata,
-                        **result.metadata,
-                        "duration_ms": duration_ms,
-                    },
-                    parent_call_id=parent_trace_id,
+                # Emit success trace using inherited helper
+                # inputs contains template variables (criteria, instructions, etc.)
+                # Static config (model, template) is in metadata.llm_config
+                await self._emit_success_trace(
                     record=record,
+                    outputs=result.content,
+                    processor_stage=processor_stage,
+                    parent_trace_id=parent_trace_id,
+                    duration_ms=duration_ms,
+                    messages=result.messages,
+                    inputs=result.resolved_inputs if result.resolved_inputs else kwargs,
+                    extra_metadata=combined_metadata,
+                    execution_type="llm_processing",
+                    trace_id=result.trace_id,
+                    component_name=component_name,
                 )
-
-                # Emit trace if trace writer is available
-                if hasattr(self, "trace_writer") and self.trace_writer:
-                    try:
-                        await self.trace_writer.add(execution_trace)
-                    except Exception as e:
-                        logger.warning(f"Failed to emit trace: {e}")
 
                 span.set_status(trace.Status(trace.StatusCode.OK))
 
-                enriched_record = record.model_copy(
-                    update={
-                        self.output_col: result.content,
-                        "metadata": {
-                            **record.metadata,
-                            processor_stage: result.metadata,
-                        },
-                    }
-                )
-                yield enriched_record
+                span.set_status(trace.Status(trace.StatusCode.OK))
+
+                # Yield the content directly
+                yield result.content
 
             except ProcessingError as e:
                 # Create error trace with same structure as success trace
                 duration_ms = (time.time() - start_time) * 1000
 
-                # Get model configs for error trace too
-                error_model_configs = {}
-                if self.model in bm.llms.connections:
-                    error_llm_config = bm.llms.connections[self.model]
-                    error_model_configs = error_llm_config.configs.copy() if error_llm_config.configs else {}
-
-                # Build error metadata with input metadata if available
-                error_input_metadata = {}
-                if record is not None and hasattr(record, "metadata") and record.metadata:
-                    error_input_metadata = {"input": record.metadata}
-
-                error_trace = ExecutionTrace(
-                    agent_info={
-                        "component_name": component_name,
-                        "execution_type": "llm_processing",
-                        "processor_stage": processor_stage,
-                    },
-                    # inputs = template variables only (kwargs passed to process)
-                    inputs=kwargs if kwargs else None,
-                    parameters={**self.parameters, **error_model_configs},
-                    error={
-                        "event": str(e),
-                        "details": {"error_type": type(e).__name__},
-                    },
-                    metadata={
-                        **error_input_metadata,
-                        "duration_ms": duration_ms,
-                    },
-                    parent_call_id=parent_trace_id,
+                # Emit error trace using inherited helper
+                # inputs contains template variables (criteria, instructions, etc.)
+                # Use kwargs as fallback if result was never assigned
+                inputs_for_trace = kwargs
+                if result is not None and result.resolved_inputs:
+                    inputs_for_trace = result.resolved_inputs
+                await self._emit_error_trace(
                     record=record,
+                    error=e,
+                    processor_stage=processor_stage,
+                    parent_trace_id=parent_trace_id,
+                    duration_ms=duration_ms,
+                    inputs=inputs_for_trace,
+                    execution_type="llm_processing",
+                    component_name=component_name,
                 )
-
-                # Emit error trace
-                if hasattr(self, "trace_writer") and self.trace_writer:
-                    try:
-                        await self.trace_writer.add(error_trace)
-                    except Exception as te:
-                        logger.warning(f"Failed to emit error trace: {te}")
 
                 span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                 span.record_exception(e)
@@ -319,6 +283,7 @@ class LLMCore(ProcessorCore):
         context: Optional[list[LLMMessage]] = None,
         parent_trace_id: Optional[str] = None,
         cancellation_token: Optional[CancellationToken] = None,
+        _template_vars_derived_from_record: bool = False,
     ) -> LLMResult:
         """Process through template rendering and LLM calling.
 
@@ -326,9 +291,9 @@ class LLMCore(ProcessorCore):
 
         Args:
             template_vars: Variables to fill Jinja2 template placeholders.
-                          If None and record is provided, uses record.model_dump().
-            record: Optional record for {{ render_or_include(record) }} placeholders.
-                   NOT used as template variables unless template_vars is None.
+            record: Optional record for {{ record }} placeholders. Handled by
+                   make_messages() which calls record.as_message() to insert content.
+
             context: Optional conversation history for message context injection.
             parent_trace_id: Optional parent trace ID for correlation.
             cancellation_token: Optional token for cancelling LLM calls.
@@ -336,19 +301,16 @@ class LLMCore(ProcessorCore):
         Returns:
             LLMResult with the processed output and metadata.
 
-        Example - Agent mode (explicit template vars):
+        Example:
             result = await llm_core.process_with_llm(
                 template_vars={"question": "What is 2+2?"},
-                record=document_record,
+                record=document_record,  # Inserted at {{ record }} placeholder
                 context=conversation_history,
             )
-
-        Example - Processor mode (template vars from record):
-            result = await llm_core.process_with_llm(
-                template_vars=None,  # Will use record.model_dump()
-                record=enriched_record,
-            )
         """
+        # Lazy import to avoid loading litellm at module load time
+        from buttermilk._core.llms import ModelOutput
+
         tracer = trace.get_tracer("buttermilk.llm_core")
         result = LLMResult(content=None, error=None)
 
@@ -360,14 +322,13 @@ class LLMCore(ProcessorCore):
         if parent_trace_id:
             span_attributes["parent_trace_id"] = parent_trace_id
 
-        with tracer.start_as_current_span(
-            "llm_core.process", attributes=span_attributes
-        ) as span:
+        with tracer.start_as_current_span("llm_core.process", attributes=span_attributes) as span:
             try:
                 # === NORMALIZE INPUTS ===
-                # If template_vars not provided, derive from record
+                # template_vars are passed explicitly; record is handled separately
+                # by make_messages() which inserts it at {{ record }} placeholders
                 if template_vars is None:
-                    template_vars = record.model_dump() if record else {}
+                    template_vars = {}
 
                 # Ensure context is always a list
                 if context is None:
@@ -375,20 +336,60 @@ class LLMCore(ProcessorCore):
                 elif not isinstance(context, list):
                     context = [context]
 
+                # Detect potential record mismatch
+                # Check if template_vars was passed as a kwarg (nested dict case from process() method)
+                if template_vars is not None and record is not None:
+                    # If template_vars dict contains a 'template_vars' key, user passed it through process()
+                    actual_template_vars = template_vars.get("template_vars", template_vars)
+                    tv_text = actual_template_vars.get("text") if isinstance(actual_template_vars, dict) else None
+                    record_text = getattr(record, "text", None)
+                    if tv_text and record_text and tv_text != record_text:
+                        logger.warning(
+                            "Record mismatch detected: template_vars.text differs from record.text. This may indicate data integrity issues."
+                        )
+
                 # Store resolved inputs for traceability
+                # Avoid duplication: if template_vars was derived from record, strip BULKY
+                # content fields but keep lightweight identifiers (record_id, dataset_name, etc.)
+                # Full record is in trace.record
+                if _template_vars_derived_from_record and record:
+                    # Only strip bulky content fields - keep identifiers for quick reference
+                    bulky_fields = {"text", "content", "metadata", "images", "attachments", "embedding"}
+                    template_vars_for_trace = {k: v for k, v in template_vars.items() if k not in bulky_fields}
+                else:
+                    template_vars_for_trace = template_vars
+
+                # Flatten template_vars directly into inputs (no wrapper)
+                # Record data lives ONLY in trace.record, not duplicated in inputs
+                # Include both config-time template_vars and runtime template_vars
                 result.resolved_inputs = {
-                    "template_vars": template_vars,
-                    "record": record,
-                    "context": context,
+                    **self.template_vars,  # Config template vars (criteria, instructions, etc.)
+                    **template_vars_for_trace,  # Runtime template vars (override config)
+                    "context": context,  # Conversation history (reserved key)
                 }
 
-                # Fill template
-                llm_messages = await self._fill_template(
-                    template_vars, record=record, context=context
-                )
+                # Store this for later use in trace emission
+                result.metadata["_template_vars_from_record"] = _template_vars_derived_from_record
 
-                # Store template metadata
-                result.metadata["template"] = self.template_metadata
+                # Fill template
+                llm_messages = await self._fill_template(template_vars, record=record, context=context)
+
+                # Store template metadata (without hash - hash goes to hashes dict)
+                result.metadata["template"] = {
+                    "template_name": self._template_metadata.get("template_name"),
+                    "unfilled_vars": self._template_metadata.get("unfilled_vars", []),
+                }
+
+                # Consolidate all hashes in metadata.hashes
+                result.metadata["hashes"] = {
+                    "template_hash": self._template_metadata.get("template_hash"),
+                }
+                if record is not None:
+                    result.metadata["hashes"]["record_hash"] = record.record_hash
+                    if hasattr(record, "ground_truth_hash") and record.ground_truth_hash:
+                        result.metadata["hashes"]["ground_truth_hash"] = record.ground_truth_hash
+                    # Store record_id separately (not a hash)
+                    result.metadata["record_id"] = record.record_id
 
                 # Call LLM
                 llm_result = await self._call_llm_with_trace(
@@ -402,7 +403,7 @@ class LLMCore(ProcessorCore):
                     raise ProcessingError(llm_result.error_message)
 
                 # Extract content based on output type
-                if self.output_model and isinstance(llm_result, ModelOutput):
+                if self._resolved_output_model and isinstance(llm_result, ModelOutput):
                     result.content = llm_result.parsed_object
                 else:
                     result.content = llm_result.content
@@ -421,16 +422,12 @@ class LLMCore(ProcessorCore):
                     else:
                         content_str = str(result.content)
 
-                    result.messages.append(
-                        AssistantMessage(content=content_str, source=self.model)
-                    )
+                    result.messages.append(AssistantMessage(content=content_str, source=self.model))
 
                 # Collect metadata (preserve existing template metadata)
                 # Model name comes from LLM wrapper (actual from API or config as fallback)
                 model_name = self.model  # Default to config name
-                if isinstance(llm_result, ModelOutput) and hasattr(
-                    llm_result, "metadata"
-                ):
+                if isinstance(llm_result, ModelOutput) and hasattr(llm_result, "metadata"):
                     # Use model from wrapper (already contains actual API model or fallback)
                     model_name = llm_result.metadata.get("model", self.model)
 
@@ -442,9 +439,7 @@ class LLMCore(ProcessorCore):
                 }
 
                 # Add pricing if available
-                if isinstance(llm_result, ModelOutput) and hasattr(
-                    llm_result, "metadata"
-                ):
+                if isinstance(llm_result, ModelOutput) and hasattr(llm_result, "metadata"):
                     if "pricing" in llm_result.metadata:
                         result.metadata["pricing"] = llm_result.metadata["pricing"]
 
@@ -479,9 +474,13 @@ class LLMCore(ProcessorCore):
         """Render the template with provided data.
 
         Args:
-            template_vars: Dictionary of variables to fill template placeholders.
+            template_vars: Runtime variables to fill template placeholders.
             record: Optional record for render_or_include placeholders.
             context: Optional conversation history for context injection.
+
+        Template variable precedence (later overrides earlier):
+        1. self.template_vars (from LLMCore config, set at init)
+        2. template_vars argument (runtime variables from caller)
         """
         template_name = self.template
         if not template_name:
@@ -489,45 +488,37 @@ class LLMCore(ProcessorCore):
 
         logger.debug(f"LLMCore: Using template '{template_name}'")
 
-        # Clean and prepare template variables
-        filtered_vars = clean_empty_values(template_vars) if template_vars else {}
+        # Merge template variables: config defaults, then runtime overrides
+        merged_vars = {**self.template_vars, **(template_vars or {})}
+        filtered_vars = clean_empty_values(merged_vars) if merged_vars else {}
 
         # Load and render template
         rendered_template_str, unfilled_vars, template_hash = load_template(
             template=template_name,
-            parameters=self.parameters,
-            untrusted_inputs=filtered_vars,
+            template_vars=filtered_vars,
         )
 
         try:
-            llm_messages, processed_placeholders = make_messages(
-                local_template=rendered_template_str, record=record, context=context
-            )
+            llm_messages, processed_placeholders = make_messages(local_template=rendered_template_str, record=record, context=context)
         except Exception as e:
-            raise ProcessingError(
-                f"Failed to create messages from template '{template_name}'"
-            ) from e
+            raise ProcessingError(f"Failed to create messages from template '{template_name}'") from e
 
         unfilled_vars -= processed_placeholders
 
         # Check for missing variables
-        if unfilled_vars and self._fail_on_unfilled_parameters:
-            raise ProcessingError(
-                f"Template '{template_name}' has unfilled parameters: {', '.join(sorted(unfilled_vars))}"
-            )
+        if unfilled_vars and self.fail_on_unfilled_parameters:
+            raise ProcessingError(f"Template '{template_name}' has unfilled parameters: {', '.join(sorted(unfilled_vars))}")
         elif unfilled_vars:
             logger.warning(f"Template has unfilled parameters: {unfilled_vars}")
 
         # Store template metadata
-        self.template_metadata = {
+        self._template_metadata = {
             "template_name": template_name,
             "template_hash": template_hash,
             "unfilled_vars": list(unfilled_vars) if unfilled_vars else [],
         }
 
-        logger.debug(
-            f"Template '{template_name}' rendered into {len(llm_messages)} messages"
-        )
+        logger.debug(f"Template '{template_name}' rendered into {len(llm_messages)} messages")
         return llm_messages
 
     async def _call_llm_with_trace(
@@ -549,24 +540,22 @@ class LLMCore(ProcessorCore):
             "llm.model": self.model,
             "llm.message_count": len(messages),
             "llm.has_tools": len(self.tools) > 0,
-            "llm.has_schema": self.output_model is not None,
+            "llm.has_schema": self._resolved_output_model is not None,
         }
         if parent_trace_id:
             span_attributes["parent_trace_id"] = parent_trace_id
 
-        with tracer.start_as_current_span(
-            "llm_core.call_llm", attributes=span_attributes
-        ) as span:
+        with tracer.start_as_current_span("llm_core.call_llm", attributes=span_attributes) as span:
             try:
                 # Get LLM client from global BM instance
                 model_client = bm.llms.get_autogen_chat_client(self.model)
 
                 logger.debug(
-                    f"LLMCore: Calling {self.model} with {len(messages)} messages, {len(self.tools)} tools, schema={self.output_model}",
+                    f"LLMCore: Calling {self.model} with {len(messages)} messages, {len(self.tools)} tools, schema={self._resolved_output_model}",
                     model=self.model,
                     message_count=len(messages),
                     tool_count=len(self.tools),
-                    schema=self.output_model if self.output_model else None,
+                    schema=self._resolved_output_model if self._resolved_output_model else None,
                 )
 
                 # Make the actual LLM call, respecting API concurrency limits
@@ -577,7 +566,7 @@ class LLMCore(ProcessorCore):
                         messages=messages,
                         tools_list=self.tools,
                         cancellation_token=cancellation_token,
-                        schema=self.output_model,
+                        schema=self._resolved_output_model,
                     )
 
                 # Record token usage in span if available

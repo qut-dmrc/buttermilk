@@ -1,28 +1,32 @@
-host: gemini25flash
+host: gemini-flash
 
 general:
-  - gemini25flash
-  - claude45sonnet
+  - gemini-flash
+  - claude-sonnet
+  - llama-maverick
 
 judgers:
-  - gemini25pro
-  - gemini25flash
-  - claude45sonnet
+  - gemini-pro
+  - gemini-flash
+  - claude-sonnet
+  - llama-maverick
+  - gpt-mini
+  - gpt-nano
 
 synthesisers:
-  - gemini25pro
-  - gemini25flash
-  - claude45sonnet
+  - gemini-pro
+  - gemini-flash
+  - claude-sonnet
+  - llama-maverick
 
 # Model-specific parameter overrides
 # These override the defaults from models.json for this llms config
 model_parameters:
-  gemini25flash:
-    temperature: 0.7
-    max_tokens: 8192
-  gemini25pro:
-    temperature: 0.3
-    max_tokens: 8192
-  claude45sonnet:
-    temperature: 0.5
-    max_tokens: 4096
+  gemini-flash:
+    temperature: 1.0
+  gemini-pro:
+    temperature: 1.0
+  claude-sonnet:
+    temperature: 1.0
+  llama-maverick:
+    temperature: 1.0

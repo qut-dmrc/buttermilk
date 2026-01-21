@@ -197,11 +197,13 @@ class TestStorageRecordClass:
 
         try:
             # Create FileStorage with Title class
+            # Set randomize=False to preserve insertion order for testing
             config = FileStorageConfig(
                 type="file",
                 path=temp_file,
                 dataset_name="tmdb_test",
                 record_class="buttermilk.tools.catalog_test.Title",
+                randomize=False,
             )
 
             storage = FileStorage(config)
@@ -247,7 +249,8 @@ class TestStorageRecordClass:
 
         try:
             # Create FileStorage without specifying record_class
-            config = FileStorageConfig(type="file", path=temp_file, dataset_name="test")
+            # Set randomize=False to preserve insertion order for testing
+            config = FileStorageConfig(type="file", path=temp_file, dataset_name="test", randomize=False)
 
             storage = FileStorage(config)
 

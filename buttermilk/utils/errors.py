@@ -2,10 +2,8 @@ from typing import Any
 from urllib.error import HTTPError
 
 import openai
-from google.generativeai.types.generation_types import (
-    BlockedPromptException,
-    StopCandidateException,
-)
+from google.genai.errors import APIError as GenaiAPIError
+from google.genai.errors import ClientError as GenaiClientError
 from vertexai.generative_models._generative_models import (
     ResponseBlockedError,
     ResponseValidationError,
@@ -46,7 +44,7 @@ def extract_error_info(e, process_info: dict = {}) -> dict[str, Any]:
 
             else:
                 error_dict.update(e.body)
-        elif isinstance(e, (IndexError, StopCandidateException)):
+        elif isinstance(e, IndexError):
             # Gemini sometimes doesn't return a result?
             pass
 
@@ -61,8 +59,12 @@ def extract_error_info(e, process_info: dict = {}) -> dict[str, Any]:
                 {"error": "Prompt blocked by LLM", "error_info": additional}
             )
 
-        elif isinstance(e, BlockedPromptException):
-            error_dict.update({"error": "Prompt blocked by LLM"})
+        elif isinstance(e, (GenaiClientError, GenaiAPIError)):
+            # google.genai SDK errors - check for blocked content
+            if "block" in str(e).lower() or "safety" in str(e).lower():
+                error_dict.update({"error": "Prompt blocked by LLM"})
+            elif "rate" in str(e).lower() or "quota" in str(e).lower():
+                raise RateLimit(str(e))
 
         elif isinstance(e, TimeoutError):
             error_dict.update({"error": "Timeout error"})

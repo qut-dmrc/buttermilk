@@ -245,3 +245,92 @@ class TestBigQueryStorage:
         record2 = Record(record_id=678.9, content="Test content")
         assert record2.record_id == "678.9"
         assert isinstance(record2.record_id, str)
+
+
+class TestCustomQueryPlaceholders:
+    """Test custom_query placeholder substitution in BigQuery storage."""
+
+    def test_custom_query_replaces_table_placeholder(self):
+        """Test that {table} placeholder is replaced in custom_query."""
+        config = BigQueryStorageConfig(
+            type="bigquery",
+            dataset_name="test_dataset",
+            project_id="test-project",
+            dataset_id="test_dataset",
+            table_id="test_table",
+            read_only=True,  # Skip schema validation
+            custom_query="SELECT * FROM {table} WHERE active = TRUE",
+        )
+
+        storage = BigQueryStorage(config)
+        storage._client = MagicMock()
+
+        # Mock the query execution
+        mock_query_job = MagicMock()
+        mock_query_job.__iter__ = Mock(return_value=iter([]))
+        storage.client.query = Mock(return_value=mock_query_job)
+
+        # Trigger iteration which builds the query
+        list(storage)
+
+        # Verify the query was called with {table} replaced
+        called_query = storage.client.query.call_args[0][0]
+        assert "{table}" not in called_query
+        assert "test-project.test_dataset.test_table" in called_query
+
+    def test_custom_query_replaces_n_placeholder_with_limit(self):
+        """Test that {n} placeholder is replaced with config.limit in custom_query."""
+        config = BigQueryStorageConfig(
+            type="bigquery",
+            dataset_name="test_dataset",
+            project_id="test-project",
+            dataset_id="test_dataset",
+            table_id="test_table",
+            read_only=True,  # Skip schema validation
+            limit=100,
+            custom_query="SELECT * FROM {table} ORDER BY RAND() LIMIT {n}",
+        )
+
+        storage = BigQueryStorage(config)
+        storage._client = MagicMock()
+
+        # Mock the query execution
+        mock_query_job = MagicMock()
+        mock_query_job.__iter__ = Mock(return_value=iter([]))
+        storage.client.query = Mock(return_value=mock_query_job)
+
+        # Trigger iteration which builds the query
+        list(storage)
+
+        # Verify the query was called with {n} replaced with limit value
+        called_query = storage.client.query.call_args[0][0]
+        assert "{n}" not in called_query
+        assert "LIMIT 100" in called_query
+
+    def test_custom_query_with_n_placeholder_no_limit_raises_error(self):
+        """Test that using {n} without limit configured raises a clear error."""
+        config = BigQueryStorageConfig(
+            type="bigquery",
+            dataset_name="test_dataset",
+            project_id="test-project",
+            dataset_id="test_dataset",
+            table_id="test_table",
+            read_only=True,
+            # No limit set
+            custom_query="SELECT * FROM {table} LIMIT {n}",
+        )
+
+        storage = BigQueryStorage(config)
+        storage._client = MagicMock()
+
+        # Mock query to track if we get the right error before execution
+        mock_query_job = MagicMock()
+        mock_query_job.__iter__ = Mock(return_value=iter([]))
+        storage.client.query = Mock(return_value=mock_query_job)
+
+        # Should raise StorageError when trying to iterate without limit
+        import pytest
+        from buttermilk._core.exceptions import StorageError
+
+        with pytest.raises(StorageError, match="limit"):
+            list(storage)

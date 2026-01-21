@@ -35,8 +35,13 @@ from typing import Any
 import psutil  # For system utilities like getting username
 import pydantic  # Pydantic core
 import shortuuid  # For generating short, unique IDs
-from cloudpathlib import AnyPath, CloudPath  # For handling local and cloud paths
 from omegaconf import DictConfig
+
+# Lazy import cloudpathlib (it pulls in google.cloud.storage at import time)
+# Import TYPE_CHECKING guard for type hints
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from cloudpathlib import AnyPath, CloudPath
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -72,7 +77,7 @@ def _make_session_id() -> str:
     # Format timestamp for use in filenames (simplified ISO 8601)
     session_time = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%MZ")
 
-    session_id = f"session-{session_time}-{shortuuid.uuid()[:4]}-{node_name}-{username}"
+    session_id = f"session-{session_time}-{shortuuid.uuid()[:8]}-{node_name}-{username}"
     return session_id
 
 
@@ -112,6 +117,7 @@ class SessionInfo(BaseModel):
         # Configuration tracking
         agent_configs (dict): Agent configurations used in this session.
         flow_config (dict): Flow configuration for this session.
+        config_uri (str | None): URI to saved initial configuration file for trace reproducibility.
 
     """
 
@@ -155,6 +161,10 @@ class SessionInfo(BaseModel):
     flow_api: str | None = Field(
         default=None, description="URL or identifier for a flow API, if applicable."
     )
+    save_dir_base: str | None = Field(
+        default=None,
+        description="Base directory/URI for saving session outputs (e.g., gs://bucket/runs). If None, uses temp directory.",
+    )
 
     # Enhanced observability fields
     status: str = Field(default="initializing", description="Current session status.")
@@ -186,13 +196,32 @@ class SessionInfo(BaseModel):
     flow_hash: str | None = Field(
         default=None, description="Hash of flow configuration for A/B testing."
     )
+    config_uri: str | None = Field(
+        default=None, description="URI to saved initial configuration file."
+    )
     template_paths: list[str] = Field(
         default_factory=list, description="Paths to search for templates."
     )
     llm_wrapper: str = Field(
-        default="autogen",
+        default="litellm",
         description="Global LLM wrapper selection (autogen or litellm). Per-model use_litellm overrides this.",
     )
+
+    @property
+    def slug(self) -> str:
+        """Extract 8-char slug from session_id.
+
+        The session_id format is: session-{timestamp}-{slug}-{node}-{user}
+        This extracts the {slug} portion for use in topic IDs and path construction.
+
+        Returns:
+            str: The 8-character slug portion of the session_id.
+        """
+        # Format: session-20241224T1430Z-dda43ff9-hostname-user
+        # Split by '-' and get the 3rd component (index 2)
+        parts = self.session_id.split("-")
+        # Parts: ['session', '20241224T1430Z', 'dda43ff9', 'hostname', 'user']
+        return parts[2] if len(parts) >= 3 else self.session_id[:8]
 
     _get_ip_task: asyncio.Task[Any] | None = PrivateAttr(default=None)  # type: ignore
 
@@ -435,6 +464,9 @@ class BM(BaseModel):
             ValueError: If `save_dir_base` is not a string, `Path`, or `CloudPath`.
 
         """
+        # Lazy import to avoid loading google.cloud at module level
+        from cloudpathlib import CloudPath
+
         if isinstance(save_dir_base, str):
             return save_dir_base
         if isinstance(save_dir_base, Path):
@@ -639,13 +671,42 @@ class BM(BaseModel):
         """Construct the final save_dir path for this session.
 
         Constructs the full save directory path and stores it in session_info.save_dir.
+        Path hierarchy: {base}/{project}/{job}/{timestamp}-{exec_slug}-{session_slug}
+
+        Collapses exec and session IDs into a single directory using:
+        - timestamp from execution context
+        - 8-char UUID slug from execution context
+        - 8-char UUID slug from session
         """
-        # Construct full save directory path using session_id for uniqueness
+        # Lazy import to avoid loading google.cloud at module level
+        from cloudpathlib import AnyPath
+
+        from buttermilk._core.execution_context import get_execution_context
+
+        # Get execution context for the execution_context_id
+        exec_ctx = get_execution_context()
+
+        # Extract components from IDs:
+        # exec format: exec-{timestamp}-{slug}-{node}-{user}
+        # session format: session-{timestamp}-{slug}-{node}-{user}
+        # Example: exec-20251224T1921Z-ZoYkuM8a-dev3-debian
+        # Split:   ['exec', '20251224T1921Z', 'ZoYkuM8a', 'dev3', 'debian']
+        exec_parts = exec_ctx.execution_context_id.split("-")
+        session_parts = self.session_info.session_id.split("-")
+
+        exec_timestamp = exec_parts[1]  # e.g., "20251224T1921Z"
+        exec_slug = exec_parts[2]  # 8-char UUID
+        session_slug = session_parts[2]  # 8-char UUID
+
+        # Collapsed directory name: {timestamp}-{exec_slug}-{session_slug}
+        collapsed_dir = f"{exec_timestamp}-{exec_slug}-{session_slug}"
+
+        # Construct full save directory path
         save_dir_path = (
             AnyPath(self.save_dir_base)
             / self.session_info.project_name
             / self.session_info.job
-            / self.session_info.session_id
+            / collapsed_dir
         )
         self.session_info.save_dir = str(save_dir_path)
         logger.debug(f"Finalized session save_dir: {self.session_info.save_dir}")
@@ -707,12 +768,15 @@ class BM(BaseModel):
             "session_info": self.session_info.model_dump(exclude_none=True),
         }
 
-        self.save(
+        config_uri = self.save(
             data=config_data_to_save,
             basename="initial_bm_config",
             extension=".json",
         )
-        logger.debug("Initial BM config saved successfully")
+        # Store config URI for trace reproducibility
+        if config_uri:
+            self.session_info.config_uri = config_uri
+        logger.debug("Initial BM config saved successfully", config_uri=config_uri)
 
     # Permit overriding/attaching attributes (e.g., monkeypatching methods) in tests
     def __setattr__(self, name: str, value: Any) -> None:  # type: ignore[override]
@@ -781,26 +845,6 @@ class BM(BaseModel):
     def genai(self) -> Any:
         """Provides access to the GenAI client."""
         return self.cloud_manager.genai
-
-    @property
-    def pubsub(self) -> Any:
-        """Provides access to complete Pub/Sub configuration including project_id."""
-        if self._cloud_manager is None:
-            raise RuntimeError(
-                "CloudManager not available. Ensure infrastructure is properly injected."
-            )
-
-        gcp_config = self._cloud_manager.gcp_cloud_cfg
-        if not gcp_config:
-            raise RuntimeError("No GCP cloud configuration found for Pub/Sub access.")
-
-        if not gcp_config.pubsub:
-            raise RuntimeError(
-                "No Pub/Sub configuration found in GCP cloud config. Ensure pubsub is configured in your cloud configuration."
-            )
-
-        # Return the actual PubSubServiceConfig object
-        return gcp_config.pubsub
 
     async def get_weave_client(self) -> None:
         """Legacy method - weave has been removed.
@@ -927,6 +971,9 @@ class BM(BaseModel):
             effective_extension = "." + effective_extension
 
         try:
+            # Lazy import to avoid loading google.cloud at module level
+            from cloudpathlib import AnyPath
+
             # Call the utility save function
             saved_file_path = save.save(
                 data=data,

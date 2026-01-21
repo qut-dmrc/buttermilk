@@ -15,9 +15,14 @@ from buttermilk.utils.uploader import AsyncDataUploader
 class FakeTMDBProcessor:
     """Mock processor that transforms Title to Observations."""
 
-    async def process(self, record, **kwargs):
-        """Transform Title to Observations."""
+    async def process(self, context, **kwargs):
+        """Transform Title to Observations.
+
+        Args:
+            context: ProcessingContext containing the record to process.
+        """
         _ = self  # reference self to satisfy linter
+        record = context.record  # Extract record from ProcessingContext
         print(f"  TMDB processing: {record.title}")
         # Yield 1 observation for each title (pipeline only takes first output anyway)
         yield Observation(
@@ -41,8 +46,13 @@ class FakeUploader:
     def __init__(self):
         self.uploaded = []
 
-    async def process(self, record, **kwargs):
-        """Pass through and track."""
+    async def process(self, context, **kwargs):
+        """Pass through and track.
+
+        Args:
+            context: ProcessingContext containing the record to process.
+        """
+        record = context.record  # Extract record from ProcessingContext
         print(
             f"  Uploading: {type(record).__name__} - {record.record_id} - provider: {getattr(record, 'provider_name', 'N/A')}"
         )
@@ -174,8 +184,9 @@ class MetadataAddingProcessor:
         self.metadata_key = metadata_key
         self.metadata_value = metadata_value
 
-    async def process(self, record, **kwargs):
+    async def process(self, context, **kwargs):
         """Add metadata to record without changing record_id."""
+        record = context.record  # Extract record from ProcessingContext
         print(
             f"  MetadataAddingProcessor processing: {record.record_id} - {self.metadata_key}"
         )
@@ -195,8 +206,9 @@ class SplittingProcessor:
     def __init__(self, split_count: int = 3):
         self.split_count = split_count
 
-    async def process(self, record, **kwargs):
+    async def process(self, context, **kwargs):
         """Split one record into multiple, preserving record_id."""
+        record = context.record  # Extract record from ProcessingContext
 
         for i in range(self.split_count):
             # Create split record with same record_id but additional fields
@@ -342,7 +354,8 @@ async def test_record_filtering_no_metadata_update():
     class FilteringProcessor:
         """Processor that filters out records with certain content."""
 
-        async def process(self, record: BaseRecord, **kwargs):
+        async def process(self, context, **kwargs):
+            record = context.record  # Extract record from ProcessingContext
             if "skip" in record.content:
                 # Filter out this record by yielding nothing
                 return
@@ -408,8 +421,8 @@ async def test_pipeline_tracks_processing_summary():
 
     # Create simple pass-through processor
     class PassThroughProcessor:
-        async def process(self, record, **kwargs):
-            yield record
+        async def process(self, context, **kwargs):
+            yield context.record  # Extract and yield record from ProcessingContext
 
     processor = PassThroughProcessor()
 
@@ -450,8 +463,8 @@ async def test_pipeline_summary_counts_attempted():
             yield Record(record_id=f"test_{i}", content=f"Content {i}")
 
     class PassThroughProcessor:
-        async def process(self, record, **kwargs):
-            yield record
+        async def process(self, context, **kwargs):
+            yield context.record
 
     orchestrator = PipelineOrchestrator(
         pipeline_name="attempted_test",
@@ -479,8 +492,8 @@ async def test_pipeline_summary_counts_processed():
             yield Record(record_id=f"test_{i}", content=f"Content {i}")
 
     class PassThroughProcessor:
-        async def process(self, record, **kwargs):
-            yield record
+        async def process(self, context, **kwargs):
+            yield context.record
 
     orchestrator = PipelineOrchestrator(
         pipeline_name="processed_test",
@@ -508,8 +521,8 @@ async def test_pipeline_summary_with_limit():
             yield Record(record_id=f"test_{i}", content=f"Content {i}")
 
     class PassThroughProcessor:
-        async def process(self, record, **kwargs):
-            yield record
+        async def process(self, context, **kwargs):
+            yield context.record
 
     # Limit to 5 records
     orchestrator = PipelineOrchestrator(
@@ -539,8 +552,8 @@ async def test_pipeline_summary_success_rate():
             yield Record(record_id=f"test_{i}", content=f"Content {i}")
 
     class PassThroughProcessor:
-        async def process(self, record, **kwargs):
-            yield record
+        async def process(self, context, **kwargs):
+            yield context.record
 
     orchestrator = PipelineOrchestrator(
         pipeline_name="success_rate_test",
@@ -569,9 +582,9 @@ async def test_pipeline_summary_duration_tracking():
         yield Record(record_id="test_1", content="Content 1")
 
     class SlowProcessor:
-        async def process(self, record, **kwargs):
+        async def process(self, context, **kwargs):
             await asyncio.sleep(0.1)  # 100ms delay
-            yield record
+            yield context.record
 
     orchestrator = PipelineOrchestrator(
         pipeline_name="duration_test",
@@ -598,8 +611,8 @@ async def test_pipeline_summary_with_concurrency():
             yield Record(record_id=f"test_{i}", content=f"Content {i}")
 
     class PassThroughProcessor:
-        async def process(self, record, **kwargs):
-            yield record
+        async def process(self, context, **kwargs):
+            yield context.record
 
     # Use concurrency=3
     orchestrator = PipelineOrchestrator(
@@ -628,8 +641,8 @@ async def test_pipeline_summary_as_dict_export():
             yield Record(record_id=f"test_{i}", content=f"Content {i}")
 
     class PassThroughProcessor:
-        async def process(self, record, **kwargs):
-            yield record
+        async def process(self, context, **kwargs):
+            yield context.record
 
     orchestrator = PipelineOrchestrator(
         pipeline_name="export_test",

@@ -13,6 +13,8 @@ No mocks of internal code - this is a TRUE integration test.
 
 import pytest
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.mark.anyio
 async def test_litellm_vertex_uses_token_provider(real_bm):
@@ -39,8 +41,9 @@ async def test_litellm_vertex_uses_token_provider(real_bm):
     Args:
         real_bm: Real ButtermilkBM instance from conftest.py fixture
     """
-    from buttermilk._core.llms import ClientType, LiteLLMWrapper
     from autogen_core.models import UserMessage
+
+    from buttermilk._core.llms import ClientType, LiteLLMWrapper
 
     # ARRANGE: Get a Vertex model wrapper
     # testing.yaml uses llms:debug which has gemini-flash as a Vertex model

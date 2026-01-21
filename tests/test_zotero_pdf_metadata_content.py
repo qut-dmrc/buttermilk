@@ -15,7 +15,7 @@ pytest.importorskip("pyzotero")
 
 
 @pytest.mark.anyio
-async def test_zotero_sets_pdf_metadata_as_content_when_no_fulltext():
+async def test_zotero_sets_pdf_metadata_as_content_when_no_fulltext(real_bm):
     """Test that meaningful PDF metadata is set as content when fulltext not available.
 
     This ensures:
@@ -32,7 +32,7 @@ async def test_zotero_sets_pdf_metadata_as_content_when_no_fulltext():
         content="[Placeholder from fetch]",
         metadata={
             "title": "Test Document",
-            "zotero_item": {"key": "TEST_KEY", "data": {"title": "Test Document"}},
+            "zotero_item": {"key": "TEST_KEY", "title": "Test Document"},
             "zotero_links": {
                 "attachment": {
                     "attachmentType": "application/pdf",
@@ -44,7 +44,7 @@ async def test_zotero_sets_pdf_metadata_as_content_when_no_fulltext():
 
     # Mock the Zotero API client at module level
     with tempfile.TemporaryDirectory() as tmpdir:
-        with patch("buttermilk.libs.zotero.Zotero") as MockZotero:
+        with patch("pyzotero.zotero.Zotero") as MockZotero:
             mock_zot = MagicMock()
             mock_zot.fulltext_item.side_effect = Exception("No fulltext available")
             mock_zot.dump = MagicMock(
@@ -55,7 +55,7 @@ async def test_zotero_sets_pdf_metadata_as_content_when_no_fulltext():
             MockZotero.return_value = mock_zot
 
             downloader = ZoteroDownloadProcessor(
-                library_id="test_library", save_dir=tmpdir
+                library_id="test_library"
             )
 
             # Process the record
@@ -87,7 +87,7 @@ async def test_zotero_sets_pdf_metadata_as_content_when_no_fulltext():
 
 
 @pytest.mark.anyio
-async def test_zotero_uses_fulltext_when_available():
+async def test_zotero_uses_fulltext_when_available(real_bm):
     """Test that Zotero fulltext API content is used when available.
 
     This ensures backward compatibility - if Zotero provides fulltext,
@@ -101,7 +101,7 @@ async def test_zotero_uses_fulltext_when_available():
         content="[Placeholder from fetch]",
         metadata={
             "title": "Test Document",
-            "zotero_item": {"key": "TEST_KEY", "data": {"title": "Test Document"}},
+            "zotero_item": {"key": "TEST_KEY", "title": "Test Document"},
             "zotero_links": {
                 "attachment": {
                     "attachmentType": "application/pdf",
@@ -112,7 +112,7 @@ async def test_zotero_uses_fulltext_when_available():
     )
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        with patch("buttermilk.libs.zotero.Zotero") as MockZotero:
+        with patch("pyzotero.zotero.Zotero") as MockZotero:
             mock_zot = MagicMock()
             mock_zot.fulltext_item.return_value = {
                 "content": "This is the extracted text from Zotero fulltext API",
@@ -122,7 +122,7 @@ async def test_zotero_uses_fulltext_when_available():
             MockZotero.return_value = mock_zot
 
             downloader = ZoteroDownloadProcessor(
-                library_id="test_library", save_dir=tmpdir
+                library_id="test_library"
             )
 
             # Process the record

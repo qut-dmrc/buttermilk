@@ -98,15 +98,19 @@ def test_only_parallel_variants(base_variant_config):
 
 
 def test_only_sequential_variants(base_variant_config):
-    """Test config generation with only sequential variants."""
+    """Test config generation with multiple variant dimensions.
+
+    Note: The 'tasks' field was removed in favor of using 'variants' for all
+    parameter combinations. The 'variants' dict expands all combinations.
+    """
     config_data = {
         **base_variant_config,
-        "tasks": {"criteria": ["c1", "c2"], "temp": [0.5, 0.8]},
+        "variants": {"criteria": ["c1", "c2"], "temp": [0.5, 0.8]},
     }
     variant_factory = AgentVariants(**config_data)
     configs = variant_factory.get_configs()
 
-    # Sequential tasks generate separate configs for each combination
+    # Variants generate separate configs for each combination
     assert len(configs) == 4  # 2 criteria * 2 temp
     expected_combinations = [
         {"base_param": "base_value", "criteria": "c1", "temp": 0.5},
@@ -129,16 +133,20 @@ def test_only_sequential_variants(base_variant_config):
 
 
 def test_both_parallel_and_sequential_variants(base_variant_config):
-    """Test config generation with both parallel and sequential variants."""
+    """Test config generation with multiple variant dimensions.
+
+    Note: The 'tasks' field was removed. All variant dimensions are now
+    specified in 'variants' dict. This test now verifies that multiple
+    dimensions in variants are properly combined.
+    """
     config_data = {
         **base_variant_config,
-        "variants": {"model": ["m1", "m2"]},
-        "tasks": {"temp": [0.1, 0.9]},
+        "variants": {"model": ["m1", "m2"], "temp": [0.1, 0.9]},
     }
     variant_factory = AgentVariants(**config_data)
     configs = variant_factory.get_configs()
 
-    # 2 parallel variants * 2 sequential tasks = 4 total configs
+    # 2 models * 2 temps = 4 total configs
     assert len(configs) == 4
     expected_combinations = [
         {"base_param": "base_value", "model": "m1", "temp": 0.1},
@@ -234,11 +242,13 @@ def test_parameter_overwriting(base_variant_config):
 
 
 def test_omegaconf_conversion(base_variant_config):
-    """Test that OmegaConf dicts/lists in variants are converted."""
+    """Test that OmegaConf dicts/lists in variants are converted.
+
+    Note: The 'tasks' field was removed. All variants are now in 'variants' dict.
+    """
     config_data = {
         **base_variant_config,
-        "variants": OmegaConf.create({"model": ["m1", "m2"]}),
-        "tasks": OmegaConf.create({"temp": [0.1, 0.9]}),
+        "variants": OmegaConf.create({"model": ["m1", "m2"], "temp": [0.1, 0.9]}),
     }
     # The validator runs on initialization
     variant_factory = AgentVariants(**config_data)
@@ -246,16 +256,14 @@ def test_omegaconf_conversion(base_variant_config):
     # Check internal state after validation (optional, but good for debugging)
     assert isinstance(variant_factory.variants, dict)
     assert not isinstance(variant_factory.variants, OmegaConf)
-    assert isinstance(variant_factory.tasks, dict)
-    assert not isinstance(variant_factory.tasks, OmegaConf)
 
-    # Check generated configs - 2 parallel variants * 2 sequential tasks = 4 configs
+    # Check generated configs - 2 models * 2 temps = 4 configs
     configs = variant_factory.get_configs()
     assert len(configs) == 4
-    # Check that parameters contain both parallel and sequential variant values
+    # Check that parameters contain both variant dimensions
     for agent_class, config in configs:
-        assert "model" in config.parameters  # From parallel variants
-        assert "temp" in config.parameters  # From sequential tasks
+        assert "model" in config.parameters
+        assert "temp" in config.parameters
         assert config.parameters["model"] in ["m1", "m2"]
         assert config.parameters["temp"] in [0.1, 0.9]
 

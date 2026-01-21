@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 """Quick test to verify Title objects are loaded from BigQuery storage."""
-
+import pytest
 from omegaconf import OmegaConf
 
 from buttermilk._core.storage_config import StorageFactory
 
 
+@pytest.mark.slow
 def test_title_loading():
     """Test that Title objects are properly loaded from tmdbtitles storage."""
 

@@ -17,4 +17,4 @@ synthesisers:
 model_parameters:
   gemini-flash:
     temperature: 0.5
-    max_tokens: 2048
+    max_tokens: 16384

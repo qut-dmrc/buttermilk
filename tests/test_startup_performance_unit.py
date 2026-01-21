@@ -67,34 +67,17 @@ class TestBMInitialization:
             # Cloud authentication should not happen during BM creation
             mock_auth.assert_not_called()
 
-    async def test_weave_import_is_cached(self):
-        """Test that weave import is cached after first access."""
-        from unittest.mock import AsyncMock
-
+    async def test_weave_client_returns_none(self):
+        """Test that get_weave_client returns None since weave was removed."""
         from buttermilk import BM
         from buttermilk._core.bm_init import SessionInfo
 
         session_info = SessionInfo(project_name="test", job="test")
         bm = BM(session_info=session_info)
 
-        # Mock the execution context to return a consistent weave client
-        mock_weave_client = AsyncMock()
-        mock_context = AsyncMock()
-        mock_context.get_weave_client = AsyncMock(return_value=mock_weave_client)
-
-        with patch(
-            "buttermilk._core.execution_context.get_execution_context",
-            return_value=mock_context,
-        ):
-            # First access
-            weave1 = await bm.get_weave_client()
-            assert mock_context.get_weave_client.call_count == 1
-
-            # Second access should use the same execution context
-            weave2 = await bm.get_weave_client()
-            assert weave1 is weave2
-            # Execution context's get_weave_client called twice, but returns cached client
-            assert mock_context.get_weave_client.call_count == 2
+        # After weave removal, get_weave_client should return None
+        result = await bm.get_weave_client()
+        assert result is None
 
 
 class TestLazyRouteManager:

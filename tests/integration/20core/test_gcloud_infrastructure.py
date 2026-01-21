@@ -15,6 +15,7 @@ from buttermilk.utils.save import upload_binary, upload_text
 from buttermilk.utils.utils import read_file
 
 
+@pytest.mark.slow
 def test_save_binary(real_bm):
     """Test binary file upload to cloud storage."""
     # Integration test must fail if cloud manager not properly configured

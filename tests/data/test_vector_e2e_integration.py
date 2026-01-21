@@ -24,6 +24,7 @@ from buttermilk.processors.embeddings import EmbeddingGenerator
 class TestVectorE2EIntegration:
     """End-to-end integration tests for vector pipeline."""
 
+    @pytest.mark.slow
     @pytest.mark.anyio
     async def test_complete_vectorization_pipeline_with_dict_chunks(self, real_bm):
         """Test complete pipeline: Splitter -> Embeddings -> ChromaDB.

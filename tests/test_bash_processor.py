@@ -160,7 +160,7 @@ class TestPDFToTextProcessor:
 
         record = Record(
             record_id="pdf_001",
-            content="placeholder",
+            content="[PDF Document: test.pdf, Size: 0 bytes, Path: /tmp/test.pdf]",
             file_path=str(pdf_file),
             metadata={"title": "Dummy PDF"},
         )
@@ -195,7 +195,7 @@ class TestPDFToTextProcessor:
 
         record = Record(
             record_id="pdf_002",
-            content="placeholder",
+            content="[PDF Document: test.pdf, Size: 0 bytes, Path: /tmp/test.pdf]",
             file_path=str(pdf_file),
             metadata={},
         )

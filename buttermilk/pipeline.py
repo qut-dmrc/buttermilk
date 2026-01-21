@@ -62,8 +62,6 @@ from typing import (
     AsyncIterator,
     Mapping,
     Optional,
-    Protocol,
-    runtime_checkable,
 )
 
 import hydra
@@ -76,6 +74,8 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from buttermilk import bm, logger
 from buttermilk._core.hashing import compute_processor_config_hash
+from buttermilk._core.processing_context import ProcessingContext
+from buttermilk._core.protocols import Processor
 from buttermilk._core.types import BaseRecord
 
 
@@ -85,102 +85,15 @@ class RecordSkippedException(Exception):
     pass
 
 
-@runtime_checkable
-class Processor(Protocol):
-    """Standard processor interface - async generator that accepts and yields BaseRecord objects.
+class RecordBufferedException(Exception):
+    """Exception raised when a record is buffered for later batch processing.
 
-    PROCESSOR GUIDELINES:
-
-    1. **record_id Uniqueness**: Each record must have a unique record_id for proper caching.
-       For 1:N transformations, the pipeline automatically creates indexed record_ids
-       (e.g., "ABC123_output_0", "ABC123_output_1") and preserves the original in metadata.
-
-    2. **Semantic Identifiers**: When creating 1:N transformations (splits), add your own
-       meaningful identifier fields for business logic:
-       - Chunking processor: Add `chunk_id`, `chunk_index` fields
-       - TMDB processor: Add `observation_id`, `provider_name` fields
-       - LLM processor with multiple calls: Add `llm_call_index` field
-
-    3. **Metadata Namespacing**: Store processor-specific metadata in record.metadata[stage_name].
-       Each processor should use its own namespace to avoid conflicts.
-
-    4. **Pipeline Metadata**: The pipeline will automatically add stage metadata with:
-       - status: "processed"
-       - timestamp: processing timestamp
-       - processing_time_ms: time taken
-       - output_index, total_outputs: for 1:N transformations
-
-    5. **Filtering**: To filter out a record, simply yield nothing.
-       The pipeline will handle the RecordSkippedException automatically.
-
-    6. Processors MUST work with standard Python types. When loading from cache, objects
-       will be deserialized into dicts/lists/primitives. Processors must handle their own
-       own conversions internally if needed.
+    Unlike RecordSkippedException, buffered records will be processed when the
+    batch is complete or flushed. This allows the pipeline to distinguish between
+    records that are intentionally filtered vs records that are waiting in a buffer.
     """
 
-    async def process(
-        self,
-        record: Any = BaseRecord,
-        *,
-        processor_stage: str,
-        parent_trace_id: Optional[str] = None,
-        component_name: str = "LLMCore",
-        cancellation_token: Optional[Any] = None,
-        **kwargs: Any,
-    ) -> AsyncGenerator[BaseRecord, None]:
-        """Process a BaseRecord and yield zero or more output BaseRecord objects.
-
-        Args:
-            record: BaseRecord object to process
-
-        Yields:
-            BaseRecord objects (can be zero for filtering, one for 1:1, multiple for 1:N)
-
-        Examples:
-            # 1:1 transformation preserving record_id
-            updated_record = record.model_copy(update={
-                output_col: LLMResult.content,
-                "metadata": {
-                    **record.metadata,
-                    "summarizer": {"model": "gpt-4", "tokens": 500}
-                }
-            })
-            yield updated_record
-
-            # 1:N transformation with semantic IDs
-            chunks = split_text(record.content)
-            for i, chunk_text in enumerate(chunks):
-                chunk_record = record.model_copy(update={
-                    "content": chunk_text,
-                    "chunk_id": f"{record.record_id}_chunk_{i}",
-                    "chunk_index": i,
-                    "metadata": {
-                        **record.metadata,
-                        "chunking": {"parent_id": record.record_id, "index": i}
-                    }
-                })
-                yield chunk_record
-
-            # Filtering (yield nothing)
-            if should_filter(record):
-                return  # Record is filtered out
-            yield record  # Pass through unchanged
-        """
-        ...
-
-    async def finalize_processing(self) -> bool:
-        """Optional: Perform cleanup/finalization after all records are processed.
-
-        Called by the pipeline at the end of processing to allow processors to:
-        - Flush any remaining data (e.g., ChromaDBUploader syncing to remote)
-        - Close connections or resources
-        - Perform any final cleanup operations
-
-        Returns:
-            bool: True if finalization succeeded, False if there were issues
-                 (False doesn't stop pipeline, just logs a warning)
-        """
-        ...
+    pass
 
 
 class PipelineOrchestrator(BaseModel):
@@ -519,11 +432,14 @@ class PipelineOrchestrator(BaseModel):
                                     current_record, "parent_call_id", None
                                 )
 
-                                async for output_record in processor.process(
-                                    current_record,
-                                    processor_stage=processor_stage_name,
-                                    parent_trace_id=parent_trace_id,
-                                ):
+                                # All processors now use unified ProcessingContext interface
+                                context = ProcessingContext(
+                                    session_id=parent_trace_id or processor_stage_name,
+                                    record=current_record,
+                                    batch_id=self.pipeline_name,
+                                    span=processor_span,
+                                )
+                                async for output_record in processor.process(context):
                                     outputs.append(output_record)
                             except Exception as e:
                                 # Don't log here - let the task wrapper handle error logging
@@ -553,17 +469,21 @@ class PipelineOrchestrator(BaseModel):
                                     )
 
                                 # Cache the processor outputs (unless processor opts out)
+                                # IMPORTANT: _save_processor_cache returns outputs with cache_key
+                                # metadata added for 1:N transformations. We MUST use the returned
+                                # outputs so cache_key propagates to downstream processors.
                                 if getattr(processor, "skip_cache", False):
                                     logger.debug(
                                         f"🚫 Skipping cache save for {processor_class} (skip_cache=True)",
                                         processor_class=processor_class,
                                     )
+                                    outputs_for_queue = outputs
                                 else:
-                                    await self._save_processor_cache(
+                                    outputs_for_queue = await self._save_processor_cache(
                                         current_record, outputs, processor_stage_name
                                     )
                                 # Add all outputs to the next processing queue
-                                next_queue.extend(outputs)
+                                next_queue.extend(outputs_for_queue)
 
                         # Set processor span attributes for outputs
                         processor_span.set_attribute("outputs.count", len(next_queue))
@@ -777,6 +697,18 @@ class PipelineOrchestrator(BaseModel):
                                 task_span.set_attribute("status", "no_outputs")
                                 task_span.set_status(trace.Status(trace.StatusCode.OK))
 
+                        except RecordBufferedException as e:
+                            # Record is buffered for batch processing, not filtered
+                            # Don't increment skipped counter - record will be processed later via flush()
+                            task_span.set_attribute("status", "buffered")
+                            task_span.set_attribute("buffer_info", str(e))
+                            task_span.set_status(trace.Status(trace.StatusCode.OK))
+                            logger.debug(
+                                f"Record {record_id} buffered: {e}",
+                                record_id=record_id,
+                                pipeline_name=self.pipeline_name,
+                            )
+
                         except RecordSkippedException as e:
                             self._summary.increment_skipped()
                             task_span.set_attribute("status", "skipped")
@@ -841,6 +773,10 @@ class PipelineOrchestrator(BaseModel):
                 # Wait for all tasks to complete before signaling completion
                 if pending_tasks:
                     await asyncio.gather(*pending_tasks, return_exceptions=True)
+
+                # Flush buffered records from processors after source exhaustion
+                # Records from flush() flow through remaining processors
+                await self._flush_all_processors(completed_records)
 
                 # Signal completion by putting None
                 await completed_records.put(None)
@@ -954,7 +890,15 @@ class PipelineOrchestrator(BaseModel):
     async def _check_processor_cache(
         self, record: BaseRecord, processor_stage_name: str
     ) -> list[BaseRecord] | None:
-        """Check cache for processor-specific outputs."""
+        """Check cache for processor-specific outputs.
+
+        Cache key strategy:
+        - If record has metadata.cache_key (from prior 1:N transformation), use that
+        - Otherwise use record_id (original record or 1:1 transformation chain)
+
+        This ensures records from 1:N expansions (which share record_id but have
+        unique cache_keys) are cached/loaded correctly.
+        """
         if (
             not self.enable_record_cache
             or not self._record_cache
@@ -963,22 +907,30 @@ class PipelineOrchestrator(BaseModel):
         ):
             return None
 
+        # Determine the cache lookup key:
+        # - Records from 1:N transformations have metadata.cache_key (e.g., "56599_output_0")
+        # - Original records just use record_id
+        record_metadata = getattr(record, "metadata", None) or {}
+        lookup_key = record_metadata.get("cache_key", record.record_id)
+
         logger.debug(
             "🔍 Checking processor cache",
             record_id=record.record_id,
+            lookup_key=lookup_key,
+            has_cache_key=("cache_key" in record_metadata),
             processor_stage=processor_stage_name,
         )
 
-        # Try 1:1 cached result first
-        cached_record = self._record_cache.load(record.record_id, processor_stage_name)
+        # Try 1:1 cached result first (using the appropriate lookup key)
+        cached_record = self._record_cache.load(lookup_key, processor_stage_name)
         if cached_record and self._validate_cached_record(cached_record):
             return [cached_record]
 
-        # Try 1:N cached results
+        # Try 1:N cached results (for when this processor also does 1:N)
         cached_outputs = []
         output_index = 0
         while True:
-            cache_key = f"{record.record_id}_output_{output_index}"
+            cache_key = f"{lookup_key}_output_{output_index}"
             cached_output = self._record_cache.load(cache_key, processor_stage_name)
             if not cached_output:
                 break
@@ -1066,43 +1018,66 @@ class PipelineOrchestrator(BaseModel):
         input_record: BaseRecord,
         outputs: list[BaseRecord],
         processor_stage_name: str,
-    ) -> None:
-        """Save processor outputs to cache."""
+    ) -> list[BaseRecord]:
+        """Save processor outputs to cache and return records with cache metadata.
+
+        Cache key strategy matches _check_processor_cache:
+        - If input has metadata.cache_key (from prior 1:N), use that as base
+        - Otherwise use record_id as base
+
+        Returns:
+            List of records with cache_key metadata added (for 1:N transformations).
+            For 1:1, returns original outputs unchanged.
+            IMPORTANT: Caller must use returned records to ensure cache_key propagates
+            to downstream processors.
+        """
         if (
             not self.enable_record_cache
             or not self._record_cache
             or not outputs
             or not hasattr(input_record, "record_id")
         ):
-            return
+            return outputs  # Return unchanged if caching disabled
+
+        # Determine base key for caching (matches lookup logic in _check_processor_cache)
+        input_metadata = getattr(input_record, "metadata", None) or {}
+        base_key = input_metadata.get("cache_key", input_record.record_id)
 
         logger.debug(
             "💾 Saving processor outputs to cache",
             record_id=input_record.record_id,
+            base_key=base_key,
+            has_cache_key=("cache_key" in input_metadata),
             processor_stage=processor_stage_name,
             outputs_count=len(outputs),
         )
 
         try:
             if len(outputs) == 1:
-                # 1:1 transformation - use input record_id as cache key
-                self._record_cache.save(outputs[0], processor_stage_name)
+                # 1:1 transformation - use base_key as cache key
+                # No need to add cache_key metadata for 1:1 (lookup uses record_id)
+                self._record_cache.save(outputs[0], processor_stage_name, cache_key=base_key)
+                return outputs  # Return unchanged for 1:1
             else:
-                # 1:N transformation - use indexed cache keys
+                # 1:N transformation - use indexed cache keys based on base_key
+                # IMPORTANT: record_id is immutable - use cache_key for cache indexing only
+                updated_outputs = []
                 for output_index, output_record in enumerate(outputs):
-                    cache_key = f"{input_record.record_id}_output_{output_index}"
+                    cache_key = f"{base_key}_output_{output_index}"
 
-                    # Preserve original record_id in metadata (only if not already set)
+                    # Store cache key in metadata for cache lookup, but preserve original record_id
                     updated_metadata = (
                         output_record.metadata.copy() if output_record.metadata else {}
                     )
-                    if "original_record_id" not in updated_metadata:
-                        updated_metadata["original_record_id"] = input_record.record_id
+                    updated_metadata["cache_key"] = cache_key
+                    updated_metadata["output_index"] = output_index
 
                     cache_record = output_record.model_copy(
-                        update={"record_id": cache_key, "metadata": updated_metadata}
+                        update={"metadata": updated_metadata}
                     )
-                    self._record_cache.save(cache_record, processor_stage_name)
+                    self._record_cache.save(cache_record, processor_stage_name, cache_key=cache_key)
+                    updated_outputs.append(cache_record)  # Return record WITH cache metadata
+                return updated_outputs
         except Exception as e:
             logger.debug(
                 "💥 Failed to save processor cache",
@@ -1110,6 +1085,129 @@ class PipelineOrchestrator(BaseModel):
                 processor_stage=processor_stage_name,
                 error=str(e),
             )
+            return outputs  # Return original outputs on cache failure
+
+    async def _flush_all_processors(self, completed_queue: asyncio.Queue) -> None:
+        """Flush buffered records from all processors after source exhaustion.
+
+        For processors that buffer records (like BatchAccumulator), this calls
+        flush() and routes the resulting records through remaining processors.
+
+        Args:
+            completed_queue: Queue to put completed records
+        """
+        logger.debug(
+            f"🔄 Flushing processors in stage '{self.pipeline_name}'",
+            processor_count=len(self.processors),
+            pipeline_name=self.pipeline_name,
+        )
+
+        flush_tasks = []
+
+        for i, processor in enumerate(self.processors):
+            if hasattr(processor, "flush"):
+                try:
+                    flushed_count = 0
+                    async for flushed_record in processor.flush():
+                        flushed_count += 1
+                        self._summary.increment_attempted()
+
+                        # Process flushed record through remaining processors
+                        task = asyncio.create_task(
+                            self._process_flushed_record(
+                                flushed_record, i + 1, completed_queue
+                            )
+                        )
+                        flush_tasks.append(task)
+
+                    if flushed_count > 0:
+                        logger.info(
+                            f"🔄 Flushed {flushed_count} records from {type(processor).__name__}",
+                            processor_index=i,
+                            processor_name=type(processor).__name__,
+                            flushed_count=flushed_count,
+                        )
+                except Exception as e:
+                    logger.error(
+                        f"❌ Failed to flush processor {i} ({type(processor).__name__}): {e}",
+                        processor_index=i,
+                        processor_name=type(processor).__name__,
+                        error=str(e),
+                    )
+
+        # Wait for all flush tasks to complete
+        if flush_tasks:
+            await asyncio.gather(*flush_tasks, return_exceptions=True)
+
+    async def _process_flushed_record(
+        self,
+        record: BaseRecord,
+        start_index: int,
+        completed_queue: asyncio.Queue,
+    ) -> None:
+        """Process a flushed record through remaining processors.
+
+        Args:
+            record: The flushed record to process
+            start_index: Index of first processor to use (skip earlier ones)
+            completed_queue: Queue to put completed records
+        """
+        tracer = trace.get_tracer("buttermilk.pipeline")
+        record_id = getattr(record, "record_id", "unknown")
+
+        if start_index >= len(self.processors):
+            # No more processors, yield directly
+            self._summary.increment_processed()
+            await completed_queue.put(("success", record))
+            return
+
+        # Process through remaining processors only
+        async with self._semaphore:
+            with tracer.start_as_current_span(
+                "pipeline.flush_process",
+                attributes={"record.id": record_id, "start_index": start_index},
+            ) as span:
+                try:
+                    # Start with the flushed record
+                    processing_queue = [record]
+
+                    # Only process through processors[start_index:]
+                    for processor_index in range(start_index, len(self.processors)):
+                        processor = self.processors[processor_index]
+                        next_queue = []
+
+                        for current_record in processing_queue:
+                            context = ProcessingContext(
+                                session_id=self.pipeline_name,
+                                record=current_record,
+                                batch_id=self.pipeline_name,
+                                span=span,
+                            )
+                            async for output_record in processor.process(context):
+                                next_queue.append(output_record)
+
+                        if not next_queue:
+                            # Filtered out
+                            self._summary.increment_skipped()
+                            return
+
+                        processing_queue = next_queue
+
+                    # Yield all final outputs
+                    self._summary.increment_processed()
+                    for final_record in processing_queue:
+                        await completed_queue.put(("success", final_record))
+
+                    span.set_status(trace.Status(trace.StatusCode.OK))
+
+                except Exception as e:
+                    self._summary.increment_failed()
+                    span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
+                    logger.error(
+                        f"Failed to process flushed record: {e}",
+                        record_id=record_id,
+                        error=str(e),
+                    )
 
     async def _finalize_all_processors(self) -> None:
         """Call finalize_processing on all processors that support it.

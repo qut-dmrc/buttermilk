@@ -16,9 +16,7 @@ from jmespath import exceptions as jmespath_exceptions  # JMESPath specific exce
 from buttermilk._core.contract import GroupchatMessageTypes  # Union type for messages
 from buttermilk._core.log import logger  # Centralized logger
 from buttermilk.utils import scrub_serializable
-from buttermilk.utils.utils import (
-    clean_empty_values,
-)  # Utility to remove empty values from dicts
+from buttermilk.utils.utils import clean_empty_values  # Utility to remove empty values from dicts
 
 
 def extract_message_data(

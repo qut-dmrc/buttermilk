@@ -6,4 +6,5 @@ This file automatically applies markers to all tests in the directory.
 import pytest
 
 # Apply markers to all tests in this directory
-pytestmark = pytest.mark.endtoend
+# End-to-end tests need longer timeout (240s) than unit tests (60s default)
+pytestmark = [pytest.mark.integration, pytest.mark.timeout(240)]

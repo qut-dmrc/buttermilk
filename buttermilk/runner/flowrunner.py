@@ -32,7 +32,6 @@ from buttermilk._core.contract import (
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.orchestrator import Orchestrator, OrchestratorProtocol
 from buttermilk._core.types import ProcessingSummary, Record, RunRequest
-from buttermilk.api.job_queue import JobQueueClient
 from buttermilk.api.services.message_service import MessageService
 from buttermilk.api.services.session_storage import SessionStorageService
 from buttermilk.utils import scrub_serializable
@@ -44,7 +43,6 @@ from buttermilk.utils.otel import (
     # end_session_root_span,
     # start_session_root_span,
 )
-from buttermilk.utils.utils import expand_dict
 
 
 class SessionStatus(str, Enum):
@@ -1354,25 +1352,16 @@ class FlowRunner(BaseModel):
     def _save_config_snapshot(self, run_request: "RunRequest") -> None:
         """Save a snapshot of the current configuration for reproducibility.
 
-        Saves one config file per session (named by session_id) in the same location
-        as session message logs. File descriptors are properly closed after writing.
+        Saves config to GCS via bm.save() for persistence alongside other run artifacts.
 
         Args:
             run_request: The run request containing flow and session information
         """
         try:
-            import json
-            from pathlib import Path
-
             from omegaconf import OmegaConf
 
             # Get session ID, defaulting to "default" if not available
             session_id = getattr(run_request, "session_id", "default") or "default"
-
-            # Use session_id as the base filename (same pattern as message logs)
-            # Store in /tmp/runs/{session_id}/ alongside message logs
-            session_dir = Path(f"/tmp/runs/{session_id}")
-            session_dir.mkdir(parents=True, exist_ok=True)
 
             # Save flow configuration with session_id as base name
             if run_request.flow in self.flows:
@@ -1390,34 +1379,29 @@ class FlowRunner(BaseModel):
                         else str(flow_config)
                     )
 
-                # Config file named by session_id (e.g., /tmp/runs/abc123/abc123_config.json)
-                # This overwrites on each run, keeping only one config file per session
-                config_file = session_dir / f"{session_id}_config.json"
+                config_data = {
+                    "flow_name": run_request.flow,
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "session_id": session_id,
+                    "job_id": getattr(run_request, "job_id", None),
+                    "flow_config": config_dict,
+                    "run_parameters": getattr(run_request, "parameters", {}),
+                    "run_inputs": getattr(run_request, "inputs", {}),
+                    "flows_available": list(self.flows.keys()),
+                    "total_flows": len(self.flows),
+                }
 
-                # Use 'with' statement to ensure file descriptor is closed
-                with open(config_file, "w") as f:
-                    json.dump(
-                        {
-                            "flow_name": run_request.flow,
-                            "timestamp": datetime.now(UTC).isoformat(),
-                            "session_id": session_id,
-                            "job_id": getattr(run_request, "job_id", None),
-                            "flow_config": config_dict,
-                            "run_parameters": getattr(run_request, "parameters", {}),
-                            "run_inputs": getattr(run_request, "inputs", {}),
-                            "flows_available": list(self.flows.keys()),
-                            "total_flows": len(self.flows),
-                        },
-                        f,
-                        indent=2,
-                        default=str,
-                    )
-                # File is automatically closed here when exiting 'with' block
+                # Save to GCS via bm.save()
+                saved_path = bm.save(
+                    data=config_data,
+                    basename=f"config/{session_id}_config",
+                    extension=".json",
+                )
 
                 logger.debug(
-                    "Saved config snapshot for session",
+                    "Saved config snapshot",
                     session_id=session_id,
-                    config_file=str(config_file),
+                    saved_path=saved_path,
                 )
 
         except Exception as e:
@@ -1566,8 +1550,9 @@ class FlowRunner(BaseModel):
             # Save configuration snapshot for reproducibility
             self._save_config_snapshot(run_request)
 
-        # Set the callback_to_ui for the run_request, which will be used by the orchestrator
-        run_request.callback_to_ui = _session.send_message_to_ui
+        # Set the callback_to_ui for the run_request if not already set
+        if run_request.callback_to_ui is None:
+            run_request.callback_to_ui = _session.send_message_to_ui
         logger.debug(
             "[FlowRunner.run_flow] Callback configured for session",
             session_id=_session.session_id,
@@ -1661,344 +1646,3 @@ class FlowRunner(BaseModel):
                 # Clean up after completion if we were waiting
                 await self.session_manager.cleanup_session(run_request.session_id)
         return
-
-    async def create_batch(
-        self,
-        flow_name,
-        storage_config: dict | str | None = None,
-        max_records: int | None = None,
-    ) -> list[RunRequest]:  # noqa: PLR0912
-        """Create a new batch job from storage source.
-
-        Args:
-            flow_name: Name of the flow to execute
-            storage_config: Storage configuration. Can be:
-                - dict: Direct storage configuration (pipeline pattern)
-                - str: Key into flow.storage dict (backward compat with dataset_key)
-                - None: Auto-discover from flow.storage (uses 'initial' or first available)
-            max_records: Maximum number of records to process
-
-        Returns:
-            List of created RunRequest objects
-
-        Raises:
-            ValueError: If the flow doesn't exist or storage cannot be resolved
-
-        """
-        # Resolve storage configuration
-        flow = self.flows[flow_name]
-
-        if storage_config is None:
-            # Auto-discover: prefer 'initial' key, fallback to first available
-            if hasattr(flow, "storage") and flow.storage:
-                if "initial" in flow.storage:
-                    storage_cfg = flow.storage["initial"]
-                    logger.debug(
-                        "Auto-discovered storage using 'initial' key",
-                        flow_name=flow_name,
-                    )
-                else:
-                    storage_cfg = next(iter(flow.storage.values()))
-                    logger.debug(
-                        "Auto-discovered storage using first available",
-                        flow_name=flow_name,
-                    )
-            else:
-                raise ValueError(
-                    f"Flow '{flow_name}' has no storage configuration and none was provided"
-                )
-        elif isinstance(storage_config, str):
-            # Legacy dataset_key behavior - lookup in flow.storage
-            if not hasattr(flow, "storage") or storage_config not in flow.storage:
-                available = (
-                    list(flow.storage.keys()) if hasattr(flow, "storage") else []
-                )
-                raise ValueError(
-                    f"Storage key '{storage_config}' not found in flow '{flow_name}'. Available: {available}"
-                )
-            storage_cfg = flow.storage[storage_config]
-            logger.debug(
-                "Using storage from key",
-                storage_key=storage_config,
-                flow_name=flow_name,
-            )
-        else:
-            # Direct storage configuration dict (pipeline pattern)
-            storage_cfg = storage_config
-            logger.debug("Using direct storage configuration", flow_name=flow_name)
-
-        # Create storage instance using BM
-        from buttermilk._core.dmrc import get_bm
-
-        bm = get_bm()
-        storage = bm.get_storage(storage_cfg)
-
-        # Stream records from storage (don't load all into memory)
-        records = list(storage)  # Storage.__iter__ yields BaseRecord objects
-        logger.info(
-            "Extracted records from storage",
-            record_count=len(records),
-            flow_name=flow_name,
-        )
-
-        # Create multiple iterations by multiplying the parameters
-        iteration_values = expand_dict(flow.parameters) or [{}]
-        logger.debug(
-            "Expanded parameters for batch into variants",
-            parameter_count=len(flow.parameters),
-            variant_count=len(iteration_values),
-        )
-
-        #
-        # Shuffle records
-        random.shuffle(records)
-
-        batch_id = str(shortuuid.uuid())
-
-        # Create run requests for each record and parameter combination
-        job_definitions = []
-
-        # Apply iteration values
-        for iteration_params in iteration_values:
-            for i, record in enumerate(records):
-                data = {"record_id": record.record_id}
-                job = RunRequest(
-                    batch_id=batch_id,
-                    flow=flow_name,
-                    # session_id gets auto-generated UUID - each job is independent
-                    parameters=iteration_params,
-                    inputs=data,
-                    callback_to_ui=None,
-                )
-                job_definitions.append(job)
-                logger.debug(
-                    "Batch job created",
-                    flow=flow_name,
-                    record_id=record.record_id,
-                    job_id=job.job_id,
-                )
-                # Apply max_records limit if specified
-                if max_records is not None and max_records > 0 and i >= max_records:
-                    break
-
-        if max_records is not None and max_records > 0:
-            logger.info(
-                "Limited record IDs, returning iterations for jobs",
-                max_records=max_records,
-                iteration_count=len(iteration_values),
-                job_count=len(job_definitions),
-            )
-        else:
-            logger.info(
-                "Returning iterations for jobs",
-                iteration_count=len(iteration_values),
-                job_count=len(job_definitions),
-            )
-
-        random.shuffle(job_definitions)
-
-        try:
-            # Enqueue the batch for processing
-            job_queue = JobQueueClient()
-
-            for request in job_definitions:
-                job_queue.publish_job(request)
-
-        except Exception as e:
-            msg = f"Failed to publish job to queue: {e}"
-            raise FatalError(msg) from e
-
-        return job_definitions
-
-    async def run_batch_job(
-        self,
-        callback_to_ui: Callable,
-        max_jobs: int = 1,
-        wait_for_completion: bool = True,
-        show_progress: bool = True,
-    ) -> ProcessingSummary:
-        """Pull and run jobs from the queue, ensuring fresh state for each job.
-
-        Args:
-            max_jobs: Maximum number of jobs to process in this batch run
-            callback_to_ui: Callback function for UI updates
-            wait_for_completion: Whether to wait for each job to complete
-            show_progress: Whether to display a progress bar (default: True)
-
-        Returns:
-            ProcessingSummary: Statistics about the batch processing
-
-        Raises:
-            FatalError: If no run requests are found in the queue
-            Exception: If there's an error running a job
-
-        """
-        from rich.progress import (
-            BarColumn,
-            MofNCompleteColumn,
-            Progress,
-            SpinnerColumn,
-            TaskProgressColumn,
-            TextColumn,
-            TimeElapsedColumn,
-        )
-
-        summary = ProcessingSummary()
-
-        try:
-            worker = JobQueueClient(
-                max_concurrent_jobs=1,  # Process one job at a time to maintain isolation
-            )
-
-            jobs_processed = 0
-
-            # Set up progress bar
-            progress = Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(),
-                MofNCompleteColumn(),
-                TaskProgressColumn(),
-                TextColumn("•"),
-                TimeElapsedColumn(),
-                disable=not show_progress,
-            )
-
-            with progress:
-                task_id = progress.add_task("Processing batch jobs", total=max_jobs)
-
-                while jobs_processed < max_jobs:
-                    # Pull a job from the queue
-                    run_request, ack_id = await worker.pull_single_task()
-                    if not run_request:
-                        if summary.attempted == 0:
-                            # Only raise an error if we didn't process any jobs
-                            raise FatalError("No run request found in the queue.")
-                        # Update progress to show we're done
-                        progress.update(task_id, total=summary.attempted)
-                        break  # No more jobs to process
-
-                    summary.increment_attempted()
-                    run_request.callback_to_ui = callback_to_ui
-
-                    # Update progress description with current job
-                    progress.update(
-                        task_id,
-                        description=f"Processing {run_request.flow} [{run_request.job_id[:8]}...]",
-                    )
-
-                    logger.info(
-                        "Processing batch job",
-                        job_number=jobs_processed + 1,
-                        max_jobs=max_jobs,
-                        flow=run_request.flow,
-                        job_id=run_request.job_id,
-                    )
-                    try:
-                        await self.run_flow(
-                            run_request=run_request,
-                            wait_for_completion=wait_for_completion,
-                        )
-                        summary.increment_processed()
-                        if wait_for_completion:
-                            logger.info(
-                                "Successfully completed job", job_id=run_request.job_id
-                            )
-                            worker.ack_message(
-                                ack_id
-                            )  # Acknowledge only after successful processing
-                        else:
-                            logger.info(
-                                "Job started in the background",
-                                job_id=run_request.job_id,
-                            )
-                            # Defer ack until the background task completes successfully
-                            try:
-                                self.schedule_ack_on_completion(
-                                    session_id=run_request.session_id,
-                                    ack_id=ack_id,
-                                    worker=worker,
-                                )
-                            except Exception as e:
-                                logger.warning(
-                                    "Failed to schedule ack on completion",
-                                    job_id=run_request.job_id,
-                                    error=str(e),
-                                )
-                    except Exception as job_error:
-                        summary.increment_failed()
-                        logger.error(
-                            "Error running job",
-                            job_id=run_request.job_id,
-                            error=str(job_error),
-                        )
-                        # Continue processing other jobs even if one fails
-
-                    jobs_processed += 1
-                    progress.update(task_id, advance=1)
-
-            logger.info(summary.format_for_console())
-            return summary
-
-        except FatalError:
-            # Re-raise FatalError to be handled by the caller
-            raise
-        except Exception as e:
-            logger.error("Fatal error during batch processing", error=str(e))
-            raise
-
-    def schedule_ack_on_completion(
-        self, session_id: str, ack_id: str, worker: JobQueueClient
-    ) -> None:
-        """Schedule Pub/Sub ack once the flow task completes successfully.
-
-        This ensures messages are only acknowledged after the background flow
-        finishes without raising an exception. If the task fails, no ack is sent
-        so Pub/Sub can redeliver according to its settings.
-
-        Args:
-            session_id: The FlowRunContext session id housing the flow task
-            ack_id: The Pub/Sub ack id to acknowledge
-            worker: The JobQueueClient used to perform the ack
-        """
-        session = self.session_manager.sessions.get(session_id)
-        if not session:
-            logger.warning(
-                "Cannot schedule ack: session not found", session_id=session_id
-            )
-            return
-
-        task = session.flow_task
-        if not task or not isinstance(task, asyncio.Task):
-            logger.warning(
-                "Cannot schedule ack: flow task not available", session_id=session_id
-            )
-            return
-
-        def _on_done(t: asyncio.Task) -> None:
-            try:
-                exc = t.exception()
-            except asyncio.CancelledError:
-                exc = asyncio.CancelledError()
-
-            if exc is None:
-                try:
-                    worker.ack_message(ack_id)
-                    logger.debug(
-                        "Acknowledged Pub/Sub message after task completion",
-                        session_id=session_id,
-                    )
-                except Exception as e:
-                    logger.warning(
-                        "Failed to acknowledge Pub/Sub message on completion",
-                        session_id=session_id,
-                        error=str(e),
-                    )
-            else:
-                logger.error(
-                    "Flow task completed with error; not acknowledging message",
-                    session_id=session_id,
-                    error=str(exc),
-                )
-
-        task.add_done_callback(_on_done)

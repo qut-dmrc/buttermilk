@@ -294,9 +294,11 @@ class AgentConfig(BaseModel):
             should be structured or transformed before being sent out.
             (Currently, its usage might be pending full implementation).
             Serialized as `mapping_outputs`.
-        name_components (list[str]): A list of attribute names or JMESPath expressions
-            used to construct the human-friendly `agent_name`. Defaults to
-            `["role", "unique_identifier"]`.
+        name_components (list[str], init-only): A list of attribute names or JMESPath
+            expressions used to construct the human-friendly `agent_name`. Defaults to
+            `["agent_id"]` (which already contains the role). This is an init-only
+            parameter that is consumed during initialization and NOT stored on the
+            model instance.
         model_config (ConfigDict): Pydantic model configuration.
             - `extra`: "allow" - Allows extra fields not explicitly defined, useful with Hydra.
             - `arbitrary_types_allowed`: False.
@@ -353,12 +355,29 @@ class AgentConfig(BaseModel):
         description="Defines mappings for how the agent's results should be structured or transformed. (Usage may be evolving).",
         alias="mapping_outputs",
     )
-
-    name_components: list[str] = Field(
-        default=["role", "agent_id"],
-        description="List of attribute names or JMESPath expressions to construct the 'agent_name'.",
-        exclude=False,  # Ensure it's included in model_dump etc.
+    record: str | None = Field(
+        default=None,
+        description="JMESPath expression for extracting record from flow state. "
+                    "Maps directly to AgentInput.record field. "
+                    "Example: '[FETCH.outputs]||*.record' (tries FETCH first, falls back to other sources)",
     )
+    context: str | None = Field(
+        default=None,
+        description="JMESPath expression for extracting conversation context from flow state. "
+                    "Maps directly to AgentInput.context field.",
+    )
+    required: list[str] | None = Field(
+        default=None,
+        description="Whitelist of input keys to pass to the agent. "
+                    "If None (default), no filtering occurs (backward compatible). "
+                    "If empty list [], all inputs are filtered out. "
+                    "If non-empty, only those keys are passed.",
+    )
+
+    # NOTE: name_components is NOT a stored field. It's consumed during init
+    # and removed after generating agent_name. Pass it via kwargs and it will
+    # be extracted from __pydantic_extra__ in _generate_id_and_name.
+    # Default is ["agent_id"] if not provided (agent_id already contains role).
 
     # Pydantic Model Configuration
     model_config = ConfigDict(
@@ -419,10 +438,10 @@ class AgentConfig(BaseModel):
     def agent_name(self) -> str:
         """A human-friendly name for the agent instance.
 
-        This name is dynamically constructed based on the `name_components`
-        attribute, which can include the agent's `role`, `agent_id`,
-        or other values extracted via JMESPath from its configuration
-        (`inputs` and `parameters`).
+        This name is dynamically constructed during initialization based on the
+        `name_components` init-only parameter (defaults to ["agent_id"]),
+        which can include the agent's `role`, `agent_id`, or other values
+        extracted via JMESPath from its configuration (`inputs` and `parameters`).
 
         Returns:
             str: The generated human-friendly name for the agent.
@@ -441,10 +460,13 @@ class AgentConfig(BaseModel):
         assignments if `validate_assignment` is True. It ensures that:
         - `agent_id` is generated as a UUID if not already provided.
         - `_agent_name` (accessed via `agent_name` property) is constructed based
-          on `name_components`, allowing for dynamic naming using JMESPath
-          expressions on the agent's configuration.
+          on `name_components` (extracted from __pydantic_extra__ and removed),
+          allowing for dynamic naming using JMESPath expressions on the agent's
+          configuration.
 
         This method is designed to be idempotent and conditional.
+        Note: `name_components` is consumed and removed during this validation,
+        so it won't be stored on the model instance after initialization.
 
         Returns:
             Self: The instance of AgentConfig with `agent_id` and `_agent_name` populated/updated.
@@ -461,6 +483,13 @@ class AgentConfig(BaseModel):
         # Part 2: Generate agent_name
         name_parts = []
 
+        # Extract name_components from __pydantic_extra__ (since it's not a stored field)
+        # and remove it after use. Default to just ["agent_id"] since agent_id already
+        # contains the role (format: "{role}-{unique_id}").
+        name_components = ["agent_id"]  # default
+        if self.__pydantic_extra__ and "name_components" in self.__pydantic_extra__:
+            name_components = self.__pydantic_extra__.pop("name_components")
+
         # Construct the context for JMESPath search manually to avoid recursion.
         # This context should contain fields that name_components might refer to,
         # respecting aliases and excluding None values. Ensure the current
@@ -473,7 +502,7 @@ class AgentConfig(BaseModel):
         # Manually add unique_identifier as a special case (it's not in parameters)
         context_for_jmespath["unique_identifier"] = self._unique_identifier
 
-        for comp_path in self.name_components:
+        for comp_path in name_components:
             part = None
             try:
                 part = jmespath.search(comp_path, context_for_jmespath)
@@ -501,6 +530,24 @@ class AgentConfig(BaseModel):
 
         return self
 
+    @model_validator(mode="after")
+    def _validate_no_record_context_in_inputs(self) -> Self:
+        """Ensure record/context aren't specified in both top-level AND inputs dict."""
+        if self.inputs:
+            if "record" in self.inputs and self.record is not None:
+                raise ValueError(
+                    "Configuration error: 'record' field is ambiguous. "
+                    "Cannot specify 'record' in both top-level field AND inputs dict. "
+                    "Use only the top-level 'record:' field."
+                )
+            if "context" in self.inputs and self.context is not None:
+                raise ValueError(
+                    "Configuration error: 'context' field is ambiguous. "
+                    "Cannot specify 'context' in both top-level field AND inputs dict. "
+                    "Use only the top-level 'context:' field."
+                )
+        return self
+
 
 class AgentVariants(AgentConfig):
     """A factory for creating multiple `AgentConfig` instances (variants).
@@ -511,31 +558,22 @@ class AgentVariants(AgentConfig):
     It extends `AgentConfig` to inherit base configuration fields and adds
     specific fields for defining variant parameters.
 
-    Variants can be defined in two main ways:
-    1.  **`variants` (Parallel Variants)**: A dictionary where keys are parameter names
-        and values are lists of possible settings. Combinations of these create
-        distinct agent configurations that can potentially run in parallel.
-        Example: `variants: {model: ["gpt-4", "claude-3"], temperature: [0.7, 0.9]}`
-        would generate four base configurations.
-    2.  **`tasks` (Sequential Variants/Tasks)**: Similar to `variants`, but these
-        combinations define sequential tasks or sub-configurations to be executed
-        by *each* agent instance created from the parallel `variants`.
-        Example: `tasks: {prompt_style: ["detailed", "concise"]}`. If there were
-        two parallel variants, each would run these two sequential tasks.
+    The `variants` dictionary defines parameter combinations. Keys are parameter names
+    and values are lists of possible settings. All combinations are expanded to create
+    distinct agent configurations that run in parallel.
+    Example: `variants: {model: ["gpt-4", "claude-3"], temperature: [0.7, 0.9]}`
+    would generate four agent configurations.
 
-    The `num_runs` attribute replicates each parallel variant configuration a
-    specified number of times, useful for repeated trials.
+    The `num_runs` attribute replicates each variant configuration a specified
+    number of times, useful for repeated trials.
 
     Attributes:
         agent_obj (str): The Python class name of the agent implementation to
             instantiate (e.g., 'LLMAgent', 'SummarizationAgent'). This class
             should be registered in `AgentRegistry`.
-        variants (dict): Dictionary defining parameters for parallel agent variations.
+        variants (dict): Dictionary defining parameters for agent variations.
             Keys are parameter names, values are lists of settings for that parameter.
-        tasks (dict): Dictionary defining parameters for sequential tasks or
-            sub-configurations within each parallel variation.
-        num_runs (int): Number of times to replicate each parallel variant
-            configuration.
+        num_runs (int): Number of times to replicate each variant configuration.
         extra_params (list[str]): A list of parameter names that should be sourced
             from the runtime `RunRequest` and merged into the agent's parameters.
             This allows for dynamic configuration at execution time.
@@ -545,13 +583,9 @@ class AgentVariants(AgentConfig):
     agent_obj: str = Field(
         description="The Python class name of the agent implementation to instantiate (e.g., 'LLMAgent'). Must be registered in AgentRegistry.",
     )
-    variants: dict[str, list[Any]] = Field(  # More specific type hint
+    variants: dict[str, list[Any]] = Field(
         default_factory=dict,
-        description="Parameters for parallel agent variations (e.g., {'model': ['gpt-4', 'claude-3']}).",
-    )
-    tasks: dict[str, list[Any]] = Field(  # More specific type hint
-        default_factory=dict,
-        description="Parameters for sequential tasks within each parallel variation (e.g., {'prompt_style': ['concise', 'detailed']}).",
+        description="Parameters for agent variations (e.g., {'model': ['gpt-4', 'claude-3']}).",
     )
     num_runs: int = Field(
         default=1,
@@ -566,11 +600,11 @@ class AgentVariants(AgentConfig):
     def get_configs(
         self, params: RunRequest | None = None, flow_default_params: dict = {}
     ) -> list[tuple[type[Any], AgentConfig]]:
-        """Generates a list of agent configurations based on defined variants and tasks.
+        """Generates a list of agent configurations based on defined variants.
 
-        This method expands the `variants` and `tasks` dictionaries to create all
-        possible combinations of parameters. Each combination, along with base
-        parameters and any runtime `extra_params`, forms a distinct `AgentConfig`.
+        This method expands the `variants` dictionary to create all possible
+        combinations of parameters. Each combination, along with base parameters
+        and any runtime `extra_params`, forms a distinct `AgentConfig`.
         The `num_runs` setting further replicates these configurations.
 
         Args:
@@ -578,6 +612,7 @@ class AgentVariants(AgentConfig):
                 runtime parameters. If `extra_params` are defined for this
                 `AgentVariants` instance, their values are sourced from this
                 `RunRequest`.
+            flow_default_params (dict): Default parameters from the flow configuration.
 
         Returns:
             list[tuple[type[Any], AgentConfig]]: A list of tuples, where each tuple
@@ -587,8 +622,7 @@ class AgentVariants(AgentConfig):
         Raises:
             ValueError: If an `extra_param` is specified but not found in the
                 provided `RunRequest` `params`.
-            FatalError: If no agent configurations can be generated (e.g., due to
-                empty variants and tasks without a base configuration).
+            FatalError: If no agent configurations can be generated.
             TypeError: If `agent_obj` is not found in the `AgentRegistry`.
 
         """
@@ -596,7 +630,6 @@ class AgentVariants(AgentConfig):
             exclude={
                 "agent_obj",  # Exclude agent_obj as it's used to get the class
                 "variants",
-                "tasks",
                 "num_runs",
                 "extra_params",
                 # Also exclude fields that are part of AgentConfig's identity if they are recalculated
@@ -606,7 +639,13 @@ class AgentVariants(AgentConfig):
             },
             exclude_none=True,  # Exclude None values to avoid overriding defaults in AgentConfig
         )
+        # Preserve 'required' before clean_empty_values - empty list has semantic meaning
+        # ([] = filter all inputs, None = no filtering)
+        required_value = static_config_dict.get("required")
         static_config_dict = clean_empty_values(static_config_dict)
+        # Restore required if it was explicitly set (even if empty list)
+        if required_value is not None:
+            static_config_dict["required"] = required_value
 
         # Ensure 'parameters' exists and is a dict, even if empty from model_dump
         base_parameters = static_config_dict.pop("parameters", {})
@@ -650,69 +689,62 @@ class AgentVariants(AgentConfig):
             for key in params.parameters.keys():
                 filtered_variants.pop(key, None)
 
-        parallel_variant_combinations = (
+        variant_combinations = (
             expand_dict(clean_empty_values(filtered_variants))
             if filtered_variants
             else [{}]
         )
 
-        # Only use explicitly defined tasks, not flow default parameters
-        sequential_task_sets = (
-            expand_dict(clean_empty_values(self.tasks)) if self.tasks else [{}]
-        )
-
         generated_configs: list[tuple[type[Any], AgentConfig]] = []
         for _ in range(self.num_runs):  # Loop for num_runs
-            for parallel_params in parallel_variant_combinations:
-                for task_params in sequential_task_sets:
-                    # Start with the static parts of AgentVariants config
-                    current_config_dict = copy.deepcopy(static_config_dict)
+            for variant_params in variant_combinations:
+                # Start with the static parts of AgentVariants config
+                current_config_dict = copy.deepcopy(static_config_dict)
 
-                    # Combine parameters: flow defaults, then base (agent + RunRequest), then parallel, then task-specific.
-                    # This order defines precedence - later values override earlier ones.
-                    final_params = {
-                        **flow_default_params,
-                        **base_parameters,
-                        **parallel_params,
-                        **task_params,
-                    }
-                    current_config_dict["parameters"] = clean_empty_values(final_params)
+                # Combine parameters: flow defaults, then base (agent + RunRequest), then variant.
+                # This order defines precedence - later values override earlier ones.
+                final_params = {
+                    **flow_default_params,
+                    **base_parameters,
+                    **variant_params,
+                }
+                current_config_dict["parameters"] = clean_empty_values(final_params)
 
-                    # Ensure all necessary fields for AgentConfig are present or defaulted
-                    # Role and description might come from static_config_dict or need defaults
-                    current_config_dict.setdefault("role", self.role or "VARIANT_AGENT")
-                    current_config_dict.setdefault(
-                        "description", self.description or "Generated variant agent"
+                # Ensure all necessary fields for AgentConfig are present or defaulted
+                # Role and description might come from static_config_dict or need defaults
+                current_config_dict.setdefault("role", self.role or "VARIANT_AGENT")
+                current_config_dict.setdefault(
+                    "description", self.description or "Generated variant agent"
+                )
+
+                # Explicitly remove fields not in AgentConfig before instantiation
+                # This is safer than relying solely on AgentConfig.model_config['extra'] = 'ignore'
+                # if AgentConfig itself doesn't have 'extra':'allow' or if strictness is desired.
+                valid_agent_config_fields = AgentConfig.model_fields.keys()
+                filtered_cfg_dict = {
+                    k: v
+                    for k, v in current_config_dict.items()
+                    if k in valid_agent_config_fields
+                }
+
+                # Ensure 'parameters' contains the final merged parameters
+                filtered_cfg_dict["parameters"] = final_params
+
+                try:
+                    agent_config_instance = AgentConfig(**filtered_cfg_dict)
+                    generated_configs.append((agent_class, agent_config_instance))
+                except Exception as e:
+                    logger.error(
+                        msg
+                        := f"Error creating AgentConfig for role '{filtered_cfg_dict.get('role', 'unknown')}' "
+                        f"with parameters {final_params}: {e}",
                     )
-
-                    # Explicitly remove fields not in AgentConfig before instantiation
-                    # This is safer than relying solely on AgentConfig.model_config['extra'] = 'ignore'
-                    # if AgentConfig itself doesn't have 'extra':'allow' or if strictness is desired.
-                    valid_agent_config_fields = AgentConfig.model_fields.keys()
-                    filtered_cfg_dict = {
-                        k: v
-                        for k, v in current_config_dict.items()
-                        if k in valid_agent_config_fields
-                    }
-
-                    # Ensure 'parameters' contains the final merged parameters
-                    filtered_cfg_dict["parameters"] = final_params
-
-                    try:
-                        agent_config_instance = AgentConfig(**filtered_cfg_dict)
-                        generated_configs.append((agent_class, agent_config_instance))
-                    except Exception as e:
-                        logger.error(
-                            msg
-                            := f"Error creating AgentConfig for role '{filtered_cfg_dict.get('role', 'unknown')}' "
-                            f"with parameters {final_params}: {e}",
-                        )
-                        raise FatalError(msg) from e
+                    raise FatalError(msg) from e
 
         if not generated_configs:
             logger.warning(
                 f"No agent configurations were generated for AgentVariants: {self.agent_id or self.role}. "
-                f"This might be due to empty 'variants' and 'tasks' with num_runs=0, or misconfiguration."
+                f"This might be due to empty 'variants' with num_runs=0, or misconfiguration."
             )
             # Depending on desired behavior, could raise FatalError or return empty list.
             # Current behavior: returns empty list, which might be handled by caller.

@@ -1,5 +1,8 @@
 type: bigquery
 randomize: false
 full_table_id: "prosocial-443205.mediamarkets.titles_tmdb_theatrical"
+dataset_id: "mediamarkets"
+table_id: "titles_tmdb_theatrical"
+project_id: "prosocial-443205"
 schema_path: "tmdbtitles.schema.json"
 record_class: "buttermilk.tools.catalog_test.Title"

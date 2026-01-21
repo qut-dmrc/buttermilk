@@ -68,10 +68,10 @@ async def test_llmcore_fills_template_with_expected_from_record(judge_trace):
     )
 
     # Call _fill_template() - this is what process() calls internally
-    # Pass record as inputs parameter since that's how processor mode works
+    # Pass record fields as template_vars dict (first positional arg)
     messages = await llm_core._fill_template(
-        inputs=record,
-        record=None,  # In processor mode, data comes from inputs
+        record.model_dump(),
+        record=record,
         context=[],
     )
 
@@ -230,8 +230,8 @@ async def test_full_rescore_pipeline_preserves_expected():
     # Call _fill_template which extracts fields from record and renders template
     # This is what process_with_llm calls internally (line 355 in llm_core.py)
     messages = await llm_core._fill_template(
-        inputs=transformed_record,  # In processor mode, record is passed as inputs
-        record=None,
+        transformed_record.model_dump(),  # Pass record fields as template_vars dict
+        record=transformed_record,
         context=[],
     )
 
@@ -277,10 +277,11 @@ def test_score_template_with_empty_expected_should_fail():
     # This SHOULD raise an error because expected is empty
     # and we have fail_on_unfilled_parameters=True
     with pytest.raises(Exception, match="unfilled|expected"):
+        # Merge inputs with parameters (parameters take precedence)
+        merged_vars = {**untrusted_inputs, "fail_on_unfilled_parameters": True}
         rendered, unfilled_vars, _ = load_template(
             template="score",
-            parameters={"fail_on_unfilled_parameters": True},
-            untrusted_inputs=untrusted_inputs,
+            template_vars=merged_vars,
         )
 
 
@@ -300,8 +301,9 @@ def test_score_template_without_expected_should_fail():
     # This SHOULD raise an error because expected is missing
     # and we have fail_on_unfilled_parameters=True
     with pytest.raises(Exception, match="unfilled|expected"):
+        # Merge inputs with parameters (parameters take precedence)
+        merged_vars = {**untrusted_inputs, "fail_on_unfilled_parameters": True}
         rendered, unfilled_vars, _ = load_template(
             template="score",
-            parameters={"fail_on_unfilled_parameters": True},
-            untrusted_inputs=untrusted_inputs,
+            template_vars=merged_vars,
         )

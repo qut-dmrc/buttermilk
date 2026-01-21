@@ -96,7 +96,6 @@ async def test_huggingface_classifier_e2e(
 
 
 @pytest.mark.anyio
-@pytest.mark.endtoend
 @pytest.mark.skipif(
     not os.environ.get("ZENTROPI_API_KEY"),
     reason="ZENTROPI_API_KEY not set",
@@ -163,7 +162,6 @@ async def test_zentropi_classifier_e2e(real_bm, session_runner, text_record: Bas
 
 
 @pytest.mark.anyio
-@pytest.mark.endtoend
 @pytest.mark.parametrize("model", ["gpt-oss-safeguard-20b"])
 async def test_huggingface_classifier_input_tracing(
     real_bm, session_runner, text_record: BaseRecord, model: str
@@ -265,8 +263,7 @@ async def test_huggingface_classifier_input_tracing(
     # Recompute template hash and verify it matches
     _, _, expected_template_hash = load_template(
         template="test/classify",
-        parameters={},
-        untrusted_inputs={},
+        template_vars={},
     )
     assert metadata["template_hash"] == expected_template_hash, (
         "template_hash should match recomputed hash"
@@ -275,7 +272,6 @@ async def test_huggingface_classifier_input_tracing(
 
 
 @pytest.mark.anyio
-@pytest.mark.endtoend
 @pytest.mark.skipif(
     not os.environ.get("ZENTROPI_API_KEY"),
     reason="ZENTROPI_API_KEY not set",
@@ -379,8 +375,7 @@ async def test_zentropi_classifier_input_tracing(
     # Recompute template hash and verify it matches
     _, _, expected_template_hash = load_template(
         template="test/classify",
-        parameters={},
-        untrusted_inputs={},
+        template_vars={},
     )
     assert metadata["template_hash"] == expected_template_hash, (
         "template_hash should match recomputed hash"

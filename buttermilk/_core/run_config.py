@@ -20,9 +20,7 @@ class RunMode(str, Enum):
     Each mode determines how Buttermilk executes and what parameters are relevant:
 
     - console: Interactive CLI execution
-    - batch: Create batch jobs only
-    - batch_run: Process existing batch jobs
-    - batch_all: Create and process batch jobs
+    - batch: Pipeline-based batch processing (recommended)
     - api: Run FastAPI server
     - pipeline: Multi-stage data processing
     - streamlit: Streamlit web interface
@@ -32,8 +30,6 @@ class RunMode(str, Enum):
 
     CONSOLE = "console"
     BATCH = "batch"
-    BATCH_RUN = "batch_run"
-    BATCH_ALL = "batch_all"
     API = "api"
     PIPELINE = "pipeline"
     STREAMLIT = "streamlit"
