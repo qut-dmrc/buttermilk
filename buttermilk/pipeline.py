@@ -85,6 +85,17 @@ class RecordSkippedException(Exception):
     pass
 
 
+class RecordBufferedException(Exception):
+    """Exception raised when a record is buffered for later batch processing.
+
+    Unlike RecordSkippedException, buffered records will be processed when the
+    batch is complete or flushed. This allows the pipeline to distinguish between
+    records that are intentionally filtered vs records that are waiting in a buffer.
+    """
+
+    pass
+
+
 class PipelineOrchestrator(BaseModel):
     """Concurrent async pipeline orchestrator for processing records through processor chains.
 
@@ -685,6 +696,18 @@ class PipelineOrchestrator(BaseModel):
                             else:
                                 task_span.set_attribute("status", "no_outputs")
                                 task_span.set_status(trace.Status(trace.StatusCode.OK))
+
+                        except RecordBufferedException as e:
+                            # Record is buffered for batch processing, not filtered
+                            # Don't increment skipped counter - record will be processed later via flush()
+                            task_span.set_attribute("status", "buffered")
+                            task_span.set_attribute("buffer_info", str(e))
+                            task_span.set_status(trace.Status(trace.StatusCode.OK))
+                            logger.debug(
+                                f"Record {record_id} buffered: {e}",
+                                record_id=record_id,
+                                pipeline_name=self.pipeline_name,
+                            )
 
                         except RecordSkippedException as e:
                             self._summary.increment_skipped()

@@ -36,6 +36,7 @@ from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.processor_core import ProcessorCore
 from buttermilk._core.protocols import BatchProcessor
 from buttermilk._core.types import BaseRecord
+from buttermilk.pipeline import RecordBufferedException
 
 
 class BatchAccumulator(ProcessorCore):
@@ -103,7 +104,12 @@ class BatchAccumulator(ProcessorCore):
             # Process outside lock to allow concurrent buffer appends
             async for record in self._process_batch_from_contexts(batch_to_process):
                 yield record
-        # If batch not full, generator completes without yielding (record is buffered)
+        else:
+            # Record is buffered, not filtered - raise distinct exception so pipeline
+            # logs "buffered" instead of "skipped/filtered"
+            raise RecordBufferedException(
+                f"Record buffered in BatchAccumulator (buffer size: {len(self._buffer)}/{self.batch_size})"
+            )
 
     async def _process_batch_from_contexts(
         self, contexts: list[ProcessingContext]
