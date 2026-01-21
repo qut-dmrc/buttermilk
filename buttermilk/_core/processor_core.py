@@ -19,6 +19,7 @@ from buttermilk import logger
 from buttermilk._core.contract import ExecutionTrace
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord
+from buttermilk.pipeline import RecordBufferedException
 
 
 class ObservabilityMixin(BaseModel):
@@ -207,6 +208,10 @@ class ProcessorCore(ObservabilityMixin, ABC):
             try:
                 async for output in self._process_record(context):
                     yield output
+            except RecordBufferedException:
+                # Buffered records are not failures - re-raise without error logging
+                # The pipeline handler will log at DEBUG level
+                raise
             except Exception as e:
                 span.record_exception(e)
                 logger.error(
