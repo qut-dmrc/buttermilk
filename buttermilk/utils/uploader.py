@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from tenacity import RetryError
 
 from buttermilk import bm
+from buttermilk._core.constants import cache, get_base_cache_dir
 from buttermilk._core.log import logger
 from buttermilk._core.retry import RetryWrapper
 from buttermilk._core.types import BaseRecord
@@ -59,13 +60,44 @@ class AsyncDataUploader:
         self.last_flush = time.time()
         self._shutdown: asyncio.Event = asyncio.Event()
 
-        self.backup_dir = Path(mkdtemp())
+        # Use a persistent backup directory under ~/.cache/buttermilk/backup/ instead of
+        # an ephemeral temp directory. This ensures backups survive process restarts
+        # and can be recovered if uploads fail during shutdown.
+        self.backup_dir = self._get_persistent_backup_dir()
         self.worker_task = None
 
         # Register shutdown handlers
         atexit.register(self.shutdown)
         signal.signal(signal.SIGTERM, self.shutdown)
         signal.signal(signal.SIGINT, self.shutdown)
+
+    def _get_persistent_backup_dir(self) -> Path:
+        """Get a persistent backup directory for trace recovery.
+
+        Uses the centralized cache infrastructure from constants.py:
+        get_base_cache_dir() / cache.BACKUP / {session_id}
+
+        Falls back to a temp directory if the persistent location cannot be created.
+
+        Returns:
+            Path to the backup directory (created if necessary)
+        """
+        try:
+            # Try to use bm.session_info.session_id for a session-specific backup dir
+            session_id = getattr(bm, "session_info", None)
+            if session_id and hasattr(session_id, "session_id"):
+                session_id = session_id.session_id
+            else:
+                session_id = "unknown"
+
+            backup_base = get_base_cache_dir() / cache.BACKUP / session_id
+            backup_base.mkdir(parents=True, exist_ok=True)
+            logger.debug(f"Using persistent backup directory: {backup_base}")
+            return backup_base
+        except Exception as e:
+            # Fall back to temp directory if we can't create the persistent one
+            logger.warning(f"Could not create persistent backup dir, using temp: {e}")
+            return Path(mkdtemp())
 
     async def add(self, item: Any):
         """Add item (preferably a BaseRecord) to upload queue."""

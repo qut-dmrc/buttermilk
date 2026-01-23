@@ -174,12 +174,13 @@ class ProcessorCore(ObservabilityMixin, ABC):
     """Base class for single-record pipeline processors.
 
     Implements Processor protocol with OTEL tracing.
+    Supports typed data flow: processors can yield Any type, not just BaseRecord.
     """
 
     async def process(
         self,
         context: ProcessingContext,
-    ) -> AsyncGenerator[BaseRecord, None]:
+    ) -> AsyncGenerator[Any, None]:
         """Process with OTEL span wrapping.
 
         Creates an OpenTelemetry span for this processor execution,
@@ -189,7 +190,8 @@ class ProcessorCore(ObservabilityMixin, ABC):
             context: ProcessingContext with record and session state
 
         Yields:
-            Output records from _process_record()
+            Any: Output objects from _process_record(). Typically BaseRecord,
+                 but can be any type for typed data flow.
         """
         tracer = trace.get_tracer("buttermilk.processor")
         parent_context = trace.set_span_in_context(context.span) if context.span else None
@@ -226,26 +228,26 @@ class ProcessorCore(ObservabilityMixin, ABC):
     async def _process_record(
         self,
         context: ProcessingContext,
-    ) -> AsyncGenerator[BaseRecord, None]:
+    ) -> AsyncGenerator[Any, None]:
         """Concrete processing logic. Must be implemented by subclasses.
 
         Args:
             context: ProcessingContext with record and session state
 
         Yields:
-            Zero or more output records
+            Any: Zero or more output objects (typically BaseRecord, but can be any type)
         """
         raise NotImplementedError("Subclasses must implement _process_record")
         yield
 
-    async def flush(self) -> AsyncGenerator[BaseRecord, None]:
+    async def flush(self) -> AsyncGenerator[Any, None]:
         """Flush any buffered records after source exhaustion.
 
         Default implementation yields nothing. Override in processors
         that buffer records (like BatchAccumulator).
 
         Yields:
-            Any remaining buffered records after processing.
+            Any: Any remaining buffered records/objects after processing.
         """
         return
         yield  # Make this a generator

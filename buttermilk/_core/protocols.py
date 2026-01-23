@@ -6,9 +6,15 @@ It separates concerns into:
 - BatchProcessor: Efficient batch processing (e.g., for GPUs).
 
 These protocols enable a unified execution model where "everything is a processor".
+
+Typed Data Flow:
+    Processors can yield any type, not just BaseRecord. This enables typed data flow
+    where processors yield their natural output type (e.g., a Pydantic model for
+    structured LLM output). The pipeline handles both BaseRecord and arbitrary types,
+    adding metadata only to records that support it.
 """
 
-from typing import AsyncGenerator, Protocol, runtime_checkable
+from typing import Any, AsyncGenerator, Protocol, runtime_checkable
 
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord
@@ -19,13 +25,14 @@ class Processor(Protocol):
     """Standard processor interface for single-record processing.
 
     Processors accept a ProcessingContext (which contains the input record)
-    and yield zero or more output BaseRecord objects.
+    and yield zero or more output objects. Outputs can be BaseRecord instances
+    or any other type (typed data flow).
     """
 
     async def process(
         self,
         context: ProcessingContext,
-    ) -> AsyncGenerator[BaseRecord, None]:
+    ) -> AsyncGenerator[Any, None]:
         """Process a single record within a given context.
 
         Args:
@@ -33,12 +40,13 @@ class Processor(Protocol):
                      observability handles, and shared resources.
 
         Yields:
-            BaseRecord: Output records. Can be zero (filtering), one (1:1),
-                        or multiple (1:N expansion).
+            Any: Output objects. Can be zero (filtering), one (1:1),
+                 or multiple (1:N expansion). Typically BaseRecord, but can be
+                 any type for typed data flow (e.g., structured LLM outputs).
         """
         ...
 
-    async def flush(self) -> AsyncGenerator[BaseRecord, None]:
+    async def flush(self) -> AsyncGenerator[Any, None]:
         """Flush any buffered records after source exhaustion.
 
         Called by the pipeline after the source is exhausted to allow
@@ -48,7 +56,7 @@ class Processor(Protocol):
         Default implementation yields nothing. Override in buffering processors.
 
         Yields:
-            BaseRecord: Any remaining buffered records after processing.
+            Any: Any remaining buffered records/objects after processing.
         """
         ...
 

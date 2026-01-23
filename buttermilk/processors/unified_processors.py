@@ -75,14 +75,16 @@ class LLMProcessor(ProcessorCore):
     async def _process_record(
         self,
         context: ProcessingContext,
-    ) -> AsyncGenerator[BaseRecord, None]:
+    ) -> AsyncGenerator[Any, None]:
         """Process a record through LLM inference.
 
         Args:
             context: Processing context containing the record to process
 
         Yields:
-            The LLM output directly (typed model if output_model set, else string)
+            Any: The LLM output directly (typed model if output_model set, else string).
+                 Supports typed data flow - yields the natural output type rather than
+                 wrapping in BaseRecord.
 
         Raises:
             ProcessingError: If LLM processing fails

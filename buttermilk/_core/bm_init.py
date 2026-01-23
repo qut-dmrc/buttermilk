@@ -1149,6 +1149,19 @@ class BM(BaseModel):
         """
         logger.info(f"Starting graceful shutdown (timeout={timeout}s)...")
 
+        # CRITICAL: Flush trace_writer first, before waiting for/cancelling tasks.
+        # The trace_writer uses AsyncDataUploader with a background worker task.
+        # If we cancel tasks first, traces in the buffer are lost.
+        try:
+            from buttermilk.utils.trace_writer import trace_writer as global_trace_writer
+
+            if global_trace_writer is not None and global_trace_writer._initialized:
+                logger.info("Flushing trace writer...")
+                await global_trace_writer.flush()
+                logger.info("Trace writer flushed successfully")
+        except Exception as e:
+            logger.warning(f"Error flushing trace writer: {e}")
+
         # Collect all pending tasks
         all_tasks = []
 
