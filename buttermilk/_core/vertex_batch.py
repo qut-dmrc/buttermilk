@@ -21,6 +21,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import datetime
 import json
 import uuid
 from typing import TYPE_CHECKING, Any
@@ -69,6 +70,94 @@ class BatchResult(BaseModel):
     response: str | None = None
     error: str | None = None
     usage: dict[str, Any] | None = None
+
+
+class BatchJobManifest(BaseModel):
+    """Persistent manifest for batch job recovery after process restart.
+
+    Stored at `{save_dir}/batch/{job_id}/manifest.json` alongside the input.jsonl
+    and output/ directory. Contains all context needed to reconstruct job state
+    and map results back to source records.
+
+    This enables:
+    - Job recovery after process restart (fetch by job_id)
+    - Result mapping without re-accessing source data (self-contained)
+    - Audit trail for batch processing runs
+
+    Attributes:
+        job_id: Internal batch job identifier (e.g., "batch_abc123")
+        vertex_job_name: Full Vertex AI resource name
+            (e.g., "projects/.../locations/.../batchJobs/...")
+        model: Model identifier used for the batch (e.g., "gemini-2.5-flash")
+        submitted_at: ISO timestamp when job was submitted
+        input_uri: GCS URI of the input JSONL file
+        output_uri: GCS URI of the output directory
+        request_count: Number of requests in the batch
+        requests: Full BatchRequest objects for self-contained result mapping
+        criteria_contents: Rendered criteria templates keyed by criteria_key
+            (for Claude inline caching or audit purposes)
+    """
+
+    job_id: str = Field(..., description="Internal batch job ID (e.g., 'batch_abc123')")
+    vertex_job_name: str = Field(
+        ...,
+        description="Full Vertex AI resource name (projects/.../batchJobs/...)",
+    )
+    model: str = Field(..., description="Model identifier (e.g., 'gemini-2.5-flash')")
+    submitted_at: str = Field(
+        default_factory=lambda: datetime.datetime.now(datetime.UTC).isoformat(),
+        description="ISO timestamp when job was submitted",
+    )
+    input_uri: str = Field(..., description="GCS URI of input JSONL file")
+    output_uri: str = Field(..., description="GCS URI of output directory")
+    request_count: int = Field(..., description="Number of requests in the batch")
+    requests: list[BatchRequest] = Field(
+        ...,
+        description="Full BatchRequest objects for self-contained result mapping",
+    )
+    criteria_contents: dict[str, str] = Field(
+        default_factory=dict,
+        description="Rendered criteria templates keyed by criteria_key",
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "job_id": "batch_abc123def456",
+                "vertex_job_name": "projects/my-project/locations/us-central1/batchJobs/12345",
+                "model": "gemini-2.5-flash",
+                "submitted_at": "2026-01-23T07:00:00+00:00",
+                "input_uri": "gs://bucket/session/batch/batch_abc123def456/input.jsonl",
+                "output_uri": "gs://bucket/session/batch/batch_abc123def456/output/",
+                "request_count": 500,
+                "requests": [
+                    {
+                        "custom_id": "uuid-1",
+                        "record_id": "rec-001",
+                        "criteria_key": "a1b2c3d4",
+                        "content": "Record content here...",
+                        "cache_name": None,
+                    }
+                ],
+                "criteria_contents": {
+                    "a1b2c3d4": "You are evaluating content for..."
+                },
+            }
+        }
+    )
+
+    @classmethod
+    def get_manifest_uri(cls, save_dir: str, job_id: str) -> str:
+        """Get the standard manifest URI for a job.
+
+        Args:
+            save_dir: Session save directory (e.g., "gs://bucket/session")
+            job_id: Batch job ID
+
+        Returns:
+            GCS URI for the manifest file
+        """
+        return f"{save_dir}/batch/{job_id}/manifest.json"
 
 
 class BatchJobManager(BaseModel):
@@ -343,6 +432,17 @@ class BatchJobManager(BaseModel):
                 "output_uri": output_uri,
             }
 
+            # Save manifest for job recovery
+            self._save_manifest(
+                job_id=job_id,
+                vertex_job_name=job.name,
+                model=model,
+                input_uri=input_uri,
+                output_uri=output_uri,
+                requests=requests,
+                criteria_contents=criteria_contents or {},
+            )
+
             logger.info(f"Batch job submitted: {job.name}")
             return job
 
@@ -535,3 +635,207 @@ class BatchJobManager(BaseModel):
             if info["job"].name == job_name:
                 return info["output_uri"]
         raise RuntimeError(f"Job {job_name} not found in active jobs registry")
+
+    def _save_manifest(
+        self,
+        job_id: str,
+        vertex_job_name: str,
+        model: str,
+        input_uri: str,
+        output_uri: str,
+        requests: list[BatchRequest],
+        criteria_contents: dict[str, str],
+    ) -> str:
+        """Save job manifest to GCS for recovery.
+
+        Args:
+            job_id: Local job identifier
+            vertex_job_name: Full Vertex AI resource name
+            model: Model identifier
+            input_uri: GCS URI of input JSONL
+            output_uri: GCS URI of output directory
+            requests: List of batch requests
+            criteria_contents: Rendered criteria templates
+
+        Returns:
+            GCS URI of saved manifest
+        """
+        from buttermilk import bm
+        from buttermilk.utils.save import upload_text
+
+        save_dir = bm.session_info.save_dir
+        if not save_dir:
+            raise RuntimeError("No save_dir configured in session")
+
+        manifest = BatchJobManifest(
+            job_id=job_id,
+            vertex_job_name=vertex_job_name,
+            model=model,
+            input_uri=input_uri,
+            output_uri=output_uri,
+            request_count=len(requests),
+            requests=requests,
+            criteria_contents=criteria_contents,
+        )
+
+        manifest_uri = BatchJobManifest.get_manifest_uri(save_dir, job_id)
+        upload_text(
+            manifest.model_dump_json(indent=2),
+            uri=manifest_uri,
+            content_type="application/json",
+        )
+
+        logger.info(f"Saved manifest to {manifest_uri}")
+        return manifest_uri
+
+    def _load_manifest(self, job_id: str) -> BatchJobManifest:
+        """Load job manifest from GCS.
+
+        Args:
+            job_id: Local job identifier
+
+        Returns:
+            BatchJobManifest object
+
+        Raises:
+            FileNotFoundError: If manifest not found
+        """
+        from cloudpathlib import AnyPath
+
+        from buttermilk import bm
+
+        save_dir = bm.session_info.save_dir
+        if not save_dir:
+            raise RuntimeError("No save_dir configured in session")
+
+        manifest_uri = BatchJobManifest.get_manifest_uri(save_dir, job_id)
+        manifest_path = AnyPath(manifest_uri)
+
+        if not manifest_path.exists():
+            raise FileNotFoundError(f"Manifest not found for job_id: {job_id}")
+
+        content = manifest_path.read_text()
+        return BatchJobManifest.model_validate_json(content)
+
+    def get_job_status(self, job_id: str) -> dict[str, Any]:
+        """Get the current status of a batch job.
+
+        Args:
+            job_id: Local job identifier (e.g., "batch_abc123")
+
+        Returns:
+            Dictionary with job status information:
+            - job_id: Local job identifier
+            - vertex_job_name: Full Vertex AI resource name
+            - state: Job state string
+            - is_complete: Whether job has finished
+            - is_success: Whether job completed successfully
+            - error: Error message if job failed
+
+        Raises:
+            FileNotFoundError: If manifest not found for job_id
+        """
+        from google.genai.types import JobState
+
+        manifest = self._load_manifest(job_id)
+
+        try:
+            job = self.client.batches.get(name=manifest.vertex_job_name)
+        except Exception as e:
+            return {
+                "job_id": job_id,
+                "vertex_job_name": manifest.vertex_job_name,
+                "state": "UNKNOWN",
+                "is_complete": False,
+                "is_success": False,
+                "error": f"Failed to fetch job status: {e}",
+            }
+
+        completed_states = {
+            JobState.JOB_STATE_SUCCEEDED,
+            JobState.JOB_STATE_FAILED,
+            JobState.JOB_STATE_CANCELLED,
+            JobState.JOB_STATE_PAUSED,
+        }
+
+        is_complete = job.state in completed_states
+        is_success = job.state == JobState.JOB_STATE_SUCCEEDED
+
+        error = None
+        if job.state == JobState.JOB_STATE_FAILED:
+            error = "Job failed"
+        elif job.state == JobState.JOB_STATE_CANCELLED:
+            error = "Job was cancelled"
+
+        return {
+            "job_id": job_id,
+            "vertex_job_name": manifest.vertex_job_name,
+            "state": str(job.state),
+            "is_complete": is_complete,
+            "is_success": is_success,
+            "error": error,
+        }
+
+    def fetch_results(self, job_id: str) -> list[BatchResult] | dict[str, Any]:
+        """Fetch batch results using only job_id.
+
+        Loads the manifest from GCS, checks job status, and parses results
+        if the job has completed successfully.
+
+        Args:
+            job_id: Local job identifier (e.g., "batch_abc123")
+
+        Returns:
+            If job succeeded: List of BatchResult objects
+            If job still running: Dictionary with status info
+            If job failed: Dictionary with error info
+
+        Raises:
+            FileNotFoundError: If manifest not found for job_id (invalid or
+                from different session)
+        """
+        from google.genai.types import JobState
+
+        # Load manifest from GCS
+        manifest = self._load_manifest(job_id)
+
+        # Check job status
+        try:
+            job = self.client.batches.get(name=manifest.vertex_job_name)
+        except Exception as e:
+            return {
+                "job_id": job_id,
+                "status": "error",
+                "error": f"Failed to fetch job status: {e}",
+            }
+
+        # Handle different job states
+        if job.state == JobState.JOB_STATE_SUCCEEDED:
+            logger.info(f"Job {job_id} completed, parsing results")
+            return self.parse_results(manifest.output_uri, manifest.requests)
+
+        elif job.state == JobState.JOB_STATE_FAILED:
+            return {
+                "job_id": job_id,
+                "status": "failed",
+                "state": str(job.state),
+                "error": "Batch job failed",
+            }
+
+        elif job.state == JobState.JOB_STATE_CANCELLED:
+            return {
+                "job_id": job_id,
+                "status": "cancelled",
+                "state": str(job.state),
+                "error": "Batch job was cancelled",
+            }
+
+        else:
+            # Job still running
+            return {
+                "job_id": job_id,
+                "status": "running",
+                "state": str(job.state),
+                "vertex_job_name": manifest.vertex_job_name,
+                "request_count": manifest.request_count,
+            }
