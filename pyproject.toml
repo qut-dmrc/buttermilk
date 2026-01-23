@@ -231,9 +231,8 @@ buttermilk = { workspace = true }
 line-length = 150
 
 [project.scripts]
-bm = "buttermilk.runner.cli:main"
+bm = "buttermilk.cli.main:main"
 bm-debug = "buttermilk.debug.cli:debug"
-bm-batch = "buttermilk.cli.batch:batch"
 
 [project.entry-points."hydra_plugins"]
 buttermilk_search_path_plugin = "hydra_plugins.buttermilk_search_path_plugin:ButtermilkSearchPathPlugin"

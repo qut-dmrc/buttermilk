@@ -5,10 +5,10 @@ without requiring a continuous process. Jobs can be managed from any
 machine with GCS access.
 
 Usage:
-    bm-batch submit <config>      Submit batch job, print job_id, exit
-    bm-batch status <job_id>      Check job status
-    bm-batch fetch <job_id>       Fetch and save results
-    bm-batch list                 List recent batch jobs from save_dir
+    bm batch submit <config>      Submit batch job, print job_id, exit
+    bm batch status <job_id>      Check job status
+    bm batch fetch <job_id>       Fetch and save results
+    bm batch list                 List recent batch jobs from save_dir
 """
 
 import json
@@ -39,7 +39,7 @@ def submit(config: Path, json_output: bool) -> None:
     Prints the job_id which can be used with status/fetch commands.
 
     Example:
-        bm-batch submit batch_config.yaml
+        bm batch submit batch_config.yaml
     """
     import asyncio
 
@@ -109,8 +109,8 @@ def submit(config: Path, json_output: bool) -> None:
             click.echo(f"  Vertex Job: {result['vertex_job_name']}")
             click.echo(f"  Model: {result['model']}")
             click.echo(f"  Requests: {result['request_count']}")
-            click.echo(f"\nTo check status: bm-batch status {result['job_id']}")
-            click.echo(f"To fetch results: bm-batch fetch {result['job_id']}")
+            click.echo(f"\nTo check status: bm batch status {result['job_id']}")
+            click.echo(f"To fetch results: bm batch fetch {result['job_id']}")
 
     except Exception as e:
         logger.error(f"Failed to submit batch job: {e}")
@@ -135,7 +135,7 @@ def status(job_id: str, json_output: bool, save_dir: str | None) -> None:
     JOB_ID is the job identifier returned by the submit command.
 
     Example:
-        bm-batch status batch_abc123def456
+        bm batch status batch_abc123def456
     """
     import asyncio
 
@@ -203,8 +203,8 @@ def fetch(job_id: str, json_output: bool, output: str | None, save_dir: str | No
     If the job is still running, returns status instead of results.
 
     Example:
-        bm-batch fetch batch_abc123def456
-        bm-batch fetch batch_abc123def456 -o results.json
+        bm batch fetch batch_abc123def456
+        bm batch fetch batch_abc123def456 -o results.json
     """
     import asyncio
 
@@ -300,8 +300,8 @@ def list_jobs(json_output: bool, limit: int, save_dir: str | None) -> None:
     Shows job IDs, submission times, and current status.
 
     Example:
-        bm-batch list
-        bm-batch list -n 20
+        bm batch list
+        bm batch list -n 20
     """
     import asyncio
 
