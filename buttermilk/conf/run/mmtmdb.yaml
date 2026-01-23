@@ -26,6 +26,9 @@ run:
       # Defaults from /storage@run.pipeline.source: tmdbtitles will fill in project_id, dataset_id, etc.
       limit: ${run.pipeline.sample_size}  # Passes sample_size to storage for {n} substitution
       custom_query: |
+        DECLARE n INT64 DEFAULT {n};
+        DECLARE limit_val INT64 DEFAULT CAST(n * 0.5 AS INT64);
+
         WITH
         -- Floor: 0.5n records with per-decade distribution (~0.5n/14 per decade)
         decade_floor AS (
@@ -39,7 +42,7 @@ run:
         floor_records AS (
           SELECT * EXCEPT(rn)
           FROM decade_floor
-          WHERE rn <= CEIL({n} * 0.5 / 14.0)
+          WHERE rn <= CEIL(n * 0.5 / 14.0)
         ),
         -- Random: 0.5n additional random records
         random_records AS (
@@ -49,7 +52,8 @@ run:
               AND year >= 1900
               AND year < 2030
           ORDER BY RAND()
-          LIMIT CAST({n} * 0.5 AS INT64)
+          -- Use declared variable for LIMIT to avoid "LIMIT expects literal" error
+          LIMIT limit_val
         )
         -- Combined and deduplicated (final count may be < n due to overlap)
         SELECT * FROM floor_records

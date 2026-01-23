@@ -75,7 +75,6 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 from buttermilk import bm, logger
 from buttermilk._core.hashing import compute_processor_config_hash
 from buttermilk._core.processing_context import ProcessingContext
-from buttermilk._core.protocols import Processor
 from buttermilk._core.types import BaseRecord
 
 
@@ -113,16 +112,10 @@ class PipelineOrchestrator(BaseModel):
         default=10,
         description="Max concurrent API calls across all processors (limits nested parallelism)",
     )
-    limit: Optional[int] | None = Field(
-        default=None, description="Maximum records to process"
-    )
+    limit: Optional[int] | None = Field(default=None, description="Maximum records to process")
     pipeline_name: str = Field(..., description="Name for this processing pipeline")
-    force_reprocess: bool = Field(
-        default=False, description="Ignore cache and reprocess"
-    )
-    enable_record_cache: bool = Field(
-        default=True, description="Enable per-processor Record caching"
-    )
+    force_reprocess: bool = Field(default=False, description="Ignore cache and reprocess")
+    enable_record_cache: bool = Field(default=True, description="Enable per-processor Record caching")
     cache_dir: Optional[str] = Field(
         default=None,
         description="Base directory for record cache (defaults to ~/.cache/buttermilk)",
@@ -134,12 +127,8 @@ class PipelineOrchestrator(BaseModel):
     )
 
     # Inputs configured after instantiation
-    source: Optional[Any] = Field(
-        default=None, exclude=True, description="Source config or AsyncIterator"
-    )
-    processors: list[Any] = Field(
-        default_factory=list, exclude=True
-    )  # List of processors to chain
+    source: Optional[Any] = Field(default=None, exclude=True, description="Source config or AsyncIterator")
+    processors: list[Any] = Field(default_factory=list, exclude=True)  # List of processors to chain
 
     # Internal state
     _semaphore: asyncio.Semaphore = PrivateAttr()
@@ -157,10 +146,7 @@ class PipelineOrchestrator(BaseModel):
             # Instantiate source if it's a DictConfig or dict
             values["source"] = bm.get_storage(values.get("source"))
 
-        values["processors"] = [
-            hydra.utils.instantiate(p) if isinstance(p, DictConfig) else p
-            for p in values.get("processors", [])
-        ]
+        values["processors"] = [hydra.utils.instantiate(p) if isinstance(p, DictConfig) else p for p in values.get("processors", [])]
         return values
 
     @pydantic.model_validator(mode="after")
@@ -223,9 +209,7 @@ class PipelineOrchestrator(BaseModel):
 
         return self
 
-    async def _process_single_record(
-        self, record: BaseRecord
-    ) -> AsyncGenerator[BaseRecord, None]:
+    async def _process_single_record(self, record: BaseRecord) -> AsyncGenerator[BaseRecord, None]:
         """Process a single BaseRecord through the entire processor chain.
 
         Properly handles 1:N transformations where processors can yield multiple outputs.
@@ -247,11 +231,7 @@ class PipelineOrchestrator(BaseModel):
         tracer = trace.get_tracer("buttermilk.pipeline")
         record_id = getattr(record, "record_id", "unknown")
         title = getattr(record, "title", None)
-        record_title = (
-            (title[:50] if title else "Unknown")
-            if hasattr(record, "title")
-            else "Unknown"
-        )
+        record_title = (title[:50] if title else "Unknown") if hasattr(record, "title") else "Unknown"
 
         # Build span attributes for record processing
         span_attributes = {
@@ -261,9 +241,7 @@ class PipelineOrchestrator(BaseModel):
             "stage.processor_count": len(self.processors),
         }
 
-        with tracer.start_as_current_span(
-            "pipeline.process_record", attributes=span_attributes
-        ) as span:
+        with tracer.start_as_current_span("pipeline.process_record", attributes=span_attributes) as span:
             try:
                 # Per-processor caching is now handled in _process_without_cache
 
@@ -295,19 +273,13 @@ class PipelineOrchestrator(BaseModel):
         """
         return cached_record is not None
 
-    async def _process_without_cache(
-        self, record: BaseRecord
-    ) -> AsyncGenerator[BaseRecord, None]:  # noqa: PLR0912
+    async def _process_without_cache(self, record: BaseRecord) -> AsyncGenerator[BaseRecord, None]:  # noqa: PLR0912
         """Process BaseRecord through the processor chain without caching."""
         start_time = time.time()
         tracer = trace.get_tracer("buttermilk.pipeline")
         record_id = getattr(record, "record_id", "unknown")
         title = getattr(record, "title", None)
-        record_title = (
-            (title[:50] if title else "Unknown")
-            if hasattr(record, "title")
-            else "Unknown"
-        )
+        record_title = (title[:50] if title else "Unknown") if hasattr(record, "title") else "Unknown"
 
         # Build span attributes for processor chain
         span_attributes = {
@@ -317,9 +289,7 @@ class PipelineOrchestrator(BaseModel):
             "record.title": record_title,
         }
 
-        with tracer.start_as_current_span(
-            "pipeline.process_chain", attributes=span_attributes
-        ) as chain_span:
+        with tracer.start_as_current_span("pipeline.process_chain", attributes=span_attributes) as chain_span:
             # Log processing start
             logger.debug(
                 f"🔷 {self.pipeline_name} Processing record ID: {record.record_id} - '{record_title}'",
@@ -383,12 +353,8 @@ class PipelineOrchestrator(BaseModel):
                         # Process each record in the current queue through this processor
                         for current_record in processing_queue:
                             # Trace record state BEFORE processor
-                            trace_before = self._trace_record_state(
-                                current_record, "before_processor", processor_stage_name
-                            )
-                            logger.debug(
-                                "📋 Record state before processor", **trace_before
-                            )
+                            trace_before = self._trace_record_state(current_record, "before_processor", processor_stage_name)
+                            logger.debug("📋 Record state before processor", **trace_before)
 
                             # Check processor-specific cache first (unless processor opts out)
                             cached_outputs = None
@@ -398,16 +364,12 @@ class PipelineOrchestrator(BaseModel):
                                     processor_class=processor_class,
                                 )
                             else:
-                                cached_outputs = await self._check_processor_cache(
-                                    current_record, processor_stage_name
-                                )
+                                cached_outputs = await self._check_processor_cache(current_record, processor_stage_name)
 
                             if cached_outputs:
                                 logger.debug(
                                     f"⚡ Processor {processor_stage_name} cache hit",
-                                    record_id=getattr(
-                                        current_record, "record_id", "unknown"
-                                    ),
+                                    record_id=getattr(current_record, "record_id", "unknown"),
                                     processor_stage=processor_stage_name,
                                     processor_stage_name=processor_stage_name,
                                     cached_outputs_count=len(cached_outputs),
@@ -419,9 +381,7 @@ class PipelineOrchestrator(BaseModel):
                                         "cached_output",
                                         processor_stage_name,
                                     )
-                                    logger.debug(
-                                        f"📋 Cached output {i} state", **trace_cached
-                                    )
+                                    logger.debug(f"📋 Cached output {i} state", **trace_cached)
                                 next_queue.extend(cached_outputs)
                                 continue
 
@@ -429,9 +389,7 @@ class PipelineOrchestrator(BaseModel):
                             try:
                                 # Extract parent_call_id from record for trace lineage
                                 # This links processor operations back to their source records
-                                parent_trace_id = getattr(
-                                    current_record, "parent_call_id", None
-                                )
+                                parent_trace_id = getattr(current_record, "parent_call_id", None)
 
                                 # All processors now use unified ProcessingContext interface
                                 context = ProcessingContext(
@@ -452,17 +410,13 @@ class PipelineOrchestrator(BaseModel):
                             except Exception as e:
                                 # Don't log here - let the task wrapper handle error logging
                                 # to avoid duplicate error messages
-                                processor_span.set_status(
-                                    trace.Status(trace.StatusCode.ERROR, str(e))
-                                )
+                                processor_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                                 raise
 
                             if not outputs:
                                 # This record was filtered out by this processor
                                 processor_span.set_attribute("filtered", True)
-                                raise RecordSkippedException(
-                                    f"Record was filtered out by processor in {processor_stage_name}"
-                                )
+                                raise RecordSkippedException(f"Record was filtered out by processor in {processor_stage_name}")
                             else:
                                 # Trace record state AFTER processor
                                 for i, output_record in enumerate(outputs):
@@ -487,9 +441,7 @@ class PipelineOrchestrator(BaseModel):
                                     )
                                     outputs_for_queue = outputs
                                 else:
-                                    outputs_for_queue = await self._save_processor_cache(
-                                        current_record, outputs, processor_stage_name
-                                    )
+                                    outputs_for_queue = await self._save_processor_cache(current_record, outputs, processor_stage_name)
                                 # Add all outputs to the next processing queue
                                 next_queue.extend(outputs_for_queue)
 
@@ -497,9 +449,7 @@ class PipelineOrchestrator(BaseModel):
                         if buffered_count > 0 and not next_queue:
                             # All records in this stage were buffered - raise to signal this
                             # to the caller (will be processed later via flush())
-                            raise RecordBufferedException(
-                                f"All {buffered_count} records buffered in {processor_stage_name}"
-                            )
+                            raise RecordBufferedException(f"All {buffered_count} records buffered in {processor_stage_name}")
 
                         # Set processor span attributes for outputs
                         processor_span.set_attribute("outputs.count", len(next_queue))
@@ -536,14 +486,10 @@ class PipelineOrchestrator(BaseModel):
                         stage_metadata["total_outputs"] = total_outputs
 
                     # Preserve existing metadata and add stage metadata
-                    updated_metadata = (
-                        final_record.metadata.copy() if final_record.metadata else {}
-                    )
+                    updated_metadata = final_record.metadata.copy() if final_record.metadata else {}
                     updated_metadata[self.pipeline_name] = stage_metadata
 
-                    updated_record = final_record.model_copy(
-                        update={"metadata": updated_metadata}
-                    )
+                    updated_record = final_record.model_copy(update={"metadata": updated_metadata})
                     yield updated_record
 
             except GeneratorExit:
@@ -580,13 +526,9 @@ class PipelineOrchestrator(BaseModel):
             "cache.enabled": self.enable_record_cache,
         }
 
-        with tracer.start_as_current_span(
-            f"pipeline.{self.pipeline_name}", attributes=span_attributes
-        ) as stage_span:
+        with tracer.start_as_current_span(f"pipeline.{self.pipeline_name}", attributes=span_attributes) as stage_span:
             try:
-                async for record in self._run_pipeline_with_tracing(
-                    stage_span, start_time
-                ):
+                async for record in self._run_pipeline_with_tracing(stage_span, start_time):
                     yield record
             except GeneratorExit:
                 # Handle early generator termination gracefully
@@ -596,9 +538,7 @@ class PipelineOrchestrator(BaseModel):
                 stage_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                 raise
 
-    async def _run_pipeline_with_tracing(
-        self, stage_span, start_time, show_progress: bool = True
-    ) -> AsyncIterator[BaseRecord]:
+    async def _run_pipeline_with_tracing(self, stage_span, start_time, show_progress: bool = True) -> AsyncIterator[BaseRecord]:
         """Internal method to run pipeline with tracing context.
 
         Args:
@@ -671,11 +611,7 @@ class PipelineOrchestrator(BaseModel):
                     last_log = now
 
             # Ensure we have an async iterator
-            source_iter = (
-                self.source
-                if hasattr(self.source, "__anext__")
-                else self.source.__aiter__()
-            )
+            source_iter = self.source if hasattr(self.source, "__anext__") else self.source.__aiter__()
 
             completed_records = asyncio.Queue()
 
@@ -691,14 +627,10 @@ class PipelineOrchestrator(BaseModel):
                         "pipeline.name": self.pipeline_name,
                     }
 
-                    with tracer.start_as_current_span(
-                        "pipeline.task.process", attributes=task_span_attributes
-                    ) as task_span:
+                    with tracer.start_as_current_span("pipeline.task.process", attributes=task_span_attributes) as task_span:
                         try:
                             results_count = 0
-                            async for processed_record in self._process_single_record(
-                                record
-                            ):
+                            async for processed_record in self._process_single_record(record):
                                 await completed_records.put(("success", processed_record))
                                 results_count += 1
 
@@ -743,9 +675,7 @@ class PipelineOrchestrator(BaseModel):
                             self._summary.increment_failed()
                             task_span.set_attribute("status", "failed")
                             task_span.set_attribute("error_type", type(e).__name__)
-                            task_span.set_status(
-                                trace.Status(trace.StatusCode.ERROR, str(e))
-                            )
+                            task_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                             # Log failure but don't stop processing other records
                             logger.error(
                                 f"❌ Failed to process record {record_id}: {type(e).__name__}",
@@ -766,9 +696,7 @@ class PipelineOrchestrator(BaseModel):
                                     "error_type": type(e).__name__,
                                 },
                             }
-                            failed_record = record.model_copy(
-                                update={"metadata": error_metadata}
-                            )
+                            failed_record = record.model_copy(update={"metadata": error_metadata})
                             await completed_records.put(("error", failed_record))
                             # Continue processing other records - don't raise
 
@@ -777,25 +705,34 @@ class PipelineOrchestrator(BaseModel):
             # This ensures limit applies to original records BEFORE replication
             async def producer():
                 nonlocal pending_tasks
-                async for record in source_iter:
-                    self._summary.increment_attempted()
+                try:
+                    async for record in source_iter:
+                        self._summary.increment_attempted()
 
-                    # Create and track task (concurrency controlled by semaphore in process_and_queue)
-                    task = asyncio.create_task(process_and_queue(record))
-                    pending_tasks.add(task)
+                        # Create and track task (concurrency controlled by semaphore in process_and_queue)
+                        task = asyncio.create_task(process_and_queue(record))
+                        pending_tasks.add(task)
 
-                    maybe_log_status(len(pending_tasks))
+                        maybe_log_status(len(pending_tasks))
 
-                # Wait for all tasks to complete before signaling completion
-                if pending_tasks:
-                    await asyncio.gather(*pending_tasks, return_exceptions=True)
+                    # Wait for all tasks to complete before signaling completion
+                    if pending_tasks:
+                        await asyncio.gather(*pending_tasks, return_exceptions=True)
 
-                # Flush buffered records from processors after source exhaustion
-                # Records from flush() flow through remaining processors
-                await self._flush_all_processors(completed_records)
+                    # Flush buffered records from processors after source exhaustion
+                    # Records from flush() flow through remaining processors
+                    await self._flush_all_processors(completed_records)
 
-                # Signal completion by putting None
-                await completed_records.put(None)
+                except Exception as e:
+                    logger.error(
+                        f"Pipeline producer failed: {e}",
+                        pipeline_name=self.pipeline_name,
+                        error=str(e),
+                    )
+                    raise
+                finally:
+                    # Signal completion by putting None
+                    await completed_records.put(None)
 
             # Consumer: Yield completed BaseRecord objects
             async def consumer():
@@ -899,13 +836,9 @@ class PipelineOrchestrator(BaseModel):
                 )
             raise
         finally:
-            logger.info(
-                f"Pipeline '{self.pipeline_name}': {self._summary.format_for_console()}"
-            )
+            logger.info(f"Pipeline '{self.pipeline_name}': {self._summary.format_for_console()}")
 
-    async def _check_processor_cache(
-        self, record: BaseRecord, processor_stage_name: str
-    ) -> list[BaseRecord] | None:
+    async def _check_processor_cache(self, record: BaseRecord, processor_stage_name: str) -> list[BaseRecord] | None:
         """Check cache for processor-specific outputs.
 
         Cache key strategy:
@@ -915,12 +848,7 @@ class PipelineOrchestrator(BaseModel):
         This ensures records from 1:N expansions (which share record_id but have
         unique cache_keys) are cached/loaded correctly.
         """
-        if (
-            not self.enable_record_cache
-            or not self._record_cache
-            or self.force_reprocess
-            or not hasattr(record, "record_id")
-        ):
+        if not self.enable_record_cache or not self._record_cache or self.force_reprocess or not hasattr(record, "record_id"):
             return None
 
         # Determine the cache lookup key:
@@ -955,9 +883,7 @@ class PipelineOrchestrator(BaseModel):
 
         return cached_outputs if cached_outputs else None
 
-    def _trace_record_state(
-        self, record: BaseRecord, stage: str, processor_stage_name: str = ""
-    ) -> dict:
+    def _trace_record_state(self, record: BaseRecord, stage: str, processor_stage_name: str = "") -> dict:
         """Trace the current state of a record for debugging.
 
         Args:
@@ -977,13 +903,9 @@ class PipelineOrchestrator(BaseModel):
 
         # Add cache file paths for investigation
         if self._record_cache and processor_stage_name:
-            cache_path = self._record_cache._record_path(
-                processor_stage_name, record_id
-            )
+            cache_path = self._record_cache._record_path(processor_stage_name, record_id)
             trace_info["cache_file"] = str(cache_path)
-            trace_info["cache_exists"] = (
-                cache_path.exists() if hasattr(cache_path, "exists") else False
-            )
+            trace_info["cache_exists"] = cache_path.exists() if hasattr(cache_path, "exists") else False
             trace_info["cache_base_dir"] = str(self._record_cache.base_dir)
 
         # Get all non-private attributes of the record
@@ -994,11 +916,7 @@ class PipelineOrchestrator(BaseModel):
 
         record_fields = {}
         for attr_name in dir(record):
-            if (
-                not attr_name.startswith("_")
-                and not callable(getattr(record, attr_name, None))
-                and not attr_name.startswith("model_")
-            ):
+            if not attr_name.startswith("_") and not callable(getattr(record, attr_name, None)) and not attr_name.startswith("model_"):
                 try:
                     attr_value = getattr(record, attr_name, None)
                     if attr_value is not None:
@@ -1047,12 +965,7 @@ class PipelineOrchestrator(BaseModel):
             IMPORTANT: Caller must use returned records to ensure cache_key propagates
             to downstream processors.
         """
-        if (
-            not self.enable_record_cache
-            or not self._record_cache
-            or not outputs
-            or not hasattr(input_record, "record_id")
-        ):
+        if not self.enable_record_cache or not self._record_cache or not outputs or not hasattr(input_record, "record_id"):
             return outputs  # Return unchanged if caching disabled
 
         # Determine base key for caching (matches lookup logic in _check_processor_cache)
@@ -1082,15 +995,11 @@ class PipelineOrchestrator(BaseModel):
                     cache_key = f"{base_key}_output_{output_index}"
 
                     # Store cache key in metadata for cache lookup, but preserve original record_id
-                    updated_metadata = (
-                        output_record.metadata.copy() if output_record.metadata else {}
-                    )
+                    updated_metadata = output_record.metadata.copy() if output_record.metadata else {}
                     updated_metadata["cache_key"] = cache_key
                     updated_metadata["output_index"] = output_index
 
-                    cache_record = output_record.model_copy(
-                        update={"metadata": updated_metadata}
-                    )
+                    cache_record = output_record.model_copy(update={"metadata": updated_metadata})
                     self._record_cache.save(cache_record, processor_stage_name, cache_key=cache_key)
                     updated_outputs.append(cache_record)  # Return record WITH cache metadata
                 return updated_outputs
@@ -1129,11 +1038,7 @@ class PipelineOrchestrator(BaseModel):
                         self._summary.increment_attempted()
 
                         # Process flushed record through remaining processors
-                        task = asyncio.create_task(
-                            self._process_flushed_record(
-                                flushed_record, i + 1, completed_queue
-                            )
-                        )
+                        task = asyncio.create_task(self._process_flushed_record(flushed_record, i + 1, completed_queue))
                         flush_tasks.append(task)
 
                     if flushed_count > 0:
