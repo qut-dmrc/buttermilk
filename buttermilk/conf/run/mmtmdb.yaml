@@ -26,20 +26,35 @@ run:
       # Defaults from /storage@run.pipeline.source: tmdbtitles will fill in project_id, dataset_id, etc.
       limit: ${run.pipeline.sample_size}  # Passes sample_size to storage for {n} substitution
       custom_query: |
-        WITH decade_samples AS (
+        WITH
+        -- Floor: 0.5n records with per-decade distribution (~0.5n/14 per decade)
+        decade_floor AS (
           SELECT *,
-              FLOOR(year / 10) * 10 AS decade,
               ROW_NUMBER() OVER (PARTITION BY DIV(year, 10) * 10 ORDER BY RAND()) AS rn
           FROM {table}
           WHERE year IS NOT NULL
               AND year >= 1900
               AND year < 2030
+        ),
+        floor_records AS (
+          SELECT * EXCEPT(rn)
+          FROM decade_floor
+          WHERE rn <= CEIL({n} * 0.5 / 14.0)
+        ),
+        -- Random: 0.5n additional random records
+        random_records AS (
+          SELECT *
+          FROM {table}
+          WHERE year IS NOT NULL
+              AND year >= 1900
+              AND year < 2030
+          ORDER BY RAND()
+          LIMIT CAST({n} * 0.5 AS INT64)
         )
-        SELECT * EXCEPT(decade, rn)
-        FROM decade_samples
-        WHERE rn <= CEIL({n} / 14.0)
-        ORDER BY RAND()
-        LIMIT {n}
+        -- Combined and deduplicated (final count may be < n due to overlap)
+        SELECT * FROM floor_records
+        UNION DISTINCT
+        SELECT * FROM random_records
     # Processors: TMDB enrichment + upload
     processors:
       # Step 1: TMDB processor to fetch streaming availability
