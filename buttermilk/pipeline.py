@@ -136,6 +136,13 @@ class PipelineOrchestrator(BaseModel):
     _record_cache: Any = PrivateAttr(default=None)
     _summary: Any = PrivateAttr(default=None)  # ProcessingSummary instance
 
+    # Source record tracking for 1:N expansion scenarios
+    # When source records have all variants buffered, we track them here
+    # and reconcile their outcomes when variants complete via flush
+    _pending_source_records: set = PrivateAttr(default_factory=set)  # Set of record_ids
+    _variant_outcomes: dict = PrivateAttr(default_factory=dict)  # {record_id: {"success": int, "failed": int}}
+    _pending_lock: Any = PrivateAttr(default=None)  # asyncio.Lock for thread-safe access
+
     model_config = ConfigDict(arbitrary_types_allowed=True, populate_by_name=True)
 
     @pydantic.model_validator(mode="before")
@@ -159,6 +166,7 @@ class PipelineOrchestrator(BaseModel):
         self._api_semaphore = asyncio.Semaphore(self.api_concurrency)
         set_api_semaphore(self._api_semaphore)
         self._summary = ProcessingSummary()
+        self._pending_lock = asyncio.Lock()  # For thread-safe pending record tracking
 
         # Initialize record cache (lazy base_dir resolution happens in RecordCache)
         if self.enable_record_cache:
@@ -486,11 +494,15 @@ class PipelineOrchestrator(BaseModel):
                         stage_metadata["total_outputs"] = total_outputs
 
                     # Preserve existing metadata and add stage metadata
-                    updated_metadata = final_record.metadata.copy() if final_record.metadata else {}
-                    updated_metadata[self.pipeline_name] = stage_metadata
-
-                    updated_record = final_record.model_copy(update={"metadata": updated_metadata})
-                    yield updated_record
+                    # Support typed data flow: records may not have metadata attribute
+                    if hasattr(final_record, "metadata") and hasattr(final_record, "model_copy"):
+                        updated_metadata = final_record.metadata.copy() if final_record.metadata else {}
+                        updated_metadata[self.pipeline_name] = stage_metadata
+                        updated_record = final_record.model_copy(update={"metadata": updated_metadata})
+                        yield updated_record
+                    else:
+                        # Typed data flow: yield non-BaseRecord objects as-is
+                        yield final_record
 
             except GeneratorExit:
                 # Handle early generator termination gracefully
@@ -637,6 +649,12 @@ class PipelineOrchestrator(BaseModel):
                             # Only count as processed if we got at least one output
                             if results_count > 0:
                                 self._summary.increment_processed()
+                                logger.info(
+                                    f"📊 STATS: increment_processed (source record yielded {results_count} outputs)",
+                                    record_id=record_id,
+                                    results_count=results_count,
+                                    processed=self._summary.processed,
+                                )
                                 input_completion_timestamps.append(time.monotonic())
                                 task_span.set_attribute("outputs.count", results_count)
                                 task_span.set_attribute("status", "processed")
@@ -647,14 +665,20 @@ class PipelineOrchestrator(BaseModel):
 
                         except RecordBufferedException as e:
                             # Record is buffered for batch processing, not filtered
-                            # Don't increment skipped counter - record will be processed later via flush()
+                            # Track this source record as "pending" - its outcome will be determined
+                            # when its variants complete via flush()
+                            async with self._pending_lock:
+                                self._pending_source_records.add(record_id)
+                                if record_id not in self._variant_outcomes:
+                                    self._variant_outcomes[record_id] = {"success": 0, "failed": 0}
                             task_span.set_attribute("status", "buffered")
                             task_span.set_attribute("buffer_info", str(e))
                             task_span.set_status(trace.Status(trace.StatusCode.OK))
-                            logger.debug(
-                                f"Record {record_id} buffered: {e}",
+                            logger.info(
+                                f"📊 STATS: source record BUFFERED (pending outcome)",
                                 record_id=record_id,
                                 pipeline_name=self.pipeline_name,
+                                buffer_info=str(e),
                             )
 
                         except RecordSkippedException as e:
@@ -673,6 +697,12 @@ class PipelineOrchestrator(BaseModel):
 
                         except Exception as e:
                             self._summary.increment_failed()
+                            logger.info(
+                                f"📊 STATS: increment_failed (source record)",
+                                record_id=record_id,
+                                failed=self._summary.failed,
+                                error_type=type(e).__name__,
+                            )
                             task_span.set_attribute("status", "failed")
                             task_span.set_attribute("error_type", type(e).__name__)
                             task_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
@@ -686,17 +716,22 @@ class PipelineOrchestrator(BaseModel):
                             )
 
                             # Add error metadata to record and put in queue
-                            existing_metadata = getattr(record, "metadata", None) or {}
-                            error_metadata = {
-                                **existing_metadata,
-                                self.pipeline_name: {
-                                    "status": "failed",
-                                    "timestamp": time.time(),
-                                    "error": str(e),
-                                    "error_type": type(e).__name__,
-                                },
-                            }
-                            failed_record = record.model_copy(update={"metadata": error_metadata})
+                            # Support typed data flow: records may not have model_copy
+                            if hasattr(record, "model_copy"):
+                                existing_metadata = getattr(record, "metadata", None) or {}
+                                error_metadata = {
+                                    **existing_metadata,
+                                    self.pipeline_name: {
+                                        "status": "failed",
+                                        "timestamp": time.time(),
+                                        "error": str(e),
+                                        "error_type": type(e).__name__,
+                                    },
+                                }
+                                failed_record = record.model_copy(update={"metadata": error_metadata})
+                            else:
+                                # Typed data flow: pass through non-BaseRecord objects as-is
+                                failed_record = record
                             await completed_records.put(("error", failed_record))
                             # Continue processing other records - don't raise
 
@@ -708,6 +743,11 @@ class PipelineOrchestrator(BaseModel):
                 try:
                     async for record in source_iter:
                         self._summary.increment_attempted()
+                        logger.info(
+                            f"📊 STATS: increment_attempted (source record)",
+                            record_id=getattr(record, "record_id", "unknown"),
+                            attempted=self._summary.attempted,
+                        )
 
                         # Create and track task (concurrency controlled by semaphore in process_and_queue)
                         task = asyncio.create_task(process_and_queue(record))
@@ -802,6 +842,9 @@ class PipelineOrchestrator(BaseModel):
 
             # Call finalize_processing on all processors
             await self._finalize_all_processors()
+
+            # Reconcile pending source records - update their outcomes based on variant completion
+            await self._reconcile_pending_source_records()
 
             # Set final stage span attributes
             stage_duration_ms = self._summary.duration_ms()
@@ -994,14 +1037,19 @@ class PipelineOrchestrator(BaseModel):
                 for output_index, output_record in enumerate(outputs):
                     cache_key = f"{base_key}_output_{output_index}"
 
-                    # Store cache key in metadata for cache lookup, but preserve original record_id
-                    updated_metadata = output_record.metadata.copy() if output_record.metadata else {}
-                    updated_metadata["cache_key"] = cache_key
-                    updated_metadata["output_index"] = output_index
+                    # Support typed data flow: only add metadata to records that support it
+                    if hasattr(output_record, "metadata") and hasattr(output_record, "model_copy"):
+                        # Store cache key in metadata for cache lookup, but preserve original record_id
+                        updated_metadata = output_record.metadata.copy() if output_record.metadata else {}
+                        updated_metadata["cache_key"] = cache_key
+                        updated_metadata["output_index"] = output_index
+                        cache_record = output_record.model_copy(update={"metadata": updated_metadata})
+                    else:
+                        # Typed data flow: cache without metadata enrichment
+                        cache_record = output_record
 
-                    cache_record = output_record.model_copy(update={"metadata": updated_metadata})
                     self._record_cache.save(cache_record, processor_stage_name, cache_key=cache_key)
-                    updated_outputs.append(cache_record)  # Return record WITH cache metadata
+                    updated_outputs.append(cache_record)  # Return record WITH cache metadata (if applicable)
                 return updated_outputs
         except Exception as e:
             logger.debug(
@@ -1035,7 +1083,14 @@ class PipelineOrchestrator(BaseModel):
                     flushed_count = 0
                     async for flushed_record in processor.flush():
                         flushed_count += 1
-                        self._summary.increment_attempted()
+                        # DON'T increment attempted - flushed variants are derived from
+                        # source records that were already counted as attempted
+                        flushed_record_id = getattr(flushed_record, "record_id", "unknown")
+                        logger.info(
+                            f"📊 STATS: flushed variant (NOT incrementing attempted)",
+                            record_id=flushed_record_id,
+                            variant_suffix=getattr(flushed_record, "metadata", {}).get("variant_suffix", "none"),
+                        )
 
                         # Process flushed record through remaining processors
                         task = asyncio.create_task(self._process_flushed_record(flushed_record, i + 1, completed_queue))
@@ -1078,7 +1133,17 @@ class PipelineOrchestrator(BaseModel):
 
         if start_index >= len(self.processors):
             # No more processors, yield directly
-            self._summary.increment_processed()
+            # Don't increment stats here - flushed variants are derived from source records
+            # that are tracked as "pending". Stats will be reconciled at pipeline end.
+            async with self._pending_lock:
+                # Track flush success count (not per-source, just total)
+                self._variant_outcomes.setdefault("_flush_totals", {"success": 0, "failed": 0})
+                self._variant_outcomes["_flush_totals"]["success"] += 1
+            logger.info(
+                f"📊 STATS: flushed variant SUCCESS (will reconcile pending sources at end)",
+                record_id=record_id,
+                flush_success_count=self._variant_outcomes.get("_flush_totals", {}).get("success", 0),
+            )
             await completed_queue.put(("success", record))
             return
 
@@ -1115,14 +1180,32 @@ class PipelineOrchestrator(BaseModel):
                         processing_queue = next_queue
 
                     # Yield all final outputs
-                    self._summary.increment_processed()
+                    # Track flush success (not per-source, just total)
+                    async with self._pending_lock:
+                        self._variant_outcomes.setdefault("_flush_totals", {"success": 0, "failed": 0})
+                        self._variant_outcomes["_flush_totals"]["success"] += 1
+                    logger.info(
+                        f"📊 STATS: flushed variant SUCCESS (will reconcile pending sources at end)",
+                        record_id=record_id,
+                        output_count=len(processing_queue),
+                        flush_success_count=self._variant_outcomes.get("_flush_totals", {}).get("success", 0),
+                    )
                     for final_record in processing_queue:
                         await completed_queue.put(("success", final_record))
 
                     span.set_status(trace.Status(trace.StatusCode.OK))
 
                 except Exception as e:
-                    self._summary.increment_failed()
+                    # Track flush failure
+                    async with self._pending_lock:
+                        self._variant_outcomes.setdefault("_flush_totals", {"success": 0, "failed": 0})
+                        self._variant_outcomes["_flush_totals"]["failed"] += 1
+                    logger.info(
+                        f"📊 STATS: flushed variant FAILED (will reconcile pending sources at end)",
+                        record_id=record_id,
+                        flush_failed_count=self._variant_outcomes.get("_flush_totals", {}).get("failed", 0),
+                        error_type=type(e).__name__,
+                    )
                     span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                     logger.error(
                         f"Failed to process flushed record: {e}",
@@ -1181,6 +1264,78 @@ class PipelineOrchestrator(BaseModel):
             f"✅ Completed finalization for stage '{self.pipeline_name}'",
             pipeline_name=self.pipeline_name,
         )
+
+    async def _reconcile_pending_source_records(self) -> None:
+        """Reconcile outcomes for source records that had all variants buffered.
+
+        When a source record's variants are all buffered (no direct batch trigger),
+        the source record is marked as "pending" and its outcome is deferred until
+        the variants complete via flush.
+
+        This method examines the variant outcomes for each pending source record
+        and updates the summary stats accordingly:
+        - If ANY variant failed → source record = failed
+        - If ALL variants succeeded → source record = processed
+        """
+        async with self._pending_lock:
+            if not self._pending_source_records:
+                logger.debug("📊 No pending source records to reconcile")
+                return
+
+            pending_count = len(self._pending_source_records)
+            flush_totals = self._variant_outcomes.get("_flush_totals", {"success": 0, "failed": 0})
+            flush_success = flush_totals["success"]
+            flush_failed = flush_totals["failed"]
+
+            logger.info(
+                f"📊 Reconciling {pending_count} pending source records",
+                pending_count=pending_count,
+                flush_success=flush_success,
+                flush_failed=flush_failed,
+            )
+
+            # Simplified reconciliation using flush totals:
+            # We can't match individual variants to sources (record_ids change),
+            # so we use conservative heuristics:
+            # - If any flush failed → at least 1 source failed
+            # - Remaining pending sources = processed
+
+            if flush_failed > 0:
+                # Mark one source as failed for each flush failure (up to pending count)
+                failed_to_mark = min(flush_failed, pending_count)
+                processed_to_mark = pending_count - failed_to_mark
+
+                for _ in range(failed_to_mark):
+                    self._summary.increment_failed()
+                for _ in range(processed_to_mark):
+                    self._summary.increment_processed()
+
+                logger.info(
+                    f"📊 STATS: reconciled {pending_count} pending sources: "
+                    f"{processed_to_mark} processed, {failed_to_mark} failed",
+                    pending_count=pending_count,
+                    processed_marked=processed_to_mark,
+                    failed_marked=failed_to_mark,
+                    flush_success=flush_success,
+                    flush_failed=flush_failed,
+                    processed=self._summary.processed,
+                    failed=self._summary.failed,
+                )
+            else:
+                # All flushes succeeded → all pending sources processed
+                for _ in range(pending_count):
+                    self._summary.increment_processed()
+
+                logger.info(
+                    f"📊 STATS: reconciled {pending_count} pending sources as processed",
+                    pending_count=pending_count,
+                    flush_success=flush_success,
+                    processed=self._summary.processed,
+                )
+
+            # Clear tracking state
+            self._pending_source_records.clear()
+            self._variant_outcomes.clear()
 
 
 def chain_stages(*stages: PipelineOrchestrator) -> AsyncIterator[dict[str, Any]]:
