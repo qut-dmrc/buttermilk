@@ -45,15 +45,17 @@ run:
           WHERE rn <= CEIL(n * 0.5 / 14.0)
         ),
         -- Random: 0.5n additional random records
-        random_records AS (
-          SELECT *
+        random_base AS (
+          SELECT *, ROW_NUMBER() OVER (ORDER BY RAND()) as rn_rand
           FROM {table}
           WHERE year IS NOT NULL
               AND year >= 1900
               AND year < 2030
-          ORDER BY RAND()
-          -- Use declared variable for LIMIT to avoid "LIMIT expects literal" error
-          LIMIT limit_val
+        ),
+        random_records AS (
+          SELECT * EXCEPT(rn_rand)
+          FROM random_base
+          WHERE rn_rand <= limit_val
         )
         -- Combined and deduplicated (final count may be < n due to overlap)
         SELECT * FROM floor_records
