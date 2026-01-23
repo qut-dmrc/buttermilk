@@ -378,6 +378,7 @@ class PipelineOrchestrator(BaseModel):
                         attributes=processor_span_attributes,
                     ) as processor_span:
                         next_queue = []
+                        buffered_count = 0  # Track how many records were buffered
 
                         # Process each record in the current queue through this processor
                         for current_record in processing_queue:
@@ -441,6 +442,13 @@ class PipelineOrchestrator(BaseModel):
                                 )
                                 async for output_record in processor.process(context):
                                     outputs.append(output_record)
+                            except RecordBufferedException:
+                                # Record was buffered (e.g., by BatchAccumulator)
+                                # Continue processing remaining records in the queue
+                                # This is critical for 1:N transformations where multiple
+                                # outputs need to be buffered individually
+                                buffered_count += 1
+                                continue
                             except Exception as e:
                                 # Don't log here - let the task wrapper handle error logging
                                 # to avoid duplicate error messages
@@ -484,6 +492,14 @@ class PipelineOrchestrator(BaseModel):
                                     )
                                 # Add all outputs to the next processing queue
                                 next_queue.extend(outputs_for_queue)
+
+                        # After processing all records, check if all were buffered
+                        if buffered_count > 0 and not next_queue:
+                            # All records in this stage were buffered - raise to signal this
+                            # to the caller (will be processed later via flush())
+                            raise RecordBufferedException(
+                                f"All {buffered_count} records buffered in {processor_stage_name}"
+                            )
 
                         # Set processor span attributes for outputs
                         processor_span.set_attribute("outputs.count", len(next_queue))

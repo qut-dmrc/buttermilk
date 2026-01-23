@@ -669,3 +669,159 @@ async def test_pipeline_summary_as_dict_export():
     assert isinstance(summary_dict["attempted"], int)
     assert isinstance(summary_dict["duration_ms"], int)
     assert isinstance(summary_dict["success_rate"], float)
+
+
+# Tests for 1:N expansion with BatchAccumulator
+
+
+@pytest.mark.anyio
+async def test_1_to_n_expansion_with_batch_accumulator():
+    """Test that 1:N expansion works correctly when followed by BatchAccumulator.
+
+    This is a regression test for the bug where RecordBufferedException would
+    exit the processing loop early, causing variants 2..N to be lost when
+    a 1:N processor (like ParameterExpansionProcessor) preceded BatchAccumulator.
+
+    The fix ensures that when BatchAccumulator buffers variant #1 and raises
+    RecordBufferedException, the pipeline continues to process and buffer
+    variants #2, #3, etc.
+    """
+    from buttermilk._core.protocols import BatchProcessor
+    from buttermilk.processors.batch_accumulator import BatchAccumulator
+
+    # Track all records that enter the batch processor
+    processed_records = []
+
+    class TrackingBatchProcessor(BatchProcessor):
+        """Batch processor that tracks all records it receives."""
+
+        async def process_batch(self, records: list) -> list:
+            processed_records.extend(records)
+            return records
+
+    # Create test data source - just 2 input records
+    async def source():
+        from buttermilk._core.types import Record
+
+        for i in range(2):
+            yield Record(record_id=f"input_{i}", content=f"Content {i}")
+
+    # Create a 1:3 splitting processor (creates 3 outputs per input)
+    splitter = SplittingProcessor(split_count=3)
+
+    # Create BatchAccumulator with batch_size=10 (larger than 6 total records)
+    # This ensures all records get buffered first, then flushed at the end
+    batch_accumulator = BatchAccumulator(
+        batch_size=10,
+        batch_processors=[TrackingBatchProcessor()],
+    )
+
+    # Create orchestrator with splitter -> batch_accumulator
+    orchestrator = PipelineOrchestrator(
+        pipeline_name="expansion_batch_test",
+        source=source(),
+        processors=[splitter, batch_accumulator],
+        concurrency=1,
+        enable_record_cache=False,
+    )
+
+    # Run pipeline
+    results = []
+    async for record in orchestrator():
+        results.append(record)
+
+    # CRITICAL ASSERTION: We should have 6 results (2 inputs × 3 splits each)
+    # Before the fix, only 2 results would be produced (first split from each input)
+    assert len(results) == 6, (
+        f"Expected 6 results (2 inputs × 3 splits), got {len(results)}. "
+        "This indicates RecordBufferedException is breaking 1:N expansion."
+    )
+
+    # Verify the batch processor received all 6 records
+    assert len(processed_records) == 6, (
+        f"Expected batch processor to receive 6 records, got {len(processed_records)}. "
+        "Some variants were lost during buffering."
+    )
+
+    # Verify we have both input records represented in the results
+    input_ids = {r.record_id for r in results}
+    assert "input_0" in input_ids
+    assert "input_1" in input_ids
+
+    # Verify split metadata is correct
+    for record in results:
+        assert "split_info" in record.metadata
+        assert record.metadata["split_info"]["total_splits"] == 3
+
+
+@pytest.mark.anyio
+async def test_1_to_n_expansion_partial_batch_flush():
+    """Test that 1:N expansion works when batch fills mid-processing.
+
+    This tests the scenario where:
+    - Input 1 produces 3 variants -> all get buffered (buffer size = 3)
+    - Batch fills and processes
+    - Input 2 produces 3 variants -> all get buffered
+    - Flush processes remaining
+
+    Before the fix, only the first variant from each input would be processed.
+    """
+    from buttermilk._core.protocols import BatchProcessor
+    from buttermilk.processors.batch_accumulator import BatchAccumulator
+
+    batch_calls = []
+
+    class CountingBatchProcessor(BatchProcessor):
+        """Batch processor that counts batch sizes."""
+
+        async def process_batch(self, records: list) -> list:
+            batch_calls.append(len(records))
+            return records
+
+    # Create test data source - 3 input records
+    async def source():
+        from buttermilk._core.types import Record
+
+        for i in range(3):
+            yield Record(record_id=f"input_{i}", content=f"Content {i}")
+
+    # Create a 1:2 splitting processor
+    splitter = SplittingProcessor(split_count=2)
+
+    # Batch size of 3 means:
+    # - Input 0 -> 2 variants buffered (total: 2)
+    # - Input 1 -> 2 variants, first fills batch to 3, triggers processing, second buffered (total: 1)
+    # - Input 2 -> 2 variants buffered (total: 3), triggers processing
+    # - Flush: 0 remaining
+    # OR different interleaving based on concurrency
+    batch_accumulator = BatchAccumulator(
+        batch_size=3,
+        batch_processors=[CountingBatchProcessor()],
+    )
+
+    orchestrator = PipelineOrchestrator(
+        pipeline_name="partial_batch_test",
+        source=source(),
+        processors=[splitter, batch_accumulator],
+        concurrency=1,
+        enable_record_cache=False,
+    )
+
+    results = []
+    async for record in orchestrator():
+        results.append(record)
+
+    # CRITICAL: We should have 6 results (3 inputs × 2 splits each)
+    assert len(results) == 6, (
+        f"Expected 6 results (3 inputs × 2 splits), got {len(results)}. "
+        "This indicates RecordBufferedException is breaking 1:N expansion."
+    )
+
+    # Verify batch processor was called (at least once for full batch, possibly once for flush)
+    assert len(batch_calls) >= 1, "Batch processor should have been called at least once"
+
+    # Verify total records processed across all batches
+    total_batched = sum(batch_calls)
+    assert total_batched == 6, (
+        f"Expected 6 total records through batch processor, got {total_batched}"
+    )
