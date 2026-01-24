@@ -32,13 +32,62 @@ class ImageRecord(BaseModel):
         "arbitrary_types_allowed": True,
     }
 
+    @staticmethod
+    def _is_refusal_error(error: str | dict | None) -> bool:
+        """Determine if an error is a content policy refusal.
+
+        A refusal error is when the content was rejected for policy reasons,
+        not when there was a technical failure (network, timeout, invalid credentials, etc.).
+
+        Args:
+            error: Error information (either string message or dict with error details)
+
+        Returns:
+            True if this is a content policy refusal, False otherwise
+        """
+        if error is None:
+            return False
+
+        error_str = error if isinstance(error, str) else (
+            error.get("message", "") if isinstance(error, dict) else str(error)
+        )
+
+        # Normalize to lowercase for case-insensitive matching
+        error_lower = error_str.lower()
+
+        # Common refusal keywords from various APIs
+        refusal_keywords = [
+            "refus",  # "refused", "refusal", "refuses"
+            "content policy",
+            "not allowed",
+            "not permitted",
+            "violates",
+            "inappropriate",
+            "blocked",  # Content was blocked by policy
+            "cannot generate",  # Usually due to policy
+            "unable to generate",  # Usually due to policy
+            "request was refused",
+            "prompt violates",
+            "unsafe",  # When it's about policy violation
+            "not suitable",
+            "prohibited",
+        ]
+
+        return any(keyword in error_lower for keyword in refusal_keywords)
+
     @model_validator(mode="after")
     @classmethod
     def check_fields(cls, obj):
         if obj.image is None:
             if obj.error is not None:
-                # add a sad robot
-                obj.image = Image.open("tests/data/sadrobot.jpg")
+                # Only add sad robot for content policy refusals, not general API errors
+                if cls._is_refusal_error(obj.error):
+                    obj.image = Image.open("tests/data/sadrobot.jpg")
+                else:
+                    raise ValueError(
+                        "Image generation failed due to a technical error. "
+                        f"Error details: {obj.error}"
+                    )
             else:
                 raise ValueError(
                     "Image is required, unless an error has occured and the 'error' field is set.",
