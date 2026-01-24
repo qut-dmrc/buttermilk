@@ -910,9 +910,8 @@ class BM(BaseModel):
             if loop.is_running():
                 # Start task only if it hasn't been started or is already done
                 if (
-                    not hasattr(self, "_get_ip_task")
-                    or self._get_ip_task is None
-                    or self._get_ip_task.done()
+                    self.session_info._get_ip_task is None
+                    or self.session_info._get_ip_task.done()
                 ):
 
                     async def _fetch_and_set_ip() -> None:
@@ -920,7 +919,7 @@ class BM(BaseModel):
                         self.session_info.ip = ip
                         logger.debug(f"Fetched IP address: {ip}")
 
-                    self._get_ip_task = asyncio.create_task(_fetch_and_set_ip())
+                    self.session_info._get_ip_task = asyncio.create_task(_fetch_and_set_ip())
             # else: No event loop running, cannot start async task
         except RuntimeError:  # No current event loop
             logger.debug("No running event loop, skipping async IP fetch task.")
