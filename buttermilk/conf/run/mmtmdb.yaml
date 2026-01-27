@@ -30,14 +30,26 @@ run:
         DECLARE limit_val INT64 DEFAULT CAST(n * 0.5 AS INT64);
 
         WITH
+        -- Exclude titles processed in the last 14 days
+        processed_recently AS (
+            SELECT DISTINCT record_id
+            FROM `prosocial-443205.mediamarkets.observations`
+            WHERE test_date >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 14 DAY)
+        ), 
+        candidates AS (
+            SELECT t.*
+            FROM {table} t
+            LEFT JOIN processed_recently p ON t.record_id = p.record_id
+            WHERE p.record_id IS NULL
+              AND t.year IS NOT NULL
+              AND t.year >= 1900
+              AND t.year < 2030
+        ),
         -- Floor: 0.5n records with per-decade distribution (~0.5n/14 per decade)
         decade_floor AS (
           SELECT *,
               ROW_NUMBER() OVER (PARTITION BY DIV(year, 10) * 10 ORDER BY RAND()) AS rn
-          FROM {table}
-          WHERE year IS NOT NULL
-              AND year >= 1900
-              AND year < 2030
+          FROM candidates
         ),
         floor_records AS (
           SELECT * EXCEPT(rn)
@@ -47,10 +59,7 @@ run:
         -- Random: 0.5n additional random records
         random_base AS (
           SELECT *, ROW_NUMBER() OVER (ORDER BY RAND()) as rn_rand
-          FROM {table}
-          WHERE year IS NOT NULL
-              AND year >= 1900
-              AND year < 2030
+          FROM candidates
         ),
         random_records AS (
           SELECT * EXCEPT(rn_rand)
