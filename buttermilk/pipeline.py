@@ -56,17 +56,10 @@ NON-GOALS
 
 import asyncio
 import time
-from typing import (
-    Any,
-    AsyncGenerator,
-    AsyncIterator,
-    Mapping,
-    Optional,
-)
+from typing import Any, AsyncGenerator, AsyncIterator, Mapping, Optional
 
 import hydra
 import pydantic
-
 # weave import removed
 from omegaconf import DictConfig
 from opentelemetry import trace
@@ -560,14 +553,7 @@ class PipelineOrchestrator(BaseModel):
         """
         from collections import deque
 
-        from rich.progress import (
-            BarColumn,
-            Progress,
-            SpinnerColumn,
-            TaskProgressColumn,
-            TextColumn,
-            TimeElapsedColumn,
-        )
+        from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn, TimeElapsedColumn
 
         tracer = trace.get_tracer("buttermilk.pipeline")
         pending_tasks: set[asyncio.Task] = set()
@@ -675,7 +661,7 @@ class PipelineOrchestrator(BaseModel):
                             task_span.set_attribute("buffer_info", str(e))
                             task_span.set_status(trace.Status(trace.StatusCode.OK))
                             logger.info(
-                                f"📊 STATS: source record BUFFERED (pending outcome)",
+                                "📊 STATS: source record BUFFERED (pending outcome)",
                                 record_id=record_id,
                                 pipeline_name=self.pipeline_name,
                                 buffer_info=str(e),
@@ -698,7 +684,7 @@ class PipelineOrchestrator(BaseModel):
                         except Exception as e:
                             self._summary.increment_failed()
                             logger.info(
-                                f"📊 STATS: increment_failed (source record)",
+                                "📊 STATS: increment_failed (source record)",
                                 record_id=record_id,
                                 failed=self._summary.failed,
                                 error_type=type(e).__name__,
@@ -743,8 +729,8 @@ class PipelineOrchestrator(BaseModel):
                 try:
                     async for record in source_iter:
                         self._summary.increment_attempted()
-                        logger.info(
-                            f"📊 STATS: increment_attempted (source record)",
+                        logger.debug(
+                            "📊 STATS: increment_attempted (source record)",
                             record_id=getattr(record, "record_id", "unknown"),
                             attempted=self._summary.attempted,
                         )
@@ -1086,8 +1072,8 @@ class PipelineOrchestrator(BaseModel):
                         # DON'T increment attempted - flushed variants are derived from
                         # source records that were already counted as attempted
                         flushed_record_id = getattr(flushed_record, "record_id", "unknown")
-                        logger.info(
-                            f"📊 STATS: flushed variant (NOT incrementing attempted)",
+                        logger.debug(
+                            "📊 STATS: flushed variant (NOT incrementing attempted)",
                             record_id=flushed_record_id,
                             variant_suffix=getattr(flushed_record, "metadata", {}).get("variant_suffix", "none"),
                         )
@@ -1140,7 +1126,7 @@ class PipelineOrchestrator(BaseModel):
                 self._variant_outcomes.setdefault("_flush_totals", {"success": 0, "failed": 0})
                 self._variant_outcomes["_flush_totals"]["success"] += 1
             logger.info(
-                f"📊 STATS: flushed variant SUCCESS (will reconcile pending sources at end)",
+                "📊 STATS: flushed variant SUCCESS (will reconcile pending sources at end)",
                 record_id=record_id,
                 flush_success_count=self._variant_outcomes.get("_flush_totals", {}).get("success", 0),
             )
@@ -1184,8 +1170,8 @@ class PipelineOrchestrator(BaseModel):
                     async with self._pending_lock:
                         self._variant_outcomes.setdefault("_flush_totals", {"success": 0, "failed": 0})
                         self._variant_outcomes["_flush_totals"]["success"] += 1
-                    logger.info(
-                        f"📊 STATS: flushed variant SUCCESS (will reconcile pending sources at end)",
+                    logger.debug(
+                        "📊 STATS: flushed variant SUCCESS (will reconcile pending sources at end)",
                         record_id=record_id,
                         output_count=len(processing_queue),
                         flush_success_count=self._variant_outcomes.get("_flush_totals", {}).get("success", 0),
@@ -1200,8 +1186,8 @@ class PipelineOrchestrator(BaseModel):
                     async with self._pending_lock:
                         self._variant_outcomes.setdefault("_flush_totals", {"success": 0, "failed": 0})
                         self._variant_outcomes["_flush_totals"]["failed"] += 1
-                    logger.info(
-                        f"📊 STATS: flushed variant FAILED (will reconcile pending sources at end)",
+                    logger.warn(
+                        "📊 STATS: flushed variant FAILED (will reconcile pending sources at end)",
                         record_id=record_id,
                         flush_failed_count=self._variant_outcomes.get("_flush_totals", {}).get("failed", 0),
                         error_type=type(e).__name__,
