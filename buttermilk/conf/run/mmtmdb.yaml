@@ -39,7 +39,7 @@ run:
         candidates AS (
             SELECT t.*
             FROM {table} t
-            LEFT JOIN processed_recently p ON t.record_id = p.record_id
+            LEFT JOIN processed_recently p ON CAST(t.record_id AS STRING) = p.record_id
             WHERE p.record_id IS NULL
               AND t.year IS NOT NULL
               AND t.year >= 1900
