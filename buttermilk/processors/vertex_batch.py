@@ -132,10 +132,30 @@ class VertexBatchProcessor(BatchProcessorCore):
     def _ensure_manager(self) -> BatchJobManager:
         """Lazily initialize the BatchJobManager via buttermilk infrastructure."""
         if self._manager is None:
+            from google import genai
+
             from buttermilk import bm
 
+            # Resolve short alias to full model name to check if it's Gemini 3
+            resolved_model = self.model
+            if self.model in bm.llms.connections:
+                config = bm.llms.connections[self.model]
+                resolved_model = config.configs.get("model", self.model)
+
+            # Gemini 3 models require the global endpoint
+            if "gemini-3" in resolved_model.lower():
+                project_id = bm.cloud_manager.gcp_cloud_cfg.project_id
+                client = genai.Client(
+                    vertexai=True,
+                    project=project_id,
+                    location="global",
+                )
+                logger.info(f"Using global endpoint for Gemini 3 model: {self.model} -> {resolved_model}")
+            else:
+                client = bm.genai
+
             self._manager = BatchJobManager(
-                client=bm.genai,
+                client=client,
                 poll_interval=self.poll_interval,
                 max_wait_hours=self.max_wait_hours,
             )

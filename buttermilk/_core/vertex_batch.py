@@ -358,27 +358,62 @@ class BatchJobManager(BaseModel):
         path = AnyPath(uri)
         return path.read_text()
 
+    def _resolve_model_alias(self, model: str) -> str:
+        """Resolve a short model alias to its full model name.
+
+        Looks up the model in buttermilk's LLM registry. If found, returns
+        the full model name from configs["model"]. Otherwise returns the
+        input unchanged.
+
+        Args:
+            model: Model name - can be a short alias (e.g., "gemini-flash")
+                   or a full name (e.g., "gemini-3-flash-preview")
+
+        Returns:
+            Full model name from registry, or original if not found
+        """
+        try:
+            from buttermilk import bm
+
+            if model in bm.llms.connections:
+                config = bm.llms.connections[model]
+                full_model = config.configs.get("model")
+                if full_model:
+                    logger.debug(f"Resolved model alias '{model}' to '{full_model}'")
+                    return full_model
+        except Exception as e:
+            logger.debug(f"Could not resolve model alias '{model}': {e}")
+
+        return model
+
     def _get_vertex_model_path(self, model: str) -> str:
         """Convert model name to Vertex AI model path.
 
+        Resolves short model aliases (e.g., "gemini-flash") to full model names
+        (e.g., "gemini-3-flash-preview") using the buttermilk model registry.
+
         Args:
-            model: Model name (e.g., "gemini-2.5-flash", "claude-sonnet-4")
+            model: Model name - can be a short alias or full name
 
         Returns:
-            Full Vertex AI model path
+            Full Vertex AI model path suitable for the Batch API
         """
-        if "claude" in model.lower() or "anthropic" in model.lower():
+        # First, resolve short alias to full model name if it exists in the registry
+        resolved_model = self._resolve_model_alias(model)
+
+        if "claude" in resolved_model.lower() or "anthropic" in resolved_model.lower():
             # Claude models use publisher path
-            # Map common names to full paths
             claude_map = {
                 "claude-sonnet-4": "publishers/anthropic/models/claude-sonnet-4",
                 "claude-opus-4": "publishers/anthropic/models/claude-opus-4",
                 "claude-haiku": "publishers/anthropic/models/claude-3-5-haiku",
             }
-            return claude_map.get(model, f"publishers/anthropic/models/{model}")
+            return claude_map.get(resolved_model, f"publishers/anthropic/models/{resolved_model}")
         else:
-            # Gemini models use direct name
-            return model
+            # Gemini models - strip google/ prefix if present (Batch API expects bare names)
+            if resolved_model.startswith("google/"):
+                return resolved_model[len("google/"):]
+            return resolved_model
 
     async def submit_batch(
         self,
