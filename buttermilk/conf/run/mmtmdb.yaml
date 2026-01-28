@@ -35,6 +35,7 @@ run:
             SELECT DISTINCT record_id
             FROM `prosocial-443205.mediamarkets.observations`
             WHERE test_date >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 14 DAY)
+            AND NOT (error IS NULL OR TO_JSON_STRING(error) IN ('{}', '[]'))
         ), 
         candidates AS (
             SELECT t.*
