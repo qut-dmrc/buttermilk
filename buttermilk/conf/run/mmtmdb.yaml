@@ -12,7 +12,7 @@ run:
   limit: 10000
   pipeline:
     # Pipeline execution parameters
-    pipeline_name: "tmdb_observations"
+    pipeline_name: "tmdb_observations"dfasdfasdfasdf
     description: "Enrich titles with TMDB streaming availability data"
     concurrency: 20
     max_records: null # null = process all
@@ -26,10 +26,8 @@ run:
       # Defaults from /storage@run.pipeline.source: tmdbtitles will fill in project_id, dataset_id, etc.
       limit: ${run.pipeline.sample_size}  # Passes sample_size to storage for {n} substitution
       custom_query: |
-        DECLARE n INT64 DEFAULT {n};
-        DECLARE limit_val INT64 DEFAULT CAST(n * 0.5 AS INT64);
-
         WITH
+        -- Get ALL missing titles that we have not collected so far
         -- Exclude titles processed in the last 14 days
         processed_recently AS (
             SELECT DISTINCT record_id
@@ -39,38 +37,17 @@ run:
         ), 
         candidates AS (
             SELECT t.*
-            FROM {table} t
+            FROM prosocial-443205.mediamarkets.titles_tmdb_theatrical t
             LEFT JOIN processed_recently p ON CAST(t.record_id AS STRING) = p.record_id
             WHERE p.record_id IS NULL
               AND t.year IS NOT NULL
               AND t.year >= 1900
               AND t.year < 2030
-        ),
-        -- Floor: 0.5n records with per-decade distribution (~0.5n/14 per decade)
-        decade_floor AS (
-          SELECT *,
-              ROW_NUMBER() OVER (PARTITION BY DIV(year, 10) * 10 ORDER BY RAND()) AS rn
-          FROM candidates
-        ),
-        floor_records AS (
-          SELECT * EXCEPT(rn)
-          FROM decade_floor
-          WHERE rn <= CEIL(n * 0.5 / 14.0)
-        ),
-        -- Random: 0.5n additional random records
-        random_base AS (
-          SELECT *, ROW_NUMBER() OVER (ORDER BY RAND()) as rn_rand
-          FROM candidates
-        ),
-        random_records AS (
-          SELECT * EXCEPT(rn_rand)
-          FROM random_base
-          WHERE rn_rand <= limit_val
         )
-        -- Combined and deduplicated (final count may be < n due to overlap)
-        SELECT * FROM floor_records
-        UNION DISTINCT
-        SELECT * FROM random_records
+
+        SELECT *
+        FROM candidates
+        ORDER BY RAND()
     # Processors: TMDB enrichment + upload
     processors:
       # Step 1: TMDB processor to fetch streaming availability
