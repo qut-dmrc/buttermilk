@@ -12,7 +12,7 @@ run:
   limit: 10000
   pipeline:
     # Pipeline execution parameters
-    pipeline_name: "tmdb_observations"dfasdfasdfasdf
+    pipeline_name: "tmdb_observations"
     description: "Enrich titles with TMDB streaming availability data"
     concurrency: 20
     max_records: null # null = process all
@@ -44,7 +44,6 @@ run:
               AND t.year >= 1900
               AND t.year < 2030
         )
-
         SELECT *
         FROM candidates
         ORDER BY RAND()
