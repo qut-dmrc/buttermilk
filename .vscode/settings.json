@@ -70,7 +70,13 @@
     "**/*.backup": true
   },
   "explorer.excludeGitIgnore": true,
-  "python-envs.pythonProjects": [],
+  "python-envs.pythonProjects": [
+    {
+      "path": "",
+      "envManager": "ms-python.python:system",
+      "packageManager": "ms-python.python:pip"
+    }
+  ],
   "[jinja]": {
     "editor.defaultFormatter": "GlenBuktenica.unicode-substitutions"
   },
