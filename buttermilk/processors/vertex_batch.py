@@ -38,7 +38,7 @@ from buttermilk._core.processor_core import BatchProcessorCore
 from buttermilk._core.types import BaseRecord
 from buttermilk._core.vertex_batch import BatchJobManager, BatchResult
 from buttermilk.utils.import_utils import load_class
-from buttermilk.utils.templating import load_template
+from buttermilk.utils.templating import render_template
 
 if TYPE_CHECKING:
     from google.genai.types import BatchJob
@@ -150,12 +150,13 @@ class VertexBatchProcessor(BatchProcessorCore):
         Returns:
             Tuple of (rendered template string, template hash)
         """
-        merged_vars = {**self.template_vars, **variant_vars}
-        if self.fail_on_unfilled_parameters:
-            merged_vars["fail_on_unfilled_parameters"] = True
-
-        rendered, unfilled, template_hash = load_template(self.template, merged_vars)
-        return rendered, template_hash
+        result = render_template(
+            template=self.template,
+            template_vars=variant_vars,
+            base_template_vars=self.template_vars,
+            fail_on_unfilled=self.fail_on_unfilled_parameters,
+        )
+        return result.rendered, result.template_hash
 
     def prepare_batch_requests(
         self,

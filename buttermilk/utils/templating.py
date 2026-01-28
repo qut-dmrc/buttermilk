@@ -11,6 +11,7 @@ This module provides functionalities for:
   `make_messages`).
 """
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from weakref import WeakValueDictionary
@@ -533,6 +534,92 @@ def load_template(
         )
 
     return rendered_string, unfilled_vars, template_hash
+
+
+@dataclass
+class TemplateRenderResult:
+    """Result of rendering a template with merged variables.
+
+    Provides a structured return type for template rendering operations,
+    including the rendered content and metadata for traceability.
+
+    Attributes:
+        rendered: The fully rendered template string
+        template_name: Name of the template that was rendered
+        template_hash: SHA-256 hash of the template file for version tracking
+        unfilled_vars: List of template variables that remained unfilled
+    """
+
+    rendered: str
+    template_name: str
+    template_hash: str
+    unfilled_vars: list[str]
+
+
+def render_template(
+    template: str,
+    template_vars: dict[str, Any] | None = None,
+    *,
+    base_template_vars: dict[str, Any] | None = None,
+    fail_on_unfilled: bool = True,
+) -> TemplateRenderResult:
+    """Render a Jinja2 template with merged variables.
+
+    This is the preferred high-level function for template rendering. It combines
+    base_template_vars (config-time defaults) with template_vars (runtime values),
+    where runtime values override config defaults.
+
+    Use this function instead of calling load_template() directly when you need:
+    - Merging of config-time and runtime template variables
+    - Structured result with metadata
+    - Consistent fail-on-unfilled behavior
+
+    Args:
+        template: Template name (without .jinja2 extension)
+        template_vars: Runtime variables to fill template placeholders
+        base_template_vars: Config-time defaults (e.g., from processor/agent config)
+        fail_on_unfilled: If True, raise FatalError when unfilled vars remain
+            (excluding 'record' and 'context' placeholders handled by make_messages)
+
+    Returns:
+        TemplateRenderResult with rendered string and metadata
+
+    Raises:
+        FatalError: If fail_on_unfilled=True and template has unfilled parameters,
+            or if template cannot be loaded
+
+    Example:
+        >>> result = render_template(
+        ...     template="judge_criteria",
+        ...     template_vars={"text": record.text},
+        ...     base_template_vars={"criteria": "Be concise"},
+        ... )
+        >>> print(result.rendered)
+        >>> print(result.template_hash)
+    """
+    # Merge base (config-time) with runtime, runtime overrides
+    merged = {**(base_template_vars or {}), **(template_vars or {})}
+    filtered = clean_empty_values(merged) if merged else {}
+
+    # Load and render template
+    rendered_str, unfilled_vars, template_hash = load_template(template, filtered)
+
+    # Exclude placeholders handled by make_messages (not Jinja2 variables)
+    unfilled_vars = unfilled_vars - {"record", "context"}
+
+    # Fail-fast on unfilled variables if requested
+    # Use FatalError for consistency with load_template (config/setup error, not runtime)
+    if unfilled_vars and fail_on_unfilled:
+        raise FatalError(
+            f"Template '{template}' has unfilled parameters: {', '.join(sorted(unfilled_vars))}"
+        )
+
+    return TemplateRenderResult(
+        rendered=rendered_str,
+        template_name=template,
+        template_hash=template_hash,
+        unfilled_vars=list(unfilled_vars),
+    )
 
 
 def _deduplicate_messages(messages: list[LLMMessage]) -> list[LLMMessage]:
