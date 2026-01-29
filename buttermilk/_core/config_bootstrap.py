@@ -61,6 +61,12 @@ def register_library_configs_in_store(library_config_dir: Path) -> None:
             with open(config_file, "r") as f:
                 config_dict = yaml.safe_load(f)
 
+            # Skip configs with defaults lists - these are main configs meant to be
+            # loaded directly from filesystem, not registered as ConfigStore schemas.
+            # Registering them causes Hydra validation conflicts (deprecated in 1.1).
+            if config_dict and "defaults" in config_dict:
+                continue
+
             # Register in ConfigStore
             # Use library provider name for clarity
             if group:
