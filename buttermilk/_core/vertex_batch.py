@@ -562,9 +562,9 @@ class BatchJobManager(BaseModel):
         try:
             output_path = AnyPath(output_uri)
 
-            # Find all JSONL files in output directory
+            # Find all JSONL files in output directory (recursive - Vertex AI nests in subdirectories)
             if output_path.is_dir():
-                jsonl_files = list(output_path.glob("*.jsonl"))
+                jsonl_files = list(output_path.glob("**/*.jsonl"))
             else:
                 jsonl_files = [output_path]
 
@@ -578,12 +578,25 @@ class BatchJobManager(BaseModel):
                         custom_id = entry.get("custom_id", "")
                         request = request_map.get(custom_id)
 
+                        # Extract error from status field (Vertex AI format) or error field
+                        error_msg = None
+                        status_str = entry.get("status")
+                        if status_str:
+                            try:
+                                status = json.loads(status_str)
+                                if status.get("code") != 0:  # Non-zero = error
+                                    error_msg = status.get("message")
+                            except json.JSONDecodeError:
+                                error_msg = status_str  # Use raw string if not JSON
+                        if not error_msg:
+                            error_msg = entry.get("error", {}).get("message")
+
                         result = BatchResult(
                             custom_id=custom_id,
                             record_id=request.record_id if request else "",
                             criteria_key=request.criteria_key if request else "",
                             response=self._extract_response(entry),
-                            error=entry.get("error", {}).get("message"),
+                            error=error_msg,
                             usage=entry.get("response", {}).get("usage"),
                         )
                         results.append(result)

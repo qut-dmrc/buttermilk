@@ -231,12 +231,18 @@ class VertexBatchProcessor(BatchProcessorCore):
             if criteria_key not in self._cached_criteria:
                 self._cached_criteria[criteria_key] = self._render_criteria(template_vars)
 
+            # Validate content is not empty (fail-fast to avoid empty batch submissions)
+            content = record.content or ""
+            if not content.strip():
+                logger.warning(f"Skipping record {record.record_id}: empty content")
+                continue
+
             # Create request
             req = BatchRequest(
                 custom_id=str(uuid.uuid4()),  # Generate unique ID for this request within batch
                 record_id=record.record_id,
                 criteria_key=criteria_key,
-                content=record.content or "",
+                content=content,
                 cache_name=None,  # TODO: Support persistent cache resources
             )
             requests.append(req)
