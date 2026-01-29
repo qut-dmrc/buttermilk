@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, Field, PrivateAttr
 
 from buttermilk import logger
+from buttermilk._core.exceptions import FatalError
 from buttermilk._core.processor_core import BatchProcessorCore
 from buttermilk._core.types import BaseRecord
 from buttermilk._core.vertex_batch import BatchJobManager, BatchResult
@@ -49,7 +50,8 @@ class VertexBatchProcessor(BatchProcessorCore):
 
     Implements SimpleBatchProcessor protocol for use inside BatchAccumulator.
     Combines batch prediction (50% cost savings) with context caching
-    (~90% savings on repeated criteria) for efficient large-scale evaluation.
+    (~90% savings on repeated criteria, if supported by model and provider)
+    for efficient large-scale evaluation.
 
     Supports typed output via output_model, similar to LLMProcessor.
     When output_model is set, yields typed objects directly.
@@ -248,6 +250,9 @@ class VertexBatchProcessor(BatchProcessorCore):
                 cache_name=None,  # TODO: Support persistent cache resources
             )
             requests.append(req)
+
+        if not requests:
+            raise FatalError("No valid records found for batch processing")
 
         return requests
 
