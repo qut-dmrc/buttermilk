@@ -8,10 +8,10 @@ from buttermilk.api.flow import create_app
 
 
 @pytest.fixture(scope="session")
-def client(real_flow_runner, bm: BM) -> TestClient:
+def client(real_flow_runner, real_bm: BM) -> TestClient:
     # Initialize with minimal configuration for testing
 
-    app = create_app(flows=real_flow_runner, bm=bm)
+    app = create_app(flows=real_flow_runner, bm=real_bm)
     return TestClient(app)
 
 

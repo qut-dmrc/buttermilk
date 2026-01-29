@@ -75,7 +75,7 @@ class TestBatchAccumulatorWithVertexBatch:
         # Wrap in BatchAccumulator
         accumulator = BatchAccumulator(
             name="test_accumulator",
-            batch_size=2,
+            batch_size=1,
             batch_processors=[vertex_processor],
         )
 

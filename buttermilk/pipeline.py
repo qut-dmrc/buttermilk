@@ -635,7 +635,7 @@ class PipelineOrchestrator(BaseModel):
                             # Only count as processed if we got at least one output
                             if results_count > 0:
                                 self._summary.increment_processed()
-                                logger.info(
+                                logger.debug(
                                     f"📊 STATS: increment_processed (source record yielded {results_count} outputs)",
                                     record_id=record_id,
                                     results_count=results_count,
@@ -660,7 +660,7 @@ class PipelineOrchestrator(BaseModel):
                             task_span.set_attribute("status", "buffered")
                             task_span.set_attribute("buffer_info", str(e))
                             task_span.set_status(trace.Status(trace.StatusCode.OK))
-                            logger.info(
+                            logger.debug(
                                 "📊 STATS: source record BUFFERED (pending outcome)",
                                 record_id=record_id,
                                 pipeline_name=self.pipeline_name,
