@@ -1,0 +1,16 @@
+---
+
+name: test_robustness
+
+---
+
+system:
+Test template for robustness testing.
+
+Required value: {{ required_value }}
+{% if optional_value %}Optional: {{ optional_value }}{% endif %}
+{% if whitespace_value %}Stripped: {{ whitespace_value | strip_all }}{% endif %}
+{% if nested_value %}Nested: {{ nested_value }}{% endif %}
+
+user:
+Testing with: {{ required_value }}

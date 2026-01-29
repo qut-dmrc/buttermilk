@@ -32,8 +32,8 @@ from buttermilk._core.processor_core import ObservabilityMixin
 if TYPE_CHECKING:
     from buttermilk._core.llms import CreateResult, ModelOutput
 from buttermilk._core.types import BaseRecord
-from buttermilk.utils.templating import load_template, make_messages
-from buttermilk.utils.utils import clean_empty_values, scrub_serializable
+from buttermilk.utils.templating import make_messages, render_template
+from buttermilk.utils.utils import scrub_serializable
 from buttermilk.utils.validators import import_class_from_path
 
 
@@ -482,43 +482,40 @@ class LLMCore(ObservabilityMixin):
         1. self.template_vars (from LLMCore config, set at init)
         2. template_vars argument (runtime variables from caller)
         """
-        template_name = self.template
-        if not template_name:
+        if not self.template:
             raise ProcessingError("'template' is required but not specified")
 
-        logger.debug(f"LLMCore: Using template '{template_name}'")
+        logger.debug(f"LLMCore: Using template '{self.template}'")
 
-        # Merge template variables: config defaults, then runtime overrides
-        merged_vars = {**self.template_vars, **(template_vars or {})}
-        filtered_vars = clean_empty_values(merged_vars) if merged_vars else {}
-
-        # Load and render template
-        rendered_template_str, unfilled_vars, template_hash = load_template(
-            template=template_name,
-            template_vars=filtered_vars,
+        # Render template using shared utility (handles merging and fail-on-unfilled)
+        result = render_template(
+            template=self.template,
+            template_vars=template_vars,
+            base_template_vars=self.template_vars,
+            fail_on_unfilled=self.fail_on_unfilled_parameters,
         )
 
+        # Convert to LLM messages
         try:
-            llm_messages, processed_placeholders = make_messages(local_template=rendered_template_str, record=record, context=context)
+            llm_messages, processed_placeholders = make_messages(
+                local_template=result.rendered, record=record, context=context
+            )
         except Exception as e:
-            raise ProcessingError(f"Failed to create messages from template '{template_name}'") from e
+            raise ProcessingError(f"Failed to create messages from template '{self.template}'") from e
 
-        unfilled_vars -= processed_placeholders
-
-        # Check for missing variables
-        if unfilled_vars and self.fail_on_unfilled_parameters:
-            raise ProcessingError(f"Template '{template_name}' has unfilled parameters: {', '.join(sorted(unfilled_vars))}")
-        elif unfilled_vars:
+        # Update unfilled vars (remove any processed placeholders)
+        unfilled_vars = set(result.unfilled_vars) - processed_placeholders
+        if unfilled_vars:
             logger.warning(f"Template has unfilled parameters: {unfilled_vars}")
 
         # Store template metadata
         self._template_metadata = {
-            "template_name": template_name,
-            "template_hash": template_hash,
+            "template_name": result.template_name,
+            "template_hash": result.template_hash,
             "unfilled_vars": list(unfilled_vars) if unfilled_vars else [],
         }
 
-        logger.debug(f"Template '{template_name}' rendered into {len(llm_messages)} messages")
+        logger.debug(f"Template '{result.template_name}' rendered into {len(llm_messages)} messages")
         return llm_messages
 
     async def _call_llm_with_trace(
