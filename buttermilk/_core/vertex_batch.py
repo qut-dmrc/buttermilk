@@ -1,5 +1,5 @@
 """Vertex AI batch prediction utilities.
-
+<!-- NS TODO: let's fix the name collision between this and processors.vertex_batch -->
 This module provides utilities for submitting and managing batch prediction
 jobs on Vertex AI, with support for both Gemini and Claude models.
 
@@ -139,9 +139,7 @@ class BatchJobManifest(BaseModel):
                         "cache_name": None,
                     }
                 ],
-                "criteria_contents": {
-                    "a1b2c3d4": "You are evaluating content for..."
-                },
+                "criteria_contents": {"a1b2c3d4": "You are evaluating content for..."},
             }
         }
     )
@@ -240,17 +238,21 @@ class BatchJobManager(BaseModel):
 
         # Add criteria with cache_control if provided
         if criteria_content:
-            messages_content.append({
-                "type": "text",
-                "text": criteria_content,
-                "cache_control": {"type": "ephemeral"},
-            })
+            messages_content.append(
+                {
+                    "type": "text",
+                    "text": criteria_content,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            )
 
         # Add record content
-        messages_content.append({
-            "type": "text",
-            "text": request.content,
-        })
+        messages_content.append(
+            {
+                "type": "text",
+                "text": request.content,
+            }
+        )
 
         return {
             "custom_id": request.custom_id,
@@ -287,11 +289,7 @@ class BatchJobManager(BaseModel):
 
         for request in requests:
             if is_claude:
-                criteria_content = (
-                    criteria_contents.get(request.criteria_key)
-                    if criteria_contents
-                    else None
-                )
+                criteria_content = criteria_contents.get(request.criteria_key) if criteria_contents else None
                 entry = self._build_claude_request(request, criteria_content)
             else:
                 entry = self._build_gemini_request(request)
@@ -412,7 +410,7 @@ class BatchJobManager(BaseModel):
         else:
             # Gemini models - strip google/ prefix if present (Batch API expects bare names)
             if resolved_model.startswith("google/"):
-                return resolved_model[len("google/"):]
+                return resolved_model[len("google/") :]
             return resolved_model
 
     async def submit_batch(
@@ -532,9 +530,7 @@ class BatchJobManager(BaseModel):
                 else:
                     raise RuntimeError(f"Batch job {job.name} in unexpected state: {job.state}")
 
-        raise TimeoutError(
-            f"Batch job {job.name} did not complete within {self.max_wait_hours} hours"
-        )
+        raise TimeoutError(f"Batch job {job.name} did not complete within {self.max_wait_hours} hours")
 
     def parse_results(
         self,

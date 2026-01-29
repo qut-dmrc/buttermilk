@@ -1,7 +1,7 @@
 """Tests for Vertex AI batch processor and caching components.
 
 These tests focus on unit-testable components that don't require
-actual GCP connections. Integration tests would require live Vertex AI.
+actual GCP connections. Separate integration tests use live Vertex AI.
 """
 
 import json
@@ -221,30 +221,14 @@ class TestBatchJobManager:
 
     def test_extract_response_gemini_format(self, manager):
         """Test extracting response from Gemini batch result."""
-        entry = {
-            "response": {
-                "candidates": [
-                    {
-                        "content": {
-                            "parts": [{"text": "The response text"}]
-                        }
-                    }
-                ]
-            }
-        }
+        entry = {"response": {"candidates": [{"content": {"parts": [{"text": "The response text"}]}}]}}
 
         response = manager._extract_response(entry)
         assert response == "The response text"
 
     def test_extract_response_claude_format(self, manager):
         """Test extracting response from Claude batch result."""
-        entry = {
-            "response": {
-                "content": [
-                    {"type": "text", "text": "Claude response here"}
-                ]
-            }
-        }
+        entry = {"response": {"content": [{"type": "text", "text": "Claude response here"}]}}
 
         response = manager._extract_response(entry)
         assert response == "Claude response here"

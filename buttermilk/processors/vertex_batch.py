@@ -220,6 +220,8 @@ class VertexBatchProcessor(BatchProcessorCore):
             # If we rely on in-context caching (ephemeral), for Claude we inline it.
             # For Gemini we might need to create a resource.
             #
+            # As at 2026-01-29, Gemini 3 does not support context caching in batch mode.
+            #
             # Reusing existing logic: _render_criteria returns (rendered, hash).
             # We can use this to populate `cache_name` if we have a way to map hash -> resource name.
             # For now, let's assume we pass Empty `cache_name` and let BatchJobManager handle inlining
@@ -386,9 +388,7 @@ class VertexBatchProcessor(BatchProcessorCore):
         """
         output_records = []
         for record in records:
-            error_record = record.model_copy(
-                update={"error": [*(record.error or []), error_message]}
-            )
+            error_record = record.model_copy(update={"error": [*(record.error or []), error_message]})
             output_records.append(error_record)
 
         return output_records
@@ -422,9 +422,7 @@ class VertexBatchProcessor(BatchProcessorCore):
             if result is None:
                 # No result found for this record
                 logger.warning(f"No batch result found for record {record.record_id}")
-                error_record = record.model_copy(
-                    update={"error": [*(record.error or []), "No batch result found"]}
-                )
+                error_record = record.model_copy(update={"error": [*(record.error or []), "No batch result found"]})
                 output_records.append(error_record)
                 continue
 
@@ -440,13 +438,12 @@ class VertexBatchProcessor(BatchProcessorCore):
                     inputs={},
                     execution_type="llm_processing (batch)",
                 )
-                error_record = record.model_copy(
-                    update={"error": [*(record.error or []), result.error]}
-                )
+                error_record = record.model_copy(update={"error": [*(record.error or []), result.error]})
                 output_records.append(error_record)
                 continue
 
             # Parse output if output_model is set
+            # NS: TODO: this logic is duplicated in llm_processor or llmCore. Use the proper json parsing util we made.
             response = result.response or ""
             final_output: Any = response
 
