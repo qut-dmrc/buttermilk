@@ -27,6 +27,28 @@
       "console": "integratedTerminal"
     },
     {
+      "name": "batch flow",
+      "type": "debugpy",
+      "request": "launch",
+      "consoleName": "batch",
+      "module": "buttermilk.runner.cli",
+      "cwd": "${workspaceFolder}",
+      "python": "./.venv/bin/uv",
+      "pythonArgs": [
+        "run",
+        "python",
+      ],
+      "justMyCode": false,
+      "args": [
+        "--config-path=/home/nic/src/explorations/osb-benchmarking/config",
+        "--config-name=osb",
+        "run.limit=1",
+        "+run=pipeline_benchmark"
+      ],
+      "envFile": "${userHome}/.env",
+      "console": "integratedTerminal"
+    },
+    {
       "name": "Python Debugger: Current File",
       "type": "debugpy",
       "request": "launch",

@@ -48,7 +48,9 @@ class BatchRequest(BaseModel):
     custom_id: str
     record_id: str
     criteria_key: str
-    content: str
+    # Deprecated: use messages instead. content is kept for backward compatibility during migration
+    content: str | None = None
+    messages: list[dict[str, Any]] | None = None
     cache_name: str | None = None
 
 
@@ -199,30 +201,57 @@ class BatchJobManager(BaseModel):
         Returns:
             JSONL-ready dictionary for Gemini batch API
         """
-        # Combine user-part of criteria with record content
-        user_parts = []
-        if criteria and criteria[1]:
-            user_parts.append({"text": criteria[1]})
-        
-        user_parts.append({"text": request.content})
+        if request.messages:
+            # New path: use pre-formatted messages
+            # Convert generic message format to Gemini format
+            contents = []
+            system_instruction_parts = []
 
-        entry: dict[str, Any] = {
-            "custom_id": request.custom_id,
-            "request": {
-                "contents": [
-                    {
-                        "role": "user",
-                        "parts": user_parts,
-                    }
-                ],
-            },
-        }
+            for msg in request.messages:
+                role = msg.get("role")
+                content = msg.get("content")
 
-        # Add system instruction if available
-        if criteria and criteria[0]:
-            entry["request"]["system_instruction"] = {
-                "parts": [{"text": criteria[0]}]
+                if role == "system":
+                    system_instruction_parts.append({"text": content})
+                elif role == "user":
+                    contents.append({"role": "user", "parts": [{"text": content}]})
+                elif role == "assistant":
+                    contents.append({"role": "model", "parts": [{"text": content}]})
+
+            entry = {
+                "custom_id": request.custom_id,
+                "request": {
+                    "contents": contents,
+                },
             }
+
+            if system_instruction_parts:
+                entry["request"]["system_instruction"] = {"parts": system_instruction_parts}
+
+        else:
+            # Legacy path: content + criteria tuple
+            # Combine user-part of criteria with record content
+            user_parts = []
+            if criteria and criteria[1]:
+                user_parts.append({"text": criteria[1]})
+
+            user_parts.append({"text": request.content or ""})
+
+            entry: dict[str, Any] = {
+                "custom_id": request.custom_id,
+                "request": {
+                    "contents": [
+                        {
+                            "role": "user",
+                            "parts": user_parts,
+                        }
+                    ],
+                },
+            }
+
+            # Add system instruction if available
+            if criteria and criteria[0]:
+                entry["request"]["system_instruction"] = {"parts": [{"text": criteria[0]}]}
 
         # Add cache reference if available
         if request.cache_name:
@@ -249,46 +278,78 @@ class BatchJobManager(BaseModel):
         Returns:
             JSONL-ready dictionary for Claude batch API
         """
-        messages_content = []
+        if request.messages:
+            # New path: use pre-formatted messages
+            # Convert generic message format to Claude format
+            messages = []
+            system_instruction = None
 
-        system_instruction = None
-        user_criteria = None
-        if criteria:
-            system_instruction = criteria[0]
-            user_criteria = criteria[1]
+            for msg in request.messages:
+                role = msg.get("role")
+                content = msg.get("content")
 
-        # Add user-part of criteria with cache_control if provided
-        if user_criteria:
+                if role == "system":
+                    # Claude only supports one system message, or we concatenate
+                    if system_instruction:
+                        system_instruction += "\n\n" + content
+                    else:
+                        system_instruction = content
+                elif role == "user":
+                    messages.append({"role": "user", "content": content})
+                elif role == "assistant":
+                    messages.append({"role": "assistant", "content": content})
+
+            request_body = {
+                "anthropic_version": "vertex-2023-10-16",
+                "messages": messages,
+                "max_tokens": max_tokens,
+            }
+
+            if system_instruction:
+                request_body["system"] = system_instruction
+
+        else:
+            # Legacy path
+            messages_content = []
+
+            system_instruction = None
+            user_criteria = None
+            if criteria:
+                system_instruction = criteria[0]
+                user_criteria = criteria[1]
+
+            # Add user-part of criteria with cache_control if provided
+            if user_criteria:
+                messages_content.append(
+                    {
+                        "type": "text",
+                        "text": user_criteria,
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                )
+
+            # Add record content
             messages_content.append(
                 {
                     "type": "text",
-                    "text": user_criteria,
-                    "cache_control": {"type": "ephemeral"},
+                    "text": request.content or "",
                 }
             )
 
-        # Add record content
-        messages_content.append(
-            {
-                "type": "text",
-                "text": request.content,
+            request_body = {
+                "anthropic_version": "vertex-2023-10-16",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": messages_content,
+                    }
+                ],
+                "max_tokens": max_tokens,
             }
-        )
 
-        request_body = {
-            "anthropic_version": "vertex-2023-10-16",
-            "messages": [
-                {
-                    "role": "user",
-                    "content": messages_content,
-                }
-            ],
-            "max_tokens": max_tokens,
-        }
-
-        # Add system instruction if present
-        if system_instruction:
-            request_body["system"] = system_instruction
+            # Add system instruction if present
+            if system_instruction:
+                request_body["system"] = system_instruction
 
         return {
             "custom_id": request.custom_id,
@@ -317,7 +378,7 @@ class BatchJobManager(BaseModel):
         for request in requests:
             # Get criteria content tuple if available
             criteria = criteria_contents.get(request.criteria_key) if criteria_contents else None
-            
+
             if is_claude:
                 entry = self._build_claude_request(request, criteria)
             else:
@@ -326,6 +387,36 @@ class BatchJobManager(BaseModel):
             lines.append(json.dumps(entry))
 
         return "\n".join(lines)
+
+    def _resolve_batch_dir(self, job_id: str) -> str:
+        """Resolve the stable storage directory for a batch job.
+
+        Pattern: <save_dir_base>/<project>/_batches/<job_id>/
+        Fallback: <save_dir>/batch/<job_id>/ (if save_dir_base not configured)
+
+        Args:
+            job_id: The batch job identifier
+
+        Returns:
+            GCS URI or path for the batch job directory (without trailing slash)
+        """
+        from cloudpathlib import AnyPath
+
+        from buttermilk import bm
+
+        session = bm.session_info
+
+        # Prefer stable path based on save_dir_base
+        if session.save_dir_base:
+            base = AnyPath(session.save_dir_base)
+            # Use project name to organize batches within the bucket
+            return str(base / session.project_name / "_batches" / job_id)
+
+        # Fallback to session-scoped path
+        if session.save_dir:
+            return f"{session.save_dir}/batch/{job_id}"
+
+        raise RuntimeError("No save_dir_base or save_dir configured in session")
 
     def _upload_to_gcs(self, content: str, job_id: str) -> str:
         """Upload JSONL content to GCS using bm.save.
@@ -337,16 +428,13 @@ class BatchJobManager(BaseModel):
         Returns:
             GCS URI of uploaded file
         """
-        from buttermilk import bm
         from buttermilk.utils.save import upload_text
 
-        # Get save directory from session
-        save_dir = bm.session_info.save_dir
-        if not save_dir:
-            raise RuntimeError("No save_dir configured in session")
+        # Get stable batch directory
+        batch_dir = self._resolve_batch_dir(job_id)
 
-        # Construct URI within session's save directory
-        uri = f"{save_dir}/batch/{job_id}/input.jsonl"
+        # Construct URI
+        uri = f"{batch_dir}/input.jsonl"
 
         # Use existing upload utility
         result_uri = upload_text(content, uri=uri, content_type="application/jsonl")
@@ -363,13 +451,8 @@ class BatchJobManager(BaseModel):
         Returns:
             GCS URI for output directory
         """
-        from buttermilk import bm
-
-        save_dir = bm.session_info.save_dir
-        if not save_dir:
-            raise RuntimeError("No save_dir configured in session")
-
-        return f"{save_dir}/batch/{job_id}/output/"
+        batch_dir = self._resolve_batch_dir(job_id)
+        return f"{batch_dir}/output/"
 
     def _download_from_gcs(self, uri: str) -> str:
         """Download content from GCS.
@@ -468,7 +551,7 @@ class BatchJobManager(BaseModel):
         # Build JSONL
         jsonl_content = self.build_jsonl(requests, model, criteria_contents)
 
-        # Upload to GCS using session's save_dir
+        # Upload to stable batch directory
         input_uri = self._upload_to_gcs(jsonl_content, job_id)
         output_uri = self._get_output_uri(job_id)
 
@@ -505,7 +588,7 @@ class BatchJobManager(BaseModel):
                 criteria_contents=criteria_contents or {},
             )
 
-            logger.info(f"Batch job submitted: {job.name}")
+            logger.info(f"Batch job submitted: {job.name} (ID: {job_id})")
             return job
 
         except Exception as e:
@@ -572,7 +655,7 @@ class BatchJobManager(BaseModel):
 
         Args:
             output_uri: GCS URI of output directory or file
-            requests: Original requests for mapping custom_id -> record info
+            requests: Original requests for mapping custom_id -> request info
 
         Returns:
             List of BatchResult objects
@@ -733,12 +816,11 @@ class BatchJobManager(BaseModel):
         Returns:
             GCS URI of saved manifest
         """
-        from buttermilk import bm
         from buttermilk.utils.save import upload_text
 
-        save_dir = bm.session_info.save_dir
-        if not save_dir:
-            raise RuntimeError("No save_dir configured in session")
+        # Manifests always live at the root of the batch directory
+        batch_dir = self._resolve_batch_dir(job_id)
+        manifest_uri = f"{batch_dir}/manifest.json"
 
         manifest = BatchJobManifest(
             job_id=job_id,
@@ -751,7 +833,6 @@ class BatchJobManager(BaseModel):
             criteria_contents=criteria_contents,
         )
 
-        manifest_uri = BatchJobManifest.get_manifest_uri(save_dir, job_id)
         upload_text(
             manifest.model_dump_json(indent=2),
             uri=manifest_uri,

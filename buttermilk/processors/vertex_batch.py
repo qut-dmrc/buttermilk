@@ -26,7 +26,6 @@ Usage:
 
 from __future__ import annotations
 
-import hashlib
 import time
 import uuid
 from typing import TYPE_CHECKING, Any
@@ -40,7 +39,6 @@ from buttermilk._core.types import BaseRecord
 from buttermilk._core.vertex_batch import BatchJobManager, BatchResult
 from buttermilk.utils.import_utils import load_class
 from buttermilk.utils.templating import make_messages, render_template
-from autogen_core.models import SystemMessage, UserMessage, AssistantMessage
 
 if TYPE_CHECKING:
     from google.genai.types import BatchJob
@@ -64,14 +62,6 @@ class VertexBatchProcessor(BatchProcessorCore):
     template_vars: dict[str, Any] = Field(
         default_factory=dict,
         description="Static variables for template rendering",
-    )
-    system_instruction: str | None = Field(
-        default=None,
-        description="Optional system instruction for caching",
-    )
-    cache_ttl: str = Field(
-        default="3600s",
-        description="Cache TTL (e.g., '3600s' for 1 hour)",
     )
     output_model: str | None = Field(
         default=None,
@@ -100,14 +90,10 @@ class VertexBatchProcessor(BatchProcessorCore):
         description="Maximum hours to wait for batch job completion before timeout",
     )
 
-    # LLM outputs are non-deterministic, so skip pipeline caching
-    skip_cache: bool = Field(default=True, description="Skip pipeline caching for non-deterministic LLM outputs")
-
     # Internal components
     _output_class: type[BaseModel] | None = PrivateAttr(default=None)
     _client: Any = PrivateAttr(default=None)
     _manager: BatchJobManager | None = PrivateAttr(default=None)
-    _cached_criteria: dict[str, tuple[str, str, str]] = PrivateAttr(default_factory=dict)  # key -> (system, user, hash)
 
     def model_post_init(self, __context: Any) -> None:
         """Initialize after Pydantic initialization."""
@@ -120,7 +106,6 @@ class VertexBatchProcessor(BatchProcessorCore):
             "VertexBatchProcessor initialized",
             model=self.model,
             template=self.template,
-            cache_ttl=self.cache_ttl,
             output_model=self.output_model,
         )
 
@@ -164,39 +149,6 @@ class VertexBatchProcessor(BatchProcessorCore):
             )
         return self._manager
 
-    def _render_criteria(self, variant_vars: dict[str, Any]) -> tuple[str, str, str]:
-        """Render the criteria template and split into system/user parts.
-
-        Args:
-            variant_vars: Variables to merge with template_vars for rendering
-
-        Returns:
-            Tuple of (system_content, user_content, template_hash)
-        """
-        result = render_template(
-            template=self.template,
-            template_vars=variant_vars,
-            base_template_vars=self.template_vars,
-            fail_on_unfilled=self.fail_on_unfilled_parameters,
-        )
-
-        # Parse messages to separate system instruction from user content
-        messages, _ = make_messages(result.rendered)
-
-        system_parts = []
-        user_parts = []
-
-        for msg in messages:
-            if isinstance(msg, SystemMessage):
-                system_parts.append(msg.content)
-            elif isinstance(msg, (UserMessage, AssistantMessage)):
-                user_parts.append(msg.content)
-
-        system_content = "\n\n".join(system_parts)
-        user_content = "\n\n".join(user_parts)
-
-        return system_content, user_content, result.template_hash
-
     def prepare_batch_requests(
         self,
         records: list[BaseRecord],
@@ -209,62 +161,73 @@ class VertexBatchProcessor(BatchProcessorCore):
             records: List of BaseRecord objects
 
         Returns:
-            List of BatchRequest objects (as Any to avoid circular imports if possible,
-            but better to import BatchRequest if we can)
+            List of BatchRequest objects
         """
+        from buttermilk._core.llms import autogen_to_litellm_messages
         from buttermilk._core.vertex_batch import BatchRequest
 
         requests: list[BatchRequest] = []
 
         for record in records:
-            # Get template variables from record
+            # Prepare template variables
+            # Mix in record fields so template can access {{ record.foo }} or {{ foo }}
             if hasattr(record, "model_dump"):
                 record_dict = record.model_dump()
-                template_vars = {
+                # Prioritize record fields, but allow explicit template_vars to override?
+                # Usually we want record data to be available.
+                # LLMCore strategy: merge record fields into template_vars.
+                variant_vars = {
+                    **self.template_vars,
                     **record_dict.get("metadata", {}),
                     **{k: v for k, v in record_dict.items() if k != "metadata"},
                 }
             else:
-                template_vars = record.metadata if record.metadata else {}
+                variant_vars = {
+                    **self.template_vars,
+                    **(record.metadata if record.metadata else {}),
+                }
 
-            # Render criteria and get hash
-            criteria_key = self._get_criteria_key(template_vars)
+            # Additional context for template if needed
+            variant_vars["record"] = record
 
-            # NOTE: For true batch usage with caching, we might need to pre-create the cache
-            # and pass the cache name.
-            # Currently VertexBatchProcessor logic caches IN-MEMORY (self._cached_criteria).
-            # For Vertex Batch API, we need "context caching" resource if we use it.
-            # Or we inline the criteria.
-            #
-            # If we rely on in-context caching (ephemeral), for Claude we inline it.
-            # For Gemini we might need to create a resource.
-            #
-            # As at 2026-01-29, Gemini 3 does not support context caching in batch mode.
-            #
-            # Reusing existing logic: _render_criteria returns (rendered, hash).
-            # We can use this to populate `cache_name` if we have a way to map hash -> resource name.
-            # For now, let's assume we pass Empty `cache_name` and let BatchJobManager handle inlining
-            # for Claude or just including text.
-            #
-            # BUT BatchJobManager.build_jsonl expects `criteria_contents` map if inlining for Claude.
-            # And `prepare_batch_requests` needs to return requests with `criteria_key` set.
+            # Render template to get full message history
+            # This uses the standard LLMCore logic via utility functions
+            try:
+                result = render_template(
+                    template=self.template,
+                    template_vars=variant_vars,
+                    base_template_vars=self.template_vars,
+                    fail_on_unfilled=self.fail_on_unfilled_parameters,
+                )
 
-            if criteria_key not in self._cached_criteria:
-                self._cached_criteria[criteria_key] = self._render_criteria(template_vars)
-
-            # Validate content is not empty (fail-fast to avoid empty batch submissions)
-            content = record.content or ""
-            if not content.strip():
-                logger.warning(f"Skipping record {record.record_id}: empty content")
+                messages, _ = make_messages(result.rendered)
+            except Exception as e:
+                logger.warning(f"Failed to render template for record {record.record_id}: {e}")
+                # We could skip or add error record. For now, skip to avoid blocking batch.
                 continue
 
+            if not messages:
+                logger.warning(f"Skipping record {record.record_id}: generated no messages")
+                continue
+
+            # Convert to LiteLLM format (standardized intermediate format)
+            # BatchJobManager will convert this to provider-specific (Gemini/Claude) format
+            litellm_messages = autogen_to_litellm_messages(messages)
+
             # Create request
+            # We don't use criteria_key or cache_name logic here anymore as caching
+            # is harder with full-template rendering per record.
+            # Only exact dupe messages would be cacheable.
+
+            # Use hash of validation logic or similar for grouping if needed,
+            # but for now simpler is better.
+
             req = BatchRequest(
-                custom_id=str(uuid.uuid4()),  # Generate unique ID for this request within batch
+                custom_id=str(uuid.uuid4()),
                 record_id=record.record_id,
-                criteria_key=criteria_key,
-                content=content,
-                cache_name=None,  # TODO: Support persistent cache resources
+                criteria_key="default",  # Legacy field, using default
+                messages=litellm_messages,
+                cache_name=None,
             )
             requests.append(req)
 
@@ -272,24 +235,6 @@ class VertexBatchProcessor(BatchProcessorCore):
             raise FatalError("No valid records found for batch processing")
 
         return requests
-
-    def get_criteria_contents(self) -> dict[str, tuple[str, str]]:
-        """Get mapping of criteria_key to (system, user) content for all cached criteria."""
-        return {k: (v[0], v[1]) for k, v in self._cached_criteria.items()}
-
-    def _get_criteria_key(self, variant_vars: dict[str, Any]) -> str:
-        """Generate a unique key for a criteria variant.
-
-        Args:
-            variant_vars: Variables that distinguish this criteria variant
-
-        Returns:
-            Hash-based key for the criteria variant
-        """
-        # Create a deterministic key from variant variables
-        key_parts = sorted(f"{k}={v}" for k, v in variant_vars.items())
-        key_str = "|".join(key_parts) if key_parts else "default"
-        return hashlib.md5(key_str.encode()).hexdigest()[:8]
 
     async def _process_batch(
         self,
@@ -313,7 +258,8 @@ class VertexBatchProcessor(BatchProcessorCore):
 
         # Prepare batch requests (this also populates self._cached_criteria)
         requests = self.prepare_batch_requests(records)
-        criteria_contents = self.get_criteria_contents()
+        # Criteria contents is legacy/deprecated with new message-based flow
+        criteria_contents = {}
 
         logger.info(
             f"Submitting batch job with {len(requests)} requests",
@@ -512,8 +458,3 @@ class VertexBatchProcessor(BatchProcessorCore):
                 output_records.append(record.model_copy(update={"metadata": updated_metadata}))
 
         return output_records
-
-    async def finalize(self) -> None:
-        """Clean up resources after processing."""
-        self._cached_criteria.clear()
-        logger.info("VertexBatchProcessor finalized")
