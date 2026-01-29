@@ -39,7 +39,8 @@ from buttermilk._core.processor_core import BatchProcessorCore
 from buttermilk._core.types import BaseRecord
 from buttermilk._core.vertex_batch import BatchJobManager, BatchResult
 from buttermilk.utils.import_utils import load_class
-from buttermilk.utils.templating import render_template
+from buttermilk.utils.templating import make_messages, render_template
+from autogen_core.models import SystemMessage, UserMessage, AssistantMessage
 
 if TYPE_CHECKING:
     from google.genai.types import BatchJob
@@ -106,7 +107,7 @@ class VertexBatchProcessor(BatchProcessorCore):
     _output_class: type[BaseModel] | None = PrivateAttr(default=None)
     _client: Any = PrivateAttr(default=None)
     _manager: BatchJobManager | None = PrivateAttr(default=None)
-    _cached_criteria: dict[str, tuple[str, str]] = PrivateAttr(default_factory=dict)  # key -> (rendered, hash)
+    _cached_criteria: dict[str, tuple[str, str, str]] = PrivateAttr(default_factory=dict)  # key -> (system, user, hash)
 
     def model_post_init(self, __context: Any) -> None:
         """Initialize after Pydantic initialization."""
@@ -163,14 +164,14 @@ class VertexBatchProcessor(BatchProcessorCore):
             )
         return self._manager
 
-    def _render_criteria(self, variant_vars: dict[str, Any]) -> tuple[str, str]:
-        """Render the criteria template with given variables.
+    def _render_criteria(self, variant_vars: dict[str, Any]) -> tuple[str, str, str]:
+        """Render the criteria template and split into system/user parts.
 
         Args:
             variant_vars: Variables to merge with template_vars for rendering
 
         Returns:
-            Tuple of (rendered template string, template hash)
+            Tuple of (system_content, user_content, template_hash)
         """
         result = render_template(
             template=self.template,
@@ -178,7 +179,23 @@ class VertexBatchProcessor(BatchProcessorCore):
             base_template_vars=self.template_vars,
             fail_on_unfilled=self.fail_on_unfilled_parameters,
         )
-        return result.rendered, result.template_hash
+
+        # Parse messages to separate system instruction from user content
+        messages, _ = make_messages(result.rendered)
+
+        system_parts = []
+        user_parts = []
+
+        for msg in messages:
+            if isinstance(msg, SystemMessage):
+                system_parts.append(msg.content)
+            elif isinstance(msg, (UserMessage, AssistantMessage)):
+                user_parts.append(msg.content)
+
+        system_content = "\n\n".join(system_parts)
+        user_content = "\n\n".join(user_parts)
+
+        return system_content, user_content, result.template_hash
 
     def prepare_batch_requests(
         self,
@@ -256,9 +273,9 @@ class VertexBatchProcessor(BatchProcessorCore):
 
         return requests
 
-    def get_criteria_contents(self) -> dict[str, str]:
-        """Get mapping of criteria_key to rendered content for all cached criteria."""
-        return {k: v[0] for k, v in self._cached_criteria.items()}
+    def get_criteria_contents(self) -> dict[str, tuple[str, str]]:
+        """Get mapping of criteria_key to (system, user) content for all cached criteria."""
+        return {k: (v[0], v[1]) for k, v in self._cached_criteria.items()}
 
     def _get_criteria_key(self, variant_vars: dict[str, Any]) -> str:
         """Generate a unique key for a criteria variant.
