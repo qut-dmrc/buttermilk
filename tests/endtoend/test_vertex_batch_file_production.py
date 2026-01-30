@@ -135,3 +135,99 @@ class TestVertexBatchFileProduction:
         # Check system instruction
         assert "system" in req, "Missing system field"
         assert req["system"] == "You are a helpful assistant."
+
+
+class TestVertexBatchDryRun:
+    """Tests for VertexBatchProcessor dry-run mode.
+
+    Dry-run mode allows previewing batch requests without submitting to API.
+    """
+
+    @pytest.mark.anyio
+    async def test_dry_run_skips_api_submission(self):
+        """Verify dry_run=True prepares requests but does not call API.
+
+        When dry_run is enabled:
+        - Template rendering and message preparation should still happen
+        - Records should be returned with dry_run metadata
+        - No API calls should be made
+        """
+        processor = VertexBatchProcessor(
+            name="test_dry_run",
+            model="gemini-1.5-flash",
+            template="simple",
+            template_vars={"var": "default"},
+            fail_on_unfilled_parameters=False,
+            dry_run=True,
+        )
+
+        records = [
+            Record(
+                record_id=f"dry_run_{i}",
+                content=f"Test content {i}",
+                metadata={"var": f"Dry run content {i}"},
+            )
+            for i in range(3)
+        ]
+
+        # Process with dry_run=True - should NOT call any external APIs
+        results = await processor._process_batch(records)
+
+        # Should return same number of records
+        assert len(results) == 3
+
+        # Each record should have dry_run metadata
+        for i, result in enumerate(results):
+            assert result.metadata.get("dry_run") is True
+            assert result.metadata.get("batch_status") == "dry_run"
+            assert result.metadata.get("model") == "gemini-1.5-flash"
+            assert result.metadata.get("template") == "simple"
+            # Original record_id should be preserved
+            assert result.record_id == f"dry_run_{i}"
+
+    @pytest.mark.anyio
+    async def test_dry_run_false_default_behavior(self):
+        """Verify dry_run defaults to False and doesn't affect normal operation.
+
+        This test just verifies the flag defaults correctly.
+        Full API integration is tested elsewhere.
+        """
+        processor = VertexBatchProcessor(
+            name="test_default",
+            model="gemini-1.5-flash",
+            template="simple",
+            template_vars={"var": "default"},
+            fail_on_unfilled_parameters=False,
+        )
+
+        # Default should be False
+        assert processor.dry_run is False
+
+    def test_dry_run_prepare_batch_requests_still_works(self):
+        """Verify prepare_batch_requests works normally with dry_run=True.
+
+        Dry-run mode should not affect the request preparation logic.
+        """
+        processor = VertexBatchProcessor(
+            name="test_dry_run_prepare",
+            model="gemini-1.5-flash",
+            template="simple",
+            template_vars={"var": "default"},
+            fail_on_unfilled_parameters=False,
+            dry_run=True,
+        )
+
+        records = [
+            Record(
+                record_id="prepare_test",
+                content="Test",
+                metadata={"var": "Prepared content"},
+            )
+        ]
+
+        # prepare_batch_requests should work identically
+        requests = processor.prepare_batch_requests(records)
+
+        assert len(requests) == 1
+        assert requests[0].record_id == "prepare_test"
+        assert len(requests[0].messages) > 0

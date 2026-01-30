@@ -89,6 +89,10 @@ class VertexBatchProcessor(BatchProcessorCore):
         default=24,
         description="Maximum hours to wait for batch job completion before timeout",
     )
+    dry_run: bool = Field(
+        default=False,
+        description="If True, prepare and log batch requests without submitting to API",
+    )
 
     # Internal components
     _output_class: type[BaseModel] | None = PrivateAttr(default=None)
@@ -254,12 +258,18 @@ class VertexBatchProcessor(BatchProcessorCore):
             return []
 
         start_time = time.time()
-        manager = self._ensure_manager()
 
         # Prepare batch requests (this also populates self._cached_criteria)
         requests = self.prepare_batch_requests(records)
         # Criteria contents is legacy/deprecated with new message-based flow
         criteria_contents = {}
+
+        # Dry-run mode: log prepared requests and return placeholder records
+        # Check before _ensure_manager() to avoid requiring bm initialization
+        if self.dry_run:
+            return self._handle_dry_run(records, requests)
+
+        manager = self._ensure_manager()
 
         logger.info(
             f"Submitting batch job with {len(requests)} requests",
@@ -358,6 +368,65 @@ class VertexBatchProcessor(BatchProcessorCore):
         for record in records:
             error_record = record.model_copy(update={"error": [*(record.error or []), error_message]})
             output_records.append(error_record)
+
+        return output_records
+
+    def _handle_dry_run(
+        self,
+        records: list[BaseRecord],
+        requests: list[Any],
+    ) -> list[BaseRecord]:
+        """Handle dry-run mode: log prepared requests without submitting to API.
+
+        Args:
+            records: Original input records
+            requests: Prepared batch requests
+
+        Returns:
+            Records with dry_run metadata (no actual LLM output)
+        """
+        logger.info(
+            f"[DRY RUN] Would submit batch job with {len(requests)} requests",
+            model=self.model,
+            template=self.template,
+            record_count=len(records),
+        )
+
+        # Log each request's messages for inspection
+        for i, req in enumerate(requests):
+            logger.info(
+                f"[DRY RUN] Request {i + 1}/{len(requests)}",
+                record_id=req.record_id,
+                custom_id=req.custom_id,
+                message_count=len(req.messages) if req.messages else 0,
+            )
+            # Log message content at debug level for detailed inspection
+            if req.messages:
+                for j, msg in enumerate(req.messages):
+                    role = msg.get("role", "unknown")
+                    content = msg.get("content", "")
+                    # Truncate long content for readability
+                    preview = content[:500] + "..." if len(str(content)) > 500 else content
+                    logger.debug(
+                        f"[DRY RUN] Request {i + 1} Message {j + 1}",
+                        role=role,
+                        content_preview=preview,
+                    )
+
+        # Return records with dry_run metadata
+        output_records = []
+        for record in records:
+            updated_metadata = record.metadata.copy() if record.metadata else {}
+            updated_metadata["dry_run"] = True
+            updated_metadata["batch_status"] = "dry_run"
+            updated_metadata["model"] = self.model
+            updated_metadata["template"] = self.template
+            output_records.append(record.model_copy(update={"metadata": updated_metadata}))
+
+        logger.info(
+            f"[DRY RUN] Complete - {len(records)} records prepared, no API calls made",
+            model=self.model,
+        )
 
         return output_records
 
