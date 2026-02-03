@@ -360,44 +360,61 @@ class VertexBatchProcessor(BatchProcessorCore):
         records: list[BaseRecord],
         requests: list[Any],
     ) -> list[BaseRecord]:
-        """Handle dry-run mode: log prepared requests without submitting to API.
+        """Handle dry-run mode: write batch JSONL to GCS without submitting to API.
+
+        Writes the prepared batch file to GCS for inspection, validation, or
+        later submission. This allows reviewing the exact payload that would
+        be sent to the Vertex AI Batch API.
 
         Args:
             records: Original input records
             requests: Prepared batch requests
 
         Returns:
-            Records with dry_run metadata (no actual LLM output)
+            Records with dry_run metadata including the GCS URI of the batch file
         """
+        import uuid
+
+        from buttermilk.utils.save import upload_text
+
         logger.info(
-            f"[DRY RUN] Would submit batch job with {len(requests)} requests",
+            f"[DRY RUN] Preparing batch job with {len(requests)} requests",
             model=self.model,
             template=self.template,
             record_count=len(records),
         )
 
-        # Log each request's messages for inspection
-        for i, req in enumerate(requests):
-            logger.info(
+        # Build JSONL content using the same logic as real submission
+        manager = self._ensure_manager()
+        jsonl_content = manager.build_jsonl(requests, self.model)
+
+        # Generate a dry-run job ID and upload to GCS
+        dry_run_job_id = f"dry_run_{uuid.uuid4().hex[:12]}"
+        batch_dir = manager._resolve_batch_dir(dry_run_job_id)
+        input_uri = f"{batch_dir}/input.jsonl"
+
+        # Upload the JSONL file to GCS
+        result_uri = upload_text(jsonl_content, uri=input_uri, content_type="application/jsonl")
+
+        logger.info(
+            f"[DRY RUN] Batch file written to GCS",
+            uri=result_uri,
+            request_count=len(requests),
+            model=self.model,
+        )
+
+        # Log summary of requests for inspection
+        for i, req in enumerate(requests[:5]):  # Log first 5 requests
+            logger.debug(
                 f"[DRY RUN] Request {i + 1}/{len(requests)}",
                 record_id=req.record_id,
                 custom_id=req.custom_id,
                 message_count=len(req.messages) if req.messages else 0,
             )
-            # Log message content at debug level for detailed inspection
-            if req.messages:
-                for j, msg in enumerate(req.messages):
-                    role = msg.get("role", "unknown")
-                    content = msg.get("content", "")
-                    # Truncate long content for readability
-                    preview = content[:500] + "..." if len(str(content)) > 500 else content
-                    logger.debug(
-                        f"[DRY RUN] Request {i + 1} Message {j + 1}",
-                        role=role,
-                        content_preview=preview,
-                    )
+        if len(requests) > 5:
+            logger.debug(f"[DRY RUN] ... and {len(requests) - 5} more requests")
 
-        # Return records with dry_run metadata
+        # Return records with dry_run metadata including the GCS URI
         output_records = []
         for record in records:
             updated_metadata = record.metadata.copy() if record.metadata else {}
@@ -405,11 +422,14 @@ class VertexBatchProcessor(BatchProcessorCore):
             updated_metadata["batch_status"] = "dry_run"
             updated_metadata["model"] = self.model
             updated_metadata["template"] = self.template
+            updated_metadata["dry_run_uri"] = result_uri
+            updated_metadata["dry_run_job_id"] = dry_run_job_id
             output_records.append(record.model_copy(update={"metadata": updated_metadata}))
 
         logger.info(
-            f"[DRY RUN] Complete - {len(records)} records prepared, no API calls made",
+            f"[DRY RUN] Complete - {len(records)} records prepared, batch file at {result_uri}",
             model=self.model,
+            dry_run_uri=result_uri,
         )
 
         return output_records

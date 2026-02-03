@@ -140,18 +140,32 @@ class TestVertexBatchFileProduction:
 class TestVertexBatchDryRun:
     """Tests for VertexBatchProcessor dry-run mode.
 
-    Dry-run mode allows previewing batch requests without submitting to API.
+    Dry-run mode writes batch JSONL to GCS without submitting to API.
     """
 
     @pytest.mark.anyio
-    async def test_dry_run_skips_api_submission(self):
-        """Verify dry_run=True prepares requests but does not call API.
+    async def test_dry_run_writes_to_gcs(self, mocker):
+        """Verify dry_run=True writes batch JSONL to GCS but does not submit job.
 
         When dry_run is enabled:
-        - Template rendering and message preparation should still happen
-        - Records should be returned with dry_run metadata
-        - No API calls should be made
+        - Template rendering and message preparation should happen
+        - JSONL file should be written to GCS
+        - Records should be returned with dry_run metadata including GCS URI
+        - No batch job API calls should be made
         """
+        # Mock the GCS upload - patch in utils.save where it's defined
+        mock_upload = mocker.patch(
+            "buttermilk.utils.save.upload_text",
+            return_value="gs://test-bucket/dry_run_abc123/input.jsonl",
+        )
+
+        # Mock the manager's _resolve_batch_dir to avoid bm dependency
+        mocker.patch.object(
+            BatchJobManager,
+            "_resolve_batch_dir",
+            return_value="gs://test-bucket/dry_run_abc123",
+        )
+
         processor = VertexBatchProcessor(
             name="test_dry_run",
             model="gemini-1.5-flash",
@@ -160,6 +174,10 @@ class TestVertexBatchDryRun:
             fail_on_unfilled_parameters=False,
             dry_run=True,
         )
+
+        # Mock _ensure_manager to return a mock manager
+        mock_manager = BatchJobManager(client=MagicMock())
+        mocker.patch.object(processor, "_ensure_manager", return_value=mock_manager)
 
         records = [
             Record(
@@ -170,18 +188,28 @@ class TestVertexBatchDryRun:
             for i in range(3)
         ]
 
-        # Process with dry_run=True - should NOT call any external APIs
+        # Process with dry_run=True
         results = await processor._process_batch(records)
+
+        # Verify GCS upload was called with JSONL content
+        mock_upload.assert_called_once()
+        call_args = mock_upload.call_args
+        jsonl_content = call_args[0][0]  # First positional arg is content
+        assert "custom_id" in jsonl_content  # JSONL should have batch request structure
+        assert call_args[1]["content_type"] == "application/jsonl"
 
         # Should return same number of records
         assert len(results) == 3
 
-        # Each record should have dry_run metadata
+        # Each record should have dry_run metadata with GCS URI
         for i, result in enumerate(results):
             assert result.metadata.get("dry_run") is True
             assert result.metadata.get("batch_status") == "dry_run"
             assert result.metadata.get("model") == "gemini-1.5-flash"
             assert result.metadata.get("template") == "simple"
+            assert result.metadata.get("dry_run_uri") == "gs://test-bucket/dry_run_abc123/input.jsonl"
+            assert result.metadata.get("dry_run_job_id") is not None
+            assert result.metadata["dry_run_job_id"].startswith("dry_run_")
             # Original record_id should be preserved
             assert result.record_id == f"dry_run_{i}"
 
