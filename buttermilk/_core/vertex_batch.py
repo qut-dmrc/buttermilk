@@ -23,6 +23,7 @@ import asyncio
 import datetime
 import json
 import uuid
+from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
@@ -63,6 +64,176 @@ class BatchResult(BaseModel):
     response: str | None = None
     error: str | None = None
     usage: dict[str, Any] | None = None
+
+
+# =============================================================================
+# Message Format Converters
+# =============================================================================
+# Unified abstraction for provider-specific batch request/response formatting.
+# Each provider (Gemini, Claude) implements these interfaces to handle their
+# specific message format requirements while sharing common logic.
+
+# Model name patterns that indicate Claude/Anthropic models
+_CLAUDE_MODEL_PATTERNS = ("claude", "anthropic")
+
+
+class BatchMessageConverter(ABC):
+    """Abstract base for converting LiteLLM messages to provider-specific batch format."""
+
+    @abstractmethod
+    def build_request(self, request: BatchRequest) -> dict[str, Any]:
+        """Convert a BatchRequest to provider-specific JSONL entry.
+
+        Args:
+            request: BatchRequest with messages in LiteLLM format
+
+        Returns:
+            Dictionary ready for JSONL serialization
+        """
+
+    @abstractmethod
+    def extract_response(self, entry: dict[str, Any]) -> str | None:
+        """Extract response text from provider-specific batch result.
+
+        Args:
+            entry: Result entry from batch output
+
+        Returns:
+            Extracted text response or None
+        """
+
+
+class GeminiMessageConverter(BatchMessageConverter):
+    """Convert messages to/from Gemini batch format.
+
+    Gemini format:
+    - System messages → "system_instruction": {"parts": [{"text": ...}]}
+    - User/Assistant → "contents": [{"role": "user"|"model", "parts": [{"text": ...}]}]
+    - Role mapping: "assistant" → "model"
+    """
+
+    # Gemini uses "model" instead of "assistant"
+    ROLE_MAP = {"assistant": "model"}
+
+    def build_request(self, request: BatchRequest) -> dict[str, Any]:
+        """Build a Gemini batch request entry."""
+        contents = []
+        system_parts = []
+
+        for msg in request.messages:
+            role = msg.get("role")
+            content = msg.get("content")
+
+            if role == "system":
+                system_parts.append({"text": content})
+            else:
+                # Map role and wrap content in Gemini's parts structure
+                gemini_role = self.ROLE_MAP.get(role, role)
+                contents.append({"role": gemini_role, "parts": [{"text": content}]})
+
+        entry: dict[str, Any] = {
+            "custom_id": request.custom_id,
+            "request": {"contents": contents},
+        }
+
+        if system_parts:
+            entry["request"]["system_instruction"] = {"parts": system_parts}
+
+        return entry
+
+    def extract_response(self, entry: dict[str, Any]) -> str | None:
+        """Extract response from Gemini batch result.
+
+        Path: response.candidates[0].content.parts[0].text
+        """
+        response = entry.get("response", {})
+        candidates = response.get("candidates", [])
+        if candidates:
+            content = candidates[0].get("content", {})
+            parts = content.get("parts", [])
+            if parts:
+                return parts[0].get("text")
+        return None
+
+
+class ClaudeMessageConverter(BatchMessageConverter):
+    """Convert messages to/from Claude batch format.
+
+    Claude format:
+    - System messages → "system": "concatenated text"
+    - User/Assistant → "messages": [{"role": "user"|"assistant", "content": ...}]
+    - Requires: anthropic_version, max_tokens
+    """
+
+    DEFAULT_MAX_TOKENS = 4096
+    ANTHROPIC_VERSION = "vertex-2023-10-16"
+
+    def __init__(self, max_tokens: int | None = None):
+        self.max_tokens = max_tokens if max_tokens is not None else self.DEFAULT_MAX_TOKENS
+
+    def build_request(self, request: BatchRequest) -> dict[str, Any]:
+        """Build a Claude batch request entry."""
+        messages = []
+        system_parts = []
+
+        for msg in request.messages:
+            role = msg.get("role")
+            content = msg.get("content")
+
+            if role == "system":
+                system_parts.append(content)
+            else:
+                # Claude keeps role names as-is, content is direct string
+                messages.append({"role": role, "content": content})
+
+        request_body: dict[str, Any] = {
+            "anthropic_version": self.ANTHROPIC_VERSION,
+            "messages": messages,
+            "max_tokens": self.max_tokens,
+        }
+
+        if system_parts:
+            # Claude concatenates multiple system messages
+            request_body["system"] = "\n\n".join(system_parts)
+
+        return {
+            "custom_id": request.custom_id,
+            "request": request_body,
+        }
+
+    def extract_response(self, entry: dict[str, Any]) -> str | None:
+        """Extract response from Claude batch result.
+
+        Path: response.content[0].text (where type=="text")
+        """
+        response = entry.get("response", {})
+        content = response.get("content", [])
+        if content and isinstance(content, list):
+            for block in content:
+                if block.get("type") == "text":
+                    return block.get("text")
+        return None
+
+
+def _is_claude_model(model: str) -> bool:
+    """Check if model identifier indicates a Claude/Anthropic model."""
+    model_lower = model.lower()
+    return any(pattern in model_lower for pattern in _CLAUDE_MODEL_PATTERNS)
+
+
+def get_message_converter(model: str, **kwargs: Any) -> BatchMessageConverter:
+    """Factory function to get the appropriate converter for a model.
+
+    Args:
+        model: Model identifier (e.g., "gemini-2.5-flash", "claude-sonnet-4")
+        **kwargs: Provider-specific options (e.g., max_tokens for Claude)
+
+    Returns:
+        Appropriate BatchMessageConverter instance
+    """
+    if _is_claude_model(model):
+        return ClaudeMessageConverter(max_tokens=kwargs.get("max_tokens"))
+    return GeminiMessageConverter()
 
 
 class BatchJobManifest(BaseModel):
@@ -181,32 +352,7 @@ class BatchJobManager(BaseModel):
         Returns:
             JSONL-ready dictionary for Gemini batch API
         """
-        # Convert generic message format to Gemini format
-        contents = []
-        system_instruction_parts = []
-
-        for msg in request.messages:
-            role = msg.get("role")
-            content = msg.get("content")
-
-            if role == "system":
-                system_instruction_parts.append({"text": content})
-            elif role == "user":
-                contents.append({"role": "user", "parts": [{"text": content}]})
-            elif role == "assistant":
-                contents.append({"role": "model", "parts": [{"text": content}]})
-
-        entry: dict[str, Any] = {
-            "custom_id": request.custom_id,
-            "request": {
-                "contents": contents,
-            },
-        }
-
-        if system_instruction_parts:
-            entry["request"]["system_instruction"] = {"parts": system_instruction_parts}
-
-        return entry
+        return GeminiMessageConverter().build_request(request)
 
     def _build_claude_request(
         self,
@@ -222,38 +368,7 @@ class BatchJobManager(BaseModel):
         Returns:
             JSONL-ready dictionary for Claude batch API
         """
-        # Convert generic message format to Claude format
-        messages = []
-        system_instruction = None
-
-        for msg in request.messages:
-            role = msg.get("role")
-            content = msg.get("content")
-
-            if role == "system":
-                # Claude only supports one system message, or we concatenate
-                if system_instruction:
-                    system_instruction += "\n\n" + content
-                else:
-                    system_instruction = content
-            elif role == "user":
-                messages.append({"role": "user", "content": content})
-            elif role == "assistant":
-                messages.append({"role": "assistant", "content": content})
-
-        request_body: dict[str, Any] = {
-            "anthropic_version": "vertex-2023-10-16",
-            "messages": messages,
-            "max_tokens": max_tokens,
-        }
-
-        if system_instruction:
-            request_body["system"] = system_instruction
-
-        return {
-            "custom_id": request.custom_id,
-            "request": request_body,
-        }
+        return ClaudeMessageConverter(max_tokens=max_tokens).build_request(request)
 
     def build_jsonl(
         self,
@@ -269,17 +384,8 @@ class BatchJobManager(BaseModel):
         Returns:
             JSONL string ready for upload
         """
-        lines = []
-        is_claude = "claude" in model.lower() or "anthropic" in model.lower()
-
-        for request in requests:
-            if is_claude:
-                entry = self._build_claude_request(request)
-            else:
-                entry = self._build_gemini_request(request)
-
-            lines.append(json.dumps(entry))
-
+        converter = get_message_converter(model)
+        lines = [json.dumps(converter.build_request(request)) for request in requests]
         return "\n".join(lines)
 
     def _resolve_batch_dir(self, job_id: str) -> str:
@@ -611,7 +717,7 @@ class BatchJobManager(BaseModel):
     def _extract_response(self, entry: dict[str, Any]) -> str | None:
         """Extract response text from batch result entry.
 
-        Handles both Gemini and Claude response formats.
+        Handles both Gemini and Claude response formats by trying each converter.
 
         Args:
             entry: The result entry dictionary
@@ -619,25 +725,18 @@ class BatchJobManager(BaseModel):
         Returns:
             Response text or None
         """
-        response = entry.get("response", {})
+        # Try Gemini format first (most common)
+        result = GeminiMessageConverter().extract_response(entry)
+        if result is not None:
+            return result
 
-        # Gemini format: response.candidates[0].content.parts[0].text
-        candidates = response.get("candidates", [])
-        if candidates:
-            content = candidates[0].get("content", {})
-            parts = content.get("parts", [])
-            if parts:
-                return parts[0].get("text")
-
-        # Claude format: response.content[0].text
-        content = response.get("content", [])
-        if content and isinstance(content, list):
-            for block in content:
-                if block.get("type") == "text":
-                    return block.get("text")
+        # Try Claude format
+        result = ClaudeMessageConverter().extract_response(entry)
+        if result is not None:
+            return result
 
         # Fallback: try direct text field
-        return response.get("text")
+        return entry.get("response", {}).get("text")
 
     async def run_batch_and_wait(
         self,
