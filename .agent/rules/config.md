@@ -9,6 +9,8 @@ Buttermilk uses Hydra with OmegaConf for configuration management. All configura
 ### DO
 
 - ✅ Use YAML files exclusively
+- ✅ Use platform features (CLI, pipeline) over custom scripts
+- ✅ "Dogfood" features: extend Buttermilk if features are missing
 - ✅ Leverage interpolation
 - ✅ Validate early with Pydantic
 - ✅ Keep secrets in environment/secrets manager
@@ -17,6 +19,7 @@ Buttermilk uses Hydra with OmegaConf for configuration management. All configura
 ### DON'T
 
 - ❌ Create manual dictionaries
+- ❌ Write one-off scripts for standard tasks (retrieval, batching)
 - ❌ Hardcode values in code
 - ❌ Change validation to suppress errors
 - ❌ Commit sensitive data
