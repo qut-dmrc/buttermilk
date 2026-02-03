@@ -51,16 +51,10 @@ class VertexBatchExecutor(BatchExecutor):
             if not model:
                 return BatchExecutionResult(status=BatchJobStatus.FAILED, error=f"Processor {processor.name} missing 'model' attribute.")
 
-            # Get criteria contents (optional, for Claude caching)
-            criteria_contents = None
-            if hasattr(processor, "get_criteria_contents"):
-                criteria_contents = processor.get_criteria_contents()  # type: ignore
-
             # 3. Submit Job
             job = await self.manager.submit_batch(
                 model=model,
                 requests=requests,
-                criteria_contents=criteria_contents,
             )
 
             logger.info(f"Vertex batch job submitted: {job.name}")

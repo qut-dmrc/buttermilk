@@ -1,13 +1,13 @@
-"""Vertex AI Batch Processor with criteria caching.
+"""Vertex AI Batch Processor.
 
-This processor combines Vertex AI's batch prediction API with explicit
-context caching for efficient large-scale evaluation runs.
+This processor uses Vertex AI's batch prediction API for efficient large-scale
+evaluation runs.
 
 Key features:
-- Caches criteria templates (system prompt + criteria) for reuse
 - Submits batch jobs via Vertex AI Batch Prediction API (50% cost savings)
 - Supports both Gemini and Claude models on Vertex AI
 - Integrates with buttermilk's session save_dir for GCS operations
+- Template rendering matches LLMCore behavior
 
 Usage:
     ```yaml
@@ -17,10 +17,9 @@ Usage:
         batch_processors:
           - _target_: buttermilk.processors.VertexBatchProcessor
             model: gemini-2.5-flash
-            template: judge_criteria
+            template: judge_template
             template_vars:
-              criteria: "{{ criteria }}"
-            cache_ttl: "3600s"
+              some_var: "value"
     ```
 """
 
@@ -45,12 +44,10 @@ if TYPE_CHECKING:
 
 
 class VertexBatchProcessor(BatchProcessorCore):
-    """Batch processor using Vertex AI with criteria caching.
+    """Batch processor using Vertex AI Batch Prediction API.
 
     Implements SimpleBatchProcessor protocol for use inside BatchAccumulator.
-    Combines batch prediction (50% cost savings) with context caching
-    (~90% savings on repeated criteria, if supported by model and provider)
-    for efficient large-scale evaluation.
+    Uses batch prediction for 50% cost savings on large-scale evaluation.
 
     Supports typed output via output_model, similar to LLMProcessor.
     When output_model is set, yields typed objects directly.
@@ -218,20 +215,10 @@ class VertexBatchProcessor(BatchProcessorCore):
             # BatchJobManager will convert this to provider-specific (Gemini/Claude) format
             litellm_messages = autogen_to_litellm_messages(messages)
 
-            # Create request
-            # We don't use criteria_key or cache_name logic here anymore as caching
-            # is harder with full-template rendering per record.
-            # Only exact dupe messages would be cacheable.
-
-            # Use hash of validation logic or similar for grouping if needed,
-            # but for now simpler is better.
-
             req = BatchRequest(
                 custom_id=str(uuid.uuid4()),
                 record_id=record.record_id,
-                criteria_key="default",  # Legacy field, using default
                 messages=litellm_messages,
-                cache_name=None,
             )
             requests.append(req)
 
@@ -259,10 +246,8 @@ class VertexBatchProcessor(BatchProcessorCore):
 
         start_time = time.time()
 
-        # Prepare batch requests (this also populates self._cached_criteria)
+        # Prepare batch requests
         requests = self.prepare_batch_requests(records)
-        # Criteria contents is legacy/deprecated with new message-based flow
-        criteria_contents = {}
 
         # Dry-run mode: log prepared requests and return placeholder records
         # Check before _ensure_manager() to avoid requiring bm initialization
@@ -281,7 +266,6 @@ class VertexBatchProcessor(BatchProcessorCore):
         job: BatchJob = await manager.submit_batch(
             model=self.model,
             requests=requests,
-            criteria_contents=criteria_contents,
         )
 
         # Extract job_id from the job name for tracing
@@ -508,7 +492,6 @@ class VertexBatchProcessor(BatchProcessorCore):
                     "llm_config": {
                         "model": self.model,
                         "template": self.template,
-                        "criteria_key": result.criteria_key,
                         "batch_job_id": batch_job_id,
                     },
                     "usage": result.usage,

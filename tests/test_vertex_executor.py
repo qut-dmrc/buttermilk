@@ -18,9 +18,6 @@ class MockVertexProcessor(BatchProcessorCore):
     def prepare_batch_requests(self, records):
         return [{"request": "mock"}] * len(records)
 
-    def get_criteria_contents(self):
-        return None
-
 
 @pytest.fixture
 def vertex_executor():

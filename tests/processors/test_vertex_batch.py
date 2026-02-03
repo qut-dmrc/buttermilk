@@ -23,29 +23,29 @@ class TestBatchRequest:
     def test_create_batch_request(self):
         """Test creating a batch request."""
         request = BatchRequest(
-            custom_id="record_001_criteria_A",
+            custom_id="record_001",
             record_id="record_001",
-            criteria_key="criteria_A",
-            content="Test content",
-            cache_name="projects/123/cachedContents/abc",
+            messages=[{"role": "user", "content": "Test content"}],
         )
 
-        assert request.custom_id == "record_001_criteria_A"
+        assert request.custom_id == "record_001"
         assert request.record_id == "record_001"
-        assert request.criteria_key == "criteria_A"
-        assert request.content == "Test content"
-        assert request.cache_name == "projects/123/cachedContents/abc"
+        assert request.messages == [{"role": "user", "content": "Test content"}]
 
-    def test_batch_request_optional_cache(self):
-        """Test batch request without cache name."""
+    def test_batch_request_with_system_message(self):
+        """Test batch request with system and user messages."""
         request = BatchRequest(
             custom_id="test",
             record_id="rec1",
-            criteria_key="crit1",
-            content="content",
+            messages=[
+                {"role": "system", "content": "You are helpful"},
+                {"role": "user", "content": "Hello"},
+            ],
         )
 
-        assert request.cache_name is None
+        assert len(request.messages) == 2
+        assert request.messages[0]["role"] == "system"
+        assert request.messages[1]["role"] == "user"
 
 
 class TestBatchResult:
@@ -54,9 +54,8 @@ class TestBatchResult:
     def test_create_success_result(self):
         """Test creating a successful batch result."""
         result = BatchResult(
-            custom_id="record_001_criteria_A",
+            custom_id="record_001",
             record_id="record_001",
-            criteria_key="criteria_A",
             response="This is the LLM response",
             usage={"input_tokens": 100, "output_tokens": 50},
         )
@@ -68,9 +67,8 @@ class TestBatchResult:
     def test_create_error_result(self):
         """Test creating an error batch result."""
         result = BatchResult(
-            custom_id="record_001_criteria_A",
+            custom_id="record_001",
             record_id="record_001",
-            criteria_key="criteria_A",
             error="Rate limit exceeded",
         )
 
@@ -96,46 +94,42 @@ class TestBatchJobManager:
         request = BatchRequest(
             custom_id="test_001",
             record_id="rec_001",
-            criteria_key="criteria_A",
-            content="Evaluate this content",
-            cache_name="projects/123/cachedContents/abc",
+            messages=[{"role": "user", "content": "Evaluate this content"}],
         )
 
         entry = manager._build_gemini_request(request)
 
         assert entry["custom_id"] == "test_001"
         assert "request" in entry
-        assert entry["request"]["cached_content"] == "projects/123/cachedContents/abc"
         assert entry["request"]["contents"][0]["role"] == "user"
         assert entry["request"]["contents"][0]["parts"][0]["text"] == "Evaluate this content"
 
-    def test_build_gemini_request_no_cache(self, manager):
-        """Test Gemini request without cache."""
+    def test_build_gemini_request_with_system(self, manager):
+        """Test Gemini request with system instruction."""
         request = BatchRequest(
             custom_id="test_001",
             record_id="rec_001",
-            criteria_key="criteria_A",
-            content="Content",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant"},
+                {"role": "user", "content": "Hello"},
+            ],
         )
 
         entry = manager._build_gemini_request(request)
 
-        assert "cached_content" not in entry["request"]
+        assert "system_instruction" in entry["request"]
+        assert entry["request"]["system_instruction"]["parts"][0]["text"] == "You are a helpful assistant"
+        assert entry["request"]["contents"][0]["role"] == "user"
 
     def test_build_claude_request(self, manager):
         """Test building a Claude batch request entry."""
         request = BatchRequest(
             custom_id="test_001",
             record_id="rec_001",
-            criteria_key="criteria_A",
-            content="Record content here",
+            messages=[{"role": "user", "content": "Record content here"}],
         )
 
-        entry = manager._build_claude_request(
-            request,
-            criteria_content="Evaluate for hate speech...",
-            max_tokens=2048,
-        )
+        entry = manager._build_claude_request(request, max_tokens=2048)
 
         assert entry["custom_id"] == "test_001"
         assert entry["request"]["anthropic_version"] == "vertex-2023-10-16"
@@ -145,31 +139,37 @@ class TestBatchJobManager:
         messages = entry["request"]["messages"]
         assert len(messages) == 1
         assert messages[0]["role"] == "user"
+        assert messages[0]["content"] == "Record content here"
 
-        content = messages[0]["content"]
-        assert len(content) == 2
-        # First block: criteria with cache_control
-        assert content[0]["text"] == "Evaluate for hate speech..."
-        assert content[0]["cache_control"]["type"] == "ephemeral"
-        # Second block: record content
-        assert content[1]["text"] == "Record content here"
+    def test_build_claude_request_with_system(self, manager):
+        """Test building a Claude batch request with system message."""
+        request = BatchRequest(
+            custom_id="test_001",
+            record_id="rec_001",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant"},
+                {"role": "user", "content": "Hello"},
+            ],
+        )
+
+        entry = manager._build_claude_request(request)
+
+        assert entry["request"]["system"] == "You are a helpful assistant"
+        assert entry["request"]["messages"][0]["role"] == "user"
+        assert entry["request"]["messages"][0]["content"] == "Hello"
 
     def test_build_jsonl_gemini(self, manager):
         """Test building complete JSONL for Gemini."""
         requests = [
             BatchRequest(
-                custom_id="rec1_critA",
+                custom_id="rec1",
                 record_id="rec1",
-                criteria_key="critA",
-                content="Content 1",
-                cache_name="cache/123",
+                messages=[{"role": "user", "content": "Content 1"}],
             ),
             BatchRequest(
-                custom_id="rec2_critA",
+                custom_id="rec2",
                 record_id="rec2",
-                criteria_key="critA",
-                content="Content 2",
-                cache_name="cache/123",
+                messages=[{"role": "user", "content": "Content 2"}],
             ),
         ]
 
@@ -179,29 +179,22 @@ class TestBatchJobManager:
         assert len(lines) == 2
 
         entry1 = json.loads(lines[0])
-        assert entry1["custom_id"] == "rec1_critA"
+        assert entry1["custom_id"] == "rec1"
 
         entry2 = json.loads(lines[1])
-        assert entry2["custom_id"] == "rec2_critA"
+        assert entry2["custom_id"] == "rec2"
 
     def test_build_jsonl_claude(self, manager):
-        """Test building complete JSONL for Claude with inline caching."""
+        """Test building complete JSONL for Claude."""
         requests = [
             BatchRequest(
-                custom_id="rec1_critA",
+                custom_id="rec1",
                 record_id="rec1",
-                criteria_key="critA",
-                content="Content 1",
+                messages=[{"role": "user", "content": "Content 1"}],
             ),
         ]
 
-        criteria_contents = {"critA": "Criteria text here"}
-
-        jsonl = manager.build_jsonl(
-            requests,
-            model="claude-sonnet-4",
-            criteria_contents=criteria_contents,
-        )
+        jsonl = manager.build_jsonl(requests, model="claude-sonnet-4")
 
         lines = jsonl.strip().split("\n")
         assert len(lines) == 1

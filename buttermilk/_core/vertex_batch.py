@@ -13,7 +13,6 @@ Usage:
     job = await manager.submit_batch(
         model="gemini-2.5-flash",
         requests=requests,
-        cache_refs=cache_refs,
     )
     results = await manager.wait_for_results(job)
 """
@@ -40,18 +39,12 @@ class BatchRequest(BaseModel):
     Attributes:
         custom_id: Unique identifier for mapping results back to input
         record_id: Original record ID from the source data
-        criteria_key: Key identifying which criteria template was used
-        content: The record content to send as user message
-        cache_name: Optional cache resource name for criteria
+        messages: The messages to send to the model (LiteLLM format)
     """
 
     custom_id: str
     record_id: str
-    criteria_key: str
-    # Deprecated: use messages instead. content is kept for backward compatibility during migration
-    content: str | None = None
-    messages: list[dict[str, Any]] | None = None
-    cache_name: str | None = None
+    messages: list[dict[str, Any]]
 
 
 class BatchResult(BaseModel):
@@ -60,7 +53,6 @@ class BatchResult(BaseModel):
     Attributes:
         custom_id: The custom_id from the request
         record_id: Original record ID
-        criteria_key: Criteria key used
         response: The model's response content
         error: Error message if request failed
         usage: Token usage information
@@ -68,7 +60,6 @@ class BatchResult(BaseModel):
 
     custom_id: str
     record_id: str
-    criteria_key: str
     response: str | None = None
     error: str | None = None
     usage: dict[str, Any] | None = None
@@ -96,8 +87,6 @@ class BatchJobManifest(BaseModel):
         output_uri: GCS URI of the output directory
         request_count: Number of requests in the batch
         requests: Full BatchRequest objects for self-contained result mapping
-        criteria_contents: Rendered criteria templates keyed by criteria_key
-            (for Claude inline caching or audit purposes)
     """
 
     job_id: str = Field(..., description="Internal batch job ID (e.g., 'batch_abc123')")
@@ -117,10 +106,6 @@ class BatchJobManifest(BaseModel):
         ...,
         description="Full BatchRequest objects for self-contained result mapping",
     )
-    criteria_contents: dict[str, tuple[str, str]] = Field(
-        default_factory=dict,
-        description="Rendered criteria templates keyed by criteria_key (system, user)",
-    )
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -136,12 +121,9 @@ class BatchJobManifest(BaseModel):
                     {
                         "custom_id": "uuid-1",
                         "record_id": "rec-001",
-                        "criteria_key": "a1b2c3d4",
-                        "content": "Record content here...",
-                        "cache_name": None,
+                        "messages": [{"role": "user", "content": "Record content here..."}],
                     }
                 ],
-                "criteria_contents": {"a1b2c3d4": ("You are a helpful assistant", "Evaluate content for...")},
             }
         }
     )
@@ -190,166 +172,83 @@ class BatchJobManager(BaseModel):
     def _build_gemini_request(
         self,
         request: BatchRequest,
-        criteria: tuple[str, str] | None = None,
     ) -> dict[str, Any]:
         """Build a Gemini batch request entry.
 
         Args:
-            request: The batch request to format
-            criteria: Optional (system_instruction, user_content) tuple
+            request: The batch request to format (with messages in LiteLLM format)
 
         Returns:
             JSONL-ready dictionary for Gemini batch API
         """
-        if request.messages:
-            # New path: use pre-formatted messages
-            # Convert generic message format to Gemini format
-            contents = []
-            system_instruction_parts = []
+        # Convert generic message format to Gemini format
+        contents = []
+        system_instruction_parts = []
 
-            for msg in request.messages:
-                role = msg.get("role")
-                content = msg.get("content")
+        for msg in request.messages:
+            role = msg.get("role")
+            content = msg.get("content")
 
-                if role == "system":
-                    system_instruction_parts.append({"text": content})
-                elif role == "user":
-                    contents.append({"role": "user", "parts": [{"text": content}]})
-                elif role == "assistant":
-                    contents.append({"role": "model", "parts": [{"text": content}]})
+            if role == "system":
+                system_instruction_parts.append({"text": content})
+            elif role == "user":
+                contents.append({"role": "user", "parts": [{"text": content}]})
+            elif role == "assistant":
+                contents.append({"role": "model", "parts": [{"text": content}]})
 
-            entry = {
-                "custom_id": request.custom_id,
-                "request": {
-                    "contents": contents,
-                },
-            }
+        entry: dict[str, Any] = {
+            "custom_id": request.custom_id,
+            "request": {
+                "contents": contents,
+            },
+        }
 
-            if system_instruction_parts:
-                entry["request"]["system_instruction"] = {"parts": system_instruction_parts}
-
-        else:
-            # Legacy path: content + criteria tuple
-            # Combine user-part of criteria with record content
-            user_parts = []
-            if criteria and criteria[1]:
-                user_parts.append({"text": criteria[1]})
-
-            user_parts.append({"text": request.content or ""})
-
-            entry: dict[str, Any] = {
-                "custom_id": request.custom_id,
-                "request": {
-                    "contents": [
-                        {
-                            "role": "user",
-                            "parts": user_parts,
-                        }
-                    ],
-                },
-            }
-
-            # Add system instruction if available
-            if criteria and criteria[0]:
-                entry["request"]["system_instruction"] = {"parts": [{"text": criteria[0]}]}
-
-        # Add cache reference if available
-        if request.cache_name:
-            entry["request"]["cached_content"] = request.cache_name
+        if system_instruction_parts:
+            entry["request"]["system_instruction"] = {"parts": system_instruction_parts}
 
         return entry
 
     def _build_claude_request(
         self,
         request: BatchRequest,
-        criteria: tuple[str, str] | None = None,
         max_tokens: int = 4096,
     ) -> dict[str, Any]:
         """Build a Claude batch request entry.
 
-        For Claude, we use inline cache_control since batch API may not
-        support cached_content references directly.
-
         Args:
-            request: The batch request to format
-            criteria: Optional (system_instruction, user_content) tuple
+            request: The batch request to format (with messages in LiteLLM format)
             max_tokens: Maximum tokens for response
 
         Returns:
             JSONL-ready dictionary for Claude batch API
         """
-        if request.messages:
-            # New path: use pre-formatted messages
-            # Convert generic message format to Claude format
-            messages = []
-            system_instruction = None
+        # Convert generic message format to Claude format
+        messages = []
+        system_instruction = None
 
-            for msg in request.messages:
-                role = msg.get("role")
-                content = msg.get("content")
+        for msg in request.messages:
+            role = msg.get("role")
+            content = msg.get("content")
 
-                if role == "system":
-                    # Claude only supports one system message, or we concatenate
-                    if system_instruction:
-                        system_instruction += "\n\n" + content
-                    else:
-                        system_instruction = content
-                elif role == "user":
-                    messages.append({"role": "user", "content": content})
-                elif role == "assistant":
-                    messages.append({"role": "assistant", "content": content})
+            if role == "system":
+                # Claude only supports one system message, or we concatenate
+                if system_instruction:
+                    system_instruction += "\n\n" + content
+                else:
+                    system_instruction = content
+            elif role == "user":
+                messages.append({"role": "user", "content": content})
+            elif role == "assistant":
+                messages.append({"role": "assistant", "content": content})
 
-            request_body = {
-                "anthropic_version": "vertex-2023-10-16",
-                "messages": messages,
-                "max_tokens": max_tokens,
-            }
+        request_body: dict[str, Any] = {
+            "anthropic_version": "vertex-2023-10-16",
+            "messages": messages,
+            "max_tokens": max_tokens,
+        }
 
-            if system_instruction:
-                request_body["system"] = system_instruction
-
-        else:
-            # Legacy path
-            messages_content = []
-
-            system_instruction = None
-            user_criteria = None
-            if criteria:
-                system_instruction = criteria[0]
-                user_criteria = criteria[1]
-
-            # Add user-part of criteria with cache_control if provided
-            if user_criteria:
-                messages_content.append(
-                    {
-                        "type": "text",
-                        "text": user_criteria,
-                        "cache_control": {"type": "ephemeral"},
-                    }
-                )
-
-            # Add record content
-            messages_content.append(
-                {
-                    "type": "text",
-                    "text": request.content or "",
-                }
-            )
-
-            request_body = {
-                "anthropic_version": "vertex-2023-10-16",
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": messages_content,
-                    }
-                ],
-                "max_tokens": max_tokens,
-            }
-
-            # Add system instruction if present
-            if system_instruction:
-                request_body["system"] = system_instruction
+        if system_instruction:
+            request_body["system"] = system_instruction
 
         return {
             "custom_id": request.custom_id,
@@ -360,14 +259,12 @@ class BatchJobManager(BaseModel):
         self,
         requests: list[BatchRequest],
         model: str,
-        criteria_contents: dict[str, tuple[str, str]] | None = None,
     ) -> str:
         """Build JSONL content for batch job.
 
         Args:
-            requests: List of batch requests
+            requests: List of batch requests (each with messages in LiteLLM format)
             model: Model identifier (determines format)
-            criteria_contents: Map of criteria_key -> (system, user) for inline/system usage
 
         Returns:
             JSONL string ready for upload
@@ -376,13 +273,10 @@ class BatchJobManager(BaseModel):
         is_claude = "claude" in model.lower() or "anthropic" in model.lower()
 
         for request in requests:
-            # Get criteria content tuple if available
-            criteria = criteria_contents.get(request.criteria_key) if criteria_contents else None
-
             if is_claude:
-                entry = self._build_claude_request(request, criteria)
+                entry = self._build_claude_request(request)
             else:
-                entry = self._build_gemini_request(request, criteria)
+                entry = self._build_gemini_request(request)
 
             lines.append(json.dumps(entry))
 
@@ -529,14 +423,12 @@ class BatchJobManager(BaseModel):
         self,
         model: str,
         requests: list[BatchRequest],
-        criteria_contents: dict[str, str] | None = None,
     ) -> "BatchJob":
         """Submit a batch prediction job.
 
         Args:
             model: Model to use (e.g., "gemini-2.5-flash")
-            requests: List of batch requests
-            criteria_contents: For Claude, map of criteria_key -> content
+            requests: List of batch requests (each with messages in LiteLLM format)
 
         Returns:
             BatchJob object for tracking
@@ -549,7 +441,7 @@ class BatchJobManager(BaseModel):
         job_id = self._generate_job_id()
 
         # Build JSONL
-        jsonl_content = self.build_jsonl(requests, model, criteria_contents)
+        jsonl_content = self.build_jsonl(requests, model)
 
         # Upload to stable batch directory
         input_uri = self._upload_to_gcs(jsonl_content, job_id)
@@ -585,7 +477,6 @@ class BatchJobManager(BaseModel):
                 input_uri=input_uri,
                 output_uri=output_uri,
                 requests=requests,
-                criteria_contents=criteria_contents or {},
             )
 
             logger.info(f"Batch job submitted: {job.name} (ID: {job_id})")
@@ -702,7 +593,6 @@ class BatchJobManager(BaseModel):
                         result = BatchResult(
                             custom_id=custom_id,
                             record_id=request.record_id if request else "",
-                            criteria_key=request.criteria_key if request else "",
                             response=self._extract_response(entry),
                             error=error_msg,
                             usage=entry.get("response", {}).get("usage"),
@@ -753,7 +643,6 @@ class BatchJobManager(BaseModel):
         self,
         model: str,
         requests: list[BatchRequest],
-        criteria_contents: dict[str, str] | None = None,
     ) -> list[BatchResult]:
         """Submit batch job, wait for completion, and return results.
 
@@ -761,13 +650,12 @@ class BatchJobManager(BaseModel):
 
         Args:
             model: Model to use
-            requests: List of batch requests
-            criteria_contents: For Claude inline caching
+            requests: List of batch requests (each with messages in LiteLLM format)
 
         Returns:
             List of BatchResult objects
         """
-        job = await self.submit_batch(model, requests, criteria_contents)
+        job = await self.submit_batch(model, requests)
         await self.wait_for_completion(job)
 
         # Get output URI from active jobs registry
@@ -800,7 +688,6 @@ class BatchJobManager(BaseModel):
         input_uri: str,
         output_uri: str,
         requests: list[BatchRequest],
-        criteria_contents: dict[str, tuple[str, str]],
     ) -> str:
         """Save job manifest to GCS for recovery.
 
@@ -811,7 +698,6 @@ class BatchJobManager(BaseModel):
             input_uri: GCS URI of input JSONL
             output_uri: GCS URI of output directory
             requests: List of batch requests
-            criteria_contents: Rendered criteria templates
 
         Returns:
             GCS URI of saved manifest
@@ -830,7 +716,6 @@ class BatchJobManager(BaseModel):
             output_uri=output_uri,
             request_count=len(requests),
             requests=requests,
-            criteria_contents=criteria_contents,
         )
 
         upload_text(

@@ -67,7 +67,6 @@ def submit(config: Path, json_output: bool) -> None:
         # Extract batch parameters from config
         model = batch_config.get("model", "gemini-2.5-flash")
         requests_data = batch_config.get("requests", [])
-        criteria_contents = batch_config.get("criteria_contents", {})
 
         # Convert raw request dicts to BatchRequest objects
         requests = [BatchRequest(**r) for r in requests_data]
@@ -79,7 +78,6 @@ def submit(config: Path, json_output: bool) -> None:
         job = await manager.submit_batch(
             model=model,
             requests=requests,
-            criteria_contents=criteria_contents if criteria_contents else None,
         )
 
         # Extract job_id from the internal tracking
@@ -243,7 +241,6 @@ def fetch(job_id: str, json_output: bool, output: str | None, save_dir: str | No
                 click.echo("\nFirst 3 results:")
                 for i, r in enumerate(results_data[:3]):
                     click.echo(f"\n  [{i + 1}] record_id: {r['record_id']}")
-                    click.echo(f"      criteria_key: {r['criteria_key']}")
                     if r.get("response"):
                         response_preview = r["response"][:200]
                         if len(r["response"]) > 200:

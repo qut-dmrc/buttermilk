@@ -74,20 +74,17 @@ class TestBatchDecoupledWorkflow:
             BatchRequest(
                 custom_id="req-001",
                 record_id="record-001",
-                criteria_key="criteria-a",
-                content="Test content 1",
+                messages=[{"role": "user", "content": "Test content 1"}],
             ),
             BatchRequest(
                 custom_id="req-002",
                 record_id="record-002",
-                criteria_key="criteria-a",
-                content="Test content 2",
+                messages=[{"role": "user", "content": "Test content 2"}],
             ),
             BatchRequest(
                 custom_id="req-003",
                 record_id="record-003",
-                criteria_key="criteria-b",
-                content="Test content 3",
+                messages=[{"role": "user", "content": "Test content 3"}],
             ),
         ]
 
@@ -159,7 +156,6 @@ class TestBatchDecoupledWorkflow:
             job = await manager1.submit_batch(
                 model="gemini-2.5-flash",
                 requests=batch_requests,
-                criteria_contents={"criteria-a": "Criteria A content", "criteria-b": "Criteria B content"},
             )
 
             # Verify job was submitted
@@ -344,7 +340,6 @@ class TestBatchDecoupledWorkflow:
             output_uri="gs://bucket/output/",
             request_count=3,
             requests=batch_requests,
-            criteria_contents={"key1": "content1"},
         )
 
         # Serialize to JSON
@@ -359,11 +354,9 @@ class TestBatchDecoupledWorkflow:
         assert restored.model == original.model
         assert restored.request_count == original.request_count
         assert len(restored.requests) == len(original.requests)
-        assert restored.criteria_contents == original.criteria_contents
 
         # Verify nested BatchRequest objects
         for orig_req, rest_req in zip(original.requests, restored.requests):
             assert rest_req.custom_id == orig_req.custom_id
             assert rest_req.record_id == orig_req.record_id
-            assert rest_req.criteria_key == orig_req.criteria_key
-            assert rest_req.content == orig_req.content
+            assert rest_req.messages == orig_req.messages
