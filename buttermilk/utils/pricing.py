@@ -32,6 +32,10 @@ _MODEL_MAPPINGS = {
     "o4mini": "azure/o4-mini",
     "gemini25flash": "gemini/gemini-2.5-flash-preview-05-20",
     "sonnet": "vertex_ai/claude-sonnet-4@20250514",
+    # Claude model aliases used in batch manifests
+    "claude-sonnet": "vertex_ai/claude-sonnet-4@20250514",
+    "claude-haiku": "vertex_ai/claude-3-5-haiku@20241022",
+    "claude-opus": "vertex_ai/claude-opus-4@20250514",
 }
 
 
