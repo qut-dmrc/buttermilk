@@ -564,24 +564,44 @@ def expand_dict(d: dict[str, Any] | None) -> list[dict[str, Any]]:
     if not d:
         return [{}]
 
-    # Separate keys with list values and keys with single values
-    list_keys = {
-        k: v
-        for k, v in d.items()
-        if v and isinstance(v, Sequence) and not isinstance(v, str)
-    }
-    single_keys = {
-        k: v for k, v in d.items() if not isinstance(v, Sequence) or isinstance(v, str)
-    }
+    # Separate keys with list/dict values and keys with single values
+    list_keys = {}
+    single_keys = {}
+
+    for k, v in d.items():
+        if v and isinstance(v, Mapping):
+            # For dicts, treat as labeled variants: keys are labels, values are parameters
+            list_keys[k] = [(val, label) for label, val in v.items()]
+        elif v and isinstance(v, Sequence) and not isinstance(v, str):
+            list_keys[k] = v
+        else:
+            single_keys[k] = v
 
     # Generate all combinations of list values
     combinations = list(itertools.product(*list_keys.values()))
 
     # Create a list of dictionaries with all combinations
-    expanded_dicts = [
-        {**single_keys, **dict(zip(list_keys.keys(), combo, strict=False))}
-        for combo in combinations
-    ]
+    expanded_dicts = []
+    for combo in combinations:
+        new_dict = dict(single_keys)
+
+        for k, val in zip(list_keys.keys(), combo, strict=False):
+            if isinstance(val, tuple) and len(val) == 2:
+                # Labeled variant: (value, label)
+                value, label = val
+                new_dict[k] = value
+
+                # Store labels in structured variant dict
+                if "variant" not in new_dict:
+                    new_dict["variant"] = {}
+                if k not in new_dict["variant"]:
+                    new_dict["variant"][k] = {}
+                # Result: variant.<param_name>.<label> = value
+                new_dict["variant"][k][label] = value
+            else:
+                new_dict[k] = val
+
+        expanded_dicts.append(new_dict)
 
     # Guarantee at least a list with an empty dict
     if len(expanded_dicts) == 0:

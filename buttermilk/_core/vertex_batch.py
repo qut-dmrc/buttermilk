@@ -42,7 +42,7 @@ class BatchRequest(BaseModel):
         record_id: Original record ID from the source data
         messages: The messages to send to the model (LiteLLM format)
         model: Model identifier used for this request (for result analysis)
-        variant: Variant identifier (e.g., instruction type, template name)
+        variant: Variant identifier (e.g., label string or structured dict)
         processor_index: Index of this processor in a multi-processor pipeline
     """
 
@@ -50,7 +50,7 @@ class BatchRequest(BaseModel):
     record_id: str
     messages: list[dict[str, Any]]
     model: str | None = None
-    variant: str | None = None
+    variant: str | dict[str, Any] | None = None
     processor_index: int | None = None
 
 
@@ -74,7 +74,7 @@ class BatchResult(BaseModel):
     error: str | None = None
     usage: dict[str, Any] | None = None
     model: str | None = None
-    variant: str | None = None
+    variant: str | dict[str, Any] | None = None
     processor_index: int | None = None
 
     @property
@@ -89,7 +89,13 @@ class BatchResult(BaseModel):
         """
         parts = [self.record_id]
         if self.variant:
-            parts.append(self.variant)
+            if isinstance(self.variant, dict):
+                # For dict variants, generate a stable string representation
+                # Focus on identifying keys/values
+                variant_str = json.dumps(self.variant, sort_keys=True)
+                parts.append(variant_str)
+            else:
+                parts.append(str(self.variant))
         if self.model:
             parts.append(self.model)
         if self.processor_index is not None:

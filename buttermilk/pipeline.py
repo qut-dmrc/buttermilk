@@ -1125,7 +1125,7 @@ class PipelineOrchestrator(BaseModel):
                 # Track flush success count (not per-source, just total)
                 self._variant_outcomes.setdefault("_flush_totals", {"success": 0, "failed": 0})
                 self._variant_outcomes["_flush_totals"]["success"] += 1
-            logger.info(
+            logger.debug(
                 "📊 STATS: flushed variant SUCCESS (will reconcile pending sources at end)",
                 record_id=record_id,
                 flush_success_count=self._variant_outcomes.get("_flush_totals", {}).get("success", 0),

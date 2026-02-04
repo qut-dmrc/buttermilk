@@ -264,16 +264,16 @@ class VertexBatchProcessor(BatchProcessorCore):
             # BatchJobManager will convert this to provider-specific (Gemini/Claude) format
             litellm_messages = autogen_to_litellm_messages(messages)
 
-            # Extract variant from record metadata if present (set by VariantProcessor)
+            # Extract variant from record metadata if present (set by VariantProcessor or ParameterExpansionProcessor)
             variant = None
             if record.metadata:
-                variant_info = record.metadata.get("variant", {})
-                if isinstance(variant_info, dict):
-                    # VariantProcessor sets variant.processor_class or variant.stage
-                    variant = variant_info.get("stage") or variant_info.get("processor_class")
-                elif isinstance(variant_info, str):
+                variant_info = record.metadata.get("variant")
+                if variant_info:
+                    # If it's already a dict, we pass it through (supports labeled variants)
+                    # If it's a string, we use it as-is
                     variant = variant_info
-                # Also check for explicit variant_name or instruction_type
+                
+                # Fallback for old style metadata if 'variant' key wasn't structured
                 if not variant:
                     variant = record.metadata.get("variant_name") or record.metadata.get("instruction_type")
 
