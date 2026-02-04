@@ -294,6 +294,7 @@ class BatchJobManifest(BaseModel):
         vertex_job_name: Full Vertex AI resource name
             (e.g., "projects/.../locations/.../batchJobs/...")
         model: Model identifier used for the batch (e.g., "gemini-2.5-flash")
+        region: GCP region where the job was submitted (e.g., "us-central1")
         submitted_at: ISO timestamp when job was submitted
         input_uri: GCS URI of the input JSONL file
         output_uri: GCS URI of the output directory
@@ -307,6 +308,10 @@ class BatchJobManifest(BaseModel):
         description="Full Vertex AI resource name (projects/.../batchJobs/...)",
     )
     model: str = Field(..., description="Model identifier (e.g., 'gemini-2.5-flash')")
+    region: str | None = Field(
+        default=None,
+        description="GCP region where the job was submitted (e.g., 'us-central1')",
+    )
     submitted_at: str = Field(
         default_factory=lambda: datetime.datetime.now(datetime.UTC).isoformat(),
         description="ISO timestamp when job was submitted",
@@ -325,6 +330,7 @@ class BatchJobManifest(BaseModel):
                 "job_id": "batch_abc123def456",
                 "vertex_job_name": "projects/my-project/locations/us-central1/batchJobs/12345",
                 "model": "gemini-2.5-flash",
+                "region": "us-central1",
                 "submitted_at": "2026-01-23T07:00:00+00:00",
                 "input_uri": "gs://bucket/session/batch/batch_abc123def456/input.jsonl",
                 "output_uri": "gs://bucket/session/batch/batch_abc123def456/output/",
@@ -339,6 +345,30 @@ class BatchJobManifest(BaseModel):
             }
         }
     )
+
+    def get_region(self) -> str:
+        """Get the region for this job.
+
+        Returns the explicit region if set, otherwise parses it from vertex_job_name.
+        Falls back to 'us-central1' if parsing fails.
+
+        Returns:
+            GCP region string (e.g., 'us-central1')
+        """
+        if self.region:
+            return self.region
+
+        # Parse from vertex_job_name: projects/{project}/locations/{location}/...
+        try:
+            parts = self.vertex_job_name.split("/")
+            if "locations" in parts:
+                loc_idx = parts.index("locations") + 1
+                if loc_idx < len(parts):
+                    return parts[loc_idx]
+        except Exception:
+            pass
+
+        return "us-central1"  # Default fallback
 
     @classmethod
     def get_manifest_uri(cls, save_dir: str, job_id: str) -> str:
@@ -864,6 +894,85 @@ class BatchJobManager(BaseModel):
                 return info["output_uri"]
         raise RuntimeError(f"Job {job_name} not found in active jobs registry")
 
+    def _get_client_region(self) -> str | None:
+        """Extract the region from the current client configuration.
+
+        Returns:
+            Region string if available, None otherwise
+        """
+        try:
+            # The genai Client stores location in _api_client or similar
+            if hasattr(self.client, "_location"):
+                return self.client._location
+            if hasattr(self.client, "location"):
+                return self.client.location
+            # Try to get from vertexai config
+            if hasattr(self.client, "_api_client") and hasattr(self.client._api_client, "_location"):
+                return self.client._api_client._location
+        except Exception:
+            pass
+        return None
+
+    def _parse_region_from_job_name(self, vertex_job_name: str) -> str | None:
+        """Parse region from a Vertex AI resource name.
+
+        Args:
+            vertex_job_name: Full resource name like projects/.../locations/{region}/...
+
+        Returns:
+            Region string if found, None otherwise
+        """
+        try:
+            parts = vertex_job_name.split("/")
+            if "locations" in parts:
+                loc_idx = parts.index("locations") + 1
+                if loc_idx < len(parts):
+                    return parts[loc_idx]
+        except Exception:
+            pass
+        return None
+
+    def _get_client_for_region(self, region: str) -> Any:
+        """Get a GenAI client configured for a specific region.
+
+        If the current client is already configured for this region, returns it.
+        Otherwise creates a new client for the specified region.
+
+        Args:
+            region: GCP region (e.g., 'us-central1', 'us-east1')
+
+        Returns:
+            GenAI client configured for the specified region
+        """
+        current_region = self._get_client_region()
+        if current_region == region:
+            return self.client
+
+        # Need to create a new client for the target region
+        try:
+            import os
+
+            from google.genai import Client
+
+            # Get project from environment or buttermilk config
+            project = os.environ.get("GOOGLE_CLOUD_PROJECT")
+            if not project:
+                try:
+                    from buttermilk import bm
+                    project = bm.session_info.project_name
+                except Exception:
+                    pass
+
+            if not project:
+                logger.warning(f"Could not determine project for region-specific client, using default client")
+                return self.client
+
+            logger.info(f"Creating client for region: {region} (current: {current_region})")
+            return Client(vertexai=True, project=project, location=region)
+        except Exception as e:
+            logger.warning(f"Failed to create region-specific client for {region}: {e}. Using default.")
+            return self.client
+
     def _save_manifest(
         self,
         job_id: str,
@@ -892,10 +1001,14 @@ class BatchJobManager(BaseModel):
         batch_dir = self._resolve_batch_dir(job_id)
         manifest_uri = f"{batch_dir}/manifest.json"
 
+        # Extract region from vertex_job_name (most reliable) or client config
+        region = self._parse_region_from_job_name(vertex_job_name) or self._get_client_region()
+
         manifest = BatchJobManifest(
             job_id=job_id,
             vertex_job_name=vertex_job_name,
             model=model,
+            region=region,
             input_uri=input_uri,
             output_uri=output_uri,
             request_count=len(requests),
@@ -911,11 +1024,18 @@ class BatchJobManager(BaseModel):
         logger.info(f"Saved manifest to {manifest_uri}")
         return manifest_uri
 
-    def _load_manifest(self, job_id: str) -> BatchJobManifest:
+    def _load_manifest(self, job_id: str, search: bool = False) -> BatchJobManifest:
         """Load job manifest from GCS.
+
+        Uses a multi-strategy approach to locate the manifest:
+        1. Check stable persistent path at {save_dir_base}/{project}/_batches/{job_id}/
+        2. Check current session path at {save_dir}/batch/{job_id}/
+        3. (If search=True) Deep search across all runs in the bucket
 
         Args:
             job_id: Local job identifier
+            search: If True, perform deep search across bucket if manifest not found
+                   in standard locations. This can be slow for large buckets.
 
         Returns:
             BatchJobManifest object
@@ -927,24 +1047,69 @@ class BatchJobManager(BaseModel):
 
         from buttermilk import bm
 
-        save_dir = bm.session_info.save_dir
-        if not save_dir:
-            raise RuntimeError("No save_dir configured in session")
+        session = bm.session_info
+        manifest_path = None
 
-        manifest_uri = BatchJobManifest.get_manifest_uri(save_dir, job_id)
-        manifest_path = AnyPath(manifest_uri)
+        # Strategy 1: Check stable persistent path (O(1) lookup)
+        if session.save_dir_base:
+            try:
+                base = AnyPath(session.save_dir_base)
+                stable_path = base / session.project_name / "_batches" / job_id / "manifest.json"
+                if stable_path.exists():
+                    manifest_path = stable_path
+                    logger.debug(f"Found manifest at stable location: {manifest_path}")
+            except Exception as e:
+                logger.debug(f"Failed to check stable path: {e}")
 
-        if not manifest_path.exists():
-            raise FileNotFoundError(f"Manifest not found for job_id: {job_id}")
+        # Strategy 2: Check current session path (Legacy/Fallback)
+        if not manifest_path and session.save_dir:
+            try:
+                session_path = AnyPath(f"{session.save_dir}/batch/{job_id}/manifest.json")
+                if session_path.exists():
+                    manifest_path = session_path
+                    logger.debug(f"Found manifest in current session: {manifest_path}")
+            except Exception:
+                pass
+
+        # Strategy 3: Deep search across runs (if enabled)
+        if not manifest_path and search and session.save_dir:
+            try:
+                save_dir = session.save_dir
+                parts = save_dir.split("/")
+                # Extract bucket from gs://bucket/... path
+                if len(parts) > 2 and parts[0] == "gs:":
+                    bucket = parts[2]
+                    runs_root = f"gs://{bucket}/runs"
+                    logger.info(f"Searching for manifest in {runs_root}...")
+                    runs_path = AnyPath(runs_root)
+                    found_manifests = list(runs_path.glob(f"**/batch/{job_id}/manifest.json"))
+                    if found_manifests:
+                        manifest_path = found_manifests[0]
+                        logger.info(f"Found manifest via search: {manifest_path}")
+            except Exception as e:
+                logger.warning(f"Deep search failed: {e}")
+
+        if not manifest_path:
+            if search:
+                raise FileNotFoundError(
+                    f"Manifest not found for job_id: {job_id} (searched all locations)"
+                )
+            else:
+                raise FileNotFoundError(
+                    f"Manifest not found for job_id: {job_id}. "
+                    f"Try using --search to search across all sessions, or "
+                    f"--save-dir to specify the original session directory."
+                )
 
         content = manifest_path.read_text()
         return BatchJobManifest.model_validate_json(content)
 
-    def get_job_status(self, job_id: str) -> dict[str, Any]:
+    def get_job_status(self, job_id: str, search: bool = False) -> dict[str, Any]:
         """Get the current status of a batch job.
 
         Args:
             job_id: Local job identifier (e.g., "batch_abc123")
+            search: If True, search across all sessions in the bucket
 
         Returns:
             Dictionary with job status information:
@@ -960,14 +1125,19 @@ class BatchJobManager(BaseModel):
         """
         from google.genai.types import JobState
 
-        manifest = self._load_manifest(job_id)
+        manifest = self._load_manifest(job_id, search=search)
+
+        # Get the correct region for this job
+        job_region = manifest.get_region()
+        client = self._get_client_for_region(job_region)
 
         try:
-            job = self.client.batches.get(name=manifest.vertex_job_name)
+            job = client.batches.get(name=manifest.vertex_job_name)
         except Exception as e:
             return {
                 "job_id": job_id,
                 "vertex_job_name": manifest.vertex_job_name,
+                "region": job_region,
                 "state": "UNKNOWN",
                 "is_complete": False,
                 "is_success": False,
@@ -999,7 +1169,7 @@ class BatchJobManager(BaseModel):
             "error": error,
         }
 
-    def process_job_results(self, job_id: str) -> dict[str, Any]:
+    def process_job_results(self, job_id: str, search: bool = False) -> dict[str, Any]:
         """Combine all results, join with manifest, calculate cost, and save to GCS.
 
         This method:
@@ -1011,12 +1181,13 @@ class BatchJobManager(BaseModel):
 
         Args:
             job_id: Local job identifier
+            search: If True, search across all sessions in the bucket
 
         Returns:
             Dictionary containing 'summary' and 'results' (list of dicts)
         """
         # 1. Load Manifest
-        manifest = self._load_manifest(job_id)
+        manifest = self._load_manifest(job_id, search=search)
 
         # 2. Parse Results
         results = self.parse_results(manifest.output_uri, manifest.requests)
@@ -1096,7 +1267,7 @@ class BatchJobManager(BaseModel):
             "batch_results": results,
         }
 
-    def fetch_results(self, job_id: str) -> dict[str, Any]:
+    def fetch_results(self, job_id: str, search: bool = False) -> dict[str, Any]:
         """Fetch and process batch results using only job_id.
 
         Loads the manifest from GCS, checks job status, and processes results
@@ -1104,6 +1275,7 @@ class BatchJobManager(BaseModel):
 
         Args:
             job_id: Local job identifier (e.g., "batch_abc123")
+            search: If True, search across all sessions in the bucket
 
         Returns:
             If job succeeded: Summary and results dict (from process_job_results)
@@ -1116,22 +1288,27 @@ class BatchJobManager(BaseModel):
         from google.genai.types import JobState
 
         # Load manifest from GCS
-        manifest = self._load_manifest(job_id)
+        manifest = self._load_manifest(job_id, search=search)
+
+        # Get the correct region for this job
+        job_region = manifest.get_region()
+        client = self._get_client_for_region(job_region)
 
         # Check job status
         try:
-            job = self.client.batches.get(name=manifest.vertex_job_name)
+            job = client.batches.get(name=manifest.vertex_job_name)
         except Exception as e:
             return {
                 "job_id": job_id,
                 "status": "error",
+                "region": job_region,
                 "error": f"Failed to fetch job status: {e}",
             }
 
         # Handle different job states
         if job.state == JobState.JOB_STATE_SUCCEEDED:
             logger.info(f"Job {job_id} completed, processing results")
-            return self.process_job_results(job_id)
+            return self.process_job_results(job_id, search=search)
 
         elif job.state == JobState.JOB_STATE_FAILED:
             return {
