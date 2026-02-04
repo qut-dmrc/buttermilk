@@ -33,6 +33,15 @@ See `.agent/workflows/TESTING.md` for complete guide.
 - Silently continue when logging/saving fails
 - Work around broken infrastructure instead of fixing it
 
+## Methodology Belongs to Researcher (P#84)
+
+LLM generation parameters are **methodological choices** that require researcher specification:
+- `temperature`, `max_tokens`, `top_p`, `top_k` → NO DEFAULTS
+- Model selection → researcher must specify
+- Prompt templates → researcher must review
+
+These parameters affect reproducibility and must be explicitly configured, not defaulted.
+
 ## Technical Stack
 
 **Configuration**: Hydra (composable YAML configs in `conf/`)
