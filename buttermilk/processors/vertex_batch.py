@@ -469,6 +469,17 @@ class VertexBatchProcessor(BatchProcessorCore):
         # Upload the JSONL file to GCS
         result_uri = upload_text(jsonl_content, uri=input_uri, content_type="application/jsonl")
 
+        # Save manifest for job recovery inspection during dry run
+        output_uri = manager._get_output_uri(dry_run_job_id)
+        manager._save_manifest(
+            job_id=dry_run_job_id,
+            vertex_job_name=f"dry_run_{dry_run_job_id}",
+            model=self.model,
+            input_uri=result_uri,
+            output_uri=output_uri,
+            requests=requests,
+        )
+
         logger.info(
             f"[DRY RUN] Batch file written to GCS",
             uri=result_uri,
