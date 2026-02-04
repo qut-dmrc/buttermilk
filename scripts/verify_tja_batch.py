@@ -80,6 +80,11 @@ async def run_verification():
     if result.error:
         logger.error(f"Run Error: {result.error}")
 
+    # 6. Shutdown
+    from buttermilk import bm
+
+    await bm.graceful_shutdown()
+
 
 if __name__ == "__main__":
     # We need to ensure authentication/BM context is ready.

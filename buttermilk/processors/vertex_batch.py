@@ -354,9 +354,9 @@ class VertexBatchProcessor(BatchProcessorCore):
             logger.error(f"Batch job failed: {e}")
             return self._create_error_records(records, str(e), batch_job_id, start_time)
 
-        # Parse results from GCS
-        output_uri = manager._get_output_uri_for_job(job.name)
-        results = manager.parse_results(output_uri, requests)
+        # Combined processing: join manifest, calculate costs, and save combined results/summary to GCS
+        processed = manager.process_job_results(batch_job_id)
+        results = processed["batch_results"]
 
         # Map results back to records
         output_records = await self._map_results_to_records(
@@ -481,7 +481,7 @@ class VertexBatchProcessor(BatchProcessorCore):
         )
 
         logger.info(
-            f"[DRY RUN] Batch file written to GCS",
+            "[DRY RUN] Batch file written to GCS",
             uri=result_uri,
             request_count=len(requests),
             model=self.model,
@@ -599,6 +599,7 @@ class VertexBatchProcessor(BatchProcessorCore):
                         "batch_job_id": batch_job_id,
                     },
                     "usage": result.usage,
+                    "cost_usd": result.cost_usd,
                 },
                 execution_type="llm_processing (batch)",
             )
@@ -611,6 +612,8 @@ class VertexBatchProcessor(BatchProcessorCore):
                 updated_metadata = record.metadata.copy() if record.metadata else {}
                 updated_metadata["llm_output"] = response
                 updated_metadata["batch_job_id"] = batch_job_id
+                if result.cost_usd is not None:
+                    updated_metadata["cost_usd"] = result.cost_usd
                 output_records.append(record.model_copy(update={"metadata": updated_metadata}))
 
         return output_records

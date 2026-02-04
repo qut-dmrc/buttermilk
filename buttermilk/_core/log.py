@@ -588,3 +588,30 @@ def reset_logging_configuration() -> None:
 
     # Reset structlog configuration to default state
     structlog.reset_defaults()
+
+
+def flush_logging() -> None:
+    """Flush and close all logging handlers.
+
+    CRITICAL for CloudLoggingHandler to ensure logs are sent before exit.
+    This should be called during graceful shutdown.
+    """
+    bm_logger = logging.getLogger(_LOGGER_NAME)
+    handlers = list(bm_logger.handlers)
+
+    if handlers:
+        logger.debug(f"Flushing {len(handlers)} logging handlers...")
+
+    for handler in handlers:
+        try:
+            # Check if it's a CloudLoggingHandler (lazy check to avoid import)
+            handler_type = type(handler).__name__
+            if handler_type == "CloudLoggingHandler":
+                logger.debug("Closing CloudLoggingHandler...")
+
+            handler.flush()
+            handler.close()
+            bm_logger.removeHandler(handler)
+        except Exception:
+            # Don't let logging failures block shutdown
+            pass

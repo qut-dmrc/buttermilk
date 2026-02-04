@@ -1192,6 +1192,14 @@ class BM(BaseModel):
         logger.info("Waiting for traces and logs to upload...")
         await asyncio.sleep(2.0)
 
+        # CRITICAL: Flush logging handlers (especially CloudLoggingHandler)
+        try:
+            from buttermilk._core.log import flush_logging
+
+            flush_logging()
+        except Exception as e:
+            logger.warning(f"Error during final logging flush: {e}")
+
         logger.info("Graceful shutdown complete")
 
 

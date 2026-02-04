@@ -14,6 +14,8 @@ import json
 import logging
 import sys
 
+from cloudpathlib import AnyPath
+
 from buttermilk import bm, logger
 from buttermilk._core.config_bootstrap import init_async
 from buttermilk._core.vertex_batch import BatchJobManager, BatchJobManifest
@@ -36,8 +38,6 @@ async def fetch_results(job_id: str):
     # Strategy 1: Check stable persistent path (O(1) lookup)
     if bm.session_info.save_dir_base:
         try:
-            from cloudpathlib import AnyPath
-
             base = AnyPath(bm.session_info.save_dir_base)
             stable_path = base / bm.session_info.project_name / "_batches" / job_id / "manifest.json"
             if stable_path.exists():
@@ -189,7 +189,12 @@ async def fetch_results(job_id: str):
 
     except Exception as e:
         logger.error(f"Failed to parse results: {e}")
+        # Still attempt graceful shutdown on error
+        await bm.graceful_shutdown()
         sys.exit(1)
+
+    # Ensure all logs and traces are flushed before exiting
+    await bm.graceful_shutdown()
 
 
 def main():

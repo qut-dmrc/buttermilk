@@ -58,7 +58,7 @@ def submit(config: Path, json_output: bool) -> None:
 
     # Initialize buttermilk
     async def run_submit() -> dict:
-        bm = await init_async()
+        bm = await init_async(job="batch-submit")
 
         from buttermilk._core.vertex_batch import BatchJobManager, BatchRequest
 
@@ -102,7 +102,7 @@ def submit(config: Path, json_output: bool) -> None:
         if json_output:
             click.echo(json.dumps(result, indent=2))
         else:
-            click.echo(f"Job submitted successfully!")
+            click.echo("Job submitted successfully!")
             click.echo(f"  Job ID: {result['job_id']}")
             click.echo(f"  Vertex Job: {result['vertex_job_name']}")
             click.echo(f"  Model: {result['model']}")
@@ -140,7 +140,7 @@ def status(job_id: str, json_output: bool, save_dir: str | None) -> None:
     from buttermilk import init_async
 
     async def run_status() -> dict:
-        bm = await init_async()
+        bm = await init_async(job="batch-status")
 
         from buttermilk._core.vertex_batch import BatchJobManager
 
@@ -209,7 +209,7 @@ def fetch(job_id: str, json_output: bool, output: str | None, save_dir: str | No
     from buttermilk import init_async
 
     async def run_fetch() -> dict | list:
-        bm = await init_async()
+        bm = await init_async(job="batch-fetch")
 
         from buttermilk._core.vertex_batch import BatchJobManager
 
@@ -224,10 +224,10 @@ def fetch(job_id: str, json_output: bool, output: str | None, save_dir: str | No
     try:
         result = asyncio.run(run_fetch())
 
-        # Check if result is a list (success) or dict (status/error)
-        if isinstance(result, list):
-            # Convert BatchResult objects to dicts for JSON serialization
-            results_data = [r.model_dump() for r in result]
+        # Check if result is a success dict (with summary and results) or status/error dict
+        if isinstance(result, dict) and "summary" in result and "results" in result:
+            summary = result["summary"]
+            results_data = result["results"]
 
             if output:
                 output_path = Path(output)
@@ -235,9 +235,20 @@ def fetch(job_id: str, json_output: bool, output: str | None, save_dir: str | No
                 click.echo(f"Results saved to: {output_path}")
                 click.echo(f"Total results: {len(results_data)}")
             elif json_output:
-                click.echo(json.dumps(results_data, indent=2))
+                click.echo(json.dumps(result, indent=2))
             else:
-                click.echo(f"Fetched {len(results_data)} results")
+                click.echo("=" * 40)
+                click.echo("Batch Processing Summary")
+                click.echo(f"  Job ID: {summary['job_id']}")
+                click.echo(f"  Model: {summary['model']}")
+                click.echo(f"  Requests: {summary['request_count']}")
+                click.echo(f"  Success: {summary['success_count']}")
+                click.echo(f"  Errors: {summary['error_count']}")
+                if summary.get("total_cost_usd") is not None:
+                    click.echo(f"  Estimated Cost: ${summary['total_cost_usd']:.4f}")
+                click.echo("=" * 40)
+
+                click.echo(f"\nFetched {len(results_data)} results")
                 click.echo("\nFirst 3 results:")
                 for i, r in enumerate(results_data[:3]):
                     click.echo(f"\n  [{i + 1}] record_id: {r['record_id']}")
@@ -248,21 +259,23 @@ def fetch(job_id: str, json_output: bool, output: str | None, save_dir: str | No
                         click.echo(f"      response: {response_preview}")
                     if r.get("error"):
                         click.echo(f"      error: {r['error']}")
+                    if r.get("cost_usd") is not None:
+                        click.echo(f"      cost: ${r['cost_usd']:.6f}")
+
                 if len(results_data) > 3:
                     click.echo(f"\n  ... and {len(results_data) - 3} more results")
-                click.echo(f"\nUse -o <file> to save all results to a file")
+                click.echo("\nUse -o <file> to save all results to a file")
+        # Status or error dict (not processed yet)
+        elif json_output:
+            click.echo(json.dumps(result, indent=2))
         else:
-            # Status or error dict
-            if json_output:
-                click.echo(json.dumps(result, indent=2))
-            else:
-                status_val = result.get("status", result.get("state", "unknown"))
-                click.echo(f"Job {job_id}: {status_val}")
-                if result.get("error"):
-                    click.echo(f"  Error: {result['error']}")
-                elif result.get("request_count"):
-                    click.echo(f"  Requests: {result['request_count']}")
-                    click.echo("\nJob is still running. Check back later.")
+            status_val = result.get("status", result.get("state", "unknown"))
+            click.echo(f"Job {job_id}: {status_val}")
+            if result.get("error"):
+                click.echo(f"  Error: {result['error']}")
+            elif result.get("request_count"):
+                click.echo(f"  Requests: {result['request_count']}")
+                click.echo("\nJob is still running. Check back later.")
 
     except FileNotFoundError:
         msg = f"Job manifest not found for: {job_id}"
@@ -308,7 +321,7 @@ def list_jobs(json_output: bool, limit: int, save_dir: str | None) -> None:
     from buttermilk._core.vertex_batch import BatchJobManifest
 
     async def run_list() -> list[dict]:
-        bm = await init_async()
+        bm = await init_async(job="batch-list")
 
         effective_save_dir = save_dir or bm.session_info.save_dir
         if not effective_save_dir:

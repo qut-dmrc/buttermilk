@@ -28,6 +28,9 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
+from buttermilk.utils.pricing import calculate_token_cost
+from buttermilk.utils.save import scrub_serializable, upload_json, upload_text
+
 if TYPE_CHECKING:
     from google.genai.types import BatchJob
 
@@ -76,6 +79,7 @@ class BatchResult(BaseModel):
     model: str | None = None
     variant: str | dict[str, Any] | None = None
     processor_index: int | None = None
+    cost_usd: float | None = None
 
     @property
     def composite_key(self) -> str:
@@ -373,6 +377,44 @@ class BatchJobManager(BaseModel):
     # Track active jobs
     _active_jobs: dict[str, Any] = PrivateAttr(default_factory=dict)
 
+    def _save_text(self, content: str, uri: str, content_type: str = "text/plain") -> str:
+        """Save text content to GCS or local path.
+
+        Args:
+            content: Text content to save
+            uri: Target URI (gs:// or local)
+            content_type: MIME type
+
+        Returns:
+            The saved URI
+        """
+        if uri.startswith("gs://"):
+            return upload_text(content, uri=uri, content_type=content_type)
+
+        from cloudpathlib import AnyPath
+
+        path = AnyPath(uri)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+        return str(path)
+
+    def _save_json(self, data: Any, uri: str) -> str:
+        """Save JSON content to GCS or local path.
+
+        Args:
+            data: Data to serialize to JSON
+            uri: Target URI (gs:// or local)
+
+        Returns:
+            The saved URI
+        """
+        if uri.startswith("gs://"):
+            return upload_json(data, uri=uri)
+
+        # Local save
+        content = json.dumps(scrub_serializable(data), indent=2)
+        return self._save_text(content, uri, content_type="application/json")
+
     def _generate_job_id(self) -> str:
         """Generate a unique job ID."""
         return f"batch_{uuid.uuid4().hex[:12]}"
@@ -476,7 +518,7 @@ class BatchJobManager(BaseModel):
         uri = f"{batch_dir}/input.jsonl"
 
         # Use existing upload utility
-        result_uri = upload_text(content, uri=uri, content_type="application/jsonl")
+        result_uri = self._save_text(content, uri=uri, content_type="application/jsonl")
 
         logger.info(f"Uploaded batch input to {result_uri}")
         return result_uri
@@ -860,7 +902,7 @@ class BatchJobManager(BaseModel):
             requests=requests,
         )
 
-        upload_text(
+        self._save_text(
             manifest.model_dump_json(indent=2),
             uri=manifest_uri,
             content_type="application/json",
@@ -957,23 +999,119 @@ class BatchJobManager(BaseModel):
             "error": error,
         }
 
-    def fetch_results(self, job_id: str) -> list[BatchResult] | dict[str, Any]:
-        """Fetch batch results using only job_id.
+    def process_job_results(self, job_id: str) -> dict[str, Any]:
+        """Combine all results, join with manifest, calculate cost, and save to GCS.
 
-        Loads the manifest from GCS, checks job status, and parses results
+        This method:
+        1. Loads results from GCS (multiple files)
+        2. Joins with original requests from manifest
+        3. Calculates USD cost for each prediction
+        4. Saves combined outputs to job directory on GCS
+        5. Saves a full summary file with stats and total cost
+
+        Args:
+            job_id: Local job identifier
+
+        Returns:
+            Dictionary containing 'summary' and 'results' (list of dicts)
+        """
+        # 1. Load Manifest
+        manifest = self._load_manifest(job_id)
+
+        # 2. Parse Results
+        results = self.parse_results(manifest.output_uri, manifest.requests)
+
+        # 3. Join and Calculate Cost
+        combined_data = []
+        total_prompt_tokens = 0
+        total_completion_tokens = 0
+        total_cost_usd = 0.0
+
+        for result in results:
+            # Combine result with key manifest/request info
+            entry = {
+                "record_id": result.record_id,
+                "custom_id": result.custom_id,
+                "model": result.model or manifest.model,
+                "variant": result.variant,
+                "processor_index": result.processor_index,
+                "response": result.response,
+                "error": result.error,
+                "usage": result.usage,
+            }
+
+            # Calculate cost
+            if result.usage:
+                p_tokens, c_tokens, cost = calculate_token_cost(
+                    model=result.model or manifest.model,
+                    usage_dict=result.usage,
+                )
+                result.cost_usd = cost
+                entry["cost_usd"] = cost
+                total_prompt_tokens += p_tokens
+                total_completion_tokens += c_tokens
+                total_cost_usd += cost
+
+            combined_data.append(entry)
+
+        # 4. Save Combined Results to GCS
+        batch_dir = self._resolve_batch_dir(job_id)
+        combined_uri = f"{batch_dir}/combined_results.jsonl"
+        self._save_json(combined_data, uri=combined_uri)
+
+        # 5. Create and Save Summary
+        summary = {
+            "job_id": job_id,
+            "vertex_job_name": manifest.vertex_job_name,
+            "model": manifest.model,
+            "submitted_at": manifest.submitted_at,
+            "processed_at": datetime.datetime.now(datetime.UTC).isoformat(),
+            "request_count": manifest.request_count,
+            "results_count": len(results),
+            "success_count": sum(1 for r in results if not r.error),
+            "error_count": sum(1 for r in results if r.error),
+            "total_prompt_tokens": total_prompt_tokens,
+            "total_completion_tokens": total_completion_tokens,
+            "total_cost_usd": total_cost_usd,
+            "combined_results_uri": combined_uri,
+        }
+
+        summary_uri = f"{batch_dir}/summary.json"
+        self._save_text(
+            json.dumps(scrub_serializable(summary), indent=2),
+            uri=summary_uri,
+            content_type="application/json",
+        )
+
+        logger.info(
+            f"Processed results for job {job_id}. Total cost: ${total_cost_usd:.4f}. Summary at {summary_uri}",
+            job_id=job_id,
+            total_cost=total_cost_usd,
+            summary_uri=summary_uri,
+        )
+
+        return {
+            "summary": summary,
+            "results": combined_data,
+            "batch_results": results,
+        }
+
+    def fetch_results(self, job_id: str) -> dict[str, Any]:
+        """Fetch and process batch results using only job_id.
+
+        Loads the manifest from GCS, checks job status, and processes results
         if the job has completed successfully.
 
         Args:
             job_id: Local job identifier (e.g., "batch_abc123")
 
         Returns:
-            If job succeeded: List of BatchResult objects
+            If job succeeded: Summary and results dict (from process_job_results)
             If job still running: Dictionary with status info
             If job failed: Dictionary with error info
 
         Raises:
-            FileNotFoundError: If manifest not found for job_id (invalid or
-                from different session)
+            FileNotFoundError: If manifest not found for job_id
         """
         from google.genai.types import JobState
 
@@ -992,8 +1130,8 @@ class BatchJobManager(BaseModel):
 
         # Handle different job states
         if job.state == JobState.JOB_STATE_SUCCEEDED:
-            logger.info(f"Job {job_id} completed, parsing results")
-            return self.parse_results(manifest.output_uri, manifest.requests)
+            logger.info(f"Job {job_id} completed, processing results")
+            return self.process_job_results(job_id)
 
         elif job.state == JobState.JOB_STATE_FAILED:
             return {
