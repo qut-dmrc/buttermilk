@@ -127,13 +127,20 @@ def submit(config: Path, json_output: bool) -> None:
     type=str,
     help="GCS save directory (auto-detected from session if not provided)",
 )
-def status(job_id: str, json_output: bool, save_dir: str | None) -> None:
+@click.option(
+    "--search",
+    "-s",
+    is_flag=True,
+    help="Search across all sessions in the bucket to find the manifest",
+)
+def status(job_id: str, json_output: bool, save_dir: str | None, search: bool) -> None:
     """Check the status of a batch job.
 
     JOB_ID is the job identifier returned by the submit command.
 
     Example:
         bm batch status batch_abc123def456
+        bm batch status batch_abc123def456 --search
     """
     import asyncio
 
@@ -150,7 +157,7 @@ def status(job_id: str, json_output: bool, save_dir: str | None) -> None:
         if save_dir:
             bm.session_info.save_dir = save_dir
 
-        return manager.get_job_status(job_id)
+        return manager.get_job_status(job_id, search=search)
 
     try:
         result = asyncio.run(run_status())
@@ -194,7 +201,13 @@ def status(job_id: str, json_output: bool, save_dir: str | None) -> None:
     type=str,
     help="GCS save directory (auto-detected from session if not provided)",
 )
-def fetch(job_id: str, json_output: bool, output: str | None, save_dir: str | None) -> None:
+@click.option(
+    "--search",
+    "-s",
+    is_flag=True,
+    help="Search across all sessions in the bucket to find the manifest",
+)
+def fetch(job_id: str, json_output: bool, output: str | None, save_dir: str | None, search: bool) -> None:
     """Fetch results from a completed batch job.
 
     JOB_ID is the job identifier returned by the submit command.
@@ -202,6 +215,7 @@ def fetch(job_id: str, json_output: bool, output: str | None, save_dir: str | No
 
     Example:
         bm batch fetch batch_abc123def456
+        bm batch fetch batch_abc123def456 --search
         bm batch fetch batch_abc123def456 -o results.json
     """
     import asyncio
@@ -219,7 +233,7 @@ def fetch(job_id: str, json_output: bool, output: str | None, save_dir: str | No
         if save_dir:
             bm.session_info.save_dir = save_dir
 
-        return manager.fetch_results(job_id)
+        return manager.fetch_results(job_id, search=search)
 
     try:
         result = asyncio.run(run_fetch())
