@@ -41,11 +41,17 @@ class BatchRequest(BaseModel):
         custom_id: Unique identifier for mapping results back to input
         record_id: Original record ID from the source data
         messages: The messages to send to the model (LiteLLM format)
+        model: Model identifier used for this request (for result analysis)
+        variant: Variant identifier (e.g., instruction type, template name)
+        processor_index: Index of this processor in a multi-processor pipeline
     """
 
     custom_id: str
     record_id: str
     messages: list[dict[str, Any]]
+    model: str | None = None
+    variant: str | None = None
+    processor_index: int | None = None
 
 
 class BatchResult(BaseModel):
@@ -57,6 +63,9 @@ class BatchResult(BaseModel):
         response: The model's response content
         error: Error message if request failed
         usage: Token usage information
+        model: Model identifier used for this request (from BatchRequest)
+        variant: Variant identifier (from BatchRequest)
+        processor_index: Processor index (from BatchRequest)
     """
 
     custom_id: str
@@ -64,6 +73,28 @@ class BatchResult(BaseModel):
     response: str | None = None
     error: str | None = None
     usage: dict[str, Any] | None = None
+    model: str | None = None
+    variant: str | None = None
+    processor_index: int | None = None
+
+    @property
+    def composite_key(self) -> str:
+        """Generate a composite key for unique identification across variants.
+
+        Format: {record_id}[_{variant}][_{model}][_{processor_index}]
+        Only includes non-None components.
+
+        Returns:
+            str: Composite key for unique identification
+        """
+        parts = [self.record_id]
+        if self.variant:
+            parts.append(self.variant)
+        if self.model:
+            parts.append(self.model)
+        if self.processor_index is not None:
+            parts.append(str(self.processor_index))
+        return "_".join(parts)
 
 
 # =============================================================================
@@ -702,6 +733,10 @@ class BatchJobManager(BaseModel):
                             response=self._extract_response(entry),
                             error=error_msg,
                             usage=entry.get("response", {}).get("usage"),
+                            # Propagate metadata from request for unique identification
+                            model=request.model if request else None,
+                            variant=request.variant if request else None,
+                            processor_index=request.processor_index if request else None,
                         )
                         results.append(result)
                     except json.JSONDecodeError as e:

@@ -215,10 +215,33 @@ class VertexBatchProcessor(BatchProcessorCore):
             # BatchJobManager will convert this to provider-specific (Gemini/Claude) format
             litellm_messages = autogen_to_litellm_messages(messages)
 
+            # Extract variant from record metadata if present (set by VariantProcessor)
+            variant = None
+            if record.metadata:
+                variant_info = record.metadata.get("variant", {})
+                if isinstance(variant_info, dict):
+                    # VariantProcessor sets variant.processor_class or variant.stage
+                    variant = variant_info.get("stage") or variant_info.get("processor_class")
+                elif isinstance(variant_info, str):
+                    variant = variant_info
+                # Also check for explicit variant_name or instruction_type
+                if not variant:
+                    variant = record.metadata.get("variant_name") or record.metadata.get("instruction_type")
+
+            # Extract processor_index from variant metadata if present
+            processor_index = None
+            if record.metadata:
+                variant_info = record.metadata.get("variant", {})
+                if isinstance(variant_info, dict):
+                    processor_index = variant_info.get("index")
+
             req = BatchRequest(
                 custom_id=str(uuid.uuid4()),
                 record_id=record.record_id,
                 messages=litellm_messages,
+                model=self.model,
+                variant=variant or self.template,  # Fall back to template name as variant
+                processor_index=processor_index,
             )
             requests.append(req)
 
