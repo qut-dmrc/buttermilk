@@ -68,9 +68,9 @@ class VertexBatchProcessor(BatchProcessorCore):
         default=True,
         description="Fail if template parameters are unfilled",
     )
-    max_tokens: int = Field(
-        default=4096,
-        description="Maximum tokens for response",
+    max_tokens: int | None = Field(
+        default=None,
+        description="Maximum tokens for response. If None, read from model config (max_output_tokens).",
     )
 
     # Batch processing configuration
@@ -110,6 +110,43 @@ class VertexBatchProcessor(BatchProcessorCore):
             output_model=self.output_model,
         )
 
+    def _get_resolved_max_tokens(self) -> int:
+        """Resolve max_tokens from explicit config or model registry.
+
+        Returns:
+            max_tokens value - explicit if set, otherwise from model config,
+            falling back to 4096 as default.
+        """
+        # If explicitly set, use that value
+        if self.max_tokens is not None:
+            return self.max_tokens
+
+        # Try to read from model config
+        from buttermilk import bm
+
+        if self.model in bm.llms.connections:
+            config = bm.llms.connections[self.model]
+            config_max_tokens = config.configs.get("max_output_tokens")
+            if config_max_tokens is not None:
+                return config_max_tokens
+
+        # Default fallback
+        return 4096
+
+    def _get_resolved_region(self) -> str | None:
+        """Resolve region from model registry config.
+
+        Returns:
+            Region string from model config, or None if not configured.
+        """
+        from buttermilk import bm
+
+        if self.model in bm.llms.connections:
+            config = bm.llms.connections[self.model]
+            return config.configs.get("region")
+
+        return None
+
     def _ensure_client(self) -> None:
         """Lazily initialize the LLM client via buttermilk infrastructure."""
         if self._client is None:
@@ -125,11 +162,14 @@ class VertexBatchProcessor(BatchProcessorCore):
 
             from buttermilk import bm
 
-            # Resolve short alias to full model name to check if it's Gemini 3
+            # Resolve short alias to full model name and get config
             resolved_model = self.model
+            resolved_region = self._get_resolved_region()
+
             if self.model in bm.llms.connections:
                 config = bm.llms.connections[self.model]
-                resolved_model = config.configs.get("model", self.model)
+                if "model" in config.configs:
+                    resolved_model = config.configs["model"]
 
             # Gemini 3 models require the global endpoint
             if "gemini-3" in resolved_model.lower():
@@ -140,6 +180,15 @@ class VertexBatchProcessor(BatchProcessorCore):
                     location="global",
                 )
                 logger.info(f"Using global endpoint for Gemini 3 model: {self.model} -> {resolved_model}")
+            elif resolved_region:
+                # Use region from model config if available
+                project_id = bm.cloud_manager.gcp_cloud_cfg.project_id
+                client = genai.Client(
+                    vertexai=True,
+                    project=project_id,
+                    location=resolved_region,
+                )
+                logger.info(f"Using region {resolved_region} for model: {self.model}")
             else:
                 client = bm.genai
 
@@ -409,7 +458,8 @@ class VertexBatchProcessor(BatchProcessorCore):
 
         # Build JSONL content using the same logic as real submission
         manager = self._ensure_manager()
-        jsonl_content = manager.build_jsonl(requests, self.model)
+        resolved_max_tokens = self._get_resolved_max_tokens()
+        jsonl_content = manager.build_jsonl(requests, self.model, max_tokens=resolved_max_tokens)
 
         # Generate a dry-run job ID and upload to GCS
         dry_run_job_id = f"dry_run_{uuid.uuid4().hex[:12]}"

@@ -405,17 +405,19 @@ class BatchJobManager(BaseModel):
         self,
         requests: list[BatchRequest],
         model: str,
+        max_tokens: int | None = None,
     ) -> str:
         """Build JSONL content for batch job.
 
         Args:
             requests: List of batch requests (each with messages in LiteLLM format)
             model: Model identifier (determines format)
+            max_tokens: Maximum tokens for response (passed to Claude converter)
 
         Returns:
             JSONL string ready for upload
         """
-        converter = get_message_converter(model)
+        converter = get_message_converter(model, max_tokens=max_tokens)
         lines = [json.dumps(converter.build_request(request)) for request in requests]
         return "\n".join(lines)
 

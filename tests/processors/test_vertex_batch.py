@@ -343,3 +343,148 @@ class TestCriteriaCacheManager:
         assert len(caches) == 1
         assert caches[0]["name"] == "cache1"
         assert caches[0]["display_name"] == "Test 1"
+
+
+class TestVertexBatchProcessorConfigInheritance:
+    """Tests for VertexBatchProcessor inheriting config from model registry."""
+
+    @pytest.fixture
+    def mock_model_config(self):
+        """Create mock model config with max_output_tokens and region."""
+        mock_config = MagicMock()
+        mock_config.configs = {
+            "model": "claude-sonnet-4-20250514",
+            "max_output_tokens": 64000,
+            "region": "us-east5",
+            "project_id": "test-project",
+        }
+        return mock_config
+
+    def test_inherits_max_tokens_from_model_config(self, mock_model_config):
+        """VertexBatchProcessor should read max_output_tokens from model config.
+
+        When max_tokens is not explicitly set (None), the processor should
+        read max_output_tokens from bm.llms.connections[model].configs.
+        """
+        from buttermilk.processors.vertex_batch import VertexBatchProcessor
+
+        # Create processor with max_tokens=None
+        processor = VertexBatchProcessor(
+            model="claude-sonnet",
+            template="test_template",
+            max_tokens=None,  # Should inherit from config
+        )
+
+        # Mock get_bm() to return a mock BM with llms.connections
+        mock_bm_instance = MagicMock()
+        mock_bm_instance.llms.connections = {"claude-sonnet": mock_model_config}
+
+        with patch("buttermilk._core.dmrc.get_bm", return_value=mock_bm_instance):
+            # Get the resolved max_tokens value
+            resolved_max_tokens = processor._get_resolved_max_tokens()
+
+            assert resolved_max_tokens == 64000
+
+    def test_explicit_max_tokens_overrides_config(self, mock_model_config):
+        """Explicit max_tokens should override model config.
+
+        When max_tokens is explicitly set, it should take precedence over
+        the max_output_tokens value from model config.
+        """
+        from buttermilk.processors.vertex_batch import VertexBatchProcessor
+
+        # Create processor with explicit max_tokens
+        processor = VertexBatchProcessor(
+            model="claude-sonnet",
+            template="test_template",
+            max_tokens=4096,  # Explicit override
+        )
+
+        # Mock get_bm() to return a mock BM with llms.connections
+        mock_bm_instance = MagicMock()
+        mock_bm_instance.llms.connections = {"claude-sonnet": mock_model_config}
+
+        with patch("buttermilk._core.dmrc.get_bm", return_value=mock_bm_instance):
+            # Get the resolved max_tokens value
+            resolved_max_tokens = processor._get_resolved_max_tokens()
+
+            # Explicit value should override config value
+            assert resolved_max_tokens == 4096
+
+    def test_inherits_region_from_model_config(self, mock_model_config):
+        """VertexBatchProcessor should read region from model config.
+
+        The processor should read region from bm.llms.connections[model].configs
+        and use it for all models, not just Gemini 3.
+        """
+        from buttermilk.processors.vertex_batch import VertexBatchProcessor
+
+        processor = VertexBatchProcessor(
+            model="claude-sonnet",
+            template="test_template",
+        )
+
+        # Mock get_bm() to return a mock BM with llms.connections
+        mock_bm_instance = MagicMock()
+        mock_bm_instance.llms.connections = {"claude-sonnet": mock_model_config}
+
+        with patch("buttermilk._core.dmrc.get_bm", return_value=mock_bm_instance):
+            # Get the resolved region value
+            resolved_region = processor._get_resolved_region()
+
+            assert resolved_region == "us-east5"
+
+    def test_build_jsonl_passes_max_tokens_to_claude(self):
+        """build_jsonl should pass max_tokens for Claude models.
+
+        When building JSONL for Claude batch requests, the max_tokens
+        parameter should be passed through to the message converter.
+        """
+        from buttermilk._core.vertex_batch import BatchJobManager, BatchRequest
+
+        mock_client = MagicMock()
+        manager = BatchJobManager(client=mock_client)
+
+        requests = [
+            BatchRequest(
+                custom_id="rec1",
+                record_id="rec1",
+                messages=[{"role": "user", "content": "Test content"}],
+            ),
+        ]
+
+        # Build JSONL with explicit max_tokens
+        jsonl = manager.build_jsonl(requests, model="claude-sonnet-4", max_tokens=64000)
+
+        lines = jsonl.strip().split("\n")
+        entry = json.loads(lines[0])
+
+        # Verify max_tokens is in the request
+        assert entry["request"]["max_tokens"] == 64000
+
+    def test_build_jsonl_uses_default_max_tokens_when_not_specified(self):
+        """build_jsonl should use default max_tokens when not specified.
+
+        When max_tokens is None, the Claude converter should use its default value.
+        """
+        from buttermilk._core.vertex_batch import BatchJobManager, BatchRequest
+
+        mock_client = MagicMock()
+        manager = BatchJobManager(client=mock_client)
+
+        requests = [
+            BatchRequest(
+                custom_id="rec1",
+                record_id="rec1",
+                messages=[{"role": "user", "content": "Test content"}],
+            ),
+        ]
+
+        # Build JSONL without explicit max_tokens
+        jsonl = manager.build_jsonl(requests, model="claude-sonnet-4")
+
+        lines = jsonl.strip().split("\n")
+        entry = json.loads(lines[0])
+
+        # Verify default max_tokens is present (4096 is the default)
+        assert entry["request"]["max_tokens"] == 4096
