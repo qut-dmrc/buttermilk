@@ -1,0 +1,343 @@
+{
+  "session_id": "contested-analysis-demo",
+  "created_at": "2025-01-15T14:00:00.000000+00:00",
+  "last_updated": "2025-01-15T14:08:00.000000+00:00",
+  "flow_status": "completed",
+  "last_activity": "2025-01-15T14:08:00.000000+00:00",
+  "parameters": {
+    "flow": "toxicity",
+    "dataset": "tja",
+    "criteria": "trans_simplified"
+  },
+  "demo_metadata": {
+    "title": "Contested Analysis: Agent Disagreement & Resolution",
+    "description": "See how agents handle a borderline case where initial assessments differ, requiring deeper analysis and debate to reach consensus.",
+    "duration": "8 mins"
+  },
+  "messages": [
+    {
+      "type": "system_message",
+      "message_id": "contest-sys-001",
+      "preview": "Starting toxicity analysis flow with trans_simplified criteria...",
+      "timestamp": "2025-01-15T14:00:00.000000",
+      "outputs": {
+        "content": "Starting toxicity analysis flow with trans_simplified criteria..."
+      }
+    },
+    {
+      "type": "record",
+      "message_id": "contest-record-001",
+      "preview": "Loaded record for analysis",
+      "timestamp": "2025-01-15T14:00:05.000000",
+      "outputs": {
+        "content": "**Opinion Piece**: The Debate We Need to Have\n\n**Content**: As society evolves, we must ask difficult questions about how we balance individual rights with community standards. Some argue that recent policy changes have moved too quickly, leaving many feeling unheard. 'Traditional values are being erased,' one community leader stated. Others counter that progress requires challenging outdated norms. The truth, as always, lies somewhere in between.\n\nWhat's clear is that this conversation will continue, and all voices deserve to be heard respectfully.",
+        "metadata": {
+          "title": "The Debate We Need to Have",
+          "source": "Opinion Weekly",
+          "date": "2025-01-13",
+          "type": "opinion"
+        }
+      },
+      "agent_info": {
+        "agent_id": "FETCH-DEMO02",
+        "role": "FETCH",
+        "agent_name": "FETCH FETCH-DEMO02",
+        "description": "Data fetcher that retrieves records from configured data sources"
+      }
+    },
+    {
+      "type": "chat_message",
+      "message_id": "contest-judge-001",
+      "preview": "This opinion piece presents a balanced framing of societal debates. While it includes a quote about 'traditional values being erased,' this is presented as one viewpoint in a larger discussion, not an endorsement.",
+      "timestamp": "2025-01-15T14:00:45.000000",
+      "outputs": {
+        "prediction": false,
+        "confidence": 0.72,
+        "uncertainty": "medium",
+        "reasoning": "The piece attempts balance and explicitly calls for respectful dialogue. However, the framing could be seen as legitimizing certain perspectives that may be harmful to transgender individuals. My confidence is moderate."
+      },
+      "agent_info": {
+        "agent_id": "JUDGE-ALPHA",
+        "role": "JUDGE",
+        "agent_name": "JUDGE JUDGE-ALPHA",
+        "description": "Primary content evaluator",
+        "parameters": {
+          "model": "claude-3-5-sonnet-20241022",
+          "criteria": "trans_simplified"
+        }
+      },
+      "prompt_tokens": 950,
+      "completion_tokens": 165,
+      "cost_usd": 0.0052
+    },
+    {
+      "type": "chat_message",
+      "message_id": "contest-judge-002",
+      "preview": "I have concerns about this piece. The 'both sides' framing on issues of human rights can itself be a form of harm. Phrases like 'traditional values being erased' often function as coded anti-trans rhetoric.",
+      "timestamp": "2025-01-15T14:01:30.000000",
+      "outputs": {
+        "prediction": true,
+        "confidence": 0.65,
+        "uncertainty": "high",
+        "reasoning": "While not overtly hateful, this style of opinion piece can normalize harmful viewpoints by presenting discrimination as a legitimate 'side' of a debate. The vagueness is concerning - what 'policies' and 'values' are being referenced?"
+      },
+      "agent_info": {
+        "agent_id": "JUDGE-BETA",
+        "role": "JUDGE",
+        "agent_name": "JUDGE JUDGE-BETA",
+        "description": "Secondary content evaluator with focus on contextual analysis",
+        "parameters": {
+          "model": "gpt-4o",
+          "criteria": "trans_simplified"
+        }
+      },
+      "prompt_tokens": 980,
+      "completion_tokens": 178,
+      "cost_usd": 0.0062
+    },
+    {
+      "type": "chat_message",
+      "message_id": "contest-judge-003",
+      "preview": "I'm aligned with JUDGE-ALPHA on this assessment. While JUDGE-BETA raises valid concerns about 'both sides' framing, the piece explicitly advocates for respectful dialogue and doesn't directly attack any group.",
+      "timestamp": "2025-01-15T14:02:15.000000",
+      "outputs": {
+        "prediction": false,
+        "confidence": 0.68,
+        "uncertainty": "medium",
+        "reasoning": "This is a borderline case. The content is not overtly toxic, but uses rhetorical patterns that can enable harm. Given the explicit call for respect, I lean toward non-toxic, but with reservations."
+      },
+      "agent_info": {
+        "agent_id": "JUDGE-GAMMA",
+        "role": "JUDGE",
+        "agent_name": "JUDGE JUDGE-GAMMA",
+        "description": "Tertiary evaluator specializing in harm assessment",
+        "parameters": {
+          "model": "gemini-1.5-pro",
+          "criteria": "trans_simplified"
+        }
+      },
+      "prompt_tokens": 1050,
+      "completion_tokens": 145,
+      "cost_usd": 0.0048
+    },
+    {
+      "type": "differences",
+      "message_id": "contest-diff-001",
+      "preview": "Disagreement detected: 2 agents say NOT TOXIC, 1 agent says TOXIC",
+      "timestamp": "2025-01-15T14:03:00.000000",
+      "outputs": {
+        "conclusion": "Agents disagree on whether 'both sides' framing constitutes harm",
+        "divergences": [
+          {
+            "topic": "Interpretation of 'both sides' rhetoric",
+            "positions": [
+              {
+                "position": "'Both sides' framing on human rights normalizes harmful viewpoints",
+                "experts": [{"name": "JUDGE-BETA", "answer_id": "contest-judge-002"}]
+              },
+              {
+                "position": "Explicit call for respect mitigates potential harm from framing",
+                "experts": [
+                  {"name": "JUDGE-ALPHA", "answer_id": "contest-judge-001"},
+                  {"name": "JUDGE-GAMMA", "answer_id": "contest-judge-003"}
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "agent_info": {
+        "agent_id": "DIFF-ANALYZER",
+        "role": "DIFF",
+        "agent_name": "DIFF DIFF-ANALYZER",
+        "description": "Identifies and analyzes points of disagreement between judges"
+      }
+    },
+    {
+      "type": "system_prompt",
+      "message_id": "contest-prompt-001",
+      "preview": "Agents disagree. Request additional analysis?",
+      "timestamp": "2025-01-15T14:03:30.000000",
+      "outputs": {
+        "content": "The judges have reached different conclusions (2 NOT TOXIC, 1 TOXIC). Average confidence is 68%. Would you like to request additional analysis to resolve the disagreement?",
+        "options": ["Request Deep Analysis", "Accept Majority Vote", "Manual Review"]
+      },
+      "agent_info": {
+        "agent_id": "MANAGER",
+        "role": "MANAGER",
+        "agent_name": "Flow Manager",
+        "description": "Coordinates the analysis flow"
+      }
+    },
+    {
+      "type": "user_response",
+      "message_id": "contest-user-001",
+      "preview": "Request Deep Analysis",
+      "timestamp": "2025-01-15T14:04:00.000000",
+      "outputs": {
+        "selection": "Request Deep Analysis"
+      },
+      "agent_info": {
+        "agent_id": "user",
+        "role": "user",
+        "agent_name": "user",
+        "description": "Human operator"
+      }
+    },
+    {
+      "type": "chat_message",
+      "message_id": "contest-research-001",
+      "preview": "Conducting literature review on 'both sides' framing and harm...\n\nRelevant findings:\n1. False balance in journalism can normalize extreme positions\n2. However, context matters - explicit calls for civility can signal good faith\n3. Key factor: does the piece platform specific harmful claims, or discuss debate abstractly?",
+      "timestamp": "2025-01-15T14:05:00.000000",
+      "outputs": {
+        "literature": [
+          {
+            "summary": "False balance can harm marginalized groups by treating their rights as debatable",
+            "citation": "Media Framing Studies, 2023"
+          },
+          {
+            "summary": "Context and explicit framing significantly impact potential for harm",
+            "citation": "Digital Discourse Analysis, 2024"
+          }
+        ],
+        "response": "The research suggests that while 'both sides' framing can be harmful, this piece's explicit advocacy for respect and lack of specific harmful claims places it in a lower-risk category."
+      },
+      "agent_info": {
+        "agent_id": "RESEARCHER-MAIN",
+        "role": "RESEARCHER",
+        "agent_name": "RESEARCHER RESEARCHER-MAIN",
+        "description": "Conducts background research to inform analysis",
+        "parameters": {
+          "model": "claude-3-5-sonnet-20241022"
+        }
+      },
+      "prompt_tokens": 1500,
+      "completion_tokens": 280,
+      "cost_usd": 0.0095
+    },
+    {
+      "type": "chat_message",
+      "message_id": "contest-judge-004",
+      "preview": "After reviewing the research, I'm updating my assessment. The piece doesn't platform specific harmful claims - it discusses the existence of debate abstractly. While imperfect, this doesn't meet our threshold for toxic content.",
+      "timestamp": "2025-01-15T14:06:00.000000",
+      "outputs": {
+        "prediction": false,
+        "confidence": 0.78,
+        "uncertainty": "low",
+        "reasoning": "Updated assessment based on research. The key distinction is that this piece advocates for civil discourse without amplifying specific harmful narratives. Revised to NOT TOXIC."
+      },
+      "agent_info": {
+        "agent_id": "JUDGE-BETA",
+        "role": "JUDGE",
+        "agent_name": "JUDGE JUDGE-BETA",
+        "description": "Secondary content evaluator with focus on contextual analysis",
+        "parameters": {
+          "model": "gpt-4o",
+          "criteria": "trans_simplified"
+        }
+      },
+      "prompt_tokens": 1200,
+      "completion_tokens": 140,
+      "cost_usd": 0.0058
+    },
+    {
+      "type": "chat_message",
+      "message_id": "contest-synth-001",
+      "preview": "Synthesizing updated judgments...\n\nAfter deep analysis, all agents now agree: this content is NOT TOXIC.\n\nKey resolution:\n- Initial disagreement on 'both sides' framing\n- Research clarified: abstract discussion of debate differs from platforming harm\n- Explicit call for respect is meaningful signal\n\nFinal consensus confidence: 73%",
+      "timestamp": "2025-01-15T14:06:45.000000",
+      "outputs": {
+        "consensus": false,
+        "average_confidence": 0.73,
+        "agreement_rate": 1.0,
+        "summary": "After additional analysis, all evaluators agree the content does not meet the threshold for toxic classification, though they note it represents a borderline case worth monitoring."
+      },
+      "agent_info": {
+        "agent_id": "SYNTH-MAIN",
+        "role": "SYNTHESISER",
+        "agent_name": "SYNTHESISER SYNTH-MAIN",
+        "description": "Aggregates and synthesizes judgments from multiple evaluators",
+        "parameters": {
+          "model": "claude-3-5-sonnet-20241022"
+        }
+      },
+      "prompt_tokens": 1800,
+      "completion_tokens": 220,
+      "cost_usd": 0.0098
+    },
+    {
+      "type": "system_prompt",
+      "message_id": "contest-prompt-002",
+      "preview": "Accept revised consensus?",
+      "timestamp": "2025-01-15T14:07:00.000000",
+      "outputs": {
+        "content": "After deep analysis, all agents now agree: NOT TOXIC with 73% confidence. This is a borderline case. Accept result?",
+        "options": ["Accept", "Flag for Review", "Override to Toxic"]
+      },
+      "agent_info": {
+        "agent_id": "MANAGER",
+        "role": "MANAGER",
+        "agent_name": "Flow Manager",
+        "description": "Coordinates the analysis flow"
+      }
+    },
+    {
+      "type": "user_response",
+      "message_id": "contest-user-002",
+      "preview": "Flag for Review",
+      "timestamp": "2025-01-15T14:07:30.000000",
+      "outputs": {
+        "selection": "Flag for Review"
+      },
+      "agent_info": {
+        "agent_id": "user",
+        "role": "user",
+        "agent_name": "user",
+        "description": "Human operator"
+      }
+    },
+    {
+      "type": "summary_result",
+      "message_id": "contest-summary-001",
+      "preview": "Analysis complete. Result: NOT TOXIC (Flagged for human review)",
+      "timestamp": "2025-01-15T14:08:00.000000",
+      "outputs": {
+        "type": "summary_result",
+        "run_id": "contest-run-001",
+        "record_id": "contest-record-001",
+        "final_prediction": false,
+        "final_confidence": 0.73,
+        "flagged_for_review": true,
+        "predictions": [
+          {
+            "agent_id": "JUDGE-ALPHA",
+            "prediction": false,
+            "score": 0.72
+          },
+          {
+            "agent_id": "JUDGE-BETA",
+            "prediction": false,
+            "score": 0.78,
+            "notes": "Updated after deep analysis"
+          },
+          {
+            "agent_id": "JUDGE-GAMMA",
+            "prediction": false,
+            "score": 0.68
+          }
+        ],
+        "avg_score": 0.73,
+        "agreement_rate": 1.0
+      }
+    },
+    {
+      "type": "system_message",
+      "message_id": "contest-sys-002",
+      "preview": "Flow completed. Total tokens: 7480, Total cost: $0.0413. Record flagged for human review.",
+      "timestamp": "2025-01-15T14:08:00.000000",
+      "outputs": {
+        "content": "Flow completed. Total tokens: 7480, Total cost: $0.0413. Record flagged for human review."
+      }
+    }
+  ],
+  "completed_at": "2025-01-15T14:08:00.000000+00:00"
+}

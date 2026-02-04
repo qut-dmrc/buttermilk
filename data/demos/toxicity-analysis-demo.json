@@ -1,0 +1,218 @@
+{
+  "session_id": "toxicity-analysis-demo",
+  "created_at": "2025-01-15T10:00:00.000000+00:00",
+  "last_updated": "2025-01-15T10:05:30.000000+00:00",
+  "flow_status": "completed",
+  "last_activity": "2025-01-15T10:05:30.000000+00:00",
+  "parameters": {
+    "flow": "toxicity",
+    "dataset": "tja",
+    "criteria": "trans_simplified"
+  },
+  "demo_metadata": {
+    "title": "Toxicity Analysis: Multi-Agent Consensus",
+    "description": "Watch multiple AI agents analyze a piece of content for potential toxicity, debate their findings, and reach a consensus decision.",
+    "duration": "5 mins"
+  },
+  "messages": [
+    {
+      "type": "system_message",
+      "message_id": "demo-sys-001",
+      "preview": "Starting toxicity analysis flow with trans_simplified criteria...",
+      "timestamp": "2025-01-15T10:00:00.000000",
+      "outputs": {
+        "content": "Starting toxicity analysis flow with trans_simplified criteria..."
+      }
+    },
+    {
+      "type": "record",
+      "message_id": "demo-record-001",
+      "preview": "Loaded record for analysis",
+      "timestamp": "2025-01-15T10:00:05.000000",
+      "outputs": {
+        "content": "**Article Title**: Local School Board Debates New Policy\n\n**Content**: The school board met Tuesday night to discuss changes to the student dress code policy. Several parents spoke during the public comment period, with opinions divided on the proposed changes. Board member Johnson noted that 'we need to consider all students' comfort and safety.' The vote is scheduled for next month's meeting.",
+        "metadata": {
+          "title": "Local School Board Debates New Policy",
+          "source": "Local News Daily",
+          "date": "2025-01-14"
+        }
+      },
+      "agent_info": {
+        "agent_id": "FETCH-DEMO01",
+        "role": "FETCH",
+        "agent_name": "FETCH FETCH-DEMO01",
+        "description": "Data fetcher that retrieves records from configured data sources"
+      }
+    },
+    {
+      "type": "chat_message",
+      "message_id": "demo-judge-001",
+      "preview": "I've reviewed this article about a school board meeting discussing dress code policy. The content appears to be straightforward local news reporting without any inflammatory language or targeting of specific groups.",
+      "timestamp": "2025-01-15T10:00:30.000000",
+      "outputs": {
+        "prediction": false,
+        "confidence": 0.95,
+        "reasoning": "This is standard local government reporting. The article presents multiple viewpoints in a balanced manner and uses neutral language throughout."
+      },
+      "agent_info": {
+        "agent_id": "JUDGE-ALPHA",
+        "role": "JUDGE",
+        "agent_name": "JUDGE JUDGE-ALPHA",
+        "description": "Primary content evaluator",
+        "parameters": {
+          "model": "claude-3-5-sonnet-20241022",
+          "criteria": "trans_simplified"
+        }
+      },
+      "prompt_tokens": 850,
+      "completion_tokens": 120,
+      "cost_usd": 0.0042
+    },
+    {
+      "type": "chat_message",
+      "message_id": "demo-judge-002",
+      "preview": "Analyzing for potential coded language or dog whistles in the context of trans-related discourse. The phrase 'consider all students' comfort and safety' could potentially be interpreted differently depending on context.",
+      "timestamp": "2025-01-15T10:01:00.000000",
+      "outputs": {
+        "prediction": false,
+        "confidence": 0.85,
+        "uncertainty": "low",
+        "reasoning": "While certain phrases could theoretically be used as coded language in some contexts, there's no clear indication of harmful intent here. The article appears to be genuine news coverage."
+      },
+      "agent_info": {
+        "agent_id": "JUDGE-BETA",
+        "role": "JUDGE",
+        "agent_name": "JUDGE JUDGE-BETA",
+        "description": "Secondary content evaluator with focus on contextual analysis",
+        "parameters": {
+          "model": "gpt-4o",
+          "criteria": "trans_simplified"
+        }
+      },
+      "prompt_tokens": 920,
+      "completion_tokens": 145,
+      "cost_usd": 0.0058
+    },
+    {
+      "type": "chat_message",
+      "message_id": "demo-judge-003",
+      "preview": "I concur with my colleagues. Looking at this through the lens of potential harm to transgender individuals, I don't see content that would constitute harassment, misinformation, or discriminatory messaging.",
+      "timestamp": "2025-01-15T10:01:30.000000",
+      "outputs": {
+        "prediction": false,
+        "confidence": 0.92,
+        "reasoning": "The article reports on a democratic process without editorializing or using language that could be harmful to any group. Standard journalism practices are followed."
+      },
+      "agent_info": {
+        "agent_id": "JUDGE-GAMMA",
+        "role": "JUDGE",
+        "agent_name": "JUDGE JUDGE-GAMMA",
+        "description": "Tertiary evaluator specializing in harm assessment",
+        "parameters": {
+          "model": "gemini-1.5-pro",
+          "criteria": "trans_simplified"
+        }
+      },
+      "prompt_tokens": 880,
+      "completion_tokens": 110,
+      "cost_usd": 0.0038
+    },
+    {
+      "type": "chat_message",
+      "message_id": "demo-synth-001",
+      "preview": "Synthesizing judgments from all evaluators...\n\nAll three judges agree: this content is NOT toxic.\n\nKey observations:\n- Neutral news reporting style\n- Balanced presentation of viewpoints\n- No harmful language detected\n- No targeting of protected groups\n\nConsensus confidence: 91%",
+      "timestamp": "2025-01-15T10:02:00.000000",
+      "outputs": {
+        "consensus": false,
+        "average_confidence": 0.91,
+        "agreement_rate": 1.0,
+        "summary": "All evaluators unanimously determined this content to be non-toxic local news coverage."
+      },
+      "agent_info": {
+        "agent_id": "SYNTH-MAIN",
+        "role": "SYNTHESISER",
+        "agent_name": "SYNTHESISER SYNTH-MAIN",
+        "description": "Aggregates and synthesizes judgments from multiple evaluators",
+        "parameters": {
+          "model": "claude-3-5-sonnet-20241022"
+        }
+      },
+      "prompt_tokens": 1200,
+      "completion_tokens": 180,
+      "cost_usd": 0.0065
+    },
+    {
+      "type": "system_prompt",
+      "message_id": "demo-prompt-001",
+      "preview": "Accept consensus result?",
+      "timestamp": "2025-01-15T10:02:30.000000",
+      "outputs": {
+        "content": "The agents have reached consensus that this content is NOT toxic with 91% confidence. Do you want to accept this result?",
+        "options": ["Accept", "Request Review", "Override"]
+      },
+      "agent_info": {
+        "agent_id": "MANAGER",
+        "role": "MANAGER",
+        "agent_name": "Flow Manager",
+        "description": "Coordinates the analysis flow"
+      }
+    },
+    {
+      "type": "user_response",
+      "message_id": "demo-user-001",
+      "preview": "Accept",
+      "timestamp": "2025-01-15T10:03:00.000000",
+      "outputs": {
+        "selection": "Accept"
+      },
+      "agent_info": {
+        "agent_id": "user",
+        "role": "user",
+        "agent_name": "user",
+        "description": "Human operator"
+      }
+    },
+    {
+      "type": "summary_result",
+      "message_id": "demo-summary-001",
+      "preview": "Analysis complete. Result: NOT TOXIC",
+      "timestamp": "2025-01-15T10:03:30.000000",
+      "outputs": {
+        "type": "summary_result",
+        "run_id": "demo-run-001",
+        "record_id": "demo-record-001",
+        "final_prediction": false,
+        "final_confidence": 0.91,
+        "predictions": [
+          {
+            "agent_id": "JUDGE-ALPHA",
+            "prediction": false,
+            "score": 0.95
+          },
+          {
+            "agent_id": "JUDGE-BETA",
+            "prediction": false,
+            "score": 0.85
+          },
+          {
+            "agent_id": "JUDGE-GAMMA",
+            "prediction": false,
+            "score": 0.92
+          }
+        ],
+        "avg_score": 0.91,
+        "agreement_rate": 1.0
+      }
+    },
+    {
+      "type": "system_message",
+      "message_id": "demo-sys-002",
+      "preview": "Flow completed successfully. Total tokens: 3850, Total cost: $0.0203",
+      "timestamp": "2025-01-15T10:04:00.000000",
+      "outputs": {
+        "content": "Flow completed successfully. Total tokens: 3850, Total cost: $0.0203"
+      }
+    }
+  ],
+  "completed_at": "2025-01-15T10:04:00.000000+00:00"
+}
