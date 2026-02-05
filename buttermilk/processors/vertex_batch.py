@@ -90,6 +90,10 @@ class VertexBatchProcessor(BatchProcessorCore):
         default=False,
         description="If True, prepare and log batch requests without submitting to API",
     )
+    processor_index: int = Field(
+        default=0,
+        description="Index of this processor in a multi-processor pipeline (for manifest traceability)",
+    )
 
     # Internal components
     _output_class: type[BaseModel] | None = PrivateAttr(default=None)
@@ -265,31 +269,55 @@ class VertexBatchProcessor(BatchProcessorCore):
             litellm_messages = autogen_to_litellm_messages(messages)
 
             # Extract variant from record metadata if present (set by VariantProcessor or ParameterExpansionProcessor)
-            variant = None
+            # Build structured variant dict for full traceability
+            variant_from_metadata = None
             if record.metadata:
-                variant_info = record.metadata.get("variant")
-                if variant_info:
-                    # If it's already a dict, we pass it through (supports labeled variants)
-                    # If it's a string, we use it as-is
-                    variant = variant_info
-                
-                # Fallback for old style metadata if 'variant' key wasn't structured
-                if not variant:
-                    variant = record.metadata.get("variant_name") or record.metadata.get("instruction_type")
+                # ParameterExpansionProcessor uses variant_suffix for tracking (e.g., "criteria=tja")
+                variant_suffix = record.metadata.get("variant_suffix")
+                if variant_suffix:
+                    variant_from_metadata = variant_suffix
+                # Also check for explicit variant key (from VariantProcessor)
+                elif record.metadata.get("variant"):
+                    variant_from_metadata = record.metadata.get("variant")
+                # Fallback for old style metadata
+                elif record.metadata.get("variant_name") or record.metadata.get("instruction_type"):
+                    variant_from_metadata = record.metadata.get("variant_name") or record.metadata.get("instruction_type")
 
-            # Extract processor_index from variant metadata if present
-            processor_index = None
+            # Extract processor_index from variant metadata if present, else use configured default
+            processor_index = self.processor_index  # Default from processor config
             if record.metadata:
                 variant_info = record.metadata.get("variant", {})
-                if isinstance(variant_info, dict):
+                if isinstance(variant_info, dict) and "index" in variant_info:
                     processor_index = variant_info.get("index")
+
+            # Build structured variant with full model info for traceability
+            # This ensures manifests contain complete provenance information
+            structured_variant: dict[str, Any] = {
+                "template": self.template,
+                "model": self.model,
+            }
+            # Include model parameters from config if available
+            from buttermilk import bm
+            if self.model in bm.llms.connections:
+                config = bm.llms.connections[self.model]
+                structured_variant["model_config"] = {
+                    "resolved_model": config.configs.get("model", self.model),
+                    "region": config.configs.get("region"),
+                    "max_output_tokens": self._get_resolved_max_tokens(),
+                }
+            # Include variant from metadata (e.g., criteria name from ParameterExpansionProcessor)
+            if variant_from_metadata:
+                if isinstance(variant_from_metadata, dict):
+                    structured_variant["metadata_variant"] = variant_from_metadata
+                else:
+                    structured_variant["metadata_variant"] = str(variant_from_metadata)
 
             req = BatchRequest(
                 custom_id=str(uuid.uuid4()),
                 record_id=record.record_id,
                 messages=litellm_messages,
                 model=self.model,
-                variant=variant or self.template,  # Fall back to template name as variant
+                variant=structured_variant,
                 processor_index=processor_index,
             )
             requests.append(req)
@@ -470,6 +498,19 @@ class VertexBatchProcessor(BatchProcessorCore):
         result_uri = upload_text(jsonl_content, uri=input_uri, content_type="application/jsonl")
 
         # Save manifest for job recovery inspection during dry run
+        # Pass explicit region since dry_run vertex_job_name isn't a real Vertex path
+        resolved_region = self._get_resolved_region()
+        if resolved_region is None:
+            # Check if Gemini 3 model (uses global endpoint)
+            from buttermilk import bm
+            resolved_model = self.model
+            if self.model in bm.llms.connections:
+                config = bm.llms.connections[self.model]
+                if "model" in config.configs:
+                    resolved_model = config.configs["model"]
+            if "gemini-3" in resolved_model.lower():
+                resolved_region = "global"
+
         output_uri = manager._get_output_uri(dry_run_job_id)
         manager._save_manifest(
             job_id=dry_run_job_id,
@@ -478,6 +519,7 @@ class VertexBatchProcessor(BatchProcessorCore):
             input_uri=result_uri,
             output_uri=output_uri,
             requests=requests,
+            region=resolved_region,
         )
 
         logger.info(

@@ -981,6 +981,7 @@ class BatchJobManager(BaseModel):
         input_uri: str,
         output_uri: str,
         requests: list[BatchRequest],
+        region: str | None = None,
     ) -> str:
         """Save job manifest to GCS for recovery.
 
@@ -991,6 +992,7 @@ class BatchJobManager(BaseModel):
             input_uri: GCS URI of input JSONL
             output_uri: GCS URI of output directory
             requests: List of batch requests
+            region: Explicit region override (for dry runs where vertex_job_name isn't parseable)
 
         Returns:
             GCS URI of saved manifest
@@ -1001,8 +1003,9 @@ class BatchJobManager(BaseModel):
         batch_dir = self._resolve_batch_dir(job_id)
         manifest_uri = f"{batch_dir}/manifest.json"
 
-        # Extract region from vertex_job_name (most reliable) or client config
-        region = self._parse_region_from_job_name(vertex_job_name) or self._get_client_region()
+        # Use explicit region if provided, otherwise extract from job name or client config
+        if region is None:
+            region = self._parse_region_from_job_name(vertex_job_name) or self._get_client_region()
 
         manifest = BatchJobManifest(
             job_id=job_id,
