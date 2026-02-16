@@ -15,6 +15,7 @@ from .utils import (
     remove_punctuation,
     scrub_serializable,
 )
+from .viz import init_viz
 
 __all__ = [
     "col_mapping_hydra_to_local",
@@ -33,6 +34,7 @@ __all__ = [
     "read_yaml",
     "remove_punctuation",
     "scrub_serializable",
+    "init_viz",
 ]
 
 

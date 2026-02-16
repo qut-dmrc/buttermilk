@@ -101,4 +101,6 @@
     "titleBar.inactiveForeground": "#15202b99"
   },
   "peacock.color": "#ecff68",
+  "python.languageServer": "None",
+  "python.analysis.typeCheckingMode": "off",
 }
