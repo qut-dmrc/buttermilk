@@ -488,3 +488,311 @@ class TestVertexBatchProcessorConfigInheritance:
 
         # Verify default max_tokens is present (4096 is the default)
         assert entry["request"]["max_tokens"] == 4096
+
+
+# =============================================================================
+# Structured Output Tests
+# =============================================================================
+
+SAMPLE_SCHEMA = {
+    "title": "JudgeReasons",
+    "type": "object",
+    "properties": {
+        "verdict": {"type": "string", "enum": ["compliant", "non_compliant", "partial"]},
+        "confidence": {"type": "number"},
+        "reasoning": {"type": "string"},
+    },
+    "required": ["verdict", "confidence", "reasoning"],
+}
+
+
+class TestGeminiStructuredOutput:
+    """Tests for Gemini batch converter with structured output."""
+
+    def test_build_request_without_schema(self):
+        """Gemini request without schema should not include generationConfig."""
+        from buttermilk._core.vertex_batch import GeminiMessageConverter
+
+        converter = GeminiMessageConverter()
+        request = BatchRequest(
+            custom_id="test_001",
+            record_id="rec_001",
+            messages=[{"role": "user", "content": "Evaluate this"}],
+        )
+
+        entry = converter.build_request(request)
+
+        assert "generationConfig" not in entry["request"]
+
+    def test_build_request_with_schema(self):
+        """Gemini request with schema should include generationConfig."""
+        from buttermilk._core.vertex_batch import GeminiMessageConverter
+
+        converter = GeminiMessageConverter()
+        request = BatchRequest(
+            custom_id="test_001",
+            record_id="rec_001",
+            messages=[{"role": "user", "content": "Evaluate this"}],
+            response_schema=SAMPLE_SCHEMA,
+        )
+
+        entry = converter.build_request(request)
+
+        assert "generationConfig" in entry["request"]
+        gen_config = entry["request"]["generationConfig"]
+        assert gen_config["responseMimeType"] == "application/json"
+        assert gen_config["responseSchema"] == SAMPLE_SCHEMA
+
+    def test_build_request_schema_preserves_messages(self):
+        """Schema should not interfere with message structure."""
+        from buttermilk._core.vertex_batch import GeminiMessageConverter
+
+        converter = GeminiMessageConverter()
+        request = BatchRequest(
+            custom_id="test_001",
+            record_id="rec_001",
+            messages=[
+                {"role": "system", "content": "You are a judge"},
+                {"role": "user", "content": "Evaluate this"},
+            ],
+            response_schema=SAMPLE_SCHEMA,
+        )
+
+        entry = converter.build_request(request)
+
+        assert "system_instruction" in entry["request"]
+        assert entry["request"]["contents"][0]["role"] == "user"
+        assert "generationConfig" in entry["request"]
+
+
+class TestClaudeStructuredOutput:
+    """Tests for Claude batch converter with structured output."""
+
+    def test_build_request_without_schema(self):
+        """Claude request without schema should not include tools."""
+        from buttermilk._core.vertex_batch import ClaudeMessageConverter
+
+        converter = ClaudeMessageConverter()
+        request = BatchRequest(
+            custom_id="test_001",
+            record_id="rec_001",
+            messages=[{"role": "user", "content": "Evaluate this"}],
+        )
+
+        entry = converter.build_request(request)
+
+        assert "tools" not in entry["request"]
+        assert "tool_choice" not in entry["request"]
+
+    def test_build_request_with_schema(self):
+        """Claude request with schema should include tools and tool_choice."""
+        from buttermilk._core.vertex_batch import ClaudeMessageConverter
+
+        converter = ClaudeMessageConverter()
+        request = BatchRequest(
+            custom_id="test_001",
+            record_id="rec_001",
+            messages=[{"role": "user", "content": "Evaluate this"}],
+            response_schema=SAMPLE_SCHEMA,
+        )
+
+        entry = converter.build_request(request)
+
+        assert "tools" in entry["request"]
+        tools = entry["request"]["tools"]
+        assert len(tools) == 1
+        assert tools[0]["name"] == "create_judgereasons"
+        assert tools[0]["input_schema"] == SAMPLE_SCHEMA
+
+        assert "tool_choice" in entry["request"]
+        assert entry["request"]["tool_choice"]["type"] == "tool"
+        assert entry["request"]["tool_choice"]["name"] == "create_judgereasons"
+
+    def test_extract_response_tool_use(self):
+        """Claude extract_response should handle tool_use blocks."""
+        from buttermilk._core.vertex_batch import ClaudeMessageConverter
+
+        converter = ClaudeMessageConverter()
+        entry = {
+            "response": {
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "id": "toolu_123",
+                        "name": "create_judgereasons",
+                        "input": {"verdict": "compliant", "confidence": 0.95, "reasoning": "Meets all criteria"},
+                    }
+                ]
+            }
+        }
+
+        response = converter.extract_response(entry)
+
+        assert response is not None
+        parsed = json.loads(response)
+        assert parsed["verdict"] == "compliant"
+        assert parsed["confidence"] == 0.95
+
+    def test_extract_response_text_fallback(self):
+        """Claude extract_response should still handle plain text responses."""
+        from buttermilk._core.vertex_batch import ClaudeMessageConverter
+
+        converter = ClaudeMessageConverter()
+        entry = {
+            "response": {
+                "content": [{"type": "text", "text": "Plain text response"}]
+            }
+        }
+
+        response = converter.extract_response(entry)
+        assert response == "Plain text response"
+
+    def test_build_request_schema_preserves_system(self):
+        """Schema should not interfere with system message handling."""
+        from buttermilk._core.vertex_batch import ClaudeMessageConverter
+
+        converter = ClaudeMessageConverter(max_tokens=8192)
+        request = BatchRequest(
+            custom_id="test_001",
+            record_id="rec_001",
+            messages=[
+                {"role": "system", "content": "You are a judge"},
+                {"role": "user", "content": "Evaluate this"},
+            ],
+            response_schema=SAMPLE_SCHEMA,
+        )
+
+        entry = converter.build_request(request)
+
+        assert entry["request"]["system"] == "You are a judge"
+        assert entry["request"]["max_tokens"] == 8192
+        assert "tools" in entry["request"]
+
+
+class TestBuildJsonlStructuredOutput:
+    """Tests for build_jsonl with structured output schema."""
+
+    def test_build_jsonl_gemini_with_schema(self):
+        """build_jsonl should pass schema through for Gemini."""
+        mock_client = MagicMock()
+        manager = BatchJobManager(client=mock_client)
+
+        requests = [
+            BatchRequest(
+                custom_id="rec1",
+                record_id="rec1",
+                messages=[{"role": "user", "content": "Test"}],
+                response_schema=SAMPLE_SCHEMA,
+            ),
+        ]
+
+        jsonl = manager.build_jsonl(requests, model="gemini-2.5-flash")
+
+        entry = json.loads(jsonl.strip())
+        assert "generationConfig" in entry["request"]
+        assert entry["request"]["generationConfig"]["responseMimeType"] == "application/json"
+
+    def test_build_jsonl_claude_with_schema(self):
+        """build_jsonl should pass schema through for Claude."""
+        mock_client = MagicMock()
+        manager = BatchJobManager(client=mock_client)
+
+        requests = [
+            BatchRequest(
+                custom_id="rec1",
+                record_id="rec1",
+                messages=[{"role": "user", "content": "Test"}],
+                response_schema=SAMPLE_SCHEMA,
+            ),
+        ]
+
+        jsonl = manager.build_jsonl(requests, model="claude-sonnet-4")
+
+        entry = json.loads(jsonl.strip())
+        assert "tools" in entry["request"]
+        assert entry["request"]["tool_choice"]["type"] == "tool"
+
+    def test_build_jsonl_mixed_schema_and_no_schema(self):
+        """Requests with and without schema should coexist."""
+        mock_client = MagicMock()
+        manager = BatchJobManager(client=mock_client)
+
+        requests = [
+            BatchRequest(
+                custom_id="rec1",
+                record_id="rec1",
+                messages=[{"role": "user", "content": "Test 1"}],
+                response_schema=SAMPLE_SCHEMA,
+            ),
+            BatchRequest(
+                custom_id="rec2",
+                record_id="rec2",
+                messages=[{"role": "user", "content": "Test 2"}],
+            ),
+        ]
+
+        jsonl = manager.build_jsonl(requests, model="gemini-2.5-flash")
+
+        lines = jsonl.strip().split("\n")
+        entry1 = json.loads(lines[0])
+        entry2 = json.loads(lines[1])
+
+        assert "generationConfig" in entry1["request"]
+        assert "generationConfig" not in entry2["request"]
+
+
+class TestJsonSchemaUtilities:
+    """Tests for JSON schema transform utilities."""
+
+    def test_convert_enum_values_to_strings(self):
+        """Integer enum values should be converted to strings."""
+        from buttermilk._core.json_schema import convert_enum_values_to_strings
+
+        schema = {
+            "type": "object",
+            "properties": {
+                "status": {"type": "integer", "enum": [0, 1, 2]},
+                "name": {"type": "string"},
+            },
+        }
+
+        result = convert_enum_values_to_strings(schema)
+
+        assert result["properties"]["status"]["enum"] == ["0", "1", "2"]
+        assert result["properties"]["name"]["type"] == "string"
+
+    def test_convert_enum_nested(self):
+        """Nested enum values should also be converted."""
+        from buttermilk._core.json_schema import convert_enum_values_to_strings
+
+        schema = {
+            "type": "object",
+            "properties": {
+                "nested": {
+                    "type": "object",
+                    "properties": {
+                        "level": {"type": "integer", "enum": [1, 2, 3]},
+                    },
+                },
+            },
+        }
+
+        result = convert_enum_values_to_strings(schema)
+
+        assert result["properties"]["nested"]["properties"]["level"]["enum"] == ["1", "2", "3"]
+
+    def test_prepare_schema_for_vertex_gemini(self):
+        """prepare_schema_for_vertex with is_gemini should convert enums."""
+        from pydantic import BaseModel as PydanticBaseModel
+
+        from buttermilk._core.json_schema import prepare_schema_for_vertex
+
+        class SimpleModel(PydanticBaseModel):
+            verdict: str
+            confidence: float
+
+        schema = prepare_schema_for_vertex(SimpleModel, is_gemini=True)
+
+        assert "$defs" not in schema
+        assert "verdict" in schema.get("required", [])
+        assert "confidence" in schema.get("required", [])

@@ -47,6 +47,10 @@ class BatchRequest(BaseModel):
         model: Model identifier used for this request (for result analysis)
         variant: Variant identifier (e.g., label string or structured dict)
         processor_index: Index of this processor in a multi-processor pipeline
+        response_schema: Pre-resolved JSON schema dict for structured output.
+            When set, converters will include provider-specific structured output
+            parameters in the batch request (e.g., generationConfig for Gemini,
+            tool-based extraction for Claude).
     """
 
     custom_id: str
@@ -55,6 +59,7 @@ class BatchRequest(BaseModel):
     model: str | None = None
     variant: str | dict[str, Any] | None = None
     processor_index: int | None = None
+    response_schema: dict[str, Any] | None = None
 
 
 class BatchResult(BaseModel):
@@ -157,7 +162,11 @@ class GeminiMessageConverter(BatchMessageConverter):
     ROLE_MAP = {"assistant": "model"}
 
     def build_request(self, request: BatchRequest) -> dict[str, Any]:
-        """Build a Gemini batch request entry."""
+        """Build a Gemini batch request entry.
+
+        When request.response_schema is set, includes generationConfig with
+        responseMimeType and responseSchema for native structured output.
+        """
         contents = []
         system_parts = []
 
@@ -179,6 +188,12 @@ class GeminiMessageConverter(BatchMessageConverter):
 
         if system_parts:
             entry["request"]["system_instruction"] = {"parts": system_parts}
+
+        if request.response_schema:
+            entry["request"]["generationConfig"] = {
+                "responseMimeType": "application/json",
+                "responseSchema": request.response_schema,
+            }
 
         return entry
 
@@ -213,7 +228,12 @@ class ClaudeMessageConverter(BatchMessageConverter):
         self.max_tokens = max_tokens if max_tokens is not None else self.DEFAULT_MAX_TOKENS
 
     def build_request(self, request: BatchRequest) -> dict[str, Any]:
-        """Build a Claude batch request entry."""
+        """Build a Claude batch request entry.
+
+        When request.response_schema is set, includes a tool definition and
+        tool_choice to force structured output via the fake-tool pattern
+        (same approach as the sync path in LiteLLMWrapper).
+        """
         messages = []
         system_parts = []
 
@@ -237,6 +257,19 @@ class ClaudeMessageConverter(BatchMessageConverter):
             # Claude concatenates multiple system messages
             request_body["system"] = "\n\n".join(system_parts)
 
+        if request.response_schema:
+            schema = request.response_schema
+            schema_name = schema.get("title", "structured_response").lower()
+            tool_name = f"create_{schema_name}"
+            request_body["tools"] = [
+                {
+                    "name": tool_name,
+                    "description": f"Create a {schema_name} object with the specified fields",
+                    "input_schema": schema,
+                }
+            ]
+            request_body["tool_choice"] = {"type": "tool", "name": tool_name}
+
         return {
             "custom_id": request.custom_id,
             "request": request_body,
@@ -245,12 +278,19 @@ class ClaudeMessageConverter(BatchMessageConverter):
     def extract_response(self, entry: dict[str, Any]) -> str | None:
         """Extract response from Claude batch result.
 
-        Path: response.content[0].text (where type=="text")
+        Handles both text responses and tool_use responses (from structured output).
+        - Text path: response.content[0].text (where type=="text")
+        - Tool path: response.content[0].input (where type=="tool_use"), serialized as JSON
         """
+        import json as _json
+
         response = entry.get("response", {})
         content = response.get("content", [])
         if content and isinstance(content, list):
             for block in content:
+                if block.get("type") == "tool_use":
+                    # Structured output via tool use — return the input as JSON string
+                    return _json.dumps(block.get("input", {}))
                 if block.get("type") == "text":
                     return block.get("text")
         return None
