@@ -1,5 +1,7 @@
 """JSON schema transformation utilities."""
 
+from __future__ import annotations
+
 import copy
 from typing import Any
 
@@ -129,3 +131,46 @@ def _make_properties_required_recursive(node: Any) -> None:
         elif isinstance(value, list):
             for item in value:
                 _make_properties_required_recursive(item)
+
+
+def convert_enum_values_to_strings(obj: Any) -> Any:
+    """Recursively convert integer enum values to strings for Vertex AI compatibility.
+
+    Vertex AI requires enum values to be strings, not integers.
+    This converts any integer values in enum arrays to their string representation.
+
+    Args:
+        obj: JSON schema node to process
+
+    Returns:
+        Processed schema with string enum values
+    """
+    if isinstance(obj, dict):
+        return {
+            k: ([str(v) for v in val] if k == "enum" and isinstance(val, list) else convert_enum_values_to_strings(val))
+            for k, val in obj.items()
+        }
+    elif isinstance(obj, list):
+        return [convert_enum_values_to_strings(item) for item in obj]
+    return obj
+
+
+def prepare_schema_for_vertex(schema: type, is_gemini: bool = False) -> dict[str, Any]:
+    """Prepare a Pydantic model's JSON schema for use with Vertex AI APIs.
+
+    Applies all necessary transforms: resolve $refs, make all properties required,
+    and convert enum values to strings (for Gemini models).
+
+    Args:
+        schema: Pydantic model class with model_json_schema()
+        is_gemini: If True, also convert enum values to strings
+
+    Returns:
+        Transformed JSON schema dictionary ready for Vertex AI
+    """
+    schema_dict = schema.model_json_schema() if hasattr(schema, "model_json_schema") else schema.schema()
+    schema_dict = resolve_json_schema_refs(schema_dict)
+    schema_dict = make_all_properties_required(schema_dict)
+    if is_gemini:
+        schema_dict = convert_enum_values_to_strings(schema_dict)
+    return schema_dict

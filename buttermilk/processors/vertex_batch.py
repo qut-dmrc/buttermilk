@@ -97,6 +97,7 @@ class VertexBatchProcessor(BatchProcessorCore):
 
     # Internal components
     _output_class: type[BaseModel] | None = PrivateAttr(default=None)
+    _output_schema: dict[str, Any] | None = PrivateAttr(default=None)
     _client: Any = PrivateAttr(default=None)
     _manager: BatchJobManager | None = PrivateAttr(default=None)
 
@@ -106,6 +107,8 @@ class VertexBatchProcessor(BatchProcessorCore):
         # Load output model class if specified
         if self.output_model:
             self._output_class = load_class(self.output_model)
+            # Pre-resolve the JSON schema for batch structured output
+            self._output_schema = self._resolve_output_schema()
 
         logger.info(
             "VertexBatchProcessor initialized",
@@ -113,6 +116,24 @@ class VertexBatchProcessor(BatchProcessorCore):
             template=self.template,
             output_model=self.output_model,
         )
+
+    def _resolve_output_schema(self) -> dict[str, Any] | None:
+        """Resolve output_class to a provider-appropriate JSON schema dict.
+
+        Applies Vertex AI transforms (resolve $refs, make all required,
+        convert enum values for Gemini).
+
+        Returns:
+            Transformed JSON schema dict, or None if no output_class.
+        """
+        if not self._output_class:
+            return None
+
+        from buttermilk._core.json_schema import prepare_schema_for_vertex
+        from buttermilk._core.vertex_batch import _is_claude_model
+
+        is_gemini = not _is_claude_model(self.model)
+        return prepare_schema_for_vertex(self._output_class, is_gemini=is_gemini)
 
     def _get_resolved_max_tokens(self) -> int:
         """Resolve max_tokens from explicit config or model registry.
@@ -319,6 +340,7 @@ class VertexBatchProcessor(BatchProcessorCore):
                 model=self.model,
                 variant=structured_variant,
                 processor_index=processor_index,
+                response_schema=self._output_schema,
             )
             requests.append(req)
 
