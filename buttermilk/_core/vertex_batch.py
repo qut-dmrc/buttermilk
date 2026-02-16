@@ -59,7 +59,10 @@ class BatchRequest(BaseModel):
     model: str | None = None
     variant: str | dict[str, Any] | None = None
     processor_index: int | None = None
-    response_schema: dict[str, Any] | None = None
+    response_schema: dict[str, Any] | None = Field(
+        default=None,
+        exclude=True,
+    )
 
 
 class BatchResult(BaseModel):
@@ -258,8 +261,12 @@ class ClaudeMessageConverter(BatchMessageConverter):
             request_body["system"] = "\n\n".join(system_parts)
 
         if request.response_schema:
+            import re
+
             schema = request.response_schema
             schema_name = schema.get("title", "structured_response").lower()
+            # Sanitize to valid Anthropic tool name: only [a-z0-9_-]
+            schema_name = re.sub(r"[^a-z0-9_\-]", "_", schema_name)
             tool_name = f"create_{schema_name}"
             request_body["tools"] = [
                 {

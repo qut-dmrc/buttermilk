@@ -796,3 +796,114 @@ class TestJsonSchemaUtilities:
         assert "$defs" not in schema
         assert "verdict" in schema.get("required", [])
         assert "confidence" in schema.get("required", [])
+
+    def test_convert_enum_no_mutation(self):
+        """convert_enum_values_to_strings should not mutate the input dict."""
+        from buttermilk._core.json_schema import convert_enum_values_to_strings
+
+        schema = {
+            "type": "object",
+            "properties": {
+                "status": {"type": "integer", "enum": [0, 1, 2]},
+            },
+        }
+        original_enum = schema["properties"]["status"]["enum"].copy()
+
+        convert_enum_values_to_strings(schema)
+
+        # Original should be unchanged
+        assert schema["properties"]["status"]["enum"] == original_enum
+
+
+class TestClaudeToolNameSanitization:
+    """Tests for tool name sanitization in Claude converter."""
+
+    def test_tool_name_with_spaces(self):
+        """Tool name should sanitize spaces to underscores."""
+        from buttermilk._core.vertex_batch import ClaudeMessageConverter
+
+        converter = ClaudeMessageConverter()
+        schema_with_spaces = {
+            "title": "Judge Reasons",
+            "type": "object",
+            "properties": {"verdict": {"type": "string"}},
+            "required": ["verdict"],
+        }
+        request = BatchRequest(
+            custom_id="test_001",
+            record_id="rec_001",
+            messages=[{"role": "user", "content": "Evaluate this"}],
+            response_schema=schema_with_spaces,
+        )
+
+        entry = converter.build_request(request)
+
+        tool_name = entry["request"]["tools"][0]["name"]
+        assert " " not in tool_name
+        assert tool_name == "create_judge_reasons"
+        assert entry["request"]["tool_choice"]["name"] == tool_name
+
+    def test_tool_name_with_special_chars(self):
+        """Tool name should sanitize special characters."""
+        from buttermilk._core.vertex_batch import ClaudeMessageConverter
+
+        converter = ClaudeMessageConverter()
+        schema_with_special = {
+            "title": "My.Schema/v2",
+            "type": "object",
+            "properties": {"x": {"type": "string"}},
+            "required": ["x"],
+        }
+        request = BatchRequest(
+            custom_id="test_001",
+            record_id="rec_001",
+            messages=[{"role": "user", "content": "Test"}],
+            response_schema=schema_with_special,
+        )
+
+        entry = converter.build_request(request)
+
+        tool_name = entry["request"]["tools"][0]["name"]
+        # Only [a-z0-9_-] should remain
+        import re
+        assert re.match(r"^[a-z0-9_\-]+$", tool_name)
+
+    def test_tool_name_missing_title_uses_fallback(self):
+        """Missing title should use structured_response as fallback."""
+        from buttermilk._core.vertex_batch import ClaudeMessageConverter
+
+        converter = ClaudeMessageConverter()
+        schema_no_title = {
+            "type": "object",
+            "properties": {"x": {"type": "string"}},
+            "required": ["x"],
+        }
+        request = BatchRequest(
+            custom_id="test_001",
+            record_id="rec_001",
+            messages=[{"role": "user", "content": "Test"}],
+            response_schema=schema_no_title,
+        )
+
+        entry = converter.build_request(request)
+
+        assert entry["request"]["tools"][0]["name"] == "create_structured_response"
+
+
+class TestBatchRequestSerialization:
+    """Tests for BatchRequest serialization behavior."""
+
+    def test_response_schema_excluded_from_serialization(self):
+        """response_schema should be excluded from model_dump to avoid manifest bloat."""
+        request = BatchRequest(
+            custom_id="test_001",
+            record_id="rec_001",
+            messages=[{"role": "user", "content": "Test"}],
+            response_schema=SAMPLE_SCHEMA,
+        )
+
+        dumped = request.model_dump()
+        assert "response_schema" not in dumped
+
+        # But the attribute should still be accessible for build_request
+        assert request.response_schema == SAMPLE_SCHEMA

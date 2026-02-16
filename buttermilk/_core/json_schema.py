@@ -146,9 +146,10 @@ def convert_enum_values_to_strings(obj: Any) -> Any:
         Processed schema with string enum values
     """
     if isinstance(obj, dict):
-        if "enum" in obj and isinstance(obj["enum"], list):
-            obj["enum"] = [str(v) for v in obj["enum"]]
-        return {k: convert_enum_values_to_strings(v) for k, v in obj.items()}
+        return {
+            k: ([str(v) for v in val] if k == "enum" and isinstance(val, list) else convert_enum_values_to_strings(val))
+            for k, val in obj.items()
+        }
     elif isinstance(obj, list):
         return [convert_enum_values_to_strings(item) for item in obj]
     return obj
