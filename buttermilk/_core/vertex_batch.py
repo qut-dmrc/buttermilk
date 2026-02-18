@@ -126,7 +126,10 @@ class BatchResult(BaseModel):
 _CLAUDE_MODEL_PATTERNS = ("claude", "anthropic")
 
 # Model name patterns that indicate OpenAI/GPT models
-_OPENAI_MODEL_PATTERNS = ("gpt",)
+_OPENAI_MODEL_PATTERNS = ("gpt", "grok")
+
+# Model name patterns that indicate Llama/Meta models
+_LLAMA_MODEL_PATTERNS = ("llama", "meta/")
 
 
 class BatchMessageConverter(ABC):
@@ -397,6 +400,12 @@ def _is_openai_model(model: str) -> bool:
     return any(pattern in model_lower for pattern in _OPENAI_MODEL_PATTERNS)
 
 
+def _is_llama_model(model: str) -> bool:
+    """Check if model identifier indicates a Llama/Meta model."""
+    model_lower = model.lower()
+    return any(pattern in model_lower for pattern in _LLAMA_MODEL_PATTERNS)
+
+
 def get_message_converter(model: str, **kwargs: Any) -> BatchMessageConverter:
     """Factory function to get the appropriate converter for a model.
 
@@ -410,6 +419,8 @@ def get_message_converter(model: str, **kwargs: Any) -> BatchMessageConverter:
     if _is_claude_model(model):
         return ClaudeMessageConverter(max_tokens=kwargs.get("max_tokens"))
     if _is_openai_model(model):
+        return OpenAIMessageConverter(max_tokens=kwargs.get("max_tokens"), model=model)
+    if _is_llama_model(model):
         return OpenAIMessageConverter(max_tokens=kwargs.get("max_tokens"), model=model)
     return GeminiMessageConverter()
 
@@ -676,8 +687,6 @@ class BatchJobManager(BaseModel):
         Returns:
             GCS URI of uploaded file
         """
-        from buttermilk.utils.save import upload_text
-
         # Get stable batch directory
         batch_dir = self._resolve_batch_dir(job_id)
 
@@ -767,6 +776,13 @@ class BatchJobManager(BaseModel):
                 "claude-haiku": "publishers/anthropic/models/claude-3-5-haiku",
             }
             return claude_map.get(resolved_model, f"publishers/anthropic/models/{resolved_model}")
+        elif _is_llama_model(resolved_model):
+            # Llama models use Meta publisher path
+            # Strip meta/ prefix if already present to avoid double-prefixing
+            model_name = resolved_model
+            if model_name.lower().startswith("meta/"):
+                model_name = model_name[len("meta/"):]
+            return f"publishers/meta/models/{model_name}"
         else:
             # Gemini models - strip google/ prefix if present (Batch API expects bare names)
             if resolved_model.startswith("google/"):
@@ -1108,7 +1124,7 @@ class BatchJobManager(BaseModel):
                     pass
 
             if not project:
-                logger.warning(f"Could not determine project for region-specific client, using default client")
+                logger.warning("Could not determine project for region-specific client, using default client")
                 return self.client
 
             logger.info(f"Creating client for region: {region} (current: {current_region})")
@@ -1141,8 +1157,6 @@ class BatchJobManager(BaseModel):
         Returns:
             GCS URI of saved manifest
         """
-        from buttermilk.utils.save import upload_text
-
         # Manifests always live at the root of the batch directory
         batch_dir = self._resolve_batch_dir(job_id)
         manifest_uri = f"{batch_dir}/manifest.json"
