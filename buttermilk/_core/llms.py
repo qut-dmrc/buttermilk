@@ -134,6 +134,7 @@ class ClientType(Enum):
         GEMINI_VERTEX: Gemini client on vertex platform.
         VERTEX_OPENAI: Google Vertex AI platform with OpenAI-compatible endpoint (legacy).
         LLAMA_VERTEX: Llama models on Vertex AI via native LiteLLM support.
+        DEEPSEEK_VERTEX: DeepSeek models on Vertex AI via native LiteLLM support.
         ANTHROPIC: Anthropic platform (e.g., Claude models).
         ANTHROPIC_VERTEX: Anthropic models hosted on Google Vertex AI.
         llama: Llama models (often self-hosted or via specific providers).
@@ -1570,27 +1571,16 @@ class LLMs(BaseModel):
             vertex_project = config.configs.get("project_id")
             vertex_location = config.configs.get("region")
 
-        elif config.client_type == ClientType.LLAMA_VERTEX:
-            # Llama on Vertex via native LiteLLM support
+        elif config.client_type in (ClientType.LLAMA_VERTEX, ClientType.DEEPSEEK_VERTEX):
+            # Vertex AI MaaS models via native LiteLLM support (Llama, DeepSeek, etc.)
             # LiteLLM handles auth and endpoint construction - no base_url needed
             if not bm.gcp_credentials:
                 raise ValueError("GCP credentials not available for Vertex AI.")
             vertex_project = config.configs.get("project_id")
             vertex_location = config.configs.get("region")
             if not vertex_project or not vertex_location:
-                raise ValueError("project_id and region are required for Llama Vertex AI.")
-            # Don't pass base_url - let LiteLLM construct the correct endpoint
-            effective_base_url = None
-
-        elif config.client_type == ClientType.DEEPSEEK_VERTEX:
-            # DeepSeek on Vertex via native LiteLLM support
-            # LiteLLM handles auth and endpoint construction - no base_url needed
-            if not bm.gcp_credentials:
-                raise ValueError("GCP credentials not available for Vertex AI.")
-            vertex_project = config.configs.get("project_id")
-            vertex_location = config.configs.get("region")
-            if not vertex_project or not vertex_location:
-                raise ValueError("project_id and region are required for DeepSeek Vertex AI.")
+                provider = config.client_type.value
+                raise ValueError(f"project_id and region are required for {provider}.")
             # Don't pass base_url - let LiteLLM construct the correct endpoint
             effective_base_url = None
 
