@@ -907,3 +907,266 @@ class TestBatchRequestSerialization:
 
         # But the attribute should still be accessible for build_request
         assert request.response_schema == SAMPLE_SCHEMA
+
+
+# =============================================================================
+# Llama / OpenAI Format Tests
+# =============================================================================
+
+
+class TestLlamaModelDetection:
+    """Tests for Llama model detection and converter dispatch."""
+
+    def test_is_llama_model_with_llama_name(self):
+        """Llama model names should be detected."""
+        from buttermilk._core.vertex_batch import _is_llama_model
+
+        assert _is_llama_model("llama-4-maverick-17b-128e-instruct-maas")
+        assert _is_llama_model("meta/llama-4-maverick-17b-128e-instruct-maas")
+        assert _is_llama_model("llama-3.1-70b")
+
+    def test_is_llama_model_negative(self):
+        """Non-Llama models should not be detected as Llama."""
+        from buttermilk._core.vertex_batch import _is_llama_model
+
+        assert not _is_llama_model("gemini-2.5-flash")
+        assert not _is_llama_model("claude-sonnet-4")
+        assert not _is_llama_model("gpt-4o")
+
+    def test_get_converter_for_llama(self):
+        """Llama models should dispatch to OpenAIMessageConverter."""
+        from buttermilk._core.vertex_batch import OpenAIMessageConverter, get_message_converter
+
+        converter = get_message_converter("meta/llama-4-maverick-17b-128e-instruct-maas")
+        assert isinstance(converter, OpenAIMessageConverter)
+
+    def test_get_converter_for_llama_without_prefix(self):
+        """Llama models without meta/ prefix should also use OpenAI converter."""
+        from buttermilk._core.vertex_batch import OpenAIMessageConverter, get_message_converter
+
+        converter = get_message_converter("llama-4-maverick-17b-128e-instruct-maas")
+        assert isinstance(converter, OpenAIMessageConverter)
+
+
+class TestLlamaModelPath:
+    """Tests for Llama model path resolution."""
+
+    @pytest.fixture
+    def manager(self):
+        """Create a BatchJobManager with mock client."""
+        return BatchJobManager(client=MagicMock())
+
+    def test_get_vertex_model_path_llama_with_meta_prefix(self, manager):
+        """meta/llama-... should map to publishers/meta/models/llama-..."""
+        path = manager._get_vertex_model_path("meta/llama-4-maverick-17b-128e-instruct-maas")
+        assert path == "publishers/meta/models/llama-4-maverick-17b-128e-instruct-maas"
+
+    def test_get_vertex_model_path_llama_without_prefix(self, manager):
+        """llama-... should map to publishers/meta/models/llama-..."""
+        path = manager._get_vertex_model_path("llama-4-maverick-17b-128e-instruct-maas")
+        assert path == "publishers/meta/models/llama-4-maverick-17b-128e-instruct-maas"
+
+
+class TestOpenAIStructuredOutput:
+    """Tests for OpenAI/Llama batch converter with structured output."""
+
+    def test_build_request_without_schema(self):
+        """OpenAI request without schema should not include response_format."""
+        from buttermilk._core.vertex_batch import OpenAIMessageConverter
+
+        converter = OpenAIMessageConverter(max_tokens=8192, model="meta/llama-4-maverick")
+        request = BatchRequest(
+            custom_id="test_001",
+            record_id="rec_001",
+            messages=[{"role": "user", "content": "Evaluate this"}],
+        )
+
+        entry = converter.build_request(request)
+
+        assert "response_format" not in entry["body"]
+        assert entry["method"] == "POST"
+        assert entry["url"] == "/v1/chat/completions"
+
+    def test_build_request_with_schema(self):
+        """OpenAI request with schema should include response_format with json_schema."""
+        from buttermilk._core.vertex_batch import OpenAIMessageConverter
+
+        converter = OpenAIMessageConverter(max_tokens=8192, model="meta/llama-4-maverick")
+        request = BatchRequest(
+            custom_id="test_001",
+            record_id="rec_001",
+            messages=[{"role": "user", "content": "Evaluate this"}],
+            response_schema=SAMPLE_SCHEMA,
+        )
+
+        entry = converter.build_request(request)
+
+        assert "response_format" in entry["body"]
+        rf = entry["body"]["response_format"]
+        assert rf["type"] == "json_schema"
+        assert rf["json_schema"]["schema"] == SAMPLE_SCHEMA
+        assert rf["json_schema"]["strict"] is True
+
+    def test_build_request_structure(self):
+        """OpenAI batch request should have correct top-level structure."""
+        from buttermilk._core.vertex_batch import OpenAIMessageConverter
+
+        converter = OpenAIMessageConverter(max_tokens=8192, model="meta/llama-4-maverick")
+        request = BatchRequest(
+            custom_id="req-0",
+            record_id="rec_001",
+            messages=[
+                {"role": "system", "content": "You are helpful"},
+                {"role": "user", "content": "Hello"},
+            ],
+        )
+
+        entry = converter.build_request(request)
+
+        assert entry["custom_id"] == "req-0"
+        assert entry["method"] == "POST"
+        assert entry["url"] == "/v1/chat/completions"
+        assert entry["body"]["model"] == "meta/llama-4-maverick"
+        assert entry["body"]["max_tokens"] == 8192
+        assert len(entry["body"]["messages"]) == 2
+
+    def test_extract_response_text(self):
+        """OpenAI extract_response should handle standard text responses."""
+        from buttermilk._core.vertex_batch import OpenAIMessageConverter
+
+        converter = OpenAIMessageConverter()
+        entry = {
+            "response": {
+                "status_code": 200,
+                "body": {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": "The response text",
+                            }
+                        }
+                    ]
+                },
+            }
+        }
+
+        response = converter.extract_response(entry)
+        assert response == "The response text"
+
+    def test_extract_response_tool_calls(self):
+        """OpenAI extract_response should handle tool_calls responses."""
+        from buttermilk._core.vertex_batch import OpenAIMessageConverter
+
+        converter = OpenAIMessageConverter()
+        entry = {
+            "response": {
+                "status_code": 200,
+                "body": {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": None,
+                                "tool_calls": [
+                                    {
+                                        "function": {
+                                            "name": "create_judgereasons",
+                                            "arguments": '{"verdict": "compliant"}',
+                                        }
+                                    }
+                                ],
+                            }
+                        }
+                    ]
+                },
+            }
+        }
+
+        response = converter.extract_response(entry)
+        assert response == '{"verdict": "compliant"}'
+
+    def test_extract_response_empty_choices(self):
+        """OpenAI extract_response should return None for empty choices."""
+        from buttermilk._core.vertex_batch import OpenAIMessageConverter
+
+        converter = OpenAIMessageConverter()
+        entry = {"response": {"status_code": 200, "body": {"choices": []}}}
+
+        assert converter.extract_response(entry) is None
+
+
+class TestExtractResponseOpenAIFormat:
+    """Tests for _extract_response handling OpenAI batch result format."""
+
+    @pytest.fixture
+    def manager(self):
+        """Create a BatchJobManager with mock client."""
+        return BatchJobManager(client=MagicMock())
+
+    def test_extract_response_openai_format(self, manager):
+        """_extract_response should handle OpenAI batch result format."""
+        entry = {
+            "response": {
+                "status_code": 200,
+                "body": {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": "Llama response text",
+                            }
+                        }
+                    ],
+                    "usage": {"prompt_tokens": 100, "completion_tokens": 50},
+                },
+            }
+        }
+
+        response = manager._extract_response(entry)
+        assert response == "Llama response text"
+
+
+class TestBuildJsonlLlama:
+    """Tests for build_jsonl with Llama models."""
+
+    def test_build_jsonl_llama(self):
+        """build_jsonl should produce OpenAI format for Llama models."""
+        mock_client = MagicMock()
+        manager = BatchJobManager(client=mock_client)
+
+        requests = [
+            BatchRequest(
+                custom_id="rec1",
+                record_id="rec1",
+                messages=[{"role": "user", "content": "Content 1"}],
+            ),
+        ]
+
+        jsonl = manager.build_jsonl(requests, model="meta/llama-4-maverick-17b-128e-instruct-maas")
+
+        entry = json.loads(jsonl.strip())
+        assert entry["method"] == "POST"
+        assert entry["url"] == "/v1/chat/completions"
+        assert "body" in entry
+        assert entry["body"]["messages"][0]["content"] == "Content 1"
+
+    def test_build_jsonl_llama_with_schema(self):
+        """build_jsonl should pass schema through for Llama."""
+        mock_client = MagicMock()
+        manager = BatchJobManager(client=mock_client)
+
+        requests = [
+            BatchRequest(
+                custom_id="rec1",
+                record_id="rec1",
+                messages=[{"role": "user", "content": "Test"}],
+                response_schema=SAMPLE_SCHEMA,
+            ),
+        ]
+
+        jsonl = manager.build_jsonl(requests, model="meta/llama-4-maverick-17b-128e-instruct-maas")
+
+        entry = json.loads(jsonl.strip())
+        assert "response_format" in entry["body"]
+        assert entry["body"]["response_format"]["type"] == "json_schema"

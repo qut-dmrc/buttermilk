@@ -128,6 +128,9 @@ _CLAUDE_MODEL_PATTERNS = ("claude", "anthropic")
 # Model name patterns that indicate OpenAI/GPT models
 _OPENAI_MODEL_PATTERNS = ("gpt",)
 
+# Model name patterns that indicate Llama/Meta models (use OpenAI batch format on Vertex)
+_LLAMA_MODEL_PATTERNS = ("llama", "meta/")
+
 
 class BatchMessageConverter(ABC):
     """Abstract base for converting LiteLLM messages to provider-specific batch format."""
@@ -397,11 +400,18 @@ def _is_openai_model(model: str) -> bool:
     return any(pattern in model_lower for pattern in _OPENAI_MODEL_PATTERNS)
 
 
+def _is_llama_model(model: str) -> bool:
+    """Check if model identifier indicates a Llama/Meta model."""
+    model_lower = model.lower()
+    return any(pattern in model_lower for pattern in _LLAMA_MODEL_PATTERNS)
+
+
 def get_message_converter(model: str, **kwargs: Any) -> BatchMessageConverter:
     """Factory function to get the appropriate converter for a model.
 
     Args:
-        model: Model identifier (e.g., "gemini-2.5-flash", "claude-sonnet-4", "gpt-4o")
+        model: Model identifier (e.g., "gemini-2.5-flash", "claude-sonnet-4", "gpt-4o",
+               "meta/llama-4-maverick-17b-128e-instruct-maas")
         **kwargs: Provider-specific options (e.g., max_tokens for Claude/OpenAI)
 
     Returns:
@@ -409,7 +419,7 @@ def get_message_converter(model: str, **kwargs: Any) -> BatchMessageConverter:
     """
     if _is_claude_model(model):
         return ClaudeMessageConverter(max_tokens=kwargs.get("max_tokens"))
-    if _is_openai_model(model):
+    if _is_openai_model(model) or _is_llama_model(model):
         return OpenAIMessageConverter(max_tokens=kwargs.get("max_tokens"), model=model)
     return GeminiMessageConverter()
 
@@ -759,7 +769,7 @@ class BatchJobManager(BaseModel):
         # First, resolve short alias to full model name if it exists in the registry
         resolved_model = self._resolve_model_alias(model)
 
-        if "claude" in resolved_model.lower() or "anthropic" in resolved_model.lower():
+        if _is_claude_model(resolved_model):
             # Claude models use publisher path
             claude_map = {
                 "claude-sonnet-4": "publishers/anthropic/models/claude-sonnet-4",
@@ -767,10 +777,16 @@ class BatchJobManager(BaseModel):
                 "claude-haiku": "publishers/anthropic/models/claude-3-5-haiku",
             }
             return claude_map.get(resolved_model, f"publishers/anthropic/models/{resolved_model}")
+        elif _is_llama_model(resolved_model):
+            # Llama/Meta models use publisher path: meta/llama-... -> publishers/meta/models/llama-...
+            if resolved_model.startswith("meta/"):
+                model_name = resolved_model[len("meta/"):]
+                return f"publishers/meta/models/{model_name}"
+            return f"publishers/meta/models/{resolved_model}"
         else:
             # Gemini models - strip google/ prefix if present (Batch API expects bare names)
             if resolved_model.startswith("google/"):
-                return resolved_model[len("google/") :]
+                return resolved_model[len("google/"):]
             return resolved_model
 
     async def submit_batch(
