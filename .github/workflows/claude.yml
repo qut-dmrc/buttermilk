@@ -1,4 +1,5 @@
 name: Claude Code
+
 on:
   issue_comment:
     types: [created]
@@ -8,43 +9,40 @@ on:
     types: [opened, assigned]
   pull_request_review:
     types: [submitted]
+
 jobs:
   claude:
     if: |
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+      (github.event_name == 'issue_comment' &&
+        github.event.comment.user.type != 'Bot' &&
+        contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' &&
+        github.event.comment.user.type != 'Bot' &&
+        contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review' &&
+        github.event.review.user.type != 'Bot' &&
+        contains(github.event.review.body, '@claude')) ||
+      (github.event_name == 'issues' &&
+        github.event.issue.user.type != 'Bot' &&
+        (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
     runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
       issues: write
       id-token: write
-      actions: read # Required for Claude to read CI results on PRs
+      actions: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
-      - name: Authenticate to Google Cloud
-        uses: "google-github-actions/auth@v2"
-        with:
-          workload_identity_provider: "${{ vars.GCP_WIF_PROVIDER }}"
-          service_account: "${{ vars.SERVICE_ACCOUNT_EMAIL }}"
+
       - name: Run Claude Code
         id: claude
         uses: anthropics/claude-code-action@v1
-        env:
-          ANTHROPIC_VERTEX_PROJECT_ID: ${{ vars.GOOGLE_CLOUD_PROJECT }}
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          claude_args: |
-            --model opus
-            --allowedTools "Bash,Read,Write,Edit,Glob,Grep,LS,mcp__github,mcp__github__create_pull_request,mcp__github__create_issue,mcp__github__comment_on_issue,mcp__github__comment_on_pr,mcp__github__list_files,mcp__github__get_file_content"
-            --max-turns 50
-          #custom_instructions: |
-          #  CRITICAL: Follow instructions in @docs/bots/INSTRUCTIONS.md
-          # Optional: Custom environment variables for Claude
-          # claude_env: |
-          #   NODE_ENV: test
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          allowed_bots: "claude[bot]"
+          additional_permissions: |
+            actions: read
