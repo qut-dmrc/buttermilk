@@ -92,6 +92,13 @@ class TestLiteLLMModelNameResolution:
         )
         assert result == "vertex_ai/meta/llama-4-maverick-17b-128e-instruct-maas"
 
+    def test_deepseek_vertex_resolution(self):
+        """Test DeepSeek models on Vertex resolve correctly."""
+        result = LLMs.lookup_litellm_model_name(
+            "deepseek-ai/deepseek-r1-0528-maas", "deepseek_vertex"
+        )
+        assert result == "vertex_ai/deepseek-ai/deepseek-r1-0528-maas"
+
     def test_existing_prefix_handling(self):
         """Test models that already have provider prefixes are handled correctly."""
         # If a model already has the expected prefix, it should be returned as-is
@@ -127,6 +134,7 @@ class TestLiteLLMModelNameResolution:
         assert LLMs._provider_prefix_for_client_type("gemini_vertex") == "gemini"
         assert LLMs._provider_prefix_for_client_type("vertex_openai") == "vertex_ai"
         assert LLMs._provider_prefix_for_client_type("anthropic_vertex") == "vertex_ai"
+        assert LLMs._provider_prefix_for_client_type("deepseek_vertex") == "vertex_ai"
         assert LLMs._provider_prefix_for_client_type("anthropic") == "anthropic"
 
     def test_base_model_name_extraction(self):
@@ -175,6 +183,12 @@ class TestLiteLLMModelNameResolution:
             "claude-sonnet-4@20250514", "anthropic_vertex"
         )
         assert result == "vertex_ai/claude-sonnet-4@20250514"
+
+        # Test DeepSeek on Vertex - should preserve deepseek-ai/ prefix
+        result = LLMs.lookup_litellm_model_name(
+            "deepseek-ai/deepseek-r1-0528-maas", "deepseek_vertex"
+        )
+        assert result == "vertex_ai/deepseek-ai/deepseek-r1-0528-maas"
 
 
 class TestLiteLLMIntegration:

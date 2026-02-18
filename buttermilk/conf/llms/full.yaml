@@ -10,6 +10,8 @@ judgers:
   - gemini-flash
   - claude-sonnet
   - llama-maverick
+  - deepseek-r1
+  - deepseek-v3
   - gpt-mini
   - gpt-nano
 
@@ -18,6 +20,8 @@ synthesisers:
   - gemini-flash
   - claude-sonnet
   - llama-maverick
+  - deepseek-r1
+  - deepseek-v3
 
 # Model-specific parameter overrides
 # These override the defaults from models.json for this llms config
@@ -29,4 +33,8 @@ model_parameters:
   claude-sonnet:
     temperature: 1.0
   llama-maverick:
+    temperature: 1.0
+  deepseek-r1:
+    temperature: 1.0
+  deepseek-v3:
     temperature: 1.0

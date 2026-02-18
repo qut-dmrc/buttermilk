@@ -134,6 +134,7 @@ class ClientType(Enum):
         GEMINI_VERTEX: Gemini client on vertex platform.
         VERTEX_OPENAI: Google Vertex AI platform with OpenAI-compatible endpoint (legacy).
         LLAMA_VERTEX: Llama models on Vertex AI via native LiteLLM support.
+        DEEPSEEK_VERTEX: DeepSeek models on Vertex AI via native LiteLLM support.
         ANTHROPIC: Anthropic platform (e.g., Claude models).
         ANTHROPIC_VERTEX: Anthropic models hosted on Google Vertex AI.
         llama: Llama models (often self-hosted or via specific providers).
@@ -149,6 +150,7 @@ class ClientType(Enum):
     GEMINI_VERTEX = "gemini_vertex"
     VERTEX_OPENAI = "vertex_openai"  # OpenAI-compatible endpoint on Vertex (legacy)
     LLAMA_VERTEX = "llama_vertex"  # Llama models on Vertex AI via native LiteLLM
+    DEEPSEEK_VERTEX = "deepseek_vertex"  # DeepSeek models on Vertex AI via native LiteLLM
     HUGGINGFACE = "huggingface"  # HuggingFace Inference API (serverless or dedicated)
     ZENTROPI = "zentropi"  # Zentropi toxicity/content moderation API
 
@@ -1376,6 +1378,7 @@ class LLMs(BaseModel):
             "huggingface": "huggingface",
             "vertex_openai": "vertex_ai",  # For litellm pricing, Vertex models need vertex_ai prefix
             "llama_vertex": "vertex_ai",  # Llama on Vertex via native LiteLLM support
+            "deepseek_vertex": "vertex_ai",  # DeepSeek on Vertex via native LiteLLM support
             "anthropic_vertex": "vertex_ai",  # Anthropic-on-Vertex
             "anthropic": "anthropic",
             "zentropi": "zentropi",  # Zentropi custom API
@@ -1467,6 +1470,13 @@ class LLMs(BaseModel):
         # and will construct the full model name as "vertex_ai/meta/llama-..."
         if client_type == "llama_vertex":
             # Keep meta/ prefix - litellm needs it for proper routing
+            return model_name
+
+        # For deepseek_vertex, preserve the deepseek-ai/ prefix for native LiteLLM support
+        # LiteLLM expects model names like "deepseek-ai/deepseek-r1-0528-maas"
+        # and will construct the full model name as "vertex_ai/deepseek-ai/deepseek-r1-..."
+        if client_type == "deepseek_vertex":
+            # Keep deepseek-ai/ prefix - litellm needs it for proper routing
             return model_name
 
         # For anthropic_vertex clients with provider-specific models, preserve format
@@ -1561,21 +1571,22 @@ class LLMs(BaseModel):
             vertex_project = config.configs.get("project_id")
             vertex_location = config.configs.get("region")
 
-        elif config.client_type == ClientType.LLAMA_VERTEX:
-            # Llama on Vertex via native LiteLLM support
+        elif config.client_type in (ClientType.LLAMA_VERTEX, ClientType.DEEPSEEK_VERTEX):
+            # Vertex AI MaaS models via native LiteLLM support (Llama, DeepSeek, etc.)
             # LiteLLM handles auth and endpoint construction - no base_url needed
             if not bm.gcp_credentials:
                 raise ValueError("GCP credentials not available for Vertex AI.")
             vertex_project = config.configs.get("project_id")
             vertex_location = config.configs.get("region")
             if not vertex_project or not vertex_location:
-                raise ValueError("project_id and region are required for Llama Vertex AI.")
+                provider = config.client_type.value
+                raise ValueError(f"project_id and region are required for {provider}.")
             # Don't pass base_url - let LiteLLM construct the correct endpoint
             effective_base_url = None
 
         # Determine if token_provider is needed for this provider
         token_provider = None
-        if config.client_type in (ClientType.VERTEX_OPENAI, ClientType.GEMINI_VERTEX, ClientType.LLAMA_VERTEX):
+        if config.client_type in (ClientType.VERTEX_OPENAI, ClientType.GEMINI_VERTEX, ClientType.LLAMA_VERTEX, ClientType.DEEPSEEK_VERTEX):
             # Vertex models need GCP token refresh
             def get_vertex_token() -> str:
                 return bm.get_gcp_access_token()
