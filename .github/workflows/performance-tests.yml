@@ -2,13 +2,13 @@ name: Performance Tests
 on:
   pull_request:
     types: [opened, reopened] # Only on PR open/reopen, not every commit
-    branches: [main]  # Only run on PRs to main (not dev)
+    branches: [stable]  # Only run on PRs to stable (not dev)
     paths:
       - "buttermilk/**/*.py"
       - "tests/**/*.py"
       - "pyproject.toml"
   push:
-    branches: [main]  # Only run on pushes to main (not dev)
+    branches: [stable]  # Only run on pushes to stable (not dev)
   workflow_dispatch: # Allow manual triggering for any branch
 jobs:
   performance:
@@ -32,14 +32,14 @@ jobs:
           # Skip ML extras (heavy dependencies like torch, transformers)
           # Only install core + dev dependencies for performance tests
           uv sync --no-install-project --extra azure --extra aws --extra research
-          uv sync --dev
+          uv sync --extra dev
       - name: Download baseline benchmarks
         id: download-baseline
         continue-on-error: true
         uses: actions/cache@v4
         with:
           path: .benchmarks/baseline
-          key: performance-baseline-${{ github.base_ref || 'main' }}
+          key: performance-baseline-${{ github.base_ref || 'stable' }}
           restore-keys: |
             performance-baseline-
       - name: Run performance tests
@@ -48,7 +48,7 @@ jobs:
           python scripts/performance/monitor_performance.py --compare --threshold 10
         continue-on-error: true
       - name: Save current results
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/stable'
         uses: actions/cache@v4
         with:
           path: .benchmarks/baseline

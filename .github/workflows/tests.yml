@@ -1,9 +1,9 @@
 name: Test Suite
 on:
   push:
-    branches: [stable]
+    branches: [dev, stable]
   pull_request:
-    branches: [stable]
+    branches: [dev, stable]
   workflow_dispatch:
     inputs:
       run_integration_tests:
@@ -32,7 +32,7 @@ jobs:
         with:
           version: "latest"
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --extra dev
       - name: Run linting
         run: |
           uv run ruff check .
@@ -73,7 +73,7 @@ jobs:
         with:
           version: "latest"
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --extra dev
       - name: Run integration tests (without live APIs)
         run: |
           uv run pytest tests/integration/ \
@@ -103,7 +103,7 @@ jobs:
         with:
           version: "latest"
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --extra dev
       - name: Run live API integration tests
         run: |
           uv run pytest tests/integration/ \
