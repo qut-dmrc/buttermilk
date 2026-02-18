@@ -30,7 +30,6 @@ from typing import (
 
 import pandas as pd
 from pydantic import (
-    BaseModel,
     ConfigDict,
     Field,
     PrivateAttr,
@@ -174,9 +173,7 @@ class ToxicityClassifierCore(ProcessorCore):
             raise KeyError(f"{key} required in credentials dict or environment")
         return None
 
-    def run(
-        self, message: AgentInput
-    ) -> ExecutionTrace:  # Changed parameter name/type and return type
+    def run(self, message: AgentInput) -> ExecutionTrace:  # Changed parameter name/type and return type
         # Assuming the AgentInput contains a record
         if not message.record:
             raise ValueError("AgentInput must contain a record for ToxicityModel.")
@@ -184,13 +181,9 @@ class ToxicityClassifierCore(ProcessorCore):
         # Process the record in the input message
         record = message.record
 
-        response = self.moderate(
-            content=record.content, record_id=record.record_id
-        )  # Access content and record_id from Record
+        response = self.moderate(content=record.content, record_id=record.record_id)  # Access content and record_id from Record
         if not isinstance(response, EvalRecord):
-            raise ValueError(
-                f"Expected an EvalRecord from toxicity model, got: {type(response)} for: {message}"
-            )
+            raise ValueError(f"Expected an EvalRecord from toxicity model, got: {type(response)} for: {message}")
 
         # add identifying info in (already done in add_output_info)
         # response.model = self.model
@@ -296,9 +289,7 @@ class ToxicityClassifierCore(ProcessorCore):
         try:
             output = self.interpret(response)
         except ValueError as e:
-            err_msg = (
-                f"Unable to interpret response from {self.model}. Error: {e} {e.args=}"
-            )
+            err_msg = f"Unable to interpret response from {self.model}. Error: {e} {e.args=}"
             output = EvalRecord(error=err_msg, response=response)
             logger.error(err_msg)
         output = self.add_output_info(output, record_id=record_id)
@@ -308,9 +299,7 @@ class ToxicityClassifierCore(ProcessorCore):
     def interpret(self, response: Any) -> EvalRecord:
         raise NotImplementedError
 
-    def add_output_info(
-        self, record: EvalRecord, record_id=None, **kwargs
-    ) -> EvalRecord:
+    def add_output_info(self, record: EvalRecord, record_id=None, **kwargs) -> EvalRecord:
         # add identifying info in
         record.model = self.model
         record.process = self.process_chain
@@ -354,9 +343,7 @@ class ToxicityClassifierCore(ProcessorCore):
 
         content = record.content
         if not content:
-            raise ValueError(
-                f"Record {record.record_id} has no content for toxicity analysis"
-            )
+            raise ValueError(f"Record {record.record_id} has no content for toxicity analysis")
 
         # Wrap sync moderate() for async pipeline
         eval_record = await asyncio.to_thread(
@@ -448,9 +435,7 @@ class _HF(ToxicityClassifierCore):
             trust_remote_code=True,
         )
         if not self.tokenizer.pad_token_id:
-            self.tokenizer.pad_token_id = (
-                self.tokenizer.eos_token_id
-            )  # Set a padding token
+            self.tokenizer.pad_token_id = self.tokenizer.eos_token_id  # Set a padding token
 
         self._client = AutoModelForCausalLM.from_pretrained(
             self.model,
@@ -538,10 +523,7 @@ class Perspective(ToxicityClassifierCore):
     ) -> Any:
         if not (attributes := kwargs.get("attributes")):
             # get all
-            attributes = (
-                PerspectiveAttributes.__args__
-                + PerspectiveAttributesExperimental.__args__
-            )
+            attributes = PerspectiveAttributes.__args__ + PerspectiveAttributesExperimental.__args__
 
         analyze_request = {
             "comment": {"text": prompt},
@@ -682,9 +664,7 @@ class AzureContentSafety(ToxicityClassifierCore):
 
                 severity_score = severity
             except Exception:
-                raise ValueError(
-                    f"Unable to interpret Azure content safety score: {item}."
-                )
+                raise ValueError(f"Unable to interpret Azure content safety score: {item}.")
 
             if measure is not None:
                 outcome.scores.append(
@@ -783,9 +763,7 @@ class AzureModerator(ToxicityClassifierCore):
             "normalized_text",
             "auto_corrected_text",
         ]
-        outcome.metadata = {
-            x: response[x] for x in response.keys() if x not in _result_keys
-        }
+        outcome.metadata = {x: response[x] for x in response.keys() if x not in _result_keys}
 
         return outcome
 
@@ -894,9 +872,7 @@ class LFTW(ToxicityClassifierCore):
 
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
         if not self.tokenizer.pad_token_id:
-            self.tokenizer.pad_token_id = (
-                self.tokenizer.eos_token_id
-            )  # Set a padding token
+            self.tokenizer.pad_token_id = self.tokenizer.eos_token_id  # Set a padding token
         cfg = AutoConfig.from_pretrained(self.model)
         self.classes = cfg.id2label
         self._client = AutoModelForSequenceClassification.from_pretrained(self.model).to(
@@ -913,9 +889,7 @@ class LFTW(ToxicityClassifierCore):
     ) -> Any:
         import torch
 
-        input_ids = self.tokenizer([prompt], return_tensors="pt").to(self.device)[
-            "input_ids"
-        ]
+        input_ids = self.tokenizer([prompt], return_tensors="pt").to(self.device)["input_ids"]
         with torch.no_grad():
             response = self._client(input_ids=input_ids, **self.options, **kwargs)
         logits = response.logits
@@ -948,7 +922,6 @@ class GPTJT(ToxicityClassifierCore):
         default_factory=_get_torch_device,
         description="Device type (CPU or CUDA)",
     )
-
 
     ResponseMap: dict[str, int] = {
         "casual": 1,
@@ -1007,9 +980,7 @@ class GPTJT(ToxicityClassifierCore):
             outcome.prediction = self.ResponseMap[response] >= 2
             outcome.labels = [response]
         except Exception as e:
-            raise ValueError(
-                f"Unable to interpret response from GPT-JT model. {response=}, {e=}, {e.args=}"
-            )
+            raise ValueError(f"Unable to interpret response from GPT-JT model. {response=}, {e=}, {e.args=}")
 
         return outcome
 
@@ -1051,9 +1022,7 @@ class OpenAIModerator(ToxicityClassifierCore):
 
         # Load the message info into the output
         outcome = EvalRecord()
-        outcome.scores = [
-            Score(measure=k, score=v) for k, v in result["category_scores"].items()
-        ]
+        outcome.scores = [Score(measure=k, score=v) for k, v in result["category_scores"].items()]
 
         outcome.prediction = result["flagged"]
         outcome.labels = [c for c, v in result["categories"].items() if v]
@@ -1220,9 +1189,7 @@ class Zentropi(ToxicityClassifierCore):
             ValueError: If required 'label' field is missing from response
         """
         if "label" not in response:
-            raise ValueError(
-                f"Zentropi response missing required 'label' field. Got: {response.keys()}"
-            )
+            raise ValueError(f"Zentropi response missing required 'label' field. Got: {response.keys()}")
 
         # Extract label and determine prediction
         label = response["label"]
@@ -1233,9 +1200,7 @@ class Zentropi(ToxicityClassifierCore):
 
         # Add compute_time as metadata in a score if present
         if "compute_time" in response:
-            scores.append(
-                Score(measure="compute_time", score=response["compute_time"])
-            )
+            scores.append(Score(measure="compute_time", score=response["compute_time"]))
 
         # Prediction is True if label indicates positive classification
         # Label "1" or truthy string values indicate positive
@@ -1263,10 +1228,7 @@ class Zentropi(ToxicityClassifierCore):
         import requests
 
         if not self.criteria:
-            raise ValueError(
-                "Zentropi requires criteria to be set. "
-                "Pass the system message/template as the 'criteria' field."
-            )
+            raise ValueError("Zentropi requires criteria to be set. Pass the system message/template as the 'criteria' field.")
 
         payload = {
             "content_text": prompt,
@@ -1285,5 +1247,3 @@ class Zentropi(ToxicityClassifierCore):
         )
         response.raise_for_status()
         return response.json()
-
-

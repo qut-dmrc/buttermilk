@@ -70,9 +70,7 @@ async def test_corruption_quality_gate_on_real_zotero_records(real_bm):
                 elif processed.content:
                     # Fulltext was accepted - passed corruption check
                     clean_fulltexts.append(record_id)
-                    print(
-                        f"✓ Clean fulltext for {record_id} ({len(processed.content)} chars)"
-                    )
+                    print(f"✓ Clean fulltext for {record_id} ({len(processed.content)} chars)")
         except Exception as e:
             # Skip invalid/incomplete Zotero records
             skipped_errors.append(f"{base_record.record_id}: {str(e)[:100]}")
@@ -93,6 +91,4 @@ async def test_corruption_quality_gate_on_real_zotero_records(real_bm):
     # The corruption check quality gate is working if:
     # 1. We processed some records
     # 2. Decisions were made (either PDF download or fulltext accepted)
-    assert len(pdf_downloads) + len(clean_fulltexts) == records_processed, (
-        "All records should have been processed through the quality gate"
-    )
+    assert len(pdf_downloads) + len(clean_fulltexts) == records_processed, "All records should have been processed through the quality gate"

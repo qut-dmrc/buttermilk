@@ -157,13 +157,9 @@ class SlackUIAgent(UIAgent):
         if isinstance(message, SystemPromptMessage):
             await self._request_input(message)
 
-    async def initialize(
-        self, session_id: str, callback_to_groupchat, **kwargs
-    ) -> None:
+    async def initialize(self, session_id: str, callback_to_groupchat, **kwargs) -> None:
         """Initialize the interface and register handlers"""
-        await super().initialize(
-            callback_to_groupchat=callback_to_groupchat, session_id=session_id, **kwargs
-        )
+        await super().initialize(callback_to_groupchat=callback_to_groupchat, session_id=session_id, **kwargs)
         self.callback_to_groupchat = callback_to_groupchat
 
         _active_thread_registry[self.context.thread_ts] = self
@@ -184,15 +180,12 @@ class SlackUIAgent(UIAgent):
         async def matcher(message):
             return (
                 # It's a message in our thread, not from the bot.
-                message.get("thread_ts") == thread_ts
-                and message.get("subtype") != "bot_message"
+                message.get("thread_ts") == thread_ts and message.get("subtype") != "bot_message"
             )
 
         async def feed_in(message, say):
             await self._cancel_input_request()
-            await self.callback_to_groupchat(
-                UserResponseMessage(confirm=False, content=message["text"])
-            )
+            await self.callback_to_groupchat(UserResponseMessage(confirm=False, content=message["text"]))
 
         # Button action handlers
         async def handle_decline(ack, body, client):
@@ -293,9 +286,7 @@ class SlackUIAgent(UIAgent):
                 ],
             )
             # Call callback with boolean Halt signal.
-            await self.callback_to_groupchat(
-                UserResponseMessage(confirm=False, halt=True)
-            )
+            await self.callback_to_groupchat(UserResponseMessage(confirm=False, halt=True))
 
         self._handlers.text = self.app.message(matchers=[matcher])(feed_in)
         self._handlers.confirm = self.app.action("confirm_action")(handle_confirm)

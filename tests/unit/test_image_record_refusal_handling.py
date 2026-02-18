@@ -267,10 +267,7 @@ class TestImageRecordRefusalEdgeCases:
 
     def test_multiple_refusal_keywords(self):
         """Test error message with multiple refusal indicators."""
-        error_message = (
-            "Request was refused due to content policy violation. "
-            "The prompt contains unsafe content that is not allowed."
-        )
+        error_message = "Request was refused due to content policy violation. The prompt contains unsafe content that is not allowed."
         assert ImageRecord._is_refusal_error(error_message)
 
     def test_dict_error_with_missing_message_field(self):

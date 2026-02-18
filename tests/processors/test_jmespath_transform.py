@@ -14,9 +14,7 @@ class TestJMESPathTransform:
     async def test_simple_field_extraction(self):
         """Test extraction of a single field from record."""
         # Create a record with nested output data
-        record = BaseRecord(
-            record_id="test_1", metadata={"outputs": {"result": "test_value"}}
-        )
+        record = BaseRecord(record_id="test_1", metadata={"outputs": {"result": "test_value"}})
 
         # Define mapping to extract result field
         processor = JMESPathTransform(mappings={"answer": "metadata.outputs.result"})
@@ -52,9 +50,7 @@ class TestJMESPathTransform:
 
         # Define mapping to construct nested object
         processor = JMESPathTransform(
-            mappings={
-                "answers": "{agent_id: metadata.agent_info.agent_id, result: metadata.outputs, answer_id: metadata.call_id}"
-            }
+            mappings={"answers": "{agent_id: metadata.agent_info.agent_id, result: metadata.outputs, answer_id: metadata.call_id}"}
         )
 
         # Process the record

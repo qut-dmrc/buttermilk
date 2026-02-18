@@ -98,9 +98,7 @@ def test_span_with_session_creates_span_without_session_root(otel_setup):
 
     # ACT: Create span WITHOUT calling start_session_root_span
     # This is the NEW normal behavior - session context via baggage, not span hierarchy
-    with span_with_session(
-        session_id, name="independent.span", attributes={"test": "independent"}
-    ):
+    with span_with_session(session_id, name="independent.span", attributes={"test": "independent"}):
         pass
 
     # ASSERT: Verify span was created
@@ -114,9 +112,7 @@ def test_span_with_session_creates_span_without_session_root(otel_setup):
 
     # VERIFIED: This is a root span (no parent) because no session root span was created
     # span_with_session creates independent spans, not nested under a session parent
-    assert span.parent is None, (
-        "Span should be a root span when no parent context is active"
-    )
+    assert span.parent is None, "Span should be a root span when no parent context is active"
 
 
 def test_multiple_span_with_session_calls_create_independent_spans(otel_setup):
@@ -146,10 +142,7 @@ def test_multiple_span_with_session_calls_create_independent_spans(otel_setup):
     # VERIFIED: All spans are root spans (no parent) - this is the correct behavior
     # Spans are independent, linked by session_id attribute, not by hierarchy
     root_spans = [s for s in spans if s.parent is None]
-    assert len(root_spans) == 3, (
-        f"Expected 3 independent root spans, got {len(root_spans)}. "
-        f"Each span_with_session call should create a root span."
-    )
+    assert len(root_spans) == 3, f"Expected 3 independent root spans, got {len(root_spans)}. Each span_with_session call should create a root span."
 
 
 def test_baggage_propagation_without_session_root_span(otel_setup):
@@ -175,9 +168,7 @@ def test_baggage_propagation_without_session_root_span(otel_setup):
     ):
         # Verify baggage is accessible within the span context
         baggage_session_id = otel_baggage.get_baggage("buttermilk.session.id")
-        assert baggage_session_id == session_id, (
-            "Baggage should be accessible within span context"
-        )
+        assert baggage_session_id == session_id, "Baggage should be accessible within span context"
 
     # Detach baggage
     detach_session_baggage(token)
@@ -188,9 +179,7 @@ def test_baggage_propagation_without_session_root_span(otel_setup):
 
     # Verify span has session_id attribute
     span = spans[0]
-    assert span.attributes.get("buttermilk.session.id") == session_id, (
-        "Span should have session_id attribute from span_with_session"
-    )
+    assert span.attributes.get("buttermilk.session.id") == session_id, "Span should have session_id attribute from span_with_session"
 
 
 def test_session_id_consistency_validation():

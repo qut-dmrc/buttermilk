@@ -21,9 +21,7 @@ from buttermilk.data.vector import ChromaDBEmbeddings, SemanticSplitter
 class TestZoteroVectorIntegration:
     """Integration test simulating the zotero vectorization pipeline."""
 
-    @pytest.mark.skip(
-        reason="Requires BM singleton initialization - covered by test_vector_dict_chunks.py"
-    )
+    @pytest.mark.skip(reason="Requires BM singleton initialization - covered by test_vector_dict_chunks.py")
     @pytest.mark.anyio
     async def test_full_pipeline_with_dict_chunks(self):
         """Test the full pipeline: SemanticSplitter -> EmbeddingGenerator -> ChromaDB.

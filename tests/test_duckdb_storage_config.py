@@ -12,9 +12,7 @@ class TestDuckDBStorageConfig:
         """DuckDBStorageConfig should be creatable with required fields."""
         from buttermilk._core.storage_config import DuckDBStorageConfig
 
-        config = DuckDBStorageConfig(
-            type="duckdb", database="test.db", table_name="test_table"
-        )
+        config = DuckDBStorageConfig(type="duckdb", database="test.db", table_name="test_table")
 
         assert config.type == "duckdb"
         assert config.database == "test.db"
@@ -41,9 +39,7 @@ class TestDuckDBStorageConfig:
         """DuckDBStorageConfig should have all common base fields."""
         from buttermilk._core.storage_config import DuckDBStorageConfig
 
-        config = DuckDBStorageConfig(
-            type="duckdb", database="test.db", table_name="test_table"
-        )
+        config = DuckDBStorageConfig(type="duckdb", database="test.db", table_name="test_table")
 
         common_fields = [
             "type",
@@ -61,17 +57,13 @@ class TestDuckDBStorageConfig:
         ]
 
         for field in common_fields:
-            assert hasattr(config, field), (
-                f"DuckDBStorageConfig missing common field: {field}"
-            )
+            assert hasattr(config, field), f"DuckDBStorageConfig missing common field: {field}"
 
     def test_duckdb_config_has_relevant_fields_only(self):
         """DuckDBStorageConfig should only have DuckDB-specific fields."""
         from buttermilk._core.storage_config import DuckDBStorageConfig
 
-        config = DuckDBStorageConfig(
-            type="duckdb", database="test.db", table_name="test_table"
-        )
+        config = DuckDBStorageConfig(type="duckdb", database="test.db", table_name="test_table")
 
         # Should have DuckDB-specific fields
         assert hasattr(config, "database")
@@ -102,16 +94,12 @@ class TestDuckDBStorageConfig:
         from buttermilk._core.storage_config import DuckDBStorageConfig
 
         # Valid type
-        config = DuckDBStorageConfig(
-            type="duckdb", database="test.db", table_name="test_table"
-        )
+        config = DuckDBStorageConfig(type="duckdb", database="test.db", table_name="test_table")
         assert config.type == "duckdb"
 
         # Invalid type should fail
         with pytest.raises(ValueError):
-            DuckDBStorageConfig(
-                type="invalid_type", database="test.db", table_name="test_table"
-            )
+            DuckDBStorageConfig(type="invalid_type", database="test.db", table_name="test_table")
 
     def test_storage_factory_creates_duckdb_config(self):
         """StorageFactory should handle DuckDB config dicts."""

@@ -21,7 +21,6 @@ from buttermilk._core.vertex_batch import (
     BatchJobManager,
     BatchJobManifest,
     BatchRequest,
-    BatchResult,
 )
 
 
@@ -50,13 +49,7 @@ def create_fake_output_jsonl(requests: list[BatchRequest]) -> str:
         entry = {
             "custom_id": req.custom_id,
             "response": {
-                "candidates": [
-                    {
-                        "content": {
-                            "parts": [{"text": f"Response for {req.record_id}"}]
-                        }
-                    }
-                ],
+                "candidates": [{"content": {"parts": [{"text": f"Response for {req.record_id}"}]}}],
                 "usage": {"prompt_tokens": 10, "completion_tokens": 20},
             },
         }
@@ -183,9 +176,7 @@ class TestBatchDecoupledWorkflow:
         manager2 = BatchJobManager(client=mock_vertex_client)
 
         # Configure mock for status check - job still running
-        mock_vertex_client.batches.get.return_value = create_fake_batch_job(
-            vertex_job_name, FakeJobState.JOB_STATE_RUNNING
-        )
+        mock_vertex_client.batches.get.return_value = create_fake_batch_job(vertex_job_name, FakeJobState.JOB_STATE_RUNNING)
 
         # Mock JobState import for get_job_status
         with patch("google.genai.types.JobState", FakeJobState):
@@ -198,9 +189,7 @@ class TestBatchDecoupledWorkflow:
 
         # PHASE 3: Job completes, fetch results
         # Configure mock for completed job
-        mock_vertex_client.batches.get.return_value = create_fake_batch_job(
-            vertex_job_name, FakeJobState.JOB_STATE_SUCCEEDED
-        )
+        mock_vertex_client.batches.get.return_value = create_fake_batch_job(vertex_job_name, FakeJobState.JOB_STATE_SUCCEEDED)
 
         # Create fake output file in the expected location
         output_dir = Path(local_save_dir) / "batch" / job_id / "output"
@@ -260,9 +249,7 @@ class TestBatchDecoupledWorkflow:
         manager2 = BatchJobManager(client=mock_vertex_client)
 
         # Job still running
-        mock_vertex_client.batches.get.return_value = create_fake_batch_job(
-            vertex_job_name, FakeJobState.JOB_STATE_RUNNING
-        )
+        mock_vertex_client.batches.get.return_value = create_fake_batch_job(vertex_job_name, FakeJobState.JOB_STATE_RUNNING)
 
         with patch("google.genai.types.JobState", FakeJobState):
             result = manager2.fetch_results(job_id)
@@ -304,9 +291,7 @@ class TestBatchDecoupledWorkflow:
         manager2 = BatchJobManager(client=mock_vertex_client)
 
         # Job failed
-        mock_vertex_client.batches.get.return_value = create_fake_batch_job(
-            vertex_job_name, FakeJobState.JOB_STATE_FAILED
-        )
+        mock_vertex_client.batches.get.return_value = create_fake_batch_job(vertex_job_name, FakeJobState.JOB_STATE_FAILED)
 
         with patch("google.genai.types.JobState", FakeJobState):
             result = manager2.fetch_results(job_id)

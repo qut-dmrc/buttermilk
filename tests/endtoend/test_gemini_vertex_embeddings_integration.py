@@ -56,9 +56,7 @@ def test_vertex_embedding_minimal_compare(real_bm: BM, embedding_model: str) -> 
     model = TextEmbeddingModel.from_pretrained(embedding_model)
     dim = 128
     inputs: list[str | TextEmbeddingInput] = [TextEmbeddingInput(text=t) for t in texts]
-    results = model.get_embeddings(
-        texts=inputs, auto_truncate=False, output_dimensionality=dim
-    )
+    results = model.get_embeddings(texts=inputs, auto_truncate=False, output_dimensionality=dim)
 
     # Convert to plain lists where needed
     vectors = [list(r.values) for r in results]

@@ -74,9 +74,7 @@ ARTICLES = [
 
 
 @pytest.mark.parametrize("id, url, test_str", ARTICLES)
-@pytest.mark.skip(
-    reason="HTTPPath timestamp issue in cloudpathlib/newspaper causing AttributeError"
-)
+@pytest.mark.skip(reason="HTTPPath timestamp issue in cloudpathlib/newspaper causing AttributeError")
 async def test_from_uri_article(id, url, test_str):
     """Test article extraction from news URLs.
 

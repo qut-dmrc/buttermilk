@@ -29,9 +29,7 @@ class TestAsyncDataUploaderTimestamp:
 
         try:
             # Create an existing file first
-            config = FileStorageConfig(
-                type="file", path=tmp_path, dataset_name="test", split_type="test"
-            )
+            config = FileStorageConfig(type="file", path=tmp_path, dataset_name="test", split_type="test")
 
             storage = FileStorage(config)
 
@@ -115,9 +113,7 @@ class TestAsyncDataUploaderTimestamp:
 
         try:
             # Create storage config for non-existent file
-            config = FileStorageConfig(
-                type="file", path=tmp_path, dataset_name="test", split_type="test"
-            )
+            config = FileStorageConfig(type="file", path=tmp_path, dataset_name="test", split_type="test")
 
             storage = FileStorage(config)
 
@@ -175,9 +171,7 @@ class TestAsyncDataUploaderTimestamp:
 
         try:
             # Create an existing file first
-            config = FileStorageConfig(
-                type="file", path=tmp_path, dataset_name="test", split_type="test"
-            )
+            config = FileStorageConfig(type="file", path=tmp_path, dataset_name="test", split_type="test")
 
             storage = FileStorage(config)
 
@@ -241,9 +235,7 @@ class TestAsyncDataUploaderTimestamp:
 
         try:
             # Create storage
-            config = FileStorageConfig(
-                type="file", path=tmp_path, dataset_name="test", split_type="test"
-            )
+            config = FileStorageConfig(type="file", path=tmp_path, dataset_name="test", split_type="test")
 
             storage = FileStorage(config)
 

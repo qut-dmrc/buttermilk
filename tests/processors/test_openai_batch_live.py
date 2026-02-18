@@ -141,16 +141,18 @@ def _probe_batch_deployment(client):
     ]
 
     for candidate in candidates:
-        jsonl = json.dumps({
-            "custom_id": "probe-001",
-            "method": "POST",
-            "url": "/chat/completions",
-            "body": {
-                "model": candidate,
-                "messages": [{"role": "user", "content": "Say hi"}],
-                "max_tokens": 5,
-            },
-        })
+        jsonl = json.dumps(
+            {
+                "custom_id": "probe-001",
+                "method": "POST",
+                "url": "/chat/completions",
+                "body": {
+                    "model": candidate,
+                    "messages": [{"role": "user", "content": "Say hi"}],
+                    "max_tokens": 5,
+                },
+            }
+        )
 
         try:
             uploaded = client.files.create(
@@ -308,7 +310,10 @@ class TestOpenAIBatchLive:
         status = manager.get_batch_status(openai_batch_id)
         assert status["openai_batch_id"] == openai_batch_id
         assert status["status"] in {
-            "validating", "in_progress", "finalizing", "completed",
+            "validating",
+            "in_progress",
+            "finalizing",
+            "completed",
         }
         assert status["total"] >= 0
         print(f"\nBatch {openai_batch_id} status: {status['status']}")

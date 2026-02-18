@@ -81,9 +81,7 @@ class TestChromaDBBatching:
             collection = embeddings.collection
             result = collection.get()
 
-            assert len(result["ids"]) == num_chunks, (
-                f"Expected {num_chunks} chunks to be stored, but found {len(result['ids'])}"
-            )
+            assert len(result["ids"]) == num_chunks, f"Expected {num_chunks} chunks to be stored, but found {len(result['ids'])}"
 
             # Verify some chunks have correct metadata
             assert "TEST_CHUNK_0" in result["ids"]

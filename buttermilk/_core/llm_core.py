@@ -497,9 +497,7 @@ class LLMCore(ObservabilityMixin):
 
         # Convert to LLM messages
         try:
-            llm_messages, processed_placeholders = make_messages(
-                local_template=result.rendered, record=record, context=context
-            )
+            llm_messages, processed_placeholders = make_messages(local_template=result.rendered, record=record, context=context)
         except Exception as e:
             raise ProcessingError(f"Failed to create messages from template '{self.template}'") from e
 

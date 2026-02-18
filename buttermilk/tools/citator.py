@@ -17,9 +17,7 @@ class FormattedCitation(BaseModel):
     title: str = pydantic.Field(..., description="Title of the work being cited")
     citation: str = pydantic.Field(..., description="Formatted citation text")
     style: str = pydantic.Field(..., description="Citation style used (e.g., APA, MLA)")
-    error: str | None = pydantic.Field(
-        None, description="Error message if citation generation failed"
-    )
+    error: str | None = pydantic.Field(None, description="Error message if citation generation failed")
 
 
 class Citator(LLMAgent):
@@ -41,9 +39,7 @@ class Citator(LLMAgent):
 
         # Set defaults for agent configuration
         kwargs["agent_id"] = kwargs.get("agent_id", "citator")
-        kwargs["description"] = kwargs.get(
-            "description", "Generates a citation for a given text using an LLM."
-        )
+        kwargs["description"] = kwargs.get("description", "Generates a citation for a given text using an LLM.")
 
         # Set the expected output model for the LLM's response
         output_model = output_model or FormattedCitation
@@ -51,9 +47,7 @@ class Citator(LLMAgent):
         # Initialize parent class - kwargs are passed through to AgentConfig
         super().__init__(output_model=output_model, **kwargs)
 
-    async def process(
-        self, item: Record, *, processor_stage: str = "cite", **kwargs
-    ) -> AsyncGenerator[Record, None]:
+    async def process(self, item: Record, *, processor_stage: str = "cite", **kwargs) -> AsyncGenerator[Record, None]:
         """
         Process a Record to generate a citation using the LLM.
 
