@@ -781,7 +781,7 @@ class BatchJobManager(BaseModel):
             # Strip meta/ prefix if already present to avoid double-prefixing
             model_name = resolved_model
             if model_name.lower().startswith("meta/"):
-                model_name = model_name[len("meta/"):]
+                model_name = model_name[len("meta/") :]
             return f"publishers/meta/models/{model_name}"
         else:
             # Gemini models - strip google/ prefix if present (Batch API expects bare names)
@@ -1119,6 +1119,7 @@ class BatchJobManager(BaseModel):
             if not project:
                 try:
                     from buttermilk import bm
+
                     project = bm.session_info.project_name
                 except Exception:
                     pass
@@ -1252,9 +1253,7 @@ class BatchJobManager(BaseModel):
 
         if not manifest_path:
             if search:
-                raise FileNotFoundError(
-                    f"Manifest not found for job_id: {job_id} (searched all locations)"
-                )
+                raise FileNotFoundError(f"Manifest not found for job_id: {job_id} (searched all locations)")
             else:
                 raise FileNotFoundError(
                     f"Manifest not found for job_id: {job_id}. "
@@ -1721,9 +1720,7 @@ class OpenAIBatchJobManager(BaseModel):
             except Exception as e:
                 logger.warning(f"Failed to save input JSONL to storage: {e}")
 
-            logger.info(
-                f"OpenAI batch job submitted: {batch.id} (internal ID: {job_id})"
-            )
+            logger.info(f"OpenAI batch job submitted: {batch.id} (internal ID: {job_id})")
 
             return {
                 "job_id": job_id,
@@ -1771,35 +1768,20 @@ class OpenAIBatchJobManager(BaseModel):
 
             completed = getattr(batch.request_counts, "completed", 0) or 0
             total = getattr(batch.request_counts, "total", 0) or 0
-            logger.debug(
-                f"Batch {openai_batch_id} status: {batch.status} "
-                f"({completed}/{total})"
-            )
+            logger.debug(f"Batch {openai_batch_id} status: {batch.status} ({completed}/{total})")
 
             if batch.status in terminal_states:
                 if batch.status == "completed":
-                    logger.info(
-                        f"OpenAI batch {openai_batch_id} completed successfully"
-                    )
+                    logger.info(f"OpenAI batch {openai_batch_id} completed successfully")
                     return batch
                 elif batch.status == "failed":
-                    raise RuntimeError(
-                        f"OpenAI batch {openai_batch_id} failed"
-                    )
+                    raise RuntimeError(f"OpenAI batch {openai_batch_id} failed")
                 elif batch.status == "expired":
-                    raise RuntimeError(
-                        f"OpenAI batch {openai_batch_id} expired "
-                        f"(did not complete within completion window)"
-                    )
+                    raise RuntimeError(f"OpenAI batch {openai_batch_id} expired (did not complete within completion window)")
                 elif batch.status == "cancelled":
-                    raise RuntimeError(
-                        f"OpenAI batch {openai_batch_id} was cancelled"
-                    )
+                    raise RuntimeError(f"OpenAI batch {openai_batch_id} was cancelled")
 
-        raise TimeoutError(
-            f"OpenAI batch {openai_batch_id} did not complete "
-            f"within {self.max_wait_hours} hours"
-        )
+        raise TimeoutError(f"OpenAI batch {openai_batch_id} did not complete within {self.max_wait_hours} hours")
 
     def get_batch_status(self, openai_batch_id: str) -> dict[str, Any]:
         """Get the current status of an OpenAI batch job.
@@ -1860,15 +1842,10 @@ class OpenAIBatchJobManager(BaseModel):
         batch = self.client.batches.retrieve(openai_batch_id)
 
         if batch.status != "completed":
-            raise RuntimeError(
-                f"Cannot download results: batch status is '{batch.status}', "
-                f"expected 'completed'"
-            )
+            raise RuntimeError(f"Cannot download results: batch status is '{batch.status}', expected 'completed'")
 
         if not batch.output_file_id:
-            raise RuntimeError(
-                f"Batch {openai_batch_id} completed but has no output_file_id"
-            )
+            raise RuntimeError(f"Batch {openai_batch_id} completed but has no output_file_id")
 
         request_map = {r.custom_id: r for r in requests}
         converter = OpenAIMessageConverter()
@@ -1944,15 +1921,17 @@ class OpenAIBatchJobManager(BaseModel):
                             error_obj = err_entry.get("error", {})
                             error_msg = error_obj.get("message", str(error_obj)) if isinstance(error_obj, dict) else str(error_obj)
 
-                            results.append(BatchResult(
-                                custom_id=custom_id,
-                                record_id=request.record_id if request else "",
-                                response=None,
-                                error=error_msg,
-                                model=request.model if request else None,
-                                variant=request.variant if request else None,
-                                processor_index=request.processor_index if request else None,
-                            ))
+                            results.append(
+                                BatchResult(
+                                    custom_id=custom_id,
+                                    record_id=request.record_id if request else "",
+                                    response=None,
+                                    error=error_msg,
+                                    model=request.model if request else None,
+                                    variant=request.variant if request else None,
+                                    processor_index=request.processor_index if request else None,
+                                )
+                            )
                     except json.JSONDecodeError:
                         pass
             except Exception as e:
@@ -1981,9 +1960,7 @@ class OpenAIBatchJobManager(BaseModel):
         Returns:
             List of BatchResult objects
         """
-        submit_result = await self.submit_batch(
-            model, requests, metadata=metadata, max_tokens=max_tokens
-        )
+        submit_result = await self.submit_batch(model, requests, metadata=metadata, max_tokens=max_tokens)
         openai_batch_id = submit_result["openai_batch_id"]
 
         await self.wait_for_completion(openai_batch_id)
@@ -2057,9 +2034,7 @@ class OpenAIBatchJobManager(BaseModel):
         if session.save_dir_base:
             try:
                 base = AnyPath(session.save_dir_base)
-                stable_path = (
-                    base / session.project_name / "_batches" / job_id / "manifest.json"
-                )
+                stable_path = base / session.project_name / "_batches" / job_id / "manifest.json"
                 if stable_path.exists():
                     manifest_path = stable_path
             except Exception as e:
@@ -2068,18 +2043,14 @@ class OpenAIBatchJobManager(BaseModel):
         # Check current session path
         if not manifest_path and session.save_dir:
             try:
-                session_path = AnyPath(
-                    f"{session.save_dir}/batch/{job_id}/manifest.json"
-                )
+                session_path = AnyPath(f"{session.save_dir}/batch/{job_id}/manifest.json")
                 if session_path.exists():
                     manifest_path = session_path
             except Exception:
                 pass
 
         if not manifest_path:
-            raise FileNotFoundError(
-                f"OpenAI batch manifest not found for job_id: {job_id}"
-            )
+            raise FileNotFoundError(f"OpenAI batch manifest not found for job_id: {job_id}")
 
         content = manifest_path.read_text()
         return OpenAIBatchManifest.model_validate_json(content)
@@ -2120,9 +2091,7 @@ class OpenAIBatchJobManager(BaseModel):
             }
 
         # Download and process results
-        results = self.download_results(
-            manifest.openai_batch_id, manifest.requests
-        )
+        results = self.download_results(manifest.openai_batch_id, manifest.requests)
 
         # Calculate costs and build combined data
         combined_data = []
@@ -2182,10 +2151,7 @@ class OpenAIBatchJobManager(BaseModel):
             "total_cost_usd": total_cost_usd,
         }
 
-        logger.info(
-            f"Processed OpenAI batch results for job {job_id}. "
-            f"Total cost: ${total_cost_usd:.4f}"
-        )
+        logger.info(f"Processed OpenAI batch results for job {job_id}. Total cost: ${total_cost_usd:.4f}")
 
         return {
             "summary": summary,

@@ -40,9 +40,7 @@ class AgentRegistry:
             cls.discover()
             agent_class = cls._agents.get(name)
             if agent_class is None:
-                raise ValueError(
-                    f"Agent class '{name}' not found in registry after discovery."
-                )
+                raise ValueError(f"Agent class '{name}' not found in registry after discovery.")
         return agent_class
 
     @classmethod
@@ -69,9 +67,7 @@ class AgentRegistry:
         for importer, modname, ispkg in pkgutil.walk_packages(
             path=package.__path__,
             prefix=prefix,
-            onerror=lambda name: logger.warning(
-                f"AgentRegistry hit error importing {name}"
-            ),
+            onerror=lambda name: logger.warning(f"AgentRegistry hit error importing {name}"),
         ):
             try:
                 # Import the module to trigger registration via decorators or class loading

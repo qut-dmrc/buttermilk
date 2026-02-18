@@ -319,6 +319,7 @@ class VertexBatchProcessor(BatchProcessorCore):
             }
             # Include model parameters from config if available
             from buttermilk import bm
+
             if self.model in bm.llms.connections:
                 config = bm.llms.connections[self.model]
                 structured_variant["model_config"] = {
@@ -525,6 +526,7 @@ class VertexBatchProcessor(BatchProcessorCore):
         if resolved_region is None:
             # Check if Gemini 3 model (uses global endpoint)
             from buttermilk import bm
+
             resolved_model = self.model
             if self.model in bm.llms.connections:
                 config = bm.llms.connections[self.model]

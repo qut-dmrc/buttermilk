@@ -42,5 +42,6 @@ def __getattr__(name: str):
     """Lazy import for heavy BigQuery utilities."""
     if name == "construct_dict_from_schema":
         from .bq import construct_dict_from_schema
+
         return construct_dict_from_schema
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

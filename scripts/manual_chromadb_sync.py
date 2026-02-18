@@ -39,9 +39,7 @@ def check_local_chromadb(local_path: Path) -> bool:
 def check_remote_exists(remote_path: str) -> bool:
     """Check if remote path exists."""
     try:
-        result = subprocess.run(
-            ["gsutil", "ls", remote_path], check=False, capture_output=True, text=True
-        )
+        result = subprocess.run(["gsutil", "ls", remote_path], check=False, capture_output=True, text=True)
 
         if result.returncode == 0:
             print(f"⚠️  Remote path exists: {remote_path}")
@@ -160,12 +158,8 @@ def create_backup(local_path: Path) -> bool:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Manual sync tool for ChromaDB remote storage"
-    )
-    parser.add_argument(
-        "--local", type=Path, required=True, help="Local ChromaDB directory path"
-    )
+    parser = argparse.ArgumentParser(description="Manual sync tool for ChromaDB remote storage")
+    parser.add_argument("--local", type=Path, required=True, help="Local ChromaDB directory path")
     parser.add_argument(
         "--remote",
         type=str,
@@ -177,12 +171,8 @@ def main():
         action="store_true",
         help="Show what would be uploaded without actually uploading",
     )
-    parser.add_argument(
-        "--no-backup", action="store_true", help="Skip local backup creation"
-    )
-    parser.add_argument(
-        "--force", action="store_true", help="Force sync without confirmation"
-    )
+    parser.add_argument("--no-backup", action="store_true", help="Skip local backup creation")
+    parser.add_argument("--force", action="store_true", help="Force sync without confirmation")
 
     args = parser.parse_args()
 

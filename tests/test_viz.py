@@ -98,9 +98,7 @@ class TestInitViz:
         # Should match cyberpunk categorical colors (within tolerance)
         assert len(palette) >= 6  # At least 6 colors
 
-    @pytest.mark.skipif(
-        not VIZ_AVAILABLE, reason="Visualization dependencies not available"
-    )
+    @pytest.mark.skipif(not VIZ_AVAILABLE, reason="Visualization dependencies not available")
     def test_init_viz_configures_all_rcparams(self):
         """Test that all important rcParams are set."""
         init_viz(profile="hidpi", theme="cyberpunk")

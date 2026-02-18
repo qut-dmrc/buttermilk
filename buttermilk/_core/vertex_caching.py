@@ -113,9 +113,7 @@ class CriteriaCacheManager(BaseModel):
         from google.genai.types import Content, CreateCachedContentConfig, Part
 
         effective_model = model or self.model
-        cache_key = self._compute_cache_key(
-            effective_model, system_instruction, criteria_content
-        )
+        cache_key = self._compute_cache_key(effective_model, system_instruction, criteria_content)
 
         # Check local registry first
         if cache_key in self._cache_registry:
@@ -178,9 +176,7 @@ class CriteriaCacheManager(BaseModel):
             return cached.name
 
         except Exception as e:
-            raise RuntimeError(
-                f"Failed to create cache for {display_name}: {e}"
-            ) from e
+            raise RuntimeError(f"Failed to create cache for {display_name}: {e}") from e
 
     def get_cache_info(self, cache_name: str) -> dict[str, Any]:
         """Get information about a cache.
@@ -218,15 +214,11 @@ class CriteriaCacheManager(BaseModel):
             self.client.caches.delete(name=cache_name)
 
             # Remove from local registries
-            keys_to_remove = [
-                k for k, v in self._cache_registry.items() if v.name == cache_name
-            ]
+            keys_to_remove = [k for k, v in self._cache_registry.items() if v.name == cache_name]
             for key in keys_to_remove:
                 del self._cache_registry[key]
 
-            names_to_remove = [
-                k for k, v in self._name_to_cache.items() if v == cache_name
-            ]
+            names_to_remove = [k for k, v in self._name_to_cache.items() if v == cache_name]
             for name in names_to_remove:
                 del self._name_to_cache[name]
 
@@ -273,9 +265,7 @@ class CriteriaCacheManager(BaseModel):
             except Exception:
                 del self._cache_registry[cache_key]
                 # Also remove from name mapping
-                names_to_remove = [
-                    k for k, v in self._name_to_cache.items() if v == cached.name
-                ]
+                names_to_remove = [k for k, v in self._name_to_cache.items() if v == cached.name]
                 for name in names_to_remove:
                     del self._name_to_cache[name]
                 removed += 1

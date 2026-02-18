@@ -2,13 +2,6 @@
 
 from .debug_agent import DebugAgent
 from .models import *
-from .trace_models import (
-    ErrorContext,
-    TraceDiff,
-    TraceFile,
-    TraceSummary,
-    TimelineEvent,
-)
 from .trace_analysis import (
     diff_traces,
     filter_traces,
@@ -21,6 +14,13 @@ from .trace_analysis import (
     load_trace_file,
     load_traces,
     summarize,
+)
+from .trace_models import (
+    ErrorContext,
+    TimelineEvent,
+    TraceDiff,
+    TraceFile,
+    TraceSummary,
 )
 
 __all__ = [

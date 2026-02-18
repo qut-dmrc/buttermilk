@@ -127,9 +127,7 @@ class TestAgentAnnouncement:
 
         # Valid announcement types
         for ann_type in ["initial", "response", "update"]:
-            announcement = AgentAnnouncement(
-                content="Test", agent_config=agent_config, announcement_type=ann_type
-            )
+            announcement = AgentAnnouncement(content="Test", agent_config=agent_config, announcement_type=ann_type)
             assert announcement.announcement_type == ann_type
 
         # Invalid type should raise validation error

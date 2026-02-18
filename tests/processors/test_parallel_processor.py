@@ -276,22 +276,16 @@ class TestParallelProcessorWithVariantProcessor:
 
             async def process(self, record, *, processor_stage, **kwargs):
                 for model in ["gpt", "claude", "gemini"]:
-                    yield record.model_copy(
-                        update={"content": f"{record.content}_llm_{model}"}
-                    )
+                    yield record.model_copy(update={"content": f"{record.content}_llm_{model}"})
 
         class APIVariantSimulator:
             """Simulates VariantProcessor(Cope) with 2 repetitions."""
 
             async def process(self, record, *, processor_stage, **kwargs):
                 for run in [1, 2]:
-                    yield record.model_copy(
-                        update={"content": f"{record.content}_api_run{run}"}
-                    )
+                    yield record.model_copy(update={"content": f"{record.content}_api_run{run}"})
 
-        proc = ParallelProcessor(
-            processors=[LLMVariantSimulator(), APIVariantSimulator()]
-        )
+        proc = ParallelProcessor(processors=[LLMVariantSimulator(), APIVariantSimulator()])
 
         record = BaseRecord(record_id="test-1", content="input")
 

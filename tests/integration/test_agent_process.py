@@ -55,6 +55,4 @@ class TestDifferentiatorAgent:
         data = model.model_dump()
 
         assert "field1" in data
-        assert (
-            "_private" not in data
-        )  # Private attributes should not be in the output dict
+        assert "_private" not in data  # Private attributes should not be in the output dict

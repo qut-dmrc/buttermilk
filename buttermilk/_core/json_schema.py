@@ -147,8 +147,7 @@ def convert_enum_values_to_strings(obj: Any) -> Any:
     """
     if isinstance(obj, dict):
         return {
-            k: ([str(v) for v in val] if k == "enum" and isinstance(val, list) else convert_enum_values_to_strings(val))
-            for k, val in obj.items()
+            k: ([str(v) for v in val] if k == "enum" and isinstance(val, list) else convert_enum_values_to_strings(val)) for k, val in obj.items()
         }
     elif isinstance(obj, list):
         return [convert_enum_values_to_strings(item) for item in obj]

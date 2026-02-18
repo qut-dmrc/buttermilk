@@ -75,9 +75,7 @@ def example_scatter_plot():
 
     for i, (cat, color) in enumerate(zip(["Group A", "Group B", "Group C"], colors)):
         mask = categories == cat
-        ax.scatter(
-            x[mask], y[mask], label=cat, color=color, s=50, alpha=0.7, edgecolors="none"
-        )
+        ax.scatter(x[mask], y[mask], label=cat, color=color, s=50, alpha=0.7, edgecolors="none")
 
     ax.set_xlabel("Variable X")
     ax.set_ylabel("Variable Y")
@@ -164,9 +162,7 @@ def example_seaborn_integration():
     axes[0, 1].set_title("Box Plot")
 
     # Scatter plot
-    sns.scatterplot(
-        data=tips, x="total_bill", y="tip", hue="time", ax=axes[1, 0], s=100, alpha=0.7
-    )
+    sns.scatterplot(data=tips, x="total_bill", y="tip", hue="time", ax=axes[1, 0], s=100, alpha=0.7)
     axes[1, 0].set_title("Scatter Plot")
 
     # Bar plot

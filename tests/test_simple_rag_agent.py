@@ -35,11 +35,7 @@ class TestSimpleRagAgent:
     def test_research_result_structure(self):
         """Test ResearchResult model structure."""
         result = ResearchResult(
-            literature=[
-                Reference(
-                    summary="Test finding", citation="Test Document (ID: test123)"
-                )
-            ],
+            literature=[Reference(summary="Test finding", citation="Test Document (ID: test123)")],
             response="Test synthesis",
             summary="Brief summary",
         )

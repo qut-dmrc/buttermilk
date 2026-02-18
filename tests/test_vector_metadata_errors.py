@@ -90,11 +90,7 @@ class TestMetadataHandling:
         enhanced_metadata = {
             "content_type": chunk_metadata.get("content_type", "unknown"),
             "chunk_type": chunk_metadata.get("chunk_type", "unknown"),
-            **{
-                k: v
-                for k, v in chunk_metadata.items()
-                if k not in ["content_type", "chunk_type"]
-            },
+            **{k: v for k, v in chunk_metadata.items() if k not in ["content_type", "chunk_type"]},
         }
 
         # Verify the result
@@ -127,9 +123,7 @@ class TestChunkMetadataOrigin:
 
         for test_input in test_cases:
             result = scrub_serializable(test_input)
-            assert isinstance(result, dict), (
-                f"scrub_serializable returned {type(result)} for {test_input}"
-            )
+            assert isinstance(result, dict), f"scrub_serializable returned {type(result)} for {test_input}"
             assert type(result).__name__ != "dict_items"
 
     def test_scrub_serializable_with_dict_items_input(self):
