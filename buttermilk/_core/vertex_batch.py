@@ -126,7 +126,7 @@ class BatchResult(BaseModel):
 _CLAUDE_MODEL_PATTERNS = ("claude", "anthropic")
 
 # Model name patterns that indicate OpenAI/GPT models
-_OPENAI_MODEL_PATTERNS = ("gpt",)
+_OPENAI_MODEL_PATTERNS = ("gpt", "grok")
 
 
 class BatchMessageConverter(ABC):
@@ -676,8 +676,6 @@ class BatchJobManager(BaseModel):
         Returns:
             GCS URI of uploaded file
         """
-        from buttermilk.utils.save import upload_text
-
         # Get stable batch directory
         batch_dir = self._resolve_batch_dir(job_id)
 
@@ -1108,7 +1106,7 @@ class BatchJobManager(BaseModel):
                     pass
 
             if not project:
-                logger.warning(f"Could not determine project for region-specific client, using default client")
+                logger.warning("Could not determine project for region-specific client, using default client")
                 return self.client
 
             logger.info(f"Creating client for region: {region} (current: {current_region})")
@@ -1141,8 +1139,6 @@ class BatchJobManager(BaseModel):
         Returns:
             GCS URI of saved manifest
         """
-        from buttermilk.utils.save import upload_text
-
         # Manifests always live at the root of the batch directory
         batch_dir = self._resolve_batch_dir(job_id)
         manifest_uri = f"{batch_dir}/manifest.json"
