@@ -1530,19 +1530,26 @@ class OpenAIBatchJobManager(BaseModel):
     """Manage OpenAI Batch API jobs.
 
     Handles JSONL generation, file upload, batch creation, polling,
-    and result retrieval via the OpenAI API.
+    and result retrieval via the OpenAI API. Works with both direct
+    OpenAI and Azure OpenAI clients.
 
     Uses buttermilk's session save_dir for manifest persistence.
 
     Attributes:
-        client: OpenAI client instance
+        client: OpenAI or AzureOpenAI client instance
+        endpoint: API endpoint for batch requests. Use "/v1/chat/completions"
+            for direct OpenAI, "/chat/completions" for Azure OpenAI.
         poll_interval: Seconds between job status checks (default: 30)
         max_wait_hours: Maximum hours to wait for job completion (default: 24)
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    client: Any = Field(..., description="OpenAI client instance")
+    client: Any = Field(..., description="OpenAI or AzureOpenAI client instance")
+    endpoint: str = Field(
+        default="/v1/chat/completions",
+        description="Batch endpoint path. '/v1/chat/completions' for OpenAI, '/chat/completions' for Azure.",
+    )
     poll_interval: int = Field(default=30, description="Seconds between status checks")
     max_wait_hours: int = Field(default=24, description="Max wait time in hours")
 
@@ -1655,7 +1662,7 @@ class OpenAIBatchJobManager(BaseModel):
             import io
 
             uploaded_file = self.client.files.create(
-                file=io.BytesIO(jsonl_bytes),
+                file=("batch_input.jsonl", io.BytesIO(jsonl_bytes)),
                 purpose="batch",
             )
             input_file_id = uploaded_file.id
@@ -1664,7 +1671,7 @@ class OpenAIBatchJobManager(BaseModel):
             # Step 2: Create batch job
             batch = self.client.batches.create(
                 input_file_id=input_file_id,
-                endpoint="/v1/chat/completions",
+                endpoint=self.endpoint,
                 completion_window="24h",
                 metadata=metadata,
             )
@@ -1676,15 +1683,18 @@ class OpenAIBatchJobManager(BaseModel):
                 "input_file_id": input_file_id,
             }
 
-            # Step 3: Save manifest for recovery
-            self._save_manifest(
-                job_id=job_id,
-                openai_batch_id=batch.id,
-                model=model,
-                input_file_id=input_file_id,
-                requests=requests,
-                metadata=metadata,
-            )
+            # Step 3: Save manifest for recovery (non-fatal if no save_dir configured)
+            try:
+                self._save_manifest(
+                    job_id=job_id,
+                    openai_batch_id=batch.id,
+                    model=model,
+                    input_file_id=input_file_id,
+                    requests=requests,
+                    metadata=metadata,
+                )
+            except Exception as e:
+                logger.warning(f"Failed to save manifest (batch still submitted): {e}")
 
             # Step 4: Also save the JSONL to our storage for audit
             try:
