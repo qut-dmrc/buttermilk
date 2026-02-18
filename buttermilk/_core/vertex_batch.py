@@ -125,6 +125,9 @@ class BatchResult(BaseModel):
 # Model name patterns that indicate Claude/Anthropic models
 _CLAUDE_MODEL_PATTERNS = ("claude", "anthropic")
 
+# Model name patterns that indicate OpenAI/GPT models
+_OPENAI_MODEL_PATTERNS = ("gpt",)
+
 
 class BatchMessageConverter(ABC):
     """Abstract base for converting LiteLLM messages to provider-specific batch format."""
@@ -303,24 +306,111 @@ class ClaudeMessageConverter(BatchMessageConverter):
         return None
 
 
+class OpenAIMessageConverter(BatchMessageConverter):
+    """Convert messages to/from OpenAI Batch API format.
+
+    OpenAI batch format:
+    - Input: {"custom_id": ..., "method": "POST", "url": "/v1/chat/completions",
+              "body": {"model": ..., "messages": [...], ...}}
+    - Output: {"id": ..., "custom_id": ..., "response": {"status_code": 200,
+              "body": {"choices": [...], "usage": {...}}}, "error": null}
+
+    Messages are passed through directly (OpenAI uses the same format as LiteLLM).
+    Structured output uses native response_format with json_schema.
+    """
+
+    def __init__(self, max_tokens: int | None = None, model: str | None = None):
+        self.max_tokens = max_tokens
+        self.model = model
+
+    def build_request(self, request: BatchRequest) -> dict[str, Any]:
+        """Build an OpenAI batch request entry.
+
+        When request.response_schema is set, includes response_format with
+        json_schema for native structured output.
+        """
+        body: dict[str, Any] = {
+            "model": request.model or self.model,
+            "messages": request.messages,
+        }
+
+        if self.max_tokens is not None:
+            body["max_tokens"] = self.max_tokens
+
+        if request.response_schema:
+            schema = request.response_schema
+            schema_name = schema.get("title", "structured_response")
+            body["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": schema_name,
+                    "schema": schema,
+                    "strict": True,
+                },
+            }
+
+        return {
+            "custom_id": request.custom_id,
+            "method": "POST",
+            "url": "/v1/chat/completions",
+            "body": body,
+        }
+
+    def extract_response(self, entry: dict[str, Any]) -> str | None:
+        """Extract response text from OpenAI batch result.
+
+        Handles both text responses and tool_calls (function calling).
+        Path: response.body.choices[0].message.content
+        Tool path: response.body.choices[0].message.tool_calls[0].function.arguments
+        """
+        response = entry.get("response", {})
+        body = response.get("body", {}) if isinstance(response, dict) else {}
+        choices = body.get("choices", [])
+
+        if not choices:
+            return None
+
+        message = choices[0].get("message", {})
+
+        # Check for tool_calls first (structured output via function calling)
+        tool_calls = message.get("tool_calls")
+        if tool_calls and len(tool_calls) > 0:
+            function = tool_calls[0].get("function", {})
+            arguments = function.get("arguments")
+            if arguments:
+                return arguments
+
+        # Standard text content
+        content = message.get("content")
+        return content
+
+
 def _is_claude_model(model: str) -> bool:
     """Check if model identifier indicates a Claude/Anthropic model."""
     model_lower = model.lower()
     return any(pattern in model_lower for pattern in _CLAUDE_MODEL_PATTERNS)
 
 
+def _is_openai_model(model: str) -> bool:
+    """Check if model identifier indicates an OpenAI/GPT model."""
+    model_lower = model.lower()
+    return any(pattern in model_lower for pattern in _OPENAI_MODEL_PATTERNS)
+
+
 def get_message_converter(model: str, **kwargs: Any) -> BatchMessageConverter:
     """Factory function to get the appropriate converter for a model.
 
     Args:
-        model: Model identifier (e.g., "gemini-2.5-flash", "claude-sonnet-4")
-        **kwargs: Provider-specific options (e.g., max_tokens for Claude)
+        model: Model identifier (e.g., "gemini-2.5-flash", "claude-sonnet-4", "gpt-4o")
+        **kwargs: Provider-specific options (e.g., max_tokens for Claude/OpenAI)
 
     Returns:
         Appropriate BatchMessageConverter instance
     """
     if _is_claude_model(model):
         return ClaudeMessageConverter(max_tokens=kwargs.get("max_tokens"))
+    if _is_openai_model(model):
+        return OpenAIMessageConverter(max_tokens=kwargs.get("max_tokens"), model=model)
     return GeminiMessageConverter()
 
 
@@ -879,7 +969,7 @@ class BatchJobManager(BaseModel):
     def _extract_response(self, entry: dict[str, Any]) -> str | None:
         """Extract response text from batch result entry.
 
-        Handles both Gemini and Claude response formats by trying each converter.
+        Handles Gemini, Claude, and OpenAI response formats by trying each converter.
 
         Args:
             entry: The result entry dictionary
@@ -887,7 +977,14 @@ class BatchJobManager(BaseModel):
         Returns:
             Response text or None
         """
-        # Try Gemini format first (most common)
+        # Try OpenAI format (check for response.body.choices pattern)
+        response = entry.get("response", {})
+        if isinstance(response, dict) and "body" in response and "choices" in response.get("body", {}):
+            result = OpenAIMessageConverter().extract_response(entry)
+            if result is not None:
+                return result
+
+        # Try Gemini format (most common for Vertex)
         result = GeminiMessageConverter().extract_response(entry)
         if result is not None:
             return result
