@@ -1,5 +1,6 @@
 """CSV Metadata Logger for tracking image generation metadata."""
 
+import asyncio
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, AsyncGenerator
@@ -25,9 +26,7 @@ class CSVMetadataLogger(BaseModel):
     _accumulated_records: list[dict] = PrivateAttr(default_factory=list)
     _session_id: str | None = PrivateAttr(default=None)
 
-    async def process(
-        self, record: BaseRecord, *, processor_stage: str, **kwargs: Any
-    ) -> AsyncGenerator[BaseRecord, None]:
+    async def process(self, record: BaseRecord, *, processor_stage: str, **kwargs: Any) -> AsyncGenerator[BaseRecord, None]:
         """Accumulate metadata and pass record through unchanged."""
         # Extract metadata into dict for CSV row
         storage_uri = record.metadata.get("storage_uri", "")
@@ -39,18 +38,12 @@ class CSVMetadataLogger(BaseModel):
 
         # Extract model name from class object or use stored string
         model_class = record.metadata.get("model_class", "unknown")
-        model_name = (
-            model_class.__name__
-            if hasattr(model_class, "__name__")
-            else str(model_class)
-        )
+        model_name = model_class.__name__ if hasattr(model_class, "__name__") else str(model_class)
 
         row = {
             "prompt": record.content,
             "model": model_name,
-            "timestamp": record.metadata.get(
-                "timestamp", datetime.now(timezone.utc).isoformat()
-            ),
+            "timestamp": record.metadata.get("timestamp", datetime.now(timezone.utc).isoformat()),
             "filename": filename,
             "scenario": record.metadata.get("scenario", ""),
             "session_id": record.metadata.get("session_id", ""),
@@ -72,9 +65,7 @@ class CSVMetadataLogger(BaseModel):
             return
 
         path_parts = [part for part in [self.base_path, self._session_id] if part]
-        gcs_path = (
-            GSPath(f"gs://{self.bucket}") / "/".join(path_parts) / "generation_log.csv"
-        )
+        gcs_path = GSPath(f"gs://{self.bucket}") / "/".join(path_parts) / "generation_log.csv"
 
         logger.info(
             "csv_metadata_logger_finalizing",
@@ -103,11 +94,15 @@ class CSVMetadataLogger(BaseModel):
             df = pd.DataFrame(columns=columns)
 
         # Write to GCS
-        with gcs_path.open("w") as f:
-            df.to_csv(f, index=False)
+        await asyncio.to_thread(self._write_csv_to_gcs, gcs_path, df)
 
         logger.info(
             "csv_metadata_logger_complete",
             output_path=str(gcs_path),
             rows_written=len(df),
         )
+
+    def _write_csv_to_gcs(self, gcs_path: GSPath, df: pd.DataFrame) -> None:
+        """Helper to write CSV to GCS in a thread."""
+        with gcs_path.open("w") as f:
+            df.to_csv(f, index=False)
