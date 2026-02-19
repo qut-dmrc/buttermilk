@@ -131,6 +131,9 @@ _OPENAI_MODEL_PATTERNS = ("gpt", "grok")
 # Model name patterns that indicate Llama/Meta models
 _LLAMA_MODEL_PATTERNS = ("llama", "meta/")
 
+# Model name patterns that indicate Llama/Meta models (use OpenAI batch format on Vertex)
+_LLAMA_MODEL_PATTERNS = ("llama", "meta/")
+
 
 class BatchMessageConverter(ABC):
     """Abstract base for converting LiteLLM messages to provider-specific batch format."""
@@ -410,7 +413,8 @@ def get_message_converter(model: str, **kwargs: Any) -> BatchMessageConverter:
     """Factory function to get the appropriate converter for a model.
 
     Args:
-        model: Model identifier (e.g., "gemini-2.5-flash", "claude-sonnet-4", "gpt-4o")
+        model: Model identifier (e.g., "gemini-2.5-flash", "claude-sonnet-4", "gpt-4o",
+               "meta/llama-4-maverick-17b-128e-instruct-maas")
         **kwargs: Provider-specific options (e.g., max_tokens for Claude/OpenAI)
 
     Returns:
@@ -418,7 +422,7 @@ def get_message_converter(model: str, **kwargs: Any) -> BatchMessageConverter:
     """
     if _is_claude_model(model):
         return ClaudeMessageConverter(max_tokens=kwargs.get("max_tokens"))
-    if _is_openai_model(model):
+    if _is_openai_model(model) or _is_llama_model(model):
         return OpenAIMessageConverter(max_tokens=kwargs.get("max_tokens"), model=model)
     if _is_llama_model(model):
         return OpenAIMessageConverter(max_tokens=kwargs.get("max_tokens"), model=model)
@@ -768,7 +772,7 @@ class BatchJobManager(BaseModel):
         # First, resolve short alias to full model name if it exists in the registry
         resolved_model = self._resolve_model_alias(model)
 
-        if "claude" in resolved_model.lower() or "anthropic" in resolved_model.lower():
+        if _is_claude_model(resolved_model):
             # Claude models use publisher path
             claude_map = {
                 "claude-sonnet-4": "publishers/anthropic/models/claude-sonnet-4",
@@ -777,7 +781,7 @@ class BatchJobManager(BaseModel):
             }
             return claude_map.get(resolved_model, f"publishers/anthropic/models/{resolved_model}")
         elif _is_llama_model(resolved_model):
-            # Llama models use Meta publisher path
+            # Llama/Meta models use publisher path: meta/llama-... -> publishers/meta/models/llama-...
             # Strip meta/ prefix if already present to avoid double-prefixing
             model_name = resolved_model
             if model_name.lower().startswith("meta/"):
