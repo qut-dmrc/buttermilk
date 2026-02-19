@@ -34,7 +34,6 @@ from pydantic import Field, PrivateAttr
 from buttermilk import logger
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.processor_core import ProcessorCore
-from buttermilk._core.protocols import BatchProcessor
 from buttermilk._core.types import BaseRecord
 from buttermilk.pipeline import RecordBufferedException
 
@@ -69,10 +68,7 @@ class BatchAccumulator(ProcessorCore):
         self._lock = asyncio.Lock()
         for i, bp in enumerate(self.batch_processors):
             if not hasattr(bp, "process_batch"):
-                raise TypeError(
-                    f"batch_processors[{i}] must implement BatchProcessor protocol "
-                    f"(missing process_batch method): {type(bp)}"
-                )
+                raise TypeError(f"batch_processors[{i}] must implement BatchProcessor protocol (missing process_batch method): {type(bp)}")
 
     async def _process_record(
         self,
@@ -107,13 +103,9 @@ class BatchAccumulator(ProcessorCore):
         else:
             # Record is buffered, not filtered - raise distinct exception so pipeline
             # logs "buffered" instead of "skipped/filtered"
-            raise RecordBufferedException(
-                f"Record buffered in BatchAccumulator (buffer size: {len(self._buffer)}/{self.batch_size})"
-            )
+            raise RecordBufferedException(f"Record buffered in BatchAccumulator (buffer size: {len(self._buffer)}/{self.batch_size})")
 
-    async def _process_batch_from_contexts(
-        self, contexts: list[ProcessingContext]
-    ) -> AsyncGenerator[BaseRecord, None]:
+    async def _process_batch_from_contexts(self, contexts: list[ProcessingContext]) -> AsyncGenerator[BaseRecord, None]:
         """Process a batch of contexts through batch processors and yield results.
 
         Args:

@@ -20,15 +20,9 @@ class ZoteroReference(Reference):
     Extends the base Reference class to include proper academic citations.
     """
 
-    citation: str = Field(
-        ..., description="Brief, complete academic citation for the reference."
-    )
-    doi: str | None = Field(
-        default=None, description="DOI of the reference if available."
-    )
-    uri: str | None = Field(
-        default=None, description="URI of the reference if available."
-    )
+    citation: str = Field(..., description="Brief, complete academic citation for the reference.")
+    doi: str | None = Field(default=None, description="DOI of the reference if available.")
+    uri: str | None = Field(default=None, description="URI of the reference if available.")
 
 
 class ZoteroResearchResult(ResearchResult):
@@ -72,13 +66,7 @@ class ZoteroResearchResult(ResearchResult):
             if len(self.literature) > 3:
                 lit_str += f"\n- ... and {len(self.literature) - 3} more references"
 
-        return (
-            f"{header}"
-            f"{self.summary}\n"
-            f"Response: {self.response[:200]}...\n"
-            f"Academic References:\n"
-            f"{lit_str if lit_str else '- No references'}"
-        )
+        return f"{header}{self.summary}\nResponse: {self.response[:200]}...\nAcademic References:\n{lit_str if lit_str else '- No references'}"
 
 
 class RagZotero(RagAgent):
@@ -95,9 +83,7 @@ class RagZotero(RagAgent):
     All search functionality is handled by configured tools.
     """
 
-    def __init__(
-        self, *, output_model: type[pydantic.BaseModel] = None, **kwargs: Any
-    ) -> None:
+    def __init__(self, *, output_model: type[pydantic.BaseModel] = None, **kwargs: Any) -> None:
         """Initialize RagZotero with Zotero-specific output model."""
         if output_model is None:
             output_model = ZoteroResearchResult

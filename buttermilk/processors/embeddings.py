@@ -73,32 +73,16 @@ class EmbeddingGenerator(BaseModel):
     model_config = pydantic.ConfigDict(extra="ignore", arbitrary_types_allowed=True)
 
     # Embedding configuration
-    embedding_model: str = Field(
-        default="gemini-embedding-001", description="Embedding model to use"
-    )
-    dimensionality: int = Field(
-        default=3072, description="Embedding vector dimensionality"
-    )
-    task: str = Field(
-        default="RETRIEVAL_DOCUMENT", description="Task type for embeddings"
-    )
+    embedding_model: str = Field(default="gemini-embedding-001", description="Embedding model to use")
+    dimensionality: int = Field(default=3072, description="Embedding vector dimensionality")
+    task: str = Field(default="RETRIEVAL_DOCUMENT", description="Task type for embeddings")
 
     # Batch and retry configuration
-    embedding_batch_size: int = Field(
-        default=100, description="Batch size for embedding API calls"
-    )
-    embedding_max_retries: int = Field(
-        default=5, description="Max retries for embedding API calls"
-    )
-    embedding_min_wait_seconds: float = Field(
-        default=1.0, description="Min wait between embedding retries"
-    )
-    embedding_max_wait_seconds: float = Field(
-        default=120.0, description="Max wait between embedding retries"
-    )
-    embedding_cooldown_seconds: float = Field(
-        default=0.1, description="Cooldown between successful embedding calls"
-    )
+    embedding_batch_size: int = Field(default=100, description="Batch size for embedding API calls")
+    embedding_max_retries: int = Field(default=5, description="Max retries for embedding API calls")
+    embedding_min_wait_seconds: float = Field(default=1.0, description="Min wait between embedding retries")
+    embedding_max_wait_seconds: float = Field(default=120.0, description="Max wait between embedding retries")
+    embedding_cooldown_seconds: float = Field(default=0.1, description="Cooldown between successful embedding calls")
 
     # Private attributes
     _embedding_semaphore: asyncio.Semaphore = PrivateAttr()
@@ -113,9 +97,7 @@ class EmbeddingGenerator(BaseModel):
             batch_size=self.embedding_batch_size,
         )
 
-    async def process(
-        self, record: BaseRecord, *, processor_stage: str = "embed", **kwargs
-    ) -> AsyncGenerator[BaseRecord, None]:
+    async def process(self, record: BaseRecord, *, processor_stage: str = "embed", **kwargs) -> AsyncGenerator[BaseRecord, None]:
         """Process a record by generating embeddings for its chunks.
 
         Args:
@@ -245,9 +227,7 @@ class EmbeddingGenerator(BaseModel):
             return False
 
         if success_count < len(chunks):
-            logger.warning(
-                "Partial embedding failure", succeeded=success_count, total=len(chunks)
-            )
+            logger.warning("Partial embedding failure", succeeded=success_count, total=len(chunks))
             # Clear embeddings so we don't have partial state
             for c in chunks:
                 if hasattr(c, "embedding"):
@@ -262,13 +242,9 @@ class EmbeddingGenerator(BaseModel):
     def _is_rate_limit_error(self, exc: Exception) -> bool:
         """Check if an exception is a rate limit error."""
         msg = str(exc).lower()
-        return any(
-            k in msg for k in ["rate limit", "quota", "too many requests", "429"]
-        )
+        return any(k in msg for k in ["rate limit", "quota", "too many requests", "429"])
 
-    async def _embed(
-        self, embeddings_input: list[tuple[int, Any]]
-    ) -> list[tuple[int, list[float] | None]]:
+    async def _embed(self, embeddings_input: list[tuple[int, Any]]) -> list[tuple[int, list[float] | None]]:
         """Generate embeddings with retry logic.
 
         Args:
@@ -277,9 +253,7 @@ class EmbeddingGenerator(BaseModel):
         Returns:
             List of (index, embedding) tuples where embedding can be None on failure
         """
-        embedding_function = GeminiEmbeddingFunction(
-            self.embedding_model, self.dimensionality
-        )
+        embedding_function = GeminiEmbeddingFunction(self.embedding_model, self.dimensionality)
 
         async def _run_embed_batch(batch_docs, attempt: int = 0):
             """Run embedding for a batch with semaphore."""

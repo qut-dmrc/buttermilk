@@ -163,9 +163,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
 
         tools_list = list({get_tool_name(tool): tool for tool in tools}.values())
 
-        logger.debug(
-            f"StructuredLLMHost calling LLM with {len(tools_list)} tools: {[get_tool_name(tool) for tool in tools_list]}"
-        )
+        logger.debug(f"StructuredLLMHost calling LLM with {len(tools_list)} tools: {[get_tool_name(tool) for tool in tools_list]}")
 
         # Use intercept_tools=True to get FunctionCall objects without execution
         return await model_client.call_chat(
@@ -188,9 +186,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
                 inputs=inputs,
             )
         except Exception as e:
-            logger.error(
-                f"StructuredLLMHost '{self.agent_id}': Error during template processing: {e!s}"
-            )
+            logger.error(f"StructuredLLMHost '{self.agent_id}': Error during template processing: {e!s}")
             raise ProcessingError(f"Error during template processing: {e!s}") from e
 
         # Call LLM with intercept flag
@@ -204,13 +200,9 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         )
 
         # Check if we got tool calls in the output
-        if isinstance(chat_result.content, list) and all(
-            isinstance(c, FunctionCall) for c in chat_result.content
-        ):
+        if isinstance(chat_result.content, list) and all(isinstance(c, FunctionCall) for c in chat_result.content):
             tool_calls: list[FunctionCall] = chat_result.content
-            logger.debug(
-                f"StructuredLLMHost received {len(tool_calls)} tool calls from LLM"
-            )
+            logger.debug(f"StructuredLLMHost received {len(tool_calls)} tool calls from LLM")
 
             # Use the base class helper to route tool calls
             await self._route_tool_calls_to_agents(tool_calls)
@@ -275,9 +267,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
 
         # Multiple tool calls - group by type if possible
         tool_names = [call.name for call in tool_calls]
-        unique_tools = list(
-            dict.fromkeys(tool_names)
-        )  # Preserve order while removing duplicates
+        unique_tools = list(dict.fromkeys(tool_names))  # Preserve order while removing duplicates
 
         if len(unique_tools) == 1:
             return f"Making {len(tool_calls)} {unique_tools[0]} calls"

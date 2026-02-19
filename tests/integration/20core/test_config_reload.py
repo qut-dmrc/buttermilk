@@ -80,9 +80,7 @@ flows: ${flows}
         expected_session_dir = Path(f"/tmp/runs/{run_request.session_id}")
         config_file = expected_session_dir / f"{run_request.session_id}_config.json"
 
-        assert expected_session_dir.exists(), (
-            "Session directory should be created"
-        )
+        assert expected_session_dir.exists(), "Session directory should be created"
         assert config_file.exists(), "Config file should be created"
 
         # Verify config file content
@@ -98,16 +96,12 @@ flows: ${flows}
         assert "flow_config" in config_data
         assert "timestamp" in config_data
 
-    @pytest.mark.skip(
-        reason="Requires comprehensive mocking of Hydra config loading - needs refactoring"
-    )
+    @pytest.mark.skip(reason="Requires comprehensive mocking of Hydra config loading - needs refactoring")
     @pytest.mark.anyio
     @patch("hydra.core.global_hydra.GlobalHydra")
     @patch("hydra.compose")
     @patch("hydra.initialize_config_dir")
-    async def test_reload_configurations_success(
-        self, mock_initialize, mock_compose, mock_global_hydra, temp_config_dir
-    ):
+    async def test_reload_configurations_success(self, mock_initialize, mock_compose, mock_global_hydra, temp_config_dir):
         """Test successful configuration reload."""
         # Mock Hydra configuration loading
         mock_conf = Mock()
@@ -120,9 +114,7 @@ flows: ${flows}
         mock_global_hydra.instance.return_value.clear.return_value = None
 
         # Create FlowRunner with initial flows
-        flow_runner = FlowRunner(
-            flows={"test_flow": {"name": "test_flow", "updated": False}}, mode="api"
-        )
+        flow_runner = FlowRunner(flows={"test_flow": {"name": "test_flow", "updated": False}}, mode="api")
 
         # Mock the config directory path
         with patch("pathlib.Path.resolve", return_value=temp_config_dir):
@@ -141,17 +133,13 @@ flows: ${flows}
         assert "new_flow" in flow_runner.flows
         assert flow_runner.flows["test_flow"]["updated"] is True
 
-    @pytest.mark.skip(
-        reason="Requires comprehensive mocking of Hydra config loading - needs refactoring"
-    )
+    @pytest.mark.skip(reason="Requires comprehensive mocking of Hydra config loading - needs refactoring")
     @pytest.mark.anyio
     @patch("hydra.core.global_hydra.GlobalHydra")
     async def test_reload_configurations_failure(self, mock_global_hydra):
         """Test configuration reload failure handling."""
         # Mock Hydra to raise an exception
-        mock_global_hydra.instance.return_value.clear.side_effect = Exception(
-            "Config error"
-        )
+        mock_global_hydra.instance.return_value.clear.side_effect = Exception("Config error")
 
         # Create FlowRunner
         flow_runner = FlowRunner(flows={"test_flow": {"name": "test_flow"}}, mode="api")
@@ -203,14 +191,10 @@ class TestConfigReloadIntegration:
         startup_script = Path("/src/buttermilk/deploy/startup.sh")
 
         # Integration test must fail if startup script not present
-        assert startup_script.exists(), (
-            "Startup script must be present for integration tests"
-        )
+        assert startup_script.exists(), "Startup script must be present for integration tests"
 
         # Verify script is executable
-        assert startup_script.stat().st_mode & 0o111, (
-            "Startup script should be executable"
-        )
+        assert startup_script.stat().st_mode & 0o111, "Startup script should be executable"
 
         # Could add more sophisticated testing of script logic here
         # but would require mocking gcsfuse and other container-specific tools
@@ -224,9 +208,7 @@ class TestConfigReloadIntegration:
         import subprocess
 
         # Test gcsfuse help command
-        result = subprocess.run(
-            ["gcsfuse", "--help"], check=False, capture_output=True, text=True
-        )
+        result = subprocess.run(["gcsfuse", "--help"], check=False, capture_output=True, text=True)
         assert result.returncode == 0, "gcsfuse should be available and working"
         assert "gcsfuse" in result.stdout.lower(), "gcsfuse help should mention gcsfuse"
 

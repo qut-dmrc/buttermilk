@@ -732,11 +732,7 @@ class TestClaudeStructuredOutput:
         from buttermilk._core.vertex_batch import ClaudeMessageConverter
 
         converter = ClaudeMessageConverter()
-        entry = {
-            "response": {
-                "content": [{"type": "text", "text": "Plain text response"}]
-            }
-        }
+        entry = {"response": {"content": [{"type": "text", "text": "Plain text response"}]}}
 
         response = converter.extract_response(entry)
         assert response == "Plain text response"
@@ -960,6 +956,7 @@ class TestClaudeToolNameSanitization:
         tool_name = entry["request"]["tools"][0]["name"]
         # Only [a-z0-9_-] should remain
         import re
+
         assert re.match(r"^[a-z0-9_\-]+$", tool_name)
 
     def test_tool_name_missing_title_uses_fallback(self):

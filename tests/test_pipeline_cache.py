@@ -28,14 +28,10 @@ class MockProcessor(BaseModel):
     template: str = Field(default="summarize", description="Template name")
     temperature: float = Field(default=0.7, description="Temperature")
 
-    async def process(
-        self, context: ProcessingContext
-    ) -> AsyncGenerator[BaseRecord, None]:
+    async def process(self, context: ProcessingContext) -> AsyncGenerator[BaseRecord, None]:
         """Process record by adding a field based on config."""
         # Add a field that depends on processor config
-        updated = context.record.model_copy(
-            update={"output": f"Processed with {self.model} at {self.temperature}"}
-        )
+        updated = context.record.model_copy(update={"output": f"Processed with {self.model} at {self.temperature}"})
         yield updated
 
 
@@ -142,9 +138,7 @@ class TestRecordCacheProjectIsolation:
         base_dir1 = cache1.base_dir
         base_dir2 = cache2.base_dir
 
-        assert base_dir1 != base_dir2, (
-            "Different projects should have different cache dirs"
-        )
+        assert base_dir1 != base_dir2, "Different projects should have different cache dirs"
         assert "project_alpha" in str(base_dir1)
         assert "project_beta" in str(base_dir2)
 
@@ -218,9 +212,7 @@ class TestPipelineProcessorStageNames:
         hash2 = compute_processor_config_hash(config2)
 
         # Verify hashes are different
-        assert hash1 != hash2, (
-            "Different processor configs should have different hashes"
-        )
+        assert hash1 != hash2, "Different processor configs should have different hashes"
 
         # Now verify the pipeline uses these hashes in cache paths
         async def source1():
@@ -276,9 +268,7 @@ class TestPipelineProcessorStageNames:
 
         # Verify both cache directories exist (different hashes)
         all_cache_json = list(tmp_path.rglob("*.json"))
-        assert len(all_cache_json) >= 2, (
-            "Should have at least two cache files (one per config)"
-        )
+        assert len(all_cache_json) >= 2, "Should have at least two cache files (one per config)"
 
 
 class TestCacheInvalidationIntegration:

@@ -1,9 +1,11 @@
 """GCP logs analysis utilities."""
+
 from pydantic import BaseModel
 
 
 class StartupAnalysis(BaseModel):
     """Daemon startup analysis results."""
+
     total_entries: int = 0
     error_count: int = 0
     warning_count: int = 0
@@ -13,6 +15,7 @@ class StartupAnalysis(BaseModel):
 
 class AgentAnalysis(BaseModel):
     """Agent error analysis results."""
+
     agent_errors: list[str] = []
 
 

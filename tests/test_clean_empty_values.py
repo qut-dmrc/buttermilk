@@ -40,9 +40,7 @@ def test_clean_empty_values():
     cleaned_list = clean_empty_values(original_list)
 
     assert original_list == list_before, "Original list was modified!"
-    assert cleaned_list == [1, {"b": 2}], (
-        f"Expected [1, {{'b': 2}}], got {cleaned_list}"
-    )
+    assert cleaned_list == [1, {"b": 2}], f"Expected [1, {{'b': 2}}], got {cleaned_list}"
 
     print("✓ All tests passed! Function doesn't modify original data.")
 

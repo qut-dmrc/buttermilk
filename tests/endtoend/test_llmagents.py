@@ -24,12 +24,8 @@ def request_chief(fight_no_more_forever) -> AgentInput:
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize(
-    "model_name", CHEAP_CHAT_MODELS
-)  # Parametrize over cheap models
-async def test_llm_agent_direct_call(
-    real_bm, model_name: str, request_paris: AgentInput
-):
+@pytest.mark.parametrize("model_name", CHEAP_CHAT_MODELS)  # Parametrize over cheap models
+async def test_llm_agent_direct_call(real_bm, model_name: str, request_paris: AgentInput):
     """Test direct invocation of a basic LLMAgent using ._process()."""
     agent = LLMAgent(
         role="tester",
@@ -57,9 +53,7 @@ async def test_llm_agent_direct_call(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("model_name", CHAT_MODELS)
-async def test_judge_agent_process(
-    real_bm, model_name: str, request_chief: AgentInput, fight_no_more_forever: Record
-):
+async def test_judge_agent_process(real_bm, model_name: str, request_chief: AgentInput, fight_no_more_forever: Record):
     """Test direct invocation of Judge agent's _process method with a record."""
     # Templates
     judge_params = {
@@ -82,34 +76,24 @@ async def test_judge_agent_process(
     assert result.outputs is not None, "Judge agent should produce outputs"
 
     # Assert that the output is the expected Reasons model
-    assert isinstance(result.outputs, JudgeReasons), (
-        f"Expected JudgeReasons output, got {type(result.outputs)}"
-    )
+    assert isinstance(result.outputs, JudgeReasons), f"Expected JudgeReasons output, got {type(result.outputs)}"
 
     # Check fields within Reasons
-    assert isinstance(result.outputs.prediction, bool), (
-        "'prediction' field should be boolean"
-    )
+    assert isinstance(result.outputs.prediction, bool), "'prediction' field should be boolean"
     assert isinstance(result.outputs.reasons, list), "'reasons' field should be a list"
     assert len(result.outputs.reasons) > 0, "'reasons' list should not be empty"
-    assert isinstance(result.outputs.conclusion, str), (
-        "'conclusion' field should be string"
-    )
+    assert isinstance(result.outputs.conclusion, str), "'conclusion' field should be string"
 
     # Example content check (adapt based on expected behavior for the given record/criteria)
     # This is harder to make deterministic without mocking the LLM.
     # We can check if certain keywords appear, but the exact output varies.
     reasons_text = " ".join(result.outputs.reasons).lower()
     # Depending on criteria, check for keywords like 'surrender', 'fight', etc.
-    assert "surrender" in reasons_text or "fight" in reasons_text, (
-        "Reasons should relate to the speech content"
-    )
+    assert "surrender" in reasons_text or "fight" in reasons_text, "Reasons should relate to the speech content"
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize(
-    "model_name", CHEAP_CHAT_MODELS
-)  # Parametrize over cheap models
+@pytest.mark.parametrize("model_name", CHEAP_CHAT_MODELS)  # Parametrize over cheap models
 async def test_scorer(real_bm, model_name: str, request_paris: AgentInput):
     """Test direct invocation of a basic LLMAgent using __call__."""
     LLMAgent(
@@ -163,13 +147,9 @@ async def test_llm_agent_template_metadata(real_bm, model_name: str):
 
     # Verify the template metadata values
     assert template_meta["template_name"] == "simple", "Template name should match"
-    assert isinstance(template_meta["template_hash"], str), (
-        "Template hash should be string"
-    )
+    assert isinstance(template_meta["template_hash"], str), "Template hash should be string"
     # Template hash is a raw SHA256 hex string (64 chars, no prefix)
-    assert len(template_meta["template_hash"]) == 64, (
-        "Template hash should be 64 hex chars (SHA256)"
-    )
+    assert len(template_meta["template_hash"]) == 64, "Template hash should be 64 hex chars (SHA256)"
 
     # Test that ExecutionTrace also includes the metadata when created from output
     agent_info = {
@@ -178,25 +158,13 @@ async def test_llm_agent_template_metadata(real_bm, model_name: str):
         "instructions": "Test instructions",
     }
 
-    trace = ExecutionTrace.from_output(
-        output=result, inputs=request, agent_info=agent_info
-    )
+    trace = ExecutionTrace.from_output(output=result, inputs=request, agent_info=agent_info)
 
     # Verify the trace includes the template metadata (also nested under "template")
     assert isinstance(trace, ExecutionTrace), "Trace should be ExecutionTrace"
-    assert "template" in trace.metadata, (
-        "Template metadata should be in ExecutionTrace metadata"
-    )
+    assert "template" in trace.metadata, "Template metadata should be in ExecutionTrace metadata"
     trace_template_meta = trace.metadata["template"]
-    assert "template_name" in trace_template_meta, (
-        "Template name should be in ExecutionTrace template metadata"
-    )
-    assert "template_hash" in trace_template_meta, (
-        "Template hash should be in ExecutionTrace template metadata"
-    )
-    assert trace_template_meta["template_name"] == "simple", (
-        "Template name should match in trace"
-    )
-    assert trace_template_meta["template_hash"] == template_meta["template_hash"], (
-        "Template hash should match between output and trace"
-    )
+    assert "template_name" in trace_template_meta, "Template name should be in ExecutionTrace template metadata"
+    assert "template_hash" in trace_template_meta, "Template hash should be in ExecutionTrace template metadata"
+    assert trace_template_meta["template_name"] == "simple", "Template name should match in trace"
+    assert trace_template_meta["template_hash"] == template_meta["template_hash"], "Template hash should match between output and trace"

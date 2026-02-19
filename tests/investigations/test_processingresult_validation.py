@@ -10,9 +10,7 @@ from buttermilk._core.types import BaseRecord, ProcessingResult, Record
 def test_processingresult_accepts_record():
     """ProcessingResult should accept Record type."""
     # Create a Record (full record with content)
-    record = Record(
-        record_id="test_123", content="Test content", metadata={"title": "Test Record"}
-    )
+    record = Record(record_id="test_123", content="Test content", metadata={"title": "Test Record"})
 
     # This should work - ProcessingResult accepts Record
     result = ProcessingResult(
@@ -31,9 +29,7 @@ def test_processingresult_accepts_record():
 def test_processingresult_accepts_baserecord():
     """ProcessingResult should now accept BaseRecord (this was the bug)."""
     # Create a BaseRecord (minimal record without content)
-    base_record = BaseRecord(
-        record_id="test_456", metadata={"title": "Test Base Record"}
-    )
+    base_record = BaseRecord(record_id="test_456", metadata={"title": "Test Base Record"})
 
     # This should now work after the fix
     result = ProcessingResult(
@@ -83,8 +79,6 @@ def test_processingresult_with_different_statuses():
     assert result2.reason == "Duplicate record"
 
     # Test "failed" status
-    result3 = ProcessingResult(
-        record=None, status="failed", reason="Processing error occurred"
-    )
+    result3 = ProcessingResult(record=None, status="failed", reason="Processing error occurred")
     assert result3.status == "failed"
     assert result3.reason == "Processing error occurred"

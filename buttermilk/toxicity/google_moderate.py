@@ -1,10 +1,6 @@
-from typing import (
-    Any,
-)
-
 from google.cloud import language_v2
 
-from .toxicity import EvalRecord, Score, ToxicityClassifierCore, ToxicityModel
+from .toxicity import EvalRecord, Score, ToxicityClassifierCore
 
 # These are categories that we do not interpret as relevant to an overall 'toxic' result
 NON_TOXIC_CATS = [
@@ -52,9 +48,7 @@ class GoogleModerate(ToxicityClassifierCore):
                         )
                     )
                 except:
-                    outcome.scores.append(
-                        Score(measure=category.name, confidence=category.confidence)
-                    )
+                    outcome.scores.append(Score(measure=category.name, confidence=category.confidence))
 
                 if category.confidence > 0.5:
                     outcome.labels.append(category.name)

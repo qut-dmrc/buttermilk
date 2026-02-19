@@ -44,19 +44,13 @@ class TestChromaDBLazyInitialization:
             init_time = time.time() - start_time
 
             # Instance creation should be fast (<1 second)
-            assert init_time < 1.0, (
-                f"Model instantiation took {init_time:.2f}s (should be <1s)"
-            )
+            assert init_time < 1.0, f"Model instantiation took {init_time:.2f}s (should be <1s)"
 
             # Critical assertion: ChromaDB client should NOT exist yet
-            assert not hasattr(embeddings, "_client") or embeddings._client is None, (
-                "ChromaDB client should not be initialized during model creation"
-            )
+            assert not hasattr(embeddings, "_client") or embeddings._client is None, "ChromaDB client should not be initialized during model creation"
 
             # Cache should NOT be initialized yet
-            assert not embeddings._cache_initialized, (
-                "Cache should not be initialized during model creation"
-            )
+            assert not embeddings._cache_initialized, "Cache should not be initialized during model creation"
 
     async def test_chromadb_initializes_on_first_collection_access(self):
         """Test that ChromaDB initializes lazily on first collection access.
@@ -83,14 +77,10 @@ class TestChromaDBLazyInitialization:
             init_time = time.time() - start_time
 
             # Initialization should have happened
-            assert embeddings._cache_initialized, (
-                "Cache should be initialized after first collection access"
-            )
+            assert embeddings._cache_initialized, "Cache should be initialized after first collection access"
 
             # Client should now exist
-            assert embeddings._client is not None, (
-                "ChromaDB client should exist after collection access"
-            )
+            assert embeddings._client is not None, "ChromaDB client should exist after collection access"
 
             # Collection should be usable
             assert collection is not None
@@ -123,17 +113,13 @@ class TestChromaDBLazyInitialization:
 
             # Start background warmup with short timeout for testing
             # (Production will use 60s)
-            warmup_task = asyncio.create_task(
-                self._warmup_after_delay(embeddings, delay_seconds=0.5)
-            )
+            warmup_task = asyncio.create_task(self._warmup_after_delay(embeddings, delay_seconds=0.5))
 
             # Wait for warmup to complete
             await warmup_task
 
             # After warmup, should be initialized
-            assert embeddings._cache_initialized, (
-                "Cache should be initialized after background warmup"
-            )
+            assert embeddings._cache_initialized, "Cache should be initialized after background warmup"
 
             # Collection should be immediately accessible without delay
             start_time = time.time()
@@ -141,9 +127,7 @@ class TestChromaDBLazyInitialization:
             access_time = time.time() - start_time
 
             # Access should be fast since already initialized
-            assert access_time < 0.1, (
-                f"Collection access after warmup took {access_time:.2f}s (should be <0.1s)"
-            )
+            assert access_time < 0.1, f"Collection access after warmup took {access_time:.2f}s (should be <0.1s)"
 
             assert collection is not None
 

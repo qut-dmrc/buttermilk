@@ -24,9 +24,7 @@ def create_tool_functions(tool_cfg: dict[str, Any]) -> list[Tool]:
                 if isinstance(tool, Tool):
                     tools.append(tool)
                 else:
-                    logger.warning(
-                        f"Tool {name} get_tool() returned non-Tool object: {type(tool)}"
-                    )
+                    logger.warning(f"Tool {name} get_tool() returned non-Tool object: {type(tool)}")
             elif hasattr(cfg, "config") and hasattr(cfg, "__call__"):
                 # It's a callable with config - might be a ToolConfig interface
                 fn_list = cfg.config if isinstance(cfg.config, list) else [cfg.config]
@@ -37,9 +35,7 @@ def create_tool_functions(tool_cfg: dict[str, Any]) -> list[Tool]:
                 # Direct Tool instance (e.g., FunctionTool)
                 tools.append(cfg)
             else:
-                logger.warning(
-                    f"Tool {name} has unknown configuration type: {type(cfg)}"
-                )
+                logger.warning(f"Tool {name} has unknown configuration type: {type(cfg)}")
 
         except Exception as e:
             raise ValueError(f"Unable to instantiate tool '{name}': {cfg}: {e}") from e

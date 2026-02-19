@@ -26,10 +26,7 @@ class HuggingFaceStorage:
 
             self._load_dataset = load_dataset
         except ImportError:
-            raise ImportError(
-                "datasets package required for HuggingFace storage. "
-                "Install with: pip install datasets"
-            )
+            raise ImportError("datasets package required for HuggingFace storage. Install with: pip install datasets")
 
     def __iter__(self) -> Iterator[Record]:
         """Load and yield records from HuggingFace dataset."""
@@ -73,9 +70,7 @@ class HuggingFaceStorage:
                     if "record_id" not in record_kwargs:
                         record_kwargs["record_id"] = f"{self.config.path}:{idx}"
                     if "content" not in record_kwargs:
-                        record_kwargs["content"] = processed_item.get(
-                            "text", str(processed_item)
-                        )
+                        record_kwargs["content"] = processed_item.get("text", str(processed_item))
 
                     # Add loader metadata
                     base_metadata = {
@@ -105,9 +100,7 @@ class HuggingFaceStorage:
                         break
 
                 except Exception as e:
-                    logger.warning(
-                        f"Error processing HuggingFace dataset item {idx}: {e}"
-                    )
+                    logger.warning(f"Error processing HuggingFace dataset item {idx}: {e}")
                     continue
 
         except Exception as e:
@@ -132,10 +125,7 @@ class HuggingFaceStorage:
 
     def save(self, records: list[Record] | Record) -> None:
         """Save records to HuggingFace dataset (not typically supported)."""
-        raise StorageError(
-            "HuggingFace datasets are typically read-only. "
-            "Use FileStorage or BigQueryStorage for saving records."
-        )
+        raise StorageError("HuggingFace datasets are typically read-only. Use FileStorage or BigQueryStorage for saving records.")
 
     def get_record_by_id(self, record_id: str) -> Record | None:
         """Get a single record by ID.
@@ -177,7 +167,4 @@ class HuggingFaceStorage:
 
     def create(self) -> None:
         """Create dataset (not applicable for HuggingFace datasets)."""
-        raise StorageError(
-            "Cannot create HuggingFace datasets programmatically. "
-            "Datasets must exist on the HuggingFace Hub."
-        )
+        raise StorageError("Cannot create HuggingFace datasets programmatically. Datasets must exist on the HuggingFace Hub.")
