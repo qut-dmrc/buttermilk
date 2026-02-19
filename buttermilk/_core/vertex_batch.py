@@ -790,7 +790,7 @@ class BatchJobManager(BaseModel):
         else:
             # Gemini models - strip google/ prefix if present (Batch API expects bare names)
             if resolved_model.startswith("google/"):
-                return resolved_model[len("google/"):]
+                return resolved_model[len("google/") :]
             return resolved_model
 
     async def submit_batch(
