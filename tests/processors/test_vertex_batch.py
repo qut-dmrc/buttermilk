@@ -237,6 +237,100 @@ class TestBatchJobManager:
         assert len(job_id1) == 18  # "batch_" + 12 hex chars
 
 
+class TestLlamaBatchSupport:
+    """Tests for Llama/Meta model batch prediction support."""
+
+    def test_is_llama_model_with_llama_prefix(self):
+        """_is_llama_model should detect llama model names."""
+        from buttermilk._core.vertex_batch import _is_llama_model
+
+        assert _is_llama_model("llama-4-maverick-17b-128e-instruct-maas")
+        assert _is_llama_model("meta/llama-4-maverick-17b-128e-instruct-maas")
+
+    def test_is_llama_model_negative(self):
+        """_is_llama_model should not match non-llama models."""
+        from buttermilk._core.vertex_batch import _is_llama_model
+
+        assert not _is_llama_model("gemini-2.5-flash")
+        assert not _is_llama_model("claude-sonnet-4")
+        assert not _is_llama_model("gpt-4o")
+
+    def test_get_message_converter_routes_llama_to_openai(self):
+        """Llama models should use OpenAIMessageConverter."""
+        from buttermilk._core.vertex_batch import OpenAIMessageConverter, get_message_converter
+
+        converter = get_message_converter("meta/llama-4-maverick-17b-128e-instruct-maas")
+        assert isinstance(converter, OpenAIMessageConverter)
+
+    def test_get_message_converter_routes_llama_short_name(self):
+        """Llama models without meta/ prefix should also route to OpenAI converter."""
+        from buttermilk._core.vertex_batch import OpenAIMessageConverter, get_message_converter
+
+        converter = get_message_converter("llama-4-maverick-17b-128e-instruct-maas")
+        assert isinstance(converter, OpenAIMessageConverter)
+
+    def test_build_jsonl_llama(self):
+        """build_jsonl for llama should produce OpenAI-format entries."""
+        mock_client = MagicMock()
+        manager = BatchJobManager(client=mock_client)
+
+        requests = [
+            BatchRequest(
+                custom_id="rec1",
+                record_id="rec1",
+                messages=[
+                    {"role": "system", "content": "You are helpful"},
+                    {"role": "user", "content": "Hello"},
+                ],
+            ),
+        ]
+
+        jsonl = manager.build_jsonl(requests, model="meta/llama-4-maverick-17b-128e-instruct-maas")
+
+        entry = json.loads(jsonl.strip())
+        # OpenAI format has method, url, and body keys
+        assert entry["method"] == "POST"
+        assert entry["url"] == "/v1/chat/completions"
+        assert "messages" in entry["body"]
+        assert entry["body"]["messages"][0]["role"] == "system"
+
+    def test_get_vertex_model_path_llama_with_meta_prefix(self):
+        """Llama models with meta/ prefix should resolve to publishers/meta/models/..."""
+        mock_client = MagicMock()
+        manager = BatchJobManager(client=mock_client)
+
+        path = manager._get_vertex_model_path("meta/llama-4-maverick-17b-128e-instruct-maas")
+        assert path == "publishers/meta/models/llama-4-maverick-17b-128e-instruct-maas"
+
+    def test_get_vertex_model_path_llama_without_prefix(self):
+        """Llama models without meta/ prefix should still resolve to publishers/meta/models/..."""
+        mock_client = MagicMock()
+        manager = BatchJobManager(client=mock_client)
+
+        path = manager._get_vertex_model_path("llama-4-maverick-17b-128e-instruct-maas")
+        assert path == "publishers/meta/models/llama-4-maverick-17b-128e-instruct-maas"
+
+    def test_build_jsonl_llama_with_schema(self):
+        """Llama batch requests with schema should use OpenAI response_format."""
+        mock_client = MagicMock()
+        manager = BatchJobManager(client=mock_client)
+
+        requests = [
+            BatchRequest(
+                custom_id="rec1",
+                record_id="rec1",
+                messages=[{"role": "user", "content": "Evaluate this"}],
+                response_schema=SAMPLE_SCHEMA,
+            ),
+        ]
+
+        jsonl = manager.build_jsonl(requests, model="meta/llama-4-maverick-17b-128e-instruct-maas")
+
+        entry = json.loads(jsonl.strip())
+        assert "response_format" in entry["body"]
+        assert entry["body"]["response_format"]["type"] == "json_schema"
+
+
 class TestCriteriaCacheManager:
     """Tests for CriteriaCacheManager."""
 

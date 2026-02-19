@@ -130,9 +130,10 @@ class VertexBatchProcessor(BatchProcessorCore):
             return None
 
         from buttermilk._core.json_schema import prepare_schema_for_vertex
-        from buttermilk._core.vertex_batch import _is_claude_model
+        from buttermilk._core.vertex_batch import _is_claude_model, _is_llama_model
 
-        is_gemini = not _is_claude_model(self.model)
+        # Gemini requires enum values converted to strings; Claude and Llama do not
+        is_gemini = not _is_claude_model(self.model) and not _is_llama_model(self.model)
         return prepare_schema_for_vertex(self._output_class, is_gemini=is_gemini)
 
     def _get_resolved_max_tokens(self) -> int:
