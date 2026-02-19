@@ -26,9 +26,7 @@ class DebugAgent(Agent):
         self._puppet_client: Optional[FlowTestClient] = None
         self._puppet_listening: bool = False
 
-    async def _process(
-        self, *, message: AgentInput, **kwargs: Any
-    ) -> AgentOutput | None:
+    async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentOutput | None:
         """Process debugging requests."""
         # This agent is primarily tool-based, so _process just returns a helpful message
         return AgentOutput(
@@ -135,9 +133,7 @@ class DebugAgent(Agent):
             if use_direct_ws:
                 client = FlowTestClient(direct_ws_url=f"ws://{host}:{port}/ws")
             else:
-                client = FlowTestClient(
-                    base_url=f"http://{host}:{port}", ws_url=f"ws://{host}:{port}/ws"
-                )
+                client = FlowTestClient(base_url=f"http://{host}:{port}", ws_url=f"ws://{host}:{port}/ws")
 
             await client.connect()
             self._active_clients[flow_id] = client
@@ -333,9 +329,7 @@ class DebugAgent(Agent):
 
     # Puppet mode - continuous listening for LLM control
 
-    async def start_puppet_mode(
-        self, host: str = "localhost", port: int = 8000
-    ) -> dict[str, str]:
+    async def start_puppet_mode(self, host: str = "localhost", port: int = 8000) -> dict[str, str]:
         """Start puppet mode - continuous WebSocket client that acts as UI replacement.
 
         Args:
@@ -354,9 +348,7 @@ class DebugAgent(Agent):
                 await self._puppet_client.disconnect()
 
             # Create new puppet client
-            self._puppet_client = FlowTestClient(
-                base_url=f"http://{host}:{port}", ws_url=f"ws://{host}:{port}/ws"
-            )
+            self._puppet_client = FlowTestClient(base_url=f"http://{host}:{port}", ws_url=f"ws://{host}:{port}/ws")
 
             await self._puppet_client.connect()
             self._puppet_listening = True
@@ -376,9 +368,7 @@ class DebugAgent(Agent):
                 "message": f"Failed to start puppet mode: {str(e)}",
             }
 
-    async def puppet_start_flow(
-        self, flow_name: str, prompt: str = "", record: str = "", criteria: str = ""
-    ) -> dict[str, str]:
+    async def puppet_start_flow(self, flow_name: str, prompt: str = "", record: str = "", criteria: str = "") -> dict[str, str]:
         """Start a flow in puppet mode.
 
         Args:
@@ -450,9 +440,7 @@ class DebugAgent(Agent):
         except Exception as e:
             return {"status": "error", "message": f"Failed to send response: {str(e)}"}
 
-    def puppet_get_messages(
-        self, last_n: Optional[int] = 10, message_type: Optional[str] = None
-    ) -> list[dict[str, Any]]:
+    def puppet_get_messages(self, last_n: Optional[int] = 10, message_type: Optional[str] = None) -> list[dict[str, Any]]:
         """Get recent messages from puppet mode client.
 
         Args:
@@ -463,11 +451,7 @@ class DebugAgent(Agent):
             List of recent messages
         """
         if not self._puppet_client or not self._puppet_listening:
-            return [
-                {
-                    "error": "Puppet mode not active. Start with start_puppet_mode() first."
-                }
-            ]
+            return [{"error": "Puppet mode not active. Start with start_puppet_mode() first."}]
 
         collector = self._puppet_client.collector
 
@@ -511,17 +495,13 @@ class DebugAgent(Agent):
             Summary of puppet client state and messages
         """
         if not self._puppet_client or not self._puppet_listening:
-            return {
-                "error": "Puppet mode not active. Start with start_puppet_mode() first."
-            }
+            return {"error": "Puppet mode not active. Start with start_puppet_mode() first."}
 
         summary = self._puppet_client.get_message_summary()
         summary["puppet_mode"] = {
             "active": self._puppet_listening,
             "session_id": self._puppet_client.session_id,
-            "connection_status": "connected"
-            if self._puppet_client.ws
-            else "disconnected",
+            "connection_status": "connected" if self._puppet_client.ws else "disconnected",
         }
 
         return summary

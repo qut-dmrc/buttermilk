@@ -18,7 +18,6 @@ if TYPE_CHECKING:
     from buttermilk import BM
     from buttermilk._core.llms import LLMs
     from buttermilk._core.types import Record
-    from buttermilk.runner.flowrunner import FlowRunContext, FlowRunner
 
 # Model lists duplicated here to avoid importing llms.py at collection time
 # (llms.py imports litellm which takes ~3s)
@@ -87,6 +86,7 @@ async def session_runner():
 def real_bm():
     """Real BM instance created from testing.yaml configuration."""
     from buttermilk import init
+
     # Config dir resolution will find buttermilk/conf, testing.yaml has project_name and job
     return init(config_name="testing")
 
@@ -172,6 +172,7 @@ def real_flow_runner(real_conf):
     constructed instance. Most tests can use this mock.
     """
     from unittest.mock import AsyncMock, Mock
+
     from buttermilk.runner.flowrunner import FlowRunContext, FlowRunner
 
     mock_runner = Mock(spec=FlowRunner)
@@ -256,12 +257,14 @@ def config_override():
 @pytest.fixture(scope="session")
 def image_bytes() -> bytes:
     from buttermilk.utils.utils import read_file
+
     return read_file(str(TESTS_DIR / "data/Rijksmuseum_(25621972346).jpg"))
 
 
 @pytest.fixture(scope="session")
 def video_bytes(video_url: str) -> bytes:
     from buttermilk.utils.utils import read_file
+
     return read_file(video_url)
 
 
@@ -438,6 +441,7 @@ async def multimodal_record(request) -> "Record":
 )
 async def news_record(request) -> "Record":
     from buttermilk.utils.media import download_and_convert
+
     record = await download_and_convert(
         uri=request.param[1],
         mime=request.param[2],
@@ -449,6 +453,7 @@ async def news_record(request) -> "Record":
 @pytest.fixture
 def fight_no_more_forever() -> "Record":
     from buttermilk._core.types import Record
+
     return Record(
         content="""Tell General Howard I know his heart. What he told me before, I have it in my heart. I am tired of fighting. Our Chiefs are killed; Looking Glass is dead, Ta Hool Hool Shute is dead. The old men are all dead. It is the young men who say yes or no. He who led on the young men is dead. It is cold, and we have no blankets; the little children are freezing to death. My people, some of them, have run away to the hills, and have no blankets, no food. No one knows where they are - perhaps freezing to death. I want to have time to look for my children, and see how many of them I can find. Maybe I shall find them among the dead. Hear me, my Chiefs! I am tired; my heart is sick and sad. From where the sun now stands I will fight no more forever.""",
         mime="text/plain",
@@ -463,6 +468,7 @@ def fight_no_more_forever() -> "Record":
 )
 async def text_record(request) -> "Record":
     from buttermilk.utils.media import download_and_convert
+
     record = await download_and_convert(
         text=request.param[1],
         mime=request.param[2],

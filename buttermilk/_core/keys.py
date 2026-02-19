@@ -37,16 +37,12 @@ class SecretsManager(CloudProviderCfg):
 
         if self.type == "gcp":
             if not GCP_SECRETS_AVAILABLE:
-                raise ImportError(
-                    "Google Cloud Secret Manager not available. Install google-cloud-secret-manager."
-                )
+                raise ImportError("Google Cloud Secret Manager not available. Install google-cloud-secret-manager.")
             client = secretmanager.SecretManagerServiceClient()
             self._path = f"projects/{self.project_id}/secrets"
         elif self.type == "azure":
             if not AZURE_AVAILABLE:
-                raise ImportError(
-                    "Azure Key Vault not available. Install azure-identity and azure-keyvault-secrets."
-                )
+                raise ImportError("Azure Key Vault not available. Install azure-identity and azure-keyvault-secrets.")
             client = SecretClient(
                 vault_url=self.vault,
                 credential=DefaultAzureCredential(),
@@ -71,9 +67,7 @@ class SecretsManager(CloudProviderCfg):
 
         _client = self.client
 
-        name = "/".join(
-            [x for x in [self._path, secret_name, "versions", version or "latest"] if x]
-        )
+        name = "/".join([x for x in [self._path, secret_name, "versions", version or "latest"] if x])
 
         try:
             response = _client.access_secret_version(request={"name": name})

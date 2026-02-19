@@ -123,13 +123,9 @@ class Consumer(BaseModel):
 
     """
 
-    agent: str | None = (
-        ""  # This is model, or client, or whatever is used to get the result
-    )
+    agent: str | None = ""  # This is model, or client, or whatever is used to get the result
     step_name: str  # This is the step in the process that includes this particular task
-    input_queue: Queue[RunRequest] = Field(
-        default_factory=Queue
-    )  # Replaced Job with RunRequest
+    input_queue: Queue[RunRequest] = Field(default_factory=Queue)  # Replaced Job with RunRequest
     output_queue: Queue[RunRequest] = None  # Replaced Job with RunRequest
     task_num: int | None = None
     session_info: Agent
@@ -151,9 +147,7 @@ class Consumer(BaseModel):
             raise ValueError("concurrent must be at least 1")
 
         # Make a unique worker name for identification and logging
-        self.agent = "_".join(
-            [x for x in [self.step_name, self.agent, shortuuid.uuid()[:6]] if x]
-        )
+        self.agent = "_".join([x for x in [self.step_name, self.agent, shortuuid.uuid()[:6]] if x])
 
         self._sem = asyncio.Semaphore(value=self.concurrent)
         return self
@@ -244,9 +238,7 @@ class Consumer(BaseModel):
             )
 
     @abstractmethod
-    async def process(
-        self, *, job: RunRequest
-    ) -> AsyncGenerator[RunRequest, Any]:  # Replaced Job with RunRequest
+    async def process(self, *, job: RunRequest) -> AsyncGenerator[RunRequest, Any]:  # Replaced Job with RunRequest
         """Abstract method for data processing.
 
         This method MUST be implemented by subclasses. It should take a data record,
@@ -339,9 +331,7 @@ class TaskDistributor(BaseModel):
                         not self.shutdown  # Global shutdown flag not set
                         and not self._collector.shutdown  # Collector has not stopped
                         and len(self._consumers) > 0  # Consumers still alive
-                        and not all(
-                            [w.done for w in self._consumers.values()]
-                        )  # Consumers still working
+                        and not all([w.done for w in self._consumers.values()])  # Consumers still working
                     ):
                         await asyncio.sleep(0.1)
                         for w in self._consumers.values():

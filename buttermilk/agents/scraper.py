@@ -113,9 +113,7 @@ class WebScraperRequests(Agent):
             NotImplementedError: Always, as this method must be overridden.
 
         """
-        raise NotImplementedError(
-            "Subclasses should implement add_cookies for requests session if needed."
-        )
+        raise NotImplementedError("Subclasses should implement add_cookies for requests session if needed.")
 
     def _process(self, record: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
         """Processes a single record, typically representing a URL to scrape.
@@ -140,15 +138,11 @@ class WebScraperRequests(Agent):
         """
         url = record.get("url")
         if not url:
-            logger.error(
-                f"WebScraperRequests ('{self.agent_id}')._process: Record missing 'url'. Record: {record}"
-            )
+            logger.error(f"WebScraperRequests ('{self.agent_id}')._process: Record missing 'url'. Record: {record}")
             record["error"] = "Missing 'url' in record."
             return record
 
-        logger.debug(
-            f"WebScraperRequests ('{self.agent_id}'): Fetching URL: {url}, context: parent_id {record.get('parent_id')}"
-        )
+        logger.debug(f"WebScraperRequests ('{self.agent_id}'): Fetching URL: {url}, context: parent_id {record.get('parent_id')}")
 
         try:
             response = self.get(url, **kwargs)  # Call the get method with retry logic
@@ -163,13 +157,9 @@ class WebScraperRequests(Agent):
         except requests.exceptions.HTTPError as e:
             error_message = str(e)
             record["error"] = error_message
-            logger.warning(
-                f"WebScraperRequests ('{self.agent_id}'): Received HTTP error for {url}: {error_message}."
-            )
+            logger.warning(f"WebScraperRequests ('{self.agent_id}'): Received HTTP error for {url}: {error_message}.")
         except (RateLimit, FatalError) as e:  # Buttermilk specific exceptions
-            logger.error(
-                f"WebScraperRequests ('{self.agent_id}'): Critical error while processing {url}: {e!s} {e.args=}"
-            )
+            logger.error(f"WebScraperRequests ('{self.agent_id}'): Critical error while processing {url}: {e!s} {e.args=}")
             record["error"] = str(e)
         except Exception as e:  # Catch any other unexpected errors
             logger.error(
@@ -190,13 +180,9 @@ class WebScraperRequests(Agent):
             ),
         ),
         stop=stop_after_attempt(5),
-        wait=wait_exponential_jitter(
-            initial=1, max=30, jitter=1
-        ),  # Wait 1s, then up to 30s
+        wait=wait_exponential_jitter(initial=1, max=30, jitter=1),  # Wait 1s, then up to 30s
     )
-    def get(
-        self, url: str, headers: dict[str, str] | None = None, **parameters: Any
-    ) -> requests.Response:
+    def get(self, url: str, headers: dict[str, str] | None = None, **parameters: Any) -> requests.Response:
         """Makes an HTTP GET request to the specified URL with retry logic.
 
         Ensures a `requests.Session` exists (`self._session`) and updates its
@@ -222,9 +208,7 @@ class WebScraperRequests(Agent):
             requests.exceptions.Timeout: If the request times out after retries.
 
         """
-        logger.debug(
-            f"WebScraperRequests ('{self.agent_id}'): Fetching URL: {url} with parameters: {parameters}"
-        )
+        logger.debug(f"WebScraperRequests ('{self.agent_id}'): Fetching URL: {url} with parameters: {parameters}")
 
         if not hasattr(self, "_session") or self._session is None:
             self._session = requests.Session()
@@ -233,14 +217,10 @@ class WebScraperRequests(Agent):
         if headers:
             current_session_headers.update(headers)
 
-        response = self._session.get(
-            url, headers=current_session_headers, params=parameters
-        )
+        response = self._session.get(url, headers=current_session_headers, params=parameters)
         # Create a filename prefix from the URL for saving
         filename_prefix = re.sub(r"[^\w\-_\.]", "_", url)  # Sanitize URL for filename
-        self.try_save_page(
-            source=response.text, filename_prefix=filename_prefix[:100]
-        )  # Limit prefix length
+        self.try_save_page(source=response.text, filename_prefix=filename_prefix[:100])  # Limit prefix length
         response.raise_for_status()
         return response
 
@@ -311,9 +291,7 @@ class WebScraperRequests(Agent):
                 }
             )
             next_record_info.pop("nextPage", None)
-            next_record_info.pop(
-                "id", None
-            )  # New record should get its own ID if applicable
+            next_record_info.pop("id", None)  # New record should get its own ID if applicable
             return [next_record_info]
         return []
 
@@ -362,26 +340,16 @@ class WebScraperRequests(Agent):
         save_paths: dict[str, str] = {}
         source_content = kwargs.get("source")
         if source_content and isinstance(source_content, str):
-            basename = kwargs.get(
-                "filename_prefix", f"scraped_page_{shortuuid.uuid()[:8]}"
-            )
-            saved_uri = bm.save(
-                data=source_content, basename=basename, extension=".html"
-            )
+            basename = kwargs.get("filename_prefix", f"scraped_page_{shortuuid.uuid()[:8]}")
+            saved_uri = bm.save(data=source_content, basename=basename, extension=".html")
             if saved_uri:
                 save_paths["html"] = str(saved_uri)
             else:
-                logger.warning(
-                    f"WebScraperRequests ('{self.agent_id}'): Failed to save HTML content using bm.save."
-                )
+                logger.warning(f"WebScraperRequests ('{self.agent_id}'): Failed to save HTML content using bm.save.")
         elif not source_content:
-            logger.debug(
-                f"WebScraperRequests ('{self.agent_id}'): No 'source' content provided to save_page."
-            )
+            logger.debug(f"WebScraperRequests ('{self.agent_id}'): No 'source' content provided to save_page.")
         else:
-            logger.warning(
-                f"WebScraperRequests ('{self.agent_id}'): 'source' content for save_page was not a string (type: {type(source_content)})."
-            )
+            logger.warning(f"WebScraperRequests ('{self.agent_id}'): 'source' content for save_page was not a string (type: {type(source_content)}).")
         return save_paths
 
 
@@ -432,15 +400,11 @@ class WebScraperSelenium(WebScraperRequests):
 
         """
         # Call Agent's __init__ via super() chain
-        super().__init__(
-            name=name, job=job, **kwargs
-        )  # Assuming name & job are for Agent base
+        super().__init__(name=name, job=job, **kwargs)  # Assuming name & job are for Agent base
 
         self.new_webdriver()  # Initialize WebDriver
 
-    def run(
-        self, records: list[dict[str, Any]], recurse: int = 0, **kwargs: Any
-    ) -> int:
+    def run(self, records: list[dict[str, Any]], recurse: int = 0, **kwargs: Any) -> int:
         """Synchronously processes a list of records (URLs to scrape) with optional recursion.
 
         Iterates through the provided `records`, calling `self._process` (the Selenium
@@ -491,16 +455,12 @@ class WebScraperSelenium(WebScraperRequests):
             # Delay logic
             if i > 5 and i < (len(records) - 1):
                 sleep_duration = random.randint(self.wait_time, self.wait_time * 2)
-                logger.debug(
-                    f"WebScraperSelenium ('{self.agent_id}'): Sleeping for {sleep_duration} seconds between scrapes."
-                )
+                logger.debug(f"WebScraperSelenium ('{self.agent_id}'): Sleeping for {sleep_duration} seconds between scrapes.")
                 time.sleep(sleep_duration)
 
         if recurse > 0 and records_for_recursion:
             random.shuffle(records_for_recursion)
-            num_records_processed += self.run(
-                records=records_for_recursion, recurse=recurse - 1, **kwargs
-            )
+            num_records_processed += self.run(records=records_for_recursion, recurse=recurse - 1, **kwargs)
 
         return num_records_processed
 
@@ -512,9 +472,7 @@ class WebScraperSelenium(WebScraperRequests):
         does not define one).
         """
         if self.driver:
-            logger.info(
-                f"WebScraperSelenium ('{self.agent_id}'): Quitting Selenium WebDriver."
-            )
+            logger.info(f"WebScraperSelenium ('{self.agent_id}'): Quitting Selenium WebDriver.")
             try:
                 self.driver.quit()
             except Exception as e:
@@ -548,38 +506,24 @@ class WebScraperSelenium(WebScraperRequests):
         if self.driver:
             try:
                 self.driver.close()
-                logger.debug(
-                    f"WebScraperSelenium ('{self.agent_id}'): Closed existing Selenium session."
-                )
+                logger.debug(f"WebScraperSelenium ('{self.agent_id}'): Closed existing Selenium session.")
                 time.sleep(1)
             except Exception as e:
-                logger.warning(
-                    f"WebScraperSelenium ('{self.agent_id}'): Failed to close existing Selenium session: {e!s}"
-                )
+                logger.warning(f"WebScraperSelenium ('{self.agent_id}'): Failed to close existing Selenium session: {e!s}")
 
-        logger.debug(
-            f"WebScraperSelenium ('{self.agent_id}'): Starting new Selenium session."
-        )
+        logger.debug(f"WebScraperSelenium ('{self.agent_id}'): Starting new Selenium session.")
         try:
             # Assumes new_webdriver is available in the global scope or imported.
-            if "new_webdriver" not in globals() or not callable(
-                globals()["new_webdriver"]
-            ):
-                logger.error(
-                    "`new_webdriver` function is not defined or not callable globally. Cannot create WebDriver."
-                )
+            if "new_webdriver" not in globals() or not callable(globals()["new_webdriver"]):
+                logger.error("`new_webdriver` function is not defined or not callable globally. Cannot create WebDriver.")
                 self.driver = None
             else:
                 self.driver = globals()["new_webdriver"]()
 
             if self.driver:
-                logging.getLogger("seleniumwire.handler").setLevel(
-                    logging.WARNING
-                )  # For SeleniumWire
+                logging.getLogger("seleniumwire.handler").setLevel(logging.WARNING)  # For SeleniumWire
         except NameError:  # Explicitly catch NameError if new_webdriver is not found
-            logger.error(
-                "`new_webdriver` function is not defined. Selenium WebDriver cannot be created for agent '{self.agent_id}'."
-            )
+            logger.error("`new_webdriver` function is not defined. Selenium WebDriver cannot be created for agent '{self.agent_id}'.")
             self.driver = None
         except Exception as e:
             logger.error(
@@ -605,12 +549,8 @@ class WebScraperSelenium(WebScraperRequests):
             or if saving fails.
 
         """
-        if not self.driver or not hasattr(
-            self.driver, "current_url"
-        ):  # Check if driver is valid
-            logger.warning(
-                f"WebScraperSelenium ('{self.agent_id}'): WebDriver not available or no page loaded, cannot save page."
-            )
+        if not self.driver or not hasattr(self.driver, "current_url"):  # Check if driver is valid
+            logger.warning(f"WebScraperSelenium ('{self.agent_id}'): WebDriver not available or no page loaded, cannot save page.")
             return {}
 
         save_paths: dict[str, str] = {}
@@ -624,9 +564,7 @@ class WebScraperSelenium(WebScraperRequests):
 
         try:
             html_source = self.driver.page_source
-            saved_html_uri = bm.save(
-                data=html_source, basename=f"{base_filename}_source", extension=".html"
-            )
+            saved_html_uri = bm.save(data=html_source, basename=f"{base_filename}_source", extension=".html")
             if saved_html_uri:
                 save_paths["html"] = str(saved_html_uri)
 
@@ -676,9 +614,7 @@ class WebScraperSelenium(WebScraperRequests):
                         self._session.headers.update(browser_headers)
 
                     # Update requests session cookies from WebDriver's cookies
-                    selenium_cookies = (
-                        self.driver.get_cookies()
-                    )  # Standard Selenium method
+                    selenium_cookies = self.driver.get_cookies()  # Standard Selenium method
                     for cookie in selenium_cookies:
                         if "name" in cookie and "value" in cookie:
                             self._session.cookies.set(
@@ -690,9 +626,7 @@ class WebScraperSelenium(WebScraperRequests):
                     user_agent = self.get_user_agent()
                     if user_agent:
                         self._session.headers.update({"User-Agent": user_agent})
-                    logger.debug(
-                        f"WebScraperSelenium ('{self.agent_id}'): Updated requests session from WebDriver state for URL: {current_url}"
-                    )
+                    logger.debug(f"WebScraperSelenium ('{self.agent_id}'): Updated requests session from WebDriver state for URL: {current_url}")
             except Exception as e:
                 logger.warning(
                     f"WebScraperSelenium ('{self.agent_id}'): Failed to fully update requests session from WebDriver: {e!s}",
@@ -721,9 +655,7 @@ class WebScraperSelenium(WebScraperRequests):
         if kind == "attribute":
             if value:  # Attribute name must be provided
                 return item.get_attribute(value)
-            logger.warning(
-                "_extract called with kind='attribute' but no attribute name (value) provided."
-            )
+            logger.warning("_extract called with kind='attribute' but no attribute name (value) provided.")
             return None
         if kind == "text":
             return item.text
@@ -763,9 +695,7 @@ class WebScraperSelenium(WebScraperRequests):
 
         """
         results: list[Any] = []
-        if (
-            not self.driver
-        ):  # Ensure driver is available if element is not specified for search
+        if not self.driver:  # Ensure driver is available if element is not specified for search
             logger.warning("WebDriver not available in find_all.")
             return results
 
@@ -777,9 +707,7 @@ class WebScraperSelenium(WebScraperRequests):
                 extracted_value = self._extract(item_element, kind, value)
                 if extracted_value is not None:
                     results.append(extracted_value)
-        except (
-            NoSuchElementException
-        ):  # Should not be raised by find_elements (returns empty list)
+        except NoSuchElementException:  # Should not be raised by find_elements (returns empty list)
             logger.debug(
                 f"No elements found for XPath '{xpath}' within the given element.",
             )
@@ -814,9 +742,7 @@ class WebScraperSelenium(WebScraperRequests):
             logger.debug("StaleElementReferenceException during checkImageVisible.")
             return False
         except Exception as e:
-            logger.debug(
-                f"WebScraperSelenium ('{self.agent_id}'): Error checking image visibility: {e!s}"
-            )
+            logger.debug(f"WebScraperSelenium ('{self.agent_id}'): Error checking image visibility: {e!s}")
             return False
         return True
 
@@ -837,9 +763,7 @@ class WebScraperSelenium(WebScraperRequests):
         try:
             natural_width = img_element.get_property("naturalWidth")
             # Ensure natural_width is a number and greater than min_size
-            if not (
-                isinstance(natural_width, (int, float)) and natural_width > min_size
-            ):
+            if not (isinstance(natural_width, (int, float)) and natural_width > min_size):
                 return False
             # Check if element is hidden by CSS 'display: none'
             if "none" in str(img_element.value_of_css_property("display")).lower():
@@ -848,9 +772,7 @@ class WebScraperSelenium(WebScraperRequests):
             logger.debug("StaleElementReferenceException during checkImageOnPage.")
             return False
         except Exception as e:
-            logger.debug(
-                f"WebScraperSelenium ('{self.agent_id}'): Error checking image on page (size/display): {e!s}"
-            )
+            logger.debug(f"WebScraperSelenium ('{self.agent_id}'): Error checking image on page (size/display): {e!s}")
             return False
         return True
 
@@ -871,9 +793,7 @@ class WebScraperSelenium(WebScraperRequests):
 
         """
         if not cookies or not self.driver:
-            logger.debug(
-                f"WebScraperSelenium ('{self.agent_id}'): No cookies to add or driver not available."
-            )
+            logger.debug(f"WebScraperSelenium ('{self.agent_id}'): No cookies to add or driver not available.")
             return
 
         first_url = cookies.get("first_url")
@@ -886,15 +806,11 @@ class WebScraperSelenium(WebScraperRequests):
             return
 
         try:
-            self.driver.get(
-                first_url
-            )  # Navigate to the domain to set cookies correctly
+            self.driver.get(first_url)  # Navigate to the domain to set cookies correctly
             for name, value in cookie_dict.items():
                 # Selenium's add_cookie expects a dict with specific keys.
                 self.driver.add_cookie({"name": name, "value": str(value)})
-            logger.info(
-                f"WebScraperSelenium ('{self.agent_id}'): Added {len(cookie_dict)} cookies for domain of {first_url}."
-            )
+            logger.info(f"WebScraperSelenium ('{self.agent_id}'): Added {len(cookie_dict)} cookies for domain of {first_url}.")
         except Exception as e:
             logger.error(
                 f"WebScraperSelenium ('{self.agent_id}'): Error adding cookies in Selenium for URL {first_url}: {e!s}",
@@ -914,9 +830,7 @@ class WebScraperSelenium(WebScraperRequests):
         try:
             return self.driver.execute_script("return navigator.userAgent")
         except Exception as e:
-            logger.warning(
-                f"WebScraperSelenium ('{self.agent_id}'): Could not get User-Agent from Selenium: {e!s}"
-            )
+            logger.warning(f"WebScraperSelenium ('{self.agent_id}'): Could not get User-Agent from Selenium: {e!s}")
             return None
 
     def get_headers(self) -> tuple[dict[str, str], list[dict[str, Any]]]:
@@ -944,13 +858,8 @@ class WebScraperSelenium(WebScraperRequests):
             # Selenium-Wire specific: try to get headers from captured requests
             if hasattr(self.driver, "requests") and self.driver.requests:
                 for request_obj in self.driver.requests:
-                    if (
-                        request_obj.response
-                        and request_obj.url == self.driver.current_url
-                    ):
-                        headers_dict = dict(
-                            request_obj.response.headers
-                        )  # Convert to simple dict
+                    if request_obj.response and request_obj.url == self.driver.current_url:
+                        headers_dict = dict(request_obj.response.headers)  # Convert to simple dict
                         break  # Found headers for current URL
 
             # Standard Selenium: get cookies
@@ -963,13 +872,9 @@ class WebScraperSelenium(WebScraperRequests):
             try:  # Try to get standard cookies even if headers failed
                 cookies_list = self.driver.get_cookies()
             except Exception as e_cookie:
-                logger.warning(
-                    f"WebScraperSelenium ('{self.agent_id}'): Error getting cookies from standard Selenium: {e_cookie!s}"
-                )
+                logger.warning(f"WebScraperSelenium ('{self.agent_id}'): Error getting cookies from standard Selenium: {e_cookie!s}")
         except Exception as e:
-            logger.warning(
-                f"WebScraperSelenium ('{self.agent_id}'): Error getting headers/cookies: {e!s}"
-            )
+            logger.warning(f"WebScraperSelenium ('{self.agent_id}'): Error getting headers/cookies: {e!s}")
 
         return headers_dict, cookies_list
 
@@ -1013,16 +918,12 @@ class WebScraperSelenium(WebScraperRequests):
         """
         url_to_fetch = record.get("url")
         if not url_to_fetch:
-            logger.error(
-                f"WebScraperSelenium ('{self.agent_id}')._process: Record missing 'url'. Record: {record}"
-            )
+            logger.error(f"WebScraperSelenium ('{self.agent_id}')._process: Record missing 'url'. Record: {record}")
             record["error"] = "Missing 'url' in record."
             return record
 
         try:
-            page_source = self.get(
-                url_to_fetch, **kwargs
-            )  # Selenium-specific get, returns page source
+            page_source = self.get(url_to_fetch, **kwargs)  # Selenium-specific get, returns page source
             extracted_data = self.extract(page_source)  # Pass page source to extract
 
             if isinstance(extracted_data, dict):
@@ -1033,15 +934,9 @@ class WebScraperSelenium(WebScraperRequests):
                     f"WebScraperSelenium ('{self.agent_id}'): extract() method for URL {url_to_fetch} did not return a dict. Raw data stored."
                 )
             return record
-        except (
-            StaleElementReferenceException
-        ) as e_stale:  # More specific handling if needed before retry
-            logger.warning(
-                f"WebScraperSelenium ('{self.agent_id}'): StaleElementReferenceException for {url_to_fetch}. Retrying. Error: {e_stale!s}"
-            )
-            record["error"] = (
-                f"Stale element: {e_stale!s}"  # Temporary error, may be overwritten by retry
-            )
+        except StaleElementReferenceException as e_stale:  # More specific handling if needed before retry
+            logger.warning(f"WebScraperSelenium ('{self.agent_id}'): StaleElementReferenceException for {url_to_fetch}. Retrying. Error: {e_stale!s}")
+            record["error"] = f"Stale element: {e_stale!s}"  # Temporary error, may be overwritten by retry
             raise  # Re-raise for tenacity to handle
         except WebDriverException as e_wd:  # Catch other WebDriver exceptions
             error_msg = f"WebDriverException processing URL {url_to_fetch} with Selenium: {e_wd!s}"
@@ -1049,9 +944,7 @@ class WebScraperSelenium(WebScraperRequests):
             record["error"] = error_msg
             raise  # Re-raise for tenacity
         except Exception as e:  # Catch other broad exceptions during processing
-            error_msg = (
-                f"Unexpected error processing URL {url_to_fetch} with Selenium: {e!s}"
-            )
+            error_msg = f"Unexpected error processing URL {url_to_fetch} with Selenium: {e!s}"
             logger.error(error_msg, exc_info=True)
             record["error"] = error_msg
             # Not re-raising here means the loop in `run` would continue.
@@ -1094,16 +987,10 @@ class WebScraperSelenium(WebScraperRequests):
 
         """
         if not self.driver:
-            logger.error(
-                f"WebScraperSelenium ('{self.agent_id}'): Selenium WebDriver not initialized. Cannot fetch URL: {url}"
-            )
-            raise RuntimeError(
-                f"Selenium WebDriver not initialized in WebScraperSelenium.get() for agent '{self.agent_id}'"
-            )
+            logger.error(f"WebScraperSelenium ('{self.agent_id}'): Selenium WebDriver not initialized. Cannot fetch URL: {url}")
+            raise RuntimeError(f"Selenium WebDriver not initialized in WebScraperSelenium.get() for agent '{self.agent_id}'")
 
-        logger.debug(
-            f"WebScraperSelenium ('{self.agent_id}'): Fetching URL with Selenium: {url}"
-        )
+        logger.debug(f"WebScraperSelenium ('{self.agent_id}'): Fetching URL with Selenium: {url}")
         try:
             self.driver.get(url)
             self.try_save_page(**parameters)
@@ -1115,9 +1002,7 @@ class WebScraperSelenium(WebScraperRequests):
             )
             self.new_webdriver()  # Attempt to restart the driver
             if not self.driver:  # If restart failed
-                raise RuntimeError(
-                    f"Failed to restart WebDriver for agent '{self.agent_id}' after error on URL: {url}"
-                ) from e
+                raise RuntimeError(f"Failed to restart WebDriver for agent '{self.agent_id}' after error on URL: {url}") from e
             raise  # Re-raise the original WebDriverException for tenacity to handle retry
         return self.driver.page_source
 
@@ -1149,20 +1034,14 @@ class WebScraperSelenium(WebScraperRequests):
 
         """
         if not urls:
-            logger.debug(
-                f"WebScraperSelenium ('{self.agent_id}'): fetch_urls called with no URLs."
-            )
+            logger.debug(f"WebScraperSelenium ('{self.agent_id}'): fetch_urls called with no URLs.")
             return 0
 
         # Create Record objects, ensuring metadata is initialized for potential updates
-        initial_records = [
-            Record(url=url, parent_id=parent_id, metadata={}) for url in urls
-        ]
+        initial_records = [Record(url=url, parent_id=parent_id, metadata={}) for url in urls]
         return self.fetch_records(records=initial_records, recurse=recurse, **kwargs)
 
-    def fetch_records(
-        self, records: list[Record], recurse: int = 0, **kwargs: Any
-    ) -> int:
+    def fetch_records(self, records: list[Record], recurse: int = 0, **kwargs: Any) -> int:
         """Processes a list of `Record` objects, typically by scraping their URLs.
 
         This method shuffles the input `records` list (to potentially vary scrape
@@ -1182,9 +1061,7 @@ class WebScraperSelenium(WebScraperRequests):
 
         """
         if not records:
-            logger.debug(
-                f"WebScraperSelenium ('{self.agent_id}'): fetch_records called with no records."
-            )
+            logger.debug(f"WebScraperSelenium ('{self.agent_id}'): fetch_records called with no records.")
             return 0
 
         # The current self.run expects a list of dictionaries.

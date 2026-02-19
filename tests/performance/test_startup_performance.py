@@ -131,9 +131,7 @@ async def test_background_warmup_timing():
         await asyncio.sleep(3.0)
 
         # Should be initialized now
-        assert embeddings._cache_initialized, (
-            "Background warmup should have initialized collection"
-        )
+        assert embeddings._cache_initialized, "Background warmup should have initialized collection"
 
         elapsed = time.perf_counter() - start
         print(f"\n✅ Background warmup completed in {elapsed:.2f}s")
@@ -189,18 +187,14 @@ async def test_minimal_init_async_performance():
         total_time = time.perf_counter() - start
 
         # Hard requirement from issue #284
-        assert total_time < 30.0, (
-            f"Startup took {total_time:.2f}s, exceeds 30s MCP timeout"
-        )
+        assert total_time < 30.0, f"Startup took {total_time:.2f}s, exceeds 30s MCP timeout"
 
         # Phase 2 target
         target_time = 13.0
         if total_time < target_time:
             print(f"\n✅ Startup: {total_time:.2f}s (under {target_time}s target)")
         else:
-            print(
-                f"\n⚠️  Startup: {total_time:.2f}s (exceeds {target_time}s target but within 30s limit)"
-            )
+            print(f"\n⚠️  Startup: {total_time:.2f}s (exceeds {target_time}s target but within 30s limit)")
 
         # Cleanup
         if bm:

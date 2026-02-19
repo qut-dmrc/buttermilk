@@ -62,12 +62,8 @@ def test_run_query_converts_numpy_arrays_to_lists():
     assert isinstance(result_df, pd.DataFrame)
 
     # ASSERT: numpy arrays should be converted to Python lists
-    assert isinstance(result_df.iloc[0]["messages"], list), (
-        "messages field should be converted from numpy.ndarray to list"
-    )
-    assert isinstance(result_df.iloc[1]["messages"], list), (
-        "messages field should be converted from numpy.ndarray to list"
-    )
+    assert isinstance(result_df.iloc[0]["messages"], list), "messages field should be converted from numpy.ndarray to list"
+    assert isinstance(result_df.iloc[1]["messages"], list), "messages field should be converted from numpy.ndarray to list"
 
     # ASSERT: List contents should match
     assert len(result_df.iloc[0]["messages"]) == 2
@@ -87,9 +83,7 @@ def test_run_query_handles_nested_numpy_arrays():
     mock_df = pd.DataFrame(
         {
             "id": ["1"],
-            "nested_arrays": [
-                {"inner_list": np.array(["a", "b", "c"]), "regular_field": "value"}
-            ],
+            "nested_arrays": [{"inner_list": np.array(["a", "b", "c"]), "regular_field": "value"}],
         }
     )
 
@@ -107,9 +101,7 @@ def test_run_query_handles_nested_numpy_arrays():
 
     # ASSERT: Nested numpy array should be converted
     nested_data = result_df.iloc[0]["nested_arrays"]
-    assert isinstance(nested_data["inner_list"], list), (
-        "Nested numpy arrays should be converted to lists"
-    )
+    assert isinstance(nested_data["inner_list"], list), "Nested numpy arrays should be converted to lists"
     assert nested_data["inner_list"] == ["a", "b", "c"]
     assert nested_data["regular_field"] == "value"
 

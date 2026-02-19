@@ -96,9 +96,7 @@ class TestCachedProperty:
         assert second_duration < 0.001  # Should be very fast (under 1ms)
 
 
-@pytest.mark.skip(
-    reason="Lazy loading tests need refactoring for new BM structure - TODO"
-)
+@pytest.mark.skip(reason="Lazy loading tests need refactoring for new BM structure - TODO")
 class TestCloudManagerLazyLoading:
     """Test CloudManager lazy loading patterns."""
 
@@ -158,9 +156,7 @@ class TestCloudManagerLazyLoading:
             assert creds1 is creds2
 
 
-@pytest.mark.skip(
-    reason="Lazy loading tests need refactoring for new BM structure - TODO"
-)
+@pytest.mark.skip(reason="Lazy loading tests need refactoring for new BM structure - TODO")
 class TestLLMManagerLazyLoading:
     """Test LLM manager lazy loading optimizations."""
 
@@ -208,9 +204,7 @@ class TestLLMManagerLazyLoadingReal:
         assert client1 is client2
 
 
-@pytest.mark.skip(
-    reason="Lazy loading tests need refactoring for new BM structure - TODO"
-)
+@pytest.mark.skip(reason="Lazy loading tests need refactoring for new BM structure - TODO")
 class TestQueryRunnerLazyLoading:
     """Test QueryRunner lazy loading patterns."""
 
@@ -228,9 +222,7 @@ class TestQueryRunnerLazyLoading:
             assert qr.client is fake_client
 
 
-@pytest.mark.skip(
-    reason="Lazy loading tests need refactoring for new BM structure - TODO"
-)
+@pytest.mark.skip(reason="Lazy loading tests need refactoring for new BM structure - TODO")
 class TestAsyncBackgroundOperations:
     """Test async background operations don't block startup."""
 
@@ -288,9 +280,7 @@ class TestAsyncBackgroundOperations:
             assert bm.session_info.project_name == "test"
 
 
-@pytest.mark.skip(
-    reason="Lazy loading tests need refactoring for new BM structure - TODO"
-)
+@pytest.mark.skip(reason="Lazy loading tests need refactoring for new BM structure - TODO")
 class TestMemoryEfficiency:
     """Test memory efficiency of lazy loading."""
 

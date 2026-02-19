@@ -17,6 +17,7 @@ def _get_cost_per_token():
     if not _cost_per_token_loaded:
         try:
             from litellm.cost_calculator import cost_per_token
+
             _cost_per_token = cost_per_token
         except ImportError:
             logger.warning("litellm not installed. Token cost tracking will be disabled.")

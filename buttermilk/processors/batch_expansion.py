@@ -25,9 +25,7 @@ class BatchExpansionProcessor(BaseModel):
     """
 
     repetitions: int = 3
-    models: list[Type[TextToImageClient] | TextToImageClient] = Field(
-        default_factory=lambda: [cls() for cls in CHEAP_IMAGE_CLIENTS]
-    )
+    models: list[Type[TextToImageClient] | TextToImageClient] = Field(default_factory=lambda: [cls() for cls in CHEAP_IMAGE_CLIENTS])
 
     async def process(
         self,

@@ -61,9 +61,7 @@ async def run_tasks(
             )
         raise FatalError("Aborting run following exceptions in task group.")
     except Exception as e:
-        logger.exception(
-            "Received unhandled exception in run loop!", error=e, error_args=e.args
-        )
+        logger.exception("Received unhandled exception in run loop!", error=e, error_args=e.args)
         raise
 
     finally:

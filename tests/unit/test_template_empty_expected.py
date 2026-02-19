@@ -25,10 +25,7 @@ from buttermilk.utils.templating import load_template
 @pytest.fixture
 def judge_trace():
     """Load real judge trace from production bug."""
-    fixture_path = (
-        Path(__file__).parent.parent
-        / "integration/fixtures/tja_judge_trace_minneapolis_shooting.json"
-    )
+    fixture_path = Path(__file__).parent.parent / "integration/fixtures/tja_judge_trace_minneapolis_shooting.json"
     with open(fixture_path) as f:
         traces = json.load(f)
     return traces[0]  # BigQuery returns array with single result
@@ -63,9 +60,7 @@ async def test_llmcore_fills_template_with_expected_from_record(judge_trace):
     )
 
     # Create LLMCore configured for score template
-    llm_core = LLMCore(
-        model="gemini25pro", template="score", fail_on_unfilled_parameters=True
-    )
+    llm_core = LLMCore(model="gemini25pro", template="score", fail_on_unfilled_parameters=True)
 
     # Call _fill_template() - this is what process() calls internally
     # Pass record fields as template_vars dict (first positional arg)
@@ -83,20 +78,14 @@ async def test_llmcore_fills_template_with_expected_from_record(judge_trace):
     assert "<END EXPECTED ANSWER KEY POINTS>" in rendered
 
     # Extract the content between markers
-    start = rendered.find("<BEGIN EXPECTED ANSWER KEY POINTS>") + len(
-        "<BEGIN EXPECTED ANSWER KEY POINTS>"
-    )
+    start = rendered.find("<BEGIN EXPECTED ANSWER KEY POINTS>") + len("<BEGIN EXPECTED ANSWER KEY POINTS>")
     end = rendered.find("<END EXPECTED ANSWER KEY POINTS>")
     key_points_content = rendered[start:end].strip()
 
     # THE BUG: key_points_content is empty when it should have content
     # The 'expected' field from BaseRecord should be passed to the template
-    assert key_points_content, (
-        f"KEY POINTS section should have content but got empty. Full message:\n{rendered}"
-    )
-    assert "Violates by misgendering" in rendered, (
-        "Expected content should be in rendered output"
-    )
+    assert key_points_content, f"KEY POINTS section should have content but got empty. Full message:\n{rendered}"
+    assert "Violates by misgendering" in rendered, "Expected content should be in rendered output"
 
 
 @pytest.mark.anyio
@@ -110,9 +99,7 @@ async def test_jmespath_transform_preserves_expected_field():
     from buttermilk.processors.jmespath_transform import JMESPathTransform
 
     # Load SQL output from fixture
-    sql_output_path = (
-        Path(__file__).parent.parent / "integration/fixtures/rescore_sql_output.json"
-    )
+    sql_output_path = Path(__file__).parent.parent / "integration/fixtures/rescore_sql_output.json"
     with open(sql_output_path) as f:
         sql_results = json.load(f)
 
@@ -153,15 +140,9 @@ async def test_jmespath_transform_preserves_expected_field():
     output_record = output_records[0]
 
     # THE BUG: Check if 'expected' survived the transform
-    assert hasattr(output_record, "expected"), (
-        "Output record should have expected field"
-    )
-    assert output_record.expected is not None, (
-        f"expected should not be None, got: {output_record.expected}"
-    )
-    assert "Violates by misgendering" in output_record.expected, (
-        "expected should have content"
-    )
+    assert hasattr(output_record, "expected"), "Output record should have expected field"
+    assert output_record.expected is not None, f"expected should not be None, got: {output_record.expected}"
+    assert "Violates by misgendering" in output_record.expected, "expected should have content"
 
 
 @pytest.mark.anyio
@@ -176,9 +157,7 @@ async def test_full_rescore_pipeline_preserves_expected():
     from buttermilk.processors.jmespath_transform import JMESPathTransform
 
     # Load SQL output from fixture
-    sql_output_path = (
-        Path(__file__).parent.parent / "integration/fixtures/rescore_sql_output.json"
-    )
+    sql_output_path = Path(__file__).parent.parent / "integration/fixtures/rescore_sql_output.json"
     with open(sql_output_path) as f:
         sql_results = json.load(f)
 
@@ -205,27 +184,19 @@ async def test_full_rescore_pipeline_preserves_expected():
     )
 
     transformed_records = []
-    async for record in jmespath_transform.process(
-        sql_record, processor_stage="jmespath"
-    ):
+    async for record in jmespath_transform.process(sql_record, processor_stage="jmespath"):
         transformed_records.append(record)
 
     assert len(transformed_records) == 1
     transformed_record = transformed_records[0]
 
     # Verify JMESPath output has expected
-    assert hasattr(transformed_record, "expected"), (
-        "Transformed record should have expected"
-    )
-    assert transformed_record.expected is not None, (
-        "Transformed expected should not be None"
-    )
+    assert hasattr(transformed_record, "expected"), "Transformed record should have expected"
+    assert transformed_record.expected is not None, "Transformed expected should not be None"
 
     # STEP 3: Test what LLMCore would pass to the template
     # We can't actually call LLM without BM singleton, so just test _fill_template directly
-    llm_core = LLMCore(
-        model="gemini25pro", template="score", fail_on_unfilled_parameters=True
-    )
+    llm_core = LLMCore(model="gemini25pro", template="score", fail_on_unfilled_parameters=True)
 
     # Call _fill_template which extracts fields from record and renders template
     # This is what process_with_llm calls internally (line 355 in llm_core.py)
@@ -246,19 +217,13 @@ async def test_full_rescore_pipeline_preserves_expected():
     assert "<BEGIN EXPECTED ANSWER KEY POINTS>" in rendered
     assert "<END EXPECTED ANSWER KEY POINTS>" in rendered
 
-    start = rendered.find("<BEGIN EXPECTED ANSWER KEY POINTS>") + len(
-        "<BEGIN EXPECTED ANSWER KEY POINTS>"
-    )
+    start = rendered.find("<BEGIN EXPECTED ANSWER KEY POINTS>") + len("<BEGIN EXPECTED ANSWER KEY POINTS>")
     end = rendered.find("<END EXPECTED ANSWER KEY POINTS>")
     key_points_content = rendered[start:end].strip()
 
     # This is the production bug - expected renders empty despite being in the pipeline
-    assert key_points_content, (
-        f"KEY POINTS section should have content but got empty. Full message:\n{rendered}"
-    )
-    assert "Violates by misgendering" in rendered, (
-        "expected content should be in rendered output"
-    )
+    assert key_points_content, f"KEY POINTS section should have content but got empty. Full message:\n{rendered}"
+    assert "Violates by misgendering" in rendered, "expected content should be in rendered output"
 
 
 def test_score_template_with_empty_expected_should_fail():

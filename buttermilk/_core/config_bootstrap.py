@@ -36,10 +36,7 @@ def register_library_configs_in_store(library_config_dir: Path) -> None:
     # Scan library config directory for all YAML files
     for config_file in library_config_dir.rglob("*.yaml"):
         # Skip config.yaml in root (it's the main config, not a group)
-        if (
-            config_file.name == "config.yaml"
-            and config_file.parent == library_config_dir
-        ):
+        if config_file.name == "config.yaml" and config_file.parent == library_config_dir:
             continue
 
         # Determine group from directory structure
@@ -179,9 +176,7 @@ class ConfigurationBootstrapper:
         self.config_path = config_path
         self.config_name = config_name
         self.overrides = overrides or []
-        self.config = self._load_configuration(
-            config
-        )  # ButtermilkConfig, not DictConfig
+        self.config = self._load_configuration(config)  # ButtermilkConfig, not DictConfig
 
         load_dotenv()
 
@@ -209,9 +204,7 @@ class ConfigurationBootstrapper:
 
                 if GlobalHydra.instance().is_initialized():
                     # We're already in a Hydra context, get the existing config
-                    dict_config = compose(
-                        config_name=self.config_name, overrides=self.overrides
-                    )
+                    dict_config = compose(config_name=self.config_name, overrides=self.overrides)
 
                 else:
                     # Determine library and project config directories
@@ -221,17 +214,13 @@ class ConfigurationBootstrapper:
                     is_custom_config = project_config_dir != library_config_dir
 
                     # Load configuration using Hydra compose API
-                    with initialize_config_dir(
-                        config_dir=str(project_config_dir), version_base="1.3"
-                    ):
+                    with initialize_config_dir(config_dir=str(project_config_dir), version_base="1.3"):
                         # Register library configs INSIDE the Hydra context for fallback
                         # This must happen AFTER initialize but BEFORE compose
                         if is_custom_config:
                             register_library_configs_in_store(library_config_dir)
 
-                        dict_config = compose(
-                            config_name=self.config_name, overrides=self.overrides
-                        )
+                        dict_config = compose(config_name=self.config_name, overrides=self.overrides)
 
             except Exception as e:
                 print(f"Failed to load configuration: {e}")
@@ -259,9 +248,7 @@ class ConfigurationBootstrapper:
             if otel_config.get("enabled", False):
                 env_vars.update(
                     {
-                        "OTEL_SERVICE_NAME": otel_config.get(
-                            "service_name", "buttermilk"
-                        ),
+                        "OTEL_SERVICE_NAME": otel_config.get("service_name", "buttermilk"),
                         "OTEL_RESOURCE_ATTRIBUTES": f"service.name={otel_config.get('service_name', 'buttermilk')}",
                     }
                 )
@@ -277,9 +264,7 @@ class ConfigurationBootstrapper:
                     if cloud_config.get("project_id"):
                         env_vars["GOOGLE_CLOUD_PROJECT"] = cloud_config["project_id"]
                     if cloud_config.get("credentials_path"):
-                        env_vars["GOOGLE_APPLICATION_CREDENTIALS"] = cloud_config[
-                            "credentials_path"
-                        ]
+                        env_vars["GOOGLE_APPLICATION_CREDENTIALS"] = cloud_config["credentials_path"]
 
         # Apply all environment variables
         for key, value in env_vars.items():
@@ -407,9 +392,7 @@ def _run_coro_sync(coro):
         except BaseException as e:
             fut.set_exception(e)
 
-    t = threading.Thread(
-        target=_thread_runner, name="buttermilk-init-loop", daemon=True
-    )
+    t = threading.Thread(target=_thread_runner, name="buttermilk-init-loop", daemon=True)
     t.start()
     return fut.result()
 
@@ -527,9 +510,7 @@ async def bootstrap_session_with_config_async(
         overrides=bootstrap_overrides,
         config=config,
     )
-    typed_config = (
-        bootstrapper.config
-    )  # Already ButtermilkConfig from _load_configuration()
+    typed_config = bootstrapper.config  # Already ButtermilkConfig from _load_configuration()
 
     # Resolve template paths
     template_paths = list(typed_config.session.template_paths)
@@ -570,11 +551,7 @@ async def bootstrap_session_with_config_async(
     set_bm(bm)
 
     # Log startup
-    run_type_str = (
-        typed_config.run.mode if hasattr(typed_config.run, "mode") else "session"
-    )
-    bm.logger.info(
-        f"Starting {run_type_str} for {bm.session_info.project_name} job {bm.session_info.job}"
-    )
+    run_type_str = typed_config.run.mode if hasattr(typed_config.run, "mode") else "session"
+    bm.logger.info(f"Starting {run_type_str} for {bm.session_info.project_name} job {bm.session_info.job}")
 
     return bm, typed_config
