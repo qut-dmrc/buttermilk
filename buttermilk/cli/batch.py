@@ -255,6 +255,7 @@ def status(job_id: str, json_output: bool, save_dir: str | None, search: bool) -
                 client, endpoint = _create_openai_batch_client(manifest.model)
             except ValueError:
                 from openai import OpenAI
+
                 client = OpenAI()
                 endpoint = "/v1/chat/completions"
 
@@ -358,6 +359,7 @@ def fetch(job_id: str, json_output: bool, output: str | None, save_dir: str | No
                 client, endpoint = _create_openai_batch_client(manifest.model)
             except ValueError:
                 from openai import OpenAI
+
                 client = OpenAI()
                 endpoint = "/v1/chat/completions"
 

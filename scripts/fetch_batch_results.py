@@ -148,21 +148,16 @@ def _fetch_openai_results(job_id: str, manifest_data: dict) -> None:
     from buttermilk.batch.executors.openai import _create_openai_batch_client
 
     manifest = OpenAIBatchManifest(**manifest_data)
-    logger.info(
-        f"Loaded OpenAI manifest for job {job_id} "
-        f"(OpenAI Batch ID: {manifest.openai_batch_id}, Model: {manifest.model})"
-    )
+    logger.info(f"Loaded OpenAI manifest for job {job_id} (OpenAI Batch ID: {manifest.openai_batch_id}, Model: {manifest.model})")
 
     # Create client from the model registry
     try:
         client, endpoint = _create_openai_batch_client(manifest.model)
     except ValueError:
         # Model may not be in current config; try to use a generic OpenAI client
-        logger.warning(
-            f"Model '{manifest.model}' not in current config. "
-            f"Attempting direct OpenAI client."
-        )
+        logger.warning(f"Model '{manifest.model}' not in current config. Attempting direct OpenAI client.")
         from openai import OpenAI
+
         client = OpenAI()
         endpoint = "/v1/chat/completions"
 

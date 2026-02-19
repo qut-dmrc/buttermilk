@@ -18,7 +18,6 @@ import pytest
 from buttermilk.batch.executors.openai import OpenAIBatchExecutor, _create_openai_batch_client
 from buttermilk.batch.result import BatchJobStatus
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -53,14 +52,16 @@ class TestCreateOpenAIBatchClient:
         """Azure client should return AzureOpenAI instance with /chat/completions endpoint."""
         from buttermilk._core.llms import ClientType
 
-        mock_bm = _make_mock_bm({
-            "gpt-chat": _make_llm_config(
-                client_type=ClientType.AZURE,
-                api_key="azure-key",
-                base_url="https://my-resource.openai.azure.com/",
-                configs={"api_version": "2024-12-01-preview"},
-            ),
-        })
+        mock_bm = _make_mock_bm(
+            {
+                "gpt-chat": _make_llm_config(
+                    client_type=ClientType.AZURE,
+                    api_key="azure-key",
+                    base_url="https://my-resource.openai.azure.com/",
+                    configs={"api_version": "2024-12-01-preview"},
+                ),
+            }
+        )
 
         with (
             patch("buttermilk.bm", mock_bm),
@@ -83,13 +84,15 @@ class TestCreateOpenAIBatchClient:
         """OpenAI client should return OpenAI instance with /v1/chat/completions endpoint."""
         from buttermilk._core.llms import ClientType
 
-        mock_bm = _make_mock_bm({
-            "gpt-4o": _make_llm_config(
-                client_type=ClientType.OPENAI,
-                api_key="openai-key",
-                base_url=None,
-            ),
-        })
+        mock_bm = _make_mock_bm(
+            {
+                "gpt-4o": _make_llm_config(
+                    client_type=ClientType.OPENAI,
+                    api_key="openai-key",
+                    base_url=None,
+                ),
+            }
+        )
 
         with (
             patch("buttermilk.bm", mock_bm),
@@ -108,13 +111,15 @@ class TestCreateOpenAIBatchClient:
         """xAI client should return OpenAI instance with xAI base_url."""
         from buttermilk._core.llms import ClientType
 
-        mock_bm = _make_mock_bm({
-            "grok-fast": _make_llm_config(
-                client_type=ClientType.XAI,
-                api_key="xai-key",
-                base_url="https://api.x.ai/v1",
-            ),
-        })
+        mock_bm = _make_mock_bm(
+            {
+                "grok-fast": _make_llm_config(
+                    client_type=ClientType.XAI,
+                    api_key="xai-key",
+                    base_url="https://api.x.ai/v1",
+                ),
+            }
+        )
 
         with (
             patch("buttermilk.bm", mock_bm),
@@ -144,11 +149,13 @@ class TestCreateOpenAIBatchClient:
         """Unsupported client type should raise ValueError."""
         from buttermilk._core.llms import ClientType
 
-        mock_bm = _make_mock_bm({
-            "gemini-model": _make_llm_config(
-                client_type=ClientType.GEMINI,
-            ),
-        })
+        mock_bm = _make_mock_bm(
+            {
+                "gemini-model": _make_llm_config(
+                    client_type=ClientType.GEMINI,
+                ),
+            }
+        )
 
         with patch("buttermilk.bm", mock_bm):
             with pytest.raises(ValueError, match="not supported for OpenAI batch"):
@@ -158,14 +165,16 @@ class TestCreateOpenAIBatchClient:
         """Azure client without explicit api_version should use default."""
         from buttermilk._core.llms import ClientType
 
-        mock_bm = _make_mock_bm({
-            "gpt-mini": _make_llm_config(
-                client_type=ClientType.AZURE,
-                api_key="azure-key",
-                base_url="https://my-resource.openai.azure.com/",
-                configs={},  # No api_version
-            ),
-        })
+        mock_bm = _make_mock_bm(
+            {
+                "gpt-mini": _make_llm_config(
+                    client_type=ClientType.AZURE,
+                    api_key="azure-key",
+                    base_url="https://my-resource.openai.azure.com/",
+                    configs={},  # No api_version
+                ),
+            }
+        )
 
         with (
             patch("buttermilk.bm", mock_bm),
@@ -224,10 +233,12 @@ class TestOpenAIBatchExecutor:
         processor.prepare_batch_requests.return_value = [MagicMock(), MagicMock()]
 
         mock_manager = MagicMock()
-        mock_manager.submit_batch = AsyncMock(return_value={
-            "openai_batch_id": "batch_abc123",
-            "job_id": "batch_20260219_xyz",
-        })
+        mock_manager.submit_batch = AsyncMock(
+            return_value={
+                "openai_batch_id": "batch_abc123",
+                "job_id": "batch_20260219_xyz",
+            }
+        )
 
         executor._get_manager = MagicMock(return_value=mock_manager)
 
@@ -359,18 +370,22 @@ class TestExecutorPackageImports:
 
     def test_import_batch_executor(self):
         from buttermilk.batch.executors import BatchExecutor
+
         assert BatchExecutor is not None
 
     def test_import_sync_executor(self):
         from buttermilk.batch.executors import SyncBatchExecutor
+
         assert SyncBatchExecutor is not None
 
     def test_import_vertex_executor(self):
         from buttermilk.batch.executors import VertexBatchExecutor
+
         assert VertexBatchExecutor is not None
 
     def test_import_openai_executor(self):
         from buttermilk.batch.executors import OpenAIBatchExecutor
+
         assert OpenAIBatchExecutor is not None
 
 
@@ -385,21 +400,25 @@ class TestBatchLLMProcessor:
     def test_import_from_processors_package(self):
         """BatchLLMProcessor should be importable from buttermilk.processors."""
         from buttermilk.processors import BatchLLMProcessor
+
         assert BatchLLMProcessor is not None
 
     def test_import_from_vertex_batch_module(self):
         """BatchLLMProcessor should be importable from the vertex_batch module."""
         from buttermilk.processors.vertex_batch import BatchLLMProcessor
+
         assert BatchLLMProcessor is not None
 
     def test_class_hierarchy(self):
         """VertexBatchProcessor should be a subclass of BatchLLMProcessor."""
         from buttermilk.processors.vertex_batch import BatchLLMProcessor, VertexBatchProcessor
+
         assert issubclass(VertexBatchProcessor, BatchLLMProcessor)
 
     def test_vertex_still_importable_from_processors(self):
         """VertexBatchProcessor should still be importable from buttermilk.processors."""
         from buttermilk.processors import VertexBatchProcessor
+
         assert VertexBatchProcessor is not None
 
     def test_batch_llm_processor_instantiation(self):
@@ -467,10 +486,12 @@ class TestBatchLLMProcessor:
         executor = OpenAIBatchExecutor(poll_interval=10, max_wait_hours=1)
 
         mock_manager = MagicMock()
-        mock_manager.submit_batch = AsyncMock(return_value={
-            "openai_batch_id": "batch_abc123",
-            "job_id": "batch_20260219_xyz",
-        })
+        mock_manager.submit_batch = AsyncMock(
+            return_value={
+                "openai_batch_id": "batch_abc123",
+                "job_id": "batch_20260219_xyz",
+            }
+        )
         executor._get_manager = MagicMock(return_value=mock_manager)
 
         # Use patch.object since Pydantic models don't allow direct attribute assignment

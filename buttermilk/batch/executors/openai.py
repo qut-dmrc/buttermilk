@@ -35,10 +35,7 @@ def _create_openai_batch_client(model_name: str) -> tuple[Any, str]:
     from buttermilk._core.llms import ClientType
 
     if model_name not in bm.llms.connections:
-        raise ValueError(
-            f"Model '{model_name}' not found in buttermilk connections. "
-            f"Available: {list(bm.llms.connections.keys())}"
-        )
+        raise ValueError(f"Model '{model_name}' not found in buttermilk connections. Available: {list(bm.llms.connections.keys())}")
 
     config = bm.llms.connections[model_name]
 
@@ -126,8 +123,7 @@ class OpenAIBatchExecutor(BatchExecutor):
             return BatchExecutionResult(
                 status=BatchJobStatus.FAILED,
                 error=(
-                    f"Processor {processor.name} ({type(processor).__name__}) "
-                    f"does not support batch execution. Missing 'prepare_batch_requests'."
+                    f"Processor {processor.name} ({type(processor).__name__}) does not support batch execution. Missing 'prepare_batch_requests'."
                 ),
             )
 
@@ -153,9 +149,7 @@ class OpenAIBatchExecutor(BatchExecutor):
 
             openai_batch_id = result["openai_batch_id"]
             job_id = result["job_id"]
-            logger.info(
-                f"OpenAI batch job submitted: {openai_batch_id} (internal: {job_id})"
-            )
+            logger.info(f"OpenAI batch job submitted: {openai_batch_id} (internal: {job_id})")
 
             return BatchExecutionResult(
                 status=BatchJobStatus.PENDING,
