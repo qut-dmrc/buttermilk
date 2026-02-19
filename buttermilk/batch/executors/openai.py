@@ -86,7 +86,8 @@ class OpenAIBatchExecutor(BatchExecutor):
     """Executes batch processing via the OpenAI/Azure Batch API.
 
     Submits a batch job and returns immediately with PENDING status.
-    Requires a processor that supports `prepare_batch_requests`.
+    Requires a processor that supports `prepare_batch_requests`
+    (e.g. BatchLLMProcessor or VertexBatchProcessor).
 
     The client is created lazily from the buttermilk model registry
     based on the processor's model name.

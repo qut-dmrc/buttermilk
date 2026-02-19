@@ -1,10 +1,11 @@
-"""Tests for OpenAIBatchExecutor and client factory.
+"""Tests for OpenAIBatchExecutor, client factory, and BatchLLMProcessor.
 
 Tests cover:
 - _create_openai_batch_client() with Azure, OpenAI, and xAI client types
 - OpenAIBatchExecutor.execute() with mocked OpenAIBatchJobManager
 - OpenAIBatchExecutor.get_status() with mocked manager
 - Error cases (missing model, unsupported client_type, missing prepare_batch_requests)
+- BatchLLMProcessor as provider-agnostic base for OpenAI executor
 """
 
 from __future__ import annotations
@@ -371,3 +372,115 @@ class TestExecutorPackageImports:
     def test_import_openai_executor(self):
         from buttermilk.batch.executors import OpenAIBatchExecutor
         assert OpenAIBatchExecutor is not None
+
+
+# =============================================================================
+# BatchLLMProcessor Tests
+# =============================================================================
+
+
+class TestBatchLLMProcessor:
+    """Tests for BatchLLMProcessor as provider-agnostic base class."""
+
+    def test_import_from_processors_package(self):
+        """BatchLLMProcessor should be importable from buttermilk.processors."""
+        from buttermilk.processors import BatchLLMProcessor
+        assert BatchLLMProcessor is not None
+
+    def test_import_from_vertex_batch_module(self):
+        """BatchLLMProcessor should be importable from the vertex_batch module."""
+        from buttermilk.processors.vertex_batch import BatchLLMProcessor
+        assert BatchLLMProcessor is not None
+
+    def test_class_hierarchy(self):
+        """VertexBatchProcessor should be a subclass of BatchLLMProcessor."""
+        from buttermilk.processors.vertex_batch import BatchLLMProcessor, VertexBatchProcessor
+        assert issubclass(VertexBatchProcessor, BatchLLMProcessor)
+
+    def test_vertex_still_importable_from_processors(self):
+        """VertexBatchProcessor should still be importable from buttermilk.processors."""
+        from buttermilk.processors import VertexBatchProcessor
+        assert VertexBatchProcessor is not None
+
+    def test_batch_llm_processor_instantiation(self):
+        """BatchLLMProcessor should instantiate with required fields."""
+        from buttermilk.processors.vertex_batch import BatchLLMProcessor
+
+        processor = BatchLLMProcessor(
+            model="gpt-chat",
+            template="test_template",
+        )
+        assert processor.model == "gpt-chat"
+        assert processor.template == "test_template"
+
+    def test_batch_llm_processor_has_no_dry_run(self):
+        """BatchLLMProcessor should NOT have dry_run field (Vertex-specific)."""
+        from buttermilk.processors.vertex_batch import BatchLLMProcessor
+
+        assert "dry_run" not in BatchLLMProcessor.model_fields
+
+    def test_vertex_processor_has_dry_run(self):
+        """VertexBatchProcessor should have dry_run field."""
+        from buttermilk.processors.vertex_batch import VertexBatchProcessor
+
+        processor = VertexBatchProcessor(
+            model="gemini-2.5-flash",
+            template="test_template",
+            dry_run=True,
+        )
+        assert processor.dry_run is True
+
+    @pytest.mark.anyio
+    async def test_batch_llm_processor_process_batch_raises(self):
+        """BatchLLMProcessor._process_batch() should raise NotImplementedError."""
+        from buttermilk.processors.vertex_batch import BatchLLMProcessor
+
+        processor = BatchLLMProcessor(
+            model="gpt-chat",
+            template="test_template",
+        )
+
+        with pytest.raises(NotImplementedError, match="not implemented"):
+            await processor._process_batch([])
+
+    def test_batch_llm_processor_has_prepare_batch_requests(self):
+        """BatchLLMProcessor should have prepare_batch_requests method."""
+        from buttermilk.processors.vertex_batch import BatchLLMProcessor
+
+        processor = BatchLLMProcessor(
+            model="gpt-chat",
+            template="test_template",
+        )
+        assert hasattr(processor, "prepare_batch_requests")
+        assert callable(processor.prepare_batch_requests)
+
+    @pytest.mark.anyio
+    async def test_executor_accepts_batch_llm_processor(self):
+        """OpenAIBatchExecutor should work with BatchLLMProcessor."""
+        from buttermilk.processors.vertex_batch import BatchLLMProcessor
+
+        processor = BatchLLMProcessor(
+            model="gpt-chat",
+            template="test_template",
+        )
+
+        executor = OpenAIBatchExecutor(poll_interval=10, max_wait_hours=1)
+
+        mock_manager = MagicMock()
+        mock_manager.submit_batch = AsyncMock(return_value={
+            "openai_batch_id": "batch_abc123",
+            "job_id": "batch_20260219_xyz",
+        })
+        executor._get_manager = MagicMock(return_value=mock_manager)
+
+        # Use patch.object since Pydantic models don't allow direct attribute assignment
+        with patch.object(
+            type(processor),
+            "prepare_batch_requests",
+            return_value=[MagicMock(), MagicMock()],
+        ) as mock_prepare:
+            result = await executor.execute(records=[MagicMock(), MagicMock()], processor=processor)
+
+            assert result.status == BatchJobStatus.PENDING
+            assert result.job_id == "batch_20260219_xyz"
+            mock_prepare.assert_called_once()

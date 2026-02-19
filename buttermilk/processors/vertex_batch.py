@@ -1,15 +1,24 @@
-"""Vertex AI Batch Processor.
+"""Batch LLM Processors.
 
-This processor uses Vertex AI's batch prediction API for efficient large-scale
-evaluation runs.
+This module provides:
+- BatchLLMProcessor: Provider-agnostic base class for batch LLM request preparation
+  and result mapping. Works with any executor (OpenAI, Vertex, etc.).
+- VertexBatchProcessor: Vertex AI-specific subclass that adds batch submission via
+  the Vertex AI Batch Prediction API.
 
-Key features:
-- Submits batch jobs via Vertex AI Batch Prediction API (50% cost savings)
-- Supports both Gemini and Claude models on Vertex AI
-- Integrates with buttermilk's session save_dir for GCS operations
-- Template rendering matches LLMCore behavior
+Usage with OpenAI/Azure executor:
+    ```python
+    runner = BatchPipelineRunner(
+        source=records,
+        batch_processor=BatchLLMProcessor(
+            model="gpt-chat",
+            template="my_template",
+        ),
+        executor=OpenAIBatchExecutor(),
+    )
+    ```
 
-Usage:
+Usage with Vertex AI executor (unchanged):
     ```yaml
     processors:
       - _target_: buttermilk.processors.BatchAccumulator
@@ -35,26 +44,34 @@ from buttermilk import logger
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.processor_core import BatchProcessorCore
 from buttermilk._core.types import BaseRecord
-from buttermilk._core.vertex_batch import BatchJobManager, BatchResult
+from buttermilk._core.vertex_batch import BatchResult
 from buttermilk.utils.import_utils import load_class
 from buttermilk.utils.templating import make_messages, render_template
 
 if TYPE_CHECKING:
     from google.genai.types import BatchJob
 
+    from buttermilk._core.vertex_batch import BatchJobManager
 
-class VertexBatchProcessor(BatchProcessorCore):
-    """Batch processor using Vertex AI Batch Prediction API.
 
-    Implements SimpleBatchProcessor protocol for use inside BatchAccumulator.
-    Uses batch prediction for 50% cost savings on large-scale evaluation.
+# =============================================================================
+# BatchLLMProcessor -- provider-agnostic base class
+# =============================================================================
 
-    Supports typed output via output_model, similar to LLMProcessor.
-    When output_model is set, yields typed objects directly.
-    Otherwise, yields enriched BaseRecord objects.
+
+class BatchLLMProcessor(BatchProcessorCore):
+    """Provider-agnostic batch LLM processor.
+
+    Handles template rendering, batch request preparation, and result-to-record
+    mapping. Does NOT submit jobs to any API -- that is the executor's
+    responsibility, or can be done by a provider-specific subclass like
+    VertexBatchProcessor.
+
+    This class is designed to work with any BatchExecutor (OpenAI, Vertex, etc.)
+    via the prepare_batch_requests() method.
     """
 
-    model: str = Field(..., description="Vertex AI model identifier")
+    model: str = Field(..., description="Model identifier (as registered in buttermilk)")
     template: str = Field(..., description="Jinja2 template for criteria")
     template_vars: dict[str, Any] = Field(
         default_factory=dict,
@@ -86,10 +103,6 @@ class VertexBatchProcessor(BatchProcessorCore):
         default=24,
         description="Maximum hours to wait for batch job completion before timeout",
     )
-    dry_run: bool = Field(
-        default=False,
-        description="If True, prepare and log batch requests without submitting to API",
-    )
     processor_index: int = Field(
         default=0,
         description="Index of this processor in a multi-processor pipeline (for manifest traceability)",
@@ -98,8 +111,6 @@ class VertexBatchProcessor(BatchProcessorCore):
     # Internal components
     _output_class: type[BaseModel] | None = PrivateAttr(default=None)
     _output_schema: dict[str, Any] | None = PrivateAttr(default=None)
-    _client: Any = PrivateAttr(default=None)
-    _manager: BatchJobManager | None = PrivateAttr(default=None)
 
     def model_post_init(self, __context: Any) -> None:
         """Initialize after Pydantic initialization."""
@@ -111,30 +122,26 @@ class VertexBatchProcessor(BatchProcessorCore):
             self._output_schema = self._resolve_output_schema()
 
         logger.info(
-            "VertexBatchProcessor initialized",
+            f"{self.__class__.__name__} initialized",
             model=self.model,
             template=self.template,
             output_model=self.output_model,
         )
 
     def _resolve_output_schema(self) -> dict[str, Any] | None:
-        """Resolve output_class to a provider-appropriate JSON schema dict.
+        """Resolve output_class to a JSON schema dict.
 
-        Applies Vertex AI transforms (resolve $refs, make all required,
-        convert enum values for Gemini).
+        Base implementation returns raw Pydantic JSON schema, suitable for
+        OpenAI/Azure structured output. Subclasses (e.g. VertexBatchProcessor)
+        can override to apply provider-specific transforms.
 
         Returns:
-            Transformed JSON schema dict, or None if no output_class.
+            JSON schema dict, or None if no output_class.
         """
         if not self._output_class:
             return None
 
-        from buttermilk._core.json_schema import prepare_schema_for_vertex
-        from buttermilk._core.vertex_batch import _is_claude_model, _is_llama_model
-
-        # Gemini requires enum values converted to strings; Claude and Llama do not
-        is_gemini = not _is_claude_model(self.model) and not _is_llama_model(self.model)
-        return prepare_schema_for_vertex(self._output_class, is_gemini=is_gemini)
+        return self._output_class.model_json_schema()
 
     def _get_resolved_max_tokens(self) -> int:
         """Resolve max_tokens from explicit config or model registry.
@@ -159,79 +166,14 @@ class VertexBatchProcessor(BatchProcessorCore):
         # Default fallback
         return 4096
 
-    def _get_resolved_region(self) -> str | None:
-        """Resolve region from model registry config.
-
-        Returns:
-            Region string from model config, or None if not configured.
-        """
-        from buttermilk import bm
-
-        if self.model in bm.llms.connections:
-            config = bm.llms.connections[self.model]
-            return config.configs.get("region")
-
-        return None
-
-    def _ensure_client(self) -> None:
-        """Lazily initialize the LLM client via buttermilk infrastructure."""
-        if self._client is None:
-            from buttermilk import bm
-
-            # Use buttermilk's LLM infrastructure for proper model routing
-            self._client = bm.llms[self.model]
-
-    def _ensure_manager(self) -> BatchJobManager:
-        """Lazily initialize the BatchJobManager via buttermilk infrastructure."""
-        if self._manager is None:
-            from google import genai
-
-            from buttermilk import bm
-
-            # Resolve short alias to full model name and get config
-            resolved_model = self.model
-            resolved_region = self._get_resolved_region()
-
-            if self.model in bm.llms.connections:
-                config = bm.llms.connections[self.model]
-                if "model" in config.configs:
-                    resolved_model = config.configs["model"]
-
-            # Gemini 3 models require the global endpoint
-            if "gemini-3" in resolved_model.lower():
-                project_id = bm.cloud_manager.gcp_cloud_cfg.project_id
-                client = genai.Client(
-                    vertexai=True,
-                    project=project_id,
-                    location="global",
-                )
-                logger.info(f"Using global endpoint for Gemini 3 model: {self.model} -> {resolved_model}")
-            elif resolved_region:
-                # Use region from model config if available
-                project_id = bm.cloud_manager.gcp_cloud_cfg.project_id
-                client = genai.Client(
-                    vertexai=True,
-                    project=project_id,
-                    location=resolved_region,
-                )
-                logger.info(f"Using region {resolved_region} for model: {self.model}")
-            else:
-                client = bm.genai
-
-            self._manager = BatchJobManager(
-                client=client,
-                poll_interval=self.poll_interval,
-                max_wait_hours=self.max_wait_hours,
-            )
-        return self._manager
-
     def prepare_batch_requests(
         self,
         records: list[BaseRecord],
     ) -> list[Any]:
-        """Prepare batch requests for Vertex AI.
+        """Prepare batch requests from records.
 
-        Used by VertexBatchExecutor to construct batch jobs.
+        Renders templates, converts to LiteLLM message format, and creates
+        BatchRequest objects. Provider-agnostic -- works with any executor.
 
         Args:
             records: List of BaseRecord objects
@@ -355,9 +297,298 @@ class VertexBatchProcessor(BatchProcessorCore):
         self,
         records: list[BaseRecord],
     ) -> list[BaseRecord]:
-        """Process a batch of records through Vertex AI Batch Prediction API.
+        """Process a batch of records.
 
-        Implements BatchProcessorCore.
+        Base implementation raises NotImplementedError. This class is designed
+        to be used with an external executor via prepare_batch_requests().
+        Provider-specific subclasses (e.g. VertexBatchProcessor) can override
+        this to implement direct batch submission.
+
+        Args:
+            records: List of BaseRecord objects to process
+
+        Returns:
+            List of processed BaseRecord objects with LLM outputs
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__}._process_batch() is not implemented. "
+            f"Use an executor (e.g. OpenAIBatchExecutor, VertexBatchExecutor) "
+            f"with prepare_batch_requests() instead, or use VertexBatchProcessor "
+            f"for direct Vertex AI batch submission."
+        )
+
+    def _create_pending_records(
+        self,
+        records: list[BaseRecord],
+        batch_job_id: str,
+    ) -> list[BaseRecord]:
+        """Create records with pending batch job metadata for non-blocking mode.
+
+        Args:
+            records: Original input records
+            batch_job_id: The batch job ID for later retrieval
+
+        Returns:
+            Records with batch_job_id in metadata (no LLM output yet)
+        """
+        output_records = []
+        for record in records:
+            updated_metadata = record.metadata.copy() if record.metadata else {}
+            updated_metadata["batch_job_id"] = batch_job_id
+            updated_metadata["batch_status"] = "pending"
+            output_records.append(record.model_copy(update={"metadata": updated_metadata}))
+
+        logger.info(
+            f"Batch job {batch_job_id} submitted (non-blocking mode)",
+            record_count=len(records),
+        )
+        return output_records
+
+    def _create_error_records(
+        self,
+        records: list[BaseRecord],
+        error_message: str,
+        batch_job_id: str,
+        start_time: float,
+    ) -> list[BaseRecord]:
+        """Create error records when batch job fails.
+
+        Args:
+            records: Original input records
+            error_message: The error message
+            batch_job_id: The batch job ID
+            start_time: When processing started
+
+        Returns:
+            Records with error information
+        """
+        output_records = []
+        for record in records:
+            error_record = record.model_copy(update={"error": [*(record.error or []), error_message]})
+            output_records.append(error_record)
+
+        return output_records
+
+    async def _map_results_to_records(
+        self,
+        records: list[BaseRecord],
+        results: list[BatchResult],
+        batch_job_id: str,
+        start_time: float,
+    ) -> list[BaseRecord]:
+        """Map batch results back to enriched records.
+
+        Args:
+            records: Original input records
+            results: Batch results from the API
+            batch_job_id: The batch job ID for tracing
+            start_time: When processing started
+
+        Returns:
+            Enriched records with LLM outputs
+        """
+        # Build lookup from record_id to result
+        result_map = {r.record_id: r for r in results}
+        output_records: list[BaseRecord] = []
+        duration_ms = (time.time() - start_time) * 1000
+
+        for record in records:
+            result = result_map.get(record.record_id)
+
+            if result is None:
+                # No result found for this record
+                logger.warning(f"No batch result found for record {record.record_id}")
+                error_record = record.model_copy(update={"error": [*(record.error or []), "No batch result found"]})
+                output_records.append(error_record)
+                continue
+
+            if result.error:
+                # Individual request failed
+                logger.warning(f"Batch request failed for {record.record_id}: {result.error}")
+                await self._emit_error_trace(
+                    record=record,
+                    error=Exception(result.error),
+                    processor_stage=self.name or "batch_llm",
+                    parent_trace_id=None,
+                    duration_ms=duration_ms / len(records),
+                    inputs={},
+                    execution_type="llm_processing (batch)",
+                )
+                error_record = record.model_copy(update={"error": [*(record.error or []), result.error]})
+                output_records.append(error_record)
+                continue
+
+            # Parse output if output_model is set
+            # NS: TODO: this logic is duplicated in llm_processor or llmCore. Use the proper json parsing util we made.
+            response = result.response or ""
+            final_output: Any = response
+
+            if self._output_class and response:
+                try:
+                    cleaned_response = response.strip()
+                    if cleaned_response.startswith("```json"):
+                        cleaned_response = cleaned_response[7:-3].strip()
+                    elif cleaned_response.startswith("```"):
+                        cleaned_response = cleaned_response[3:-3].strip()
+                    final_output = self._output_class.model_validate_json(cleaned_response)
+                except Exception as e:
+                    logger.warning(f"Failed to parse output for {record.record_id}: {e}")
+
+            # Emit success trace with batch_job_id
+            await self._emit_success_trace(
+                record=record,
+                outputs=final_output,
+                processor_stage=self.name or "batch_llm",
+                parent_trace_id=None,
+                duration_ms=duration_ms / len(records),
+                messages=[],  # Batch API doesn't return full message history
+                inputs={},
+                extra_metadata={
+                    "llm_config": {
+                        "model": self.model,
+                        "template": self.template,
+                        "batch_job_id": batch_job_id,
+                    },
+                    "usage": result.usage,
+                    "cost_usd": result.cost_usd,
+                },
+                execution_type="llm_processing (batch)",
+            )
+
+            # Yield the typed output or enriched record
+            if self._output_class and isinstance(final_output, self._output_class):
+                output_records.append(final_output)
+            else:
+                # Enrich record with LLM output
+                updated_metadata = record.metadata.copy() if record.metadata else {}
+                updated_metadata["llm_output"] = response
+                updated_metadata["batch_job_id"] = batch_job_id
+                if result.cost_usd is not None:
+                    updated_metadata["cost_usd"] = result.cost_usd
+                output_records.append(record.model_copy(update={"metadata": updated_metadata}))
+
+        return output_records
+
+
+# =============================================================================
+# VertexBatchProcessor -- Vertex AI-specific subclass
+# =============================================================================
+
+
+class VertexBatchProcessor(BatchLLMProcessor):
+    """Batch processor using Vertex AI Batch Prediction API.
+
+    Extends BatchLLMProcessor with Vertex AI-specific batch submission,
+    schema resolution, and dry-run support.
+
+    Uses batch prediction for 50% cost savings on large-scale evaluation.
+
+    Supports typed output via output_model, similar to LLMProcessor.
+    When output_model is set, yields typed objects directly.
+    Otherwise, yields enriched BaseRecord objects.
+    """
+
+    dry_run: bool = Field(
+        default=False,
+        description="If True, prepare and log batch requests without submitting to API",
+    )
+
+    # Vertex-specific internal components
+    _client: Any = PrivateAttr(default=None)
+    _manager: BatchJobManager | None = PrivateAttr(default=None)
+
+    def _resolve_output_schema(self) -> dict[str, Any] | None:
+        """Resolve output_class to a Vertex AI-appropriate JSON schema dict.
+
+        Applies Vertex AI transforms (resolve $refs, make all required,
+        convert enum values for Gemini).
+
+        Returns:
+            Transformed JSON schema dict, or None if no output_class.
+        """
+        if not self._output_class:
+            return None
+
+        from buttermilk._core.json_schema import prepare_schema_for_vertex
+        from buttermilk._core.vertex_batch import _is_claude_model, _is_llama_model
+
+        # Gemini requires enum values converted to strings; Claude and Llama do not
+        is_gemini = not _is_claude_model(self.model) and not _is_llama_model(self.model)
+        return prepare_schema_for_vertex(self._output_class, is_gemini=is_gemini)
+
+    def _get_resolved_region(self) -> str | None:
+        """Resolve region from model registry config.
+
+        Returns:
+            Region string from model config, or None if not configured.
+        """
+        from buttermilk import bm
+
+        if self.model in bm.llms.connections:
+            config = bm.llms.connections[self.model]
+            return config.configs.get("region")
+
+        return None
+
+    def _ensure_client(self) -> None:
+        """Lazily initialize the LLM client via buttermilk infrastructure."""
+        if self._client is None:
+            from buttermilk import bm
+
+            # Use buttermilk's LLM infrastructure for proper model routing
+            self._client = bm.llms[self.model]
+
+    def _ensure_manager(self) -> BatchJobManager:
+        """Lazily initialize the BatchJobManager via buttermilk infrastructure."""
+        from buttermilk._core.vertex_batch import BatchJobManager as _BatchJobManager
+
+        if self._manager is None:
+            from google import genai
+
+            from buttermilk import bm
+
+            # Resolve short alias to full model name and get config
+            resolved_model = self.model
+            resolved_region = self._get_resolved_region()
+
+            if self.model in bm.llms.connections:
+                config = bm.llms.connections[self.model]
+                if "model" in config.configs:
+                    resolved_model = config.configs["model"]
+
+            # Gemini 3 models require the global endpoint
+            if "gemini-3" in resolved_model.lower():
+                project_id = bm.cloud_manager.gcp_cloud_cfg.project_id
+                client = genai.Client(
+                    vertexai=True,
+                    project=project_id,
+                    location="global",
+                )
+                logger.info(f"Using global endpoint for Gemini 3 model: {self.model} -> {resolved_model}")
+            elif resolved_region:
+                # Use region from model config if available
+                project_id = bm.cloud_manager.gcp_cloud_cfg.project_id
+                client = genai.Client(
+                    vertexai=True,
+                    project=project_id,
+                    location=resolved_region,
+                )
+                logger.info(f"Using region {resolved_region} for model: {self.model}")
+            else:
+                client = bm.genai
+
+            self._manager = _BatchJobManager(
+                client=client,
+                poll_interval=self.poll_interval,
+                max_wait_hours=self.max_wait_hours,
+            )
+        return self._manager
+
+    async def _process_batch(
+        self,
+        records: list[BaseRecord],
+    ) -> list[BaseRecord]:
+        """Process a batch of records through Vertex AI Batch Prediction API.
 
         Args:
             records: List of BaseRecord objects to process
@@ -424,58 +655,6 @@ class VertexBatchProcessor(BatchProcessorCore):
             batch_job_id=batch_job_id,
             duration_ms=(time.time() - start_time) * 1000,
         )
-
-        return output_records
-
-    def _create_pending_records(
-        self,
-        records: list[BaseRecord],
-        batch_job_id: str,
-    ) -> list[BaseRecord]:
-        """Create records with pending batch job metadata for non-blocking mode.
-
-        Args:
-            records: Original input records
-            batch_job_id: The batch job ID for later retrieval
-
-        Returns:
-            Records with batch_job_id in metadata (no LLM output yet)
-        """
-        output_records = []
-        for record in records:
-            updated_metadata = record.metadata.copy() if record.metadata else {}
-            updated_metadata["batch_job_id"] = batch_job_id
-            updated_metadata["batch_status"] = "pending"
-            output_records.append(record.model_copy(update={"metadata": updated_metadata}))
-
-        logger.info(
-            f"Batch job {batch_job_id} submitted (non-blocking mode)",
-            record_count=len(records),
-        )
-        return output_records
-
-    def _create_error_records(
-        self,
-        records: list[BaseRecord],
-        error_message: str,
-        batch_job_id: str,
-        start_time: float,
-    ) -> list[BaseRecord]:
-        """Create error records when batch job fails.
-
-        Args:
-            records: Original input records
-            error_message: The error message
-            batch_job_id: The batch job ID
-            start_time: When processing started
-
-        Returns:
-            Records with error information
-        """
-        output_records = []
-        for record in records:
-            error_record = record.model_copy(update={"error": [*(record.error or []), error_message]})
-            output_records.append(error_record)
 
         return output_records
 
@@ -582,105 +761,5 @@ class VertexBatchProcessor(BatchProcessorCore):
             model=self.model,
             dry_run_uri=result_uri,
         )
-
-        return output_records
-
-    async def _map_results_to_records(
-        self,
-        records: list[BaseRecord],
-        results: list[BatchResult],
-        batch_job_id: str,
-        start_time: float,
-    ) -> list[BaseRecord]:
-        """Map batch results back to enriched records.
-
-        Args:
-            records: Original input records
-            results: Batch results from the API
-            batch_job_id: The batch job ID for tracing
-            start_time: When processing started
-
-        Returns:
-            Enriched records with LLM outputs
-        """
-        # Build lookup from record_id to result
-        result_map = {r.record_id: r for r in results}
-        output_records: list[BaseRecord] = []
-        duration_ms = (time.time() - start_time) * 1000
-
-        for record in records:
-            result = result_map.get(record.record_id)
-
-            if result is None:
-                # No result found for this record
-                logger.warning(f"No batch result found for record {record.record_id}")
-                error_record = record.model_copy(update={"error": [*(record.error or []), "No batch result found"]})
-                output_records.append(error_record)
-                continue
-
-            if result.error:
-                # Individual request failed
-                logger.warning(f"Batch request failed for {record.record_id}: {result.error}")
-                await self._emit_error_trace(
-                    record=record,
-                    error=Exception(result.error),
-                    processor_stage=self.name or "vertex_batch",
-                    parent_trace_id=None,
-                    duration_ms=duration_ms / len(records),
-                    inputs={},
-                    execution_type="llm_processing (batch)",
-                )
-                error_record = record.model_copy(update={"error": [*(record.error or []), result.error]})
-                output_records.append(error_record)
-                continue
-
-            # Parse output if output_model is set
-            # NS: TODO: this logic is duplicated in llm_processor or llmCore. Use the proper json parsing util we made.
-            response = result.response or ""
-            final_output: Any = response
-
-            if self._output_class and response:
-                try:
-                    cleaned_response = response.strip()
-                    if cleaned_response.startswith("```json"):
-                        cleaned_response = cleaned_response[7:-3].strip()
-                    elif cleaned_response.startswith("```"):
-                        cleaned_response = cleaned_response[3:-3].strip()
-                    final_output = self._output_class.model_validate_json(cleaned_response)
-                except Exception as e:
-                    logger.warning(f"Failed to parse output for {record.record_id}: {e}")
-
-            # Emit success trace with batch_job_id
-            await self._emit_success_trace(
-                record=record,
-                outputs=final_output,
-                processor_stage=self.name or "vertex_batch",
-                parent_trace_id=None,
-                duration_ms=duration_ms / len(records),
-                messages=[],  # Batch API doesn't return full message history
-                inputs={},
-                extra_metadata={
-                    "llm_config": {
-                        "model": self.model,
-                        "template": self.template,
-                        "batch_job_id": batch_job_id,
-                    },
-                    "usage": result.usage,
-                    "cost_usd": result.cost_usd,
-                },
-                execution_type="llm_processing (batch)",
-            )
-
-            # Yield the typed output or enriched record
-            if self._output_class and isinstance(final_output, self._output_class):
-                output_records.append(final_output)
-            else:
-                # Enrich record with LLM output
-                updated_metadata = record.metadata.copy() if record.metadata else {}
-                updated_metadata["llm_output"] = response
-                updated_metadata["batch_job_id"] = batch_job_id
-                if result.cost_usd is not None:
-                    updated_metadata["cost_usd"] = result.cost_usd
-                output_records.append(record.model_copy(update={"metadata": updated_metadata}))
 
         return output_records
