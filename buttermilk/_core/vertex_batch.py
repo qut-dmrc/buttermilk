@@ -135,7 +135,6 @@ _LLAMA_MODEL_PATTERNS = ("llama", "meta/")
 _DEEPSEEK_MODEL_PATTERNS = ("deepseek", "deepseek-ai")
 
 
-
 class BatchMessageConverter(ABC):
     """Abstract base for converting LiteLLM messages to provider-specific batch format."""
 

@@ -22,12 +22,12 @@ from buttermilk import logger
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.processor_core import BatchProcessorCore
 from buttermilk._core.types import BaseRecord
-from buttermilk._core.vertex_batch import BatchResult, OpenAIBatchJobManager, BatchRequest
+from buttermilk._core.vertex_batch import BatchRequest, BatchResult, OpenAIBatchJobManager
 from buttermilk.utils.import_utils import load_class
 from buttermilk.utils.templating import make_messages, render_template
 
 if TYPE_CHECKING:
-    from openai.types import Batch
+    pass
 
 
 class OpenAIBatchProcessor(BatchProcessorCore):
@@ -130,6 +130,7 @@ class OpenAIBatchProcessor(BatchProcessorCore):
             return self.max_tokens
 
         from buttermilk import bm
+
         if self.model in bm.llms.connections:
             config = bm.llms.connections[self.model]
             return config.configs.get("max_output_tokens")
@@ -139,16 +140,17 @@ class OpenAIBatchProcessor(BatchProcessorCore):
     def _ensure_manager(self) -> OpenAIBatchJobManager:
         """Lazily initialize the OpenAIBatchJobManager."""
         if self._manager is None:
-            from buttermilk import bm
             import openai
+
+            from buttermilk import bm
             from buttermilk._core.llms import ClientType
 
             if self.model not in bm.llms.connections:
-                 # Fallback to direct OpenAI client if not in registry (e.g. ad-hoc model name)
-                 # Assume standard OpenAI environment variables
-                 logger.warning(f"Model {self.model} not found in registry, assuming standard OpenAI")
-                 client = openai.OpenAI()
-                 endpoint = "/v1/chat/completions"
+                # Fallback to direct OpenAI client if not in registry (e.g. ad-hoc model name)
+                # Assume standard OpenAI environment variables
+                logger.warning(f"Model {self.model} not found in registry, assuming standard OpenAI")
+                client = openai.OpenAI()
+                endpoint = "/v1/chat/completions"
             else:
                 config = bm.llms.connections[self.model]
 
@@ -157,7 +159,7 @@ class OpenAIBatchProcessor(BatchProcessorCore):
                     api_key = config.api_key
                     # For Azure, base_url is the endpoint (e.g. https://resource.openai.azure.com/)
                     azure_endpoint = config.base_url
-                    api_version = config.configs.get("api_version", "2024-06-01") # Default to a recent version
+                    api_version = config.configs.get("api_version", "2024-06-01")  # Default to a recent version
 
                     logger.info(f"Using Azure OpenAI client for {self.model} (endpoint: {azure_endpoint})")
                     client = openai.AzureOpenAI(
@@ -171,7 +173,7 @@ class OpenAIBatchProcessor(BatchProcessorCore):
                 else:
                     # Standard OpenAI or compatible (xAI, etc.)
                     api_key = config.api_key
-                    base_url = config.base_url # Could be xAI URL or None (default OpenAI)
+                    base_url = config.base_url  # Could be xAI URL or None (default OpenAI)
 
                     logger.info(f"Using OpenAI client for {self.model} (base_url: {base_url})")
                     client = openai.OpenAI(
@@ -357,6 +359,7 @@ class OpenAIBatchProcessor(BatchProcessorCore):
     def _handle_dry_run(self, records: list[BaseRecord], requests: list[Any]) -> list[BaseRecord]:
         """Handle dry-run mode."""
         import uuid
+
         from buttermilk.utils.save import upload_text
 
         manager = self._ensure_manager()
@@ -369,7 +372,7 @@ class OpenAIBatchProcessor(BatchProcessorCore):
         result_uri = upload_text(jsonl_content, uri=input_uri, content_type="application/jsonl")
 
         logger.info(
-            f"[DRY RUN] OpenAI Batch file written to GCS",
+            "[DRY RUN] OpenAI Batch file written to GCS",
             uri=result_uri,
             request_count=len(requests),
             model=self.model,
