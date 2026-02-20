@@ -191,7 +191,33 @@ class OpenAIBatchProcessor(BatchProcessorCore):
 
         return self._manager
 
-    def prepare_batch_requests(
+    def _resolve_field(self, field_name: str, record: BaseRecord) -> Any:
+        """Resolve a configuration field, checking for overrides in record metadata.
+
+        Resolution order:
+        1. record.metadata[field_name]
+        2. self[field_name] (configured default)
+
+        Args:
+            field_name: Name of the field to resolve (e.g., 'model', 'template')
+            record: Record to check metadata
+
+        Returns:
+            Resolved value for the field.
+        """
+        # 1. Check record metadata
+        if record.metadata:
+            if field_name in record.metadata:
+                return record.metadata[field_name]
+            # Also check nested 'variant_params' from VariantProcessor
+            variant_params = record.metadata.get("variant_params", {})
+            if isinstance(variant_params, dict) and field_name in variant_params:
+                return variant_params[field_name]
+
+        # 2. Fallback to configured default
+        return getattr(self, field_name, None)
+
+    def prepare_batch_requests(  # noqa: PLR0912
         self,
         records: list[BaseRecord],
     ) -> list[Any]:
@@ -201,6 +227,10 @@ class OpenAIBatchProcessor(BatchProcessorCore):
         requests: list[BatchRequest] = []
 
         for record in records:
+            # Dynamically resolve model and template for this record
+            resolved_model = self._resolve_field("model", record)
+            resolved_template = self._resolve_field("template", record)
+
             # Prepare template variables
             if hasattr(record, "model_dump"):
                 record_dict = record.model_dump()
@@ -219,7 +249,7 @@ class OpenAIBatchProcessor(BatchProcessorCore):
 
             try:
                 result = render_template(
-                    template=self.template,
+                    template=resolved_template,
                     template_vars=variant_vars,
                     base_template_vars=self.template_vars,
                     fail_on_unfilled=self.fail_on_unfilled_parameters,
@@ -253,8 +283,8 @@ class OpenAIBatchProcessor(BatchProcessorCore):
                     processor_index = variant_info.get("index")
 
             structured_variant: dict[str, Any] = {
-                "template": self.template,
-                "model": self.model,
+                "template": resolved_template,
+                "model": resolved_model,
             }
             if variant_from_metadata:
                 if isinstance(variant_from_metadata, dict):
@@ -266,7 +296,7 @@ class OpenAIBatchProcessor(BatchProcessorCore):
                 custom_id=str(uuid.uuid4()),
                 record_id=record.record_id,
                 messages=litellm_messages,
-                model=self.model,
+                model=resolved_model,
                 variant=structured_variant,
                 processor_index=processor_index,
                 response_schema=self._output_schema,

@@ -5,6 +5,7 @@ import asyncio
 import pytest
 
 from buttermilk._core.types import BaseRecord
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk.processors.variants import VariantProcessor
 
 
@@ -19,14 +20,11 @@ class MockProcessor:
 
     async def process(
         self,
-        record: BaseRecord,
-        *,
-        processor_stage: str,
-        parent_trace_id: str | None = None,
-        **kwargs,
+        context: ProcessingContext,
     ):
         """Process record, optionally with delay or failure."""
         self.call_count += 1
+        record = context.record
 
         if self.delay > 0:
             await asyncio.sleep(self.delay)
@@ -79,6 +77,8 @@ class TestVariantProcessorIntegration:
         # Initialize Pydantic model fields manually
         proc.__dict__.update(
             {
+                "name": None,
+                "enabled": True,
                 "processor_obj": "mock.Processor",
                 "variants": {"suffix": ["A", "B", "C"]},
                 "num_runs": 1,
@@ -99,9 +99,13 @@ class TestVariantProcessorIntegration:
         """Test that all variants produce outputs."""
         proc = variant_processor_with_mocks
         record = BaseRecord(record_id="test-1", content="hello")
+        context = ProcessingContext(
+            record=record,
+            session_id="test/00.Variant/abc123"
+        )
 
         outputs = []
-        async for output in proc.process(record, processor_stage="test/00.Variant/abc123"):
+        async for output in proc.process(context):
             outputs.append(output)
 
         assert len(outputs) == 3
@@ -113,9 +117,13 @@ class TestVariantProcessorIntegration:
         """Test that variant metadata is added to outputs."""
         proc = variant_processor_with_mocks
         record = BaseRecord(record_id="test-1", content="hello")
+        context = ProcessingContext(
+            record=record,
+            session_id="test/00.Variant/abc123"
+        )
 
         outputs = []
-        async for output in proc.process(record, processor_stage="test/00.Variant/abc123"):
+        async for output in proc.process(context):
             outputs.append(output)
 
         for output in outputs:
@@ -130,10 +138,14 @@ class TestVariantProcessorIntegration:
         """Test that faster variants yield results first."""
         proc = variant_processor_with_mocks
         record = BaseRecord(record_id="test-1", content="hello")
+        context = ProcessingContext(
+            record=record,
+            session_id="test/00.Variant/abc123"
+        )
 
         # Track order of completion
         completion_order = []
-        async for output in proc.process(record, processor_stage="test/00.Variant/abc123"):
+        async for output in proc.process(context):
             completion_order.append(output.content)
 
         # B (0.05s) should complete before A (0.1s) before C (0.15s)
@@ -147,6 +159,8 @@ class TestVariantProcessorIntegration:
         proc = object.__new__(VariantProcessor)
         proc.__dict__.update(
             {
+                "name": None,
+                "enabled": True,
                 "processor_obj": "mock.Processor",
                 "variants": {},
                 "num_runs": 1,
@@ -161,9 +175,13 @@ class TestVariantProcessorIntegration:
         ]
 
         record = BaseRecord(record_id="test-1", content="hello")
+        context = ProcessingContext(
+            record=record,
+            session_id="test/00.Variant/abc123"
+        )
 
         outputs = []
-        async for output in proc.process(record, processor_stage="test/00.Variant/abc123"):
+        async for output in proc.process(context):
             outputs.append(output)
 
         # Should get 2 successful outputs (failed variant is logged but doesn't yield)
@@ -179,6 +197,8 @@ class TestVariantProcessorIntegration:
         proc = object.__new__(VariantProcessor)
         proc.__dict__.update(
             {
+                "name": None,
+                "enabled": True,
                 "processor_obj": "mock.Processor",
                 "variants": {},
                 "num_runs": 1,
@@ -192,9 +212,13 @@ class TestVariantProcessorIntegration:
         ]
 
         record = BaseRecord(record_id="test-1", content="hello")
+        context = ProcessingContext(
+            record=record,
+            session_id="test/00.Variant/abc123"
+        )
 
         with pytest.raises(ValueError, match="configured to fail"):
-            async for _ in proc.process(record, processor_stage="test/00.Variant/abc123"):
+            async for _ in proc.process(context):
                 pass
 
     @pytest.mark.anyio
@@ -202,8 +226,12 @@ class TestVariantProcessorIntegration:
         """Test that original record_id is preserved in outputs."""
         proc = variant_processor_with_mocks
         record = BaseRecord(record_id="original-id-123", content="hello")
+        context = ProcessingContext(
+            record=record,
+            session_id="test/00.Variant/abc123"
+        )
 
-        async for output in proc.process(record, processor_stage="test/00.Variant/abc123"):
+        async for output in proc.process(context):
             assert output.record_id == "original-id-123"
 
 

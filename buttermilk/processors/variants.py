@@ -14,6 +14,7 @@ from buttermilk._core.log import logger
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.processor_core import ProcessorCore
 from buttermilk._core.types import BaseRecord
+from buttermilk.pipeline import RecordBufferedException
 
 
 class VariantProcessor(ProcessorCore):
@@ -103,7 +104,7 @@ class VariantProcessor(ProcessorCore):
             variant_count=len(self._processors),
         )
 
-    async def _process_record(
+    async def _process_record(  # noqa: PLR0912
         self,
         context: ProcessingContext,
     ) -> AsyncGenerator[BaseRecord, None]:
@@ -136,6 +137,7 @@ class VariantProcessor(ProcessorCore):
                 )
 
                 async for output in processor.process(variant_context):
+                    processed_output = output
                     # Add variant metadata immediately and put in queue
                     # Support typed data flow: only add metadata to records that support it
                     if hasattr(output, "metadata") and hasattr(output, "model_copy"):
@@ -151,10 +153,13 @@ class VariantProcessor(ProcessorCore):
                         if hasattr(processor, "model_dump"):
                             metadata["variant_params"] = processor.model_dump(exclude_none=True)
 
-                        output = output.model_copy(update={"metadata": metadata})
+                        processed_output = output.model_copy(update={"metadata": metadata})
 
                     # Put (variant_idx, output, None) - None means no error
-                    await output_queue.put((variant_idx, output, None))
+                    await output_queue.put((variant_idx, processed_output, None))
+            except RecordBufferedException as e:
+                # Issue 1: Propagate RecordBufferedException to main loop
+                await output_queue.put((variant_idx, None, e))
             except Exception as e:
                 # Put (variant_idx, None, error) - signal failure
                 await output_queue.put((variant_idx, None, e))
@@ -187,6 +192,15 @@ class VariantProcessor(ProcessorCore):
                     variant_idx, output, error = await asyncio.wait_for(output_queue.get(), timeout=0.1)
 
                     if error is not None:
+                        # Issue 1: Handle RecordBufferedException specially
+                        if isinstance(error, RecordBufferedException):
+                            # Propagate buffer signal immediately
+                            # This cancels other variants and bubbles up to pipeline
+                            for task in tasks:
+                                if not task.done():
+                                    task.cancel()
+                            raise error
+
                         # Handle variant failure
                         logger.warning(
                             f"Variant {variant_idx} failed: {error}",
@@ -223,3 +237,10 @@ class VariantProcessor(ProcessorCore):
         # If ALL variants failed and we haven't raised yet, raise the first error
         if success_count == 0 and first_error is not None:
             raise first_error
+
+    async def flush(self) -> AsyncGenerator[BaseRecord, None]:
+        """Delegate flush to all inner processors."""
+        for processor in self._processors:
+            if hasattr(processor, "flush"):
+                async for output in processor.flush():
+                    yield output
