@@ -19,6 +19,7 @@ def test_client_type_enum():
         "llama_vertex",
         "deepseek_vertex",
         "huggingface",
+        "xai",
         "zentropi",
     ]
     actual_types = [ct.value for ct in ClientType]
