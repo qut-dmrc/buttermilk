@@ -390,7 +390,7 @@ jobs:
       - name: Dismiss claude[bot] change requests
         if: steps.pr-ref.outputs.ref != '' && steps.lgtm-status.outputs.lgtm == 'true'
         env:
-          GH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUM="${{ steps.pr-ref.outputs.pr_number }}"
 

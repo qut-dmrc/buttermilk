@@ -10,7 +10,8 @@ class VertexBatchExecutor(BatchExecutor):
     """Executes batch processing asynchronously on Vertex AI.
 
     Submits a batch job and returns immediately with PENDING status.
-    Requires a processor that supports `prepare_batch_requests` (e.g. VertexBatchProcessor).
+    Requires a processor that supports `prepare_batch_requests`
+    (e.g. BatchLLMProcessor or VertexBatchProcessor).
     """
 
     def __init__(self, poll_interval: int = 30) -> None:
