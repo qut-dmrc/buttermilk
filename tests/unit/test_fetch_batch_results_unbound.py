@@ -1,12 +1,14 @@
-import pytest
-from unittest.mock import patch, MagicMock
-import sys
 import os
+import sys
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 # Add root to sys.path to import scripts
 sys.path.append(os.getcwd())
 
 from scripts.fetch_batch_results import fetch_results
+
 
 @pytest.mark.asyncio
 async def test_fetch_results_anypath_accessible():
@@ -14,7 +16,7 @@ async def test_fetch_results_anypath_accessible():
     with (
         patch("scripts.fetch_batch_results.init_async"),
         patch("scripts.fetch_batch_results.bm") as mock_bm,
-        patch("scripts.fetch_batch_results.AnyPath") as mock_anypath
+        patch("scripts.fetch_batch_results.AnyPath") as mock_anypath,
     ):
         # Setup mock session info to skip strategy 1
         mock_bm.session_info.save_dir_base = None

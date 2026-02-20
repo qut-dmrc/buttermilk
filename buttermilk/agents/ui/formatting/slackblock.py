@@ -45,9 +45,7 @@ def strip_and_wrap(lines: list[str]) -> list[str]:
 
     for line in lines:
         text = re.sub(r"\n{2,+}", "\n", line)
-        text = (
-            str(text) + " "
-        )  # add trailing space here, and we'll remove it in the next step if it's duplicated
+        text = str(text) + " "  # add trailing space here, and we'll remove it in the next step if it's duplicated
         text = re.sub(r"\s{2,+}", " ", text)
         stripped += text
 
@@ -185,9 +183,7 @@ def format_slack_message(result: ExecutionTrace) -> dict:
         # Add labels as chips if present
 
         if labels := result_copy.outputs.pop("labels", None):
-            label_text = "*Labels:* " + " ".join(
-                [f"`{label}`" for label in labels if label]
-            )
+            label_text = "*Labels:* " + " ".join([f"`{label}`" for label in labels if label])
             if label_text:
                 blocks.append(
                     {
@@ -200,11 +196,7 @@ def format_slack_message(result: ExecutionTrace) -> dict:
                 )
 
         # Extract reasons for special handling
-        reasons = (
-            result_copy.outputs.pop("reasons", [])
-            if isinstance(result_copy.outputs, dict)
-            else []
-        )
+        reasons = result_copy.outputs.pop("reasons", []) if isinstance(result_copy.outputs, dict) else []
 
         # Handle any remaining fields in outputs
         blocks.extend(dict_to_blocks(result_copy.outputs))
@@ -220,10 +212,7 @@ def format_slack_message(result: ExecutionTrace) -> dict:
             # Add each reason as its own contextual block for better readability
 
             # Convert reasons to mrkdwn elements
-            reason_elements = [
-                {"type": "mrkdwn", "text": f"{i + 1}. {reason}"}
-                for i, reason in enumerate(reasons)
-            ]
+            reason_elements = [{"type": "mrkdwn", "text": f"{i + 1}. {reason}"} for i, reason in enumerate(reasons)]
             # Add chunked context blocks
             blocks.extend(create_context_blocks(reason_elements))
 

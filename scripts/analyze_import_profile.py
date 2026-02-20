@@ -165,9 +165,7 @@ def main():
             analyze_profile(profile_file, title)
         else:
             print(f"\n⚠️  Profile not found: {profile_file}")
-            print(
-                f"   Run: uv run python -X importtime -c 'from buttermilk._core import config_bootstrap' 2> {profile_file}"
-            )
+            print(f"   Run: uv run python -X importtime -c 'from buttermilk._core import config_bootstrap' 2> {profile_file}")
 
     # Show recommendations
     find_lazy_loading_opportunities()

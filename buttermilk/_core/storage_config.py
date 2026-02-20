@@ -129,9 +129,7 @@ class BaseStorageConfig(BaseModel):
     format: str | None = Field(
         default=None,
         description=(
-            "File format for reading/writing. "
-            "Supported formats: 'json', 'jsonl', 'csv'. "
-            "If not specified, format is inferred from file extension."
+            "File format for reading/writing. Supported formats: 'json', 'jsonl', 'csv'. If not specified, format is inferred from file extension."
         ),
     )
 
@@ -149,11 +147,7 @@ class BaseStorageConfig(BaseModel):
         exclude_fields = set()
         merged_data = defaults.model_dump(exclude=exclude_fields)
         # Only update with non-None values from self
-        self_data = {
-            k: v
-            for k, v in self.model_dump(exclude=exclude_fields).items()
-            if v is not None
-        }
+        self_data = {k: v for k, v in self.model_dump(exclude=exclude_fields).items() if v is not None}
         merged_data.update(self_data)
         # Return the same type as self
         return self.__class__(**merged_data)
@@ -165,9 +159,7 @@ class BaseStorageConfig(BaseModel):
 class BigQueryStorageConfig(BaseStorageConfig):
     """Configuration for BigQuery storage operations."""
 
-    type: Literal["bigquery"] = Field(
-        default="bigquery", description="Storage backend type"
-    )
+    type: Literal["bigquery"] = Field(default="bigquery", description="Storage backend type")
 
     # Custom SQL support for complex filtering
     custom_where: str | None = Field(
@@ -246,9 +238,7 @@ class BigQueryStorageConfig(BaseStorageConfig):
                     if "table_id" not in data:
                         data["table_id"] = parts[2]
                 else:
-                    raise ValueError(
-                        f"Invalid full_table_id format: '{full_table_id}'. Expected 'project.dataset.table'"
-                    )
+                    raise ValueError(f"Invalid full_table_id format: '{full_table_id}'. Expected 'project.dataset.table'")
         return data
 
     @model_validator(mode="after")
@@ -273,9 +263,7 @@ class BigQueryStorageConfig(BaseStorageConfig):
 class FileStorageConfig(BaseStorageConfig):
     """Configuration for file-based storage operations."""
 
-    type: Literal["file", "local", "gcs", "s3", "plaintext"] = Field(
-        description="Storage backend type"
-    )
+    type: Literal["file", "local", "gcs", "s3", "plaintext"] = Field(description="Storage backend type")
 
     # File-specific fields
     path: str | None = Field(
@@ -336,9 +324,7 @@ class VectorStorageConfig(BaseStorageConfig):
 class HuggingFaceStorageConfig(BaseStorageConfig):
     """Configuration for HuggingFace dataset storage operations."""
 
-    type: Literal["huggingface"] = Field(
-        default="huggingface", description="Storage backend type"
-    )
+    type: Literal["huggingface"] = Field(default="huggingface", description="Storage backend type")
 
     # HuggingFace specific fields
     dataset_id: str | None = Field(
@@ -354,17 +340,13 @@ class HuggingFaceStorageConfig(BaseStorageConfig):
 class GeneratorStorageConfig(BaseStorageConfig):
     """Configuration for generator-based storage operations."""
 
-    type: Literal["generator", "job", "outputs"] = Field(
-        description="Storage backend type"
-    )
+    type: Literal["generator", "job", "outputs"] = Field(description="Storage backend type")
 
 
 class DuckDBStorageConfig(BaseStorageConfig):
     """Configuration for DuckDB storage operations."""
 
-    type: Literal["duckdb"] = Field(
-        default="duckdb", description="Storage backend type"
-    )
+    type: Literal["duckdb"] = Field(default="duckdb", description="Storage backend type")
 
     # DuckDB-specific fields
     database: str | None = Field(
@@ -381,20 +363,13 @@ class DuckDBStorageConfig(BaseStorageConfig):
     )
     custom_query: str | None = Field(
         default=None,
-        description=(
-            "Complete custom SQL query to override default query generation. Cannot be used with write operations."
-        ),
+        description=("Complete custom SQL query to override default query generation. Cannot be used with write operations."),
     )
 
 
 # Discriminated union for all storage config types
 StorageConfig = Annotated[
-    BigQueryStorageConfig
-    | FileStorageConfig
-    | VectorStorageConfig
-    | HuggingFaceStorageConfig
-    | GeneratorStorageConfig
-    | DuckDBStorageConfig,
+    BigQueryStorageConfig | FileStorageConfig | VectorStorageConfig | HuggingFaceStorageConfig | GeneratorStorageConfig | DuckDBStorageConfig,
     Field(discriminator="type"),
 ]
 
@@ -463,12 +438,9 @@ class StorageFactory:
         if storage_type == "chromadb":
             # Convert VectorStorageConfig to ChromaDBEmbeddings parameters
             chromadb_params = {
-                "collection_name": getattr(config, "collection_name", None)
-                or "default_collection",
-                "persist_directory": getattr(config, "persist_directory", None)
-                or "./data/chromadb",
-                "embedding_model": getattr(config, "embedding_model", None)
-                or "gemini-embedding-001",
+                "collection_name": getattr(config, "collection_name", None) or "default_collection",
+                "persist_directory": getattr(config, "persist_directory", None) or "./data/chromadb",
+                "embedding_model": getattr(config, "embedding_model", None) or "gemini-embedding-001",
                 "dimensionality": getattr(config, "dimensionality", None) or 3072,
             }
 

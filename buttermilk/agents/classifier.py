@@ -501,7 +501,9 @@ class HuggingFaceClassifier(ClassifierCore):
                 fail_on_unfilled=True,
             )
             rendered_text = result.rendered
-            logger.debug(f"HuggingFaceClassifier rendered template '{self.template}', unfilled vars: {result.unfilled_vars}, hash: {result.template_hash}")
+            logger.debug(
+                f"HuggingFaceClassifier rendered template '{self.template}', unfilled vars: {result.unfilled_vars}, hash: {result.template_hash}"
+            )
         except Exception as e:
             raise ProcessingError(f"Template rendering failed: {e}") from e
 
@@ -738,7 +740,9 @@ class ZentropiClassifier(ClassifierCore):
                 fail_on_unfilled=True,
             )
             rendered_text = result.rendered
-            logger.debug(f"ZentropiClassifier rendered template '{self.template}', unfilled vars: {result.unfilled_vars}, hash: {result.template_hash}")
+            logger.debug(
+                f"ZentropiClassifier rendered template '{self.template}', unfilled vars: {result.unfilled_vars}, hash: {result.template_hash}"
+            )
         except Exception as e:
             raise ProcessingError(f"Template rendering failed: {e}") from e
 

@@ -60,9 +60,7 @@ class TestBMAsyncInitialization:
         bm = BM(session_info=session_info)
 
         # Simulate an error during async init by patching a method
-        with patch.object(
-            bm, "_finalize_save_dir", side_effect=Exception("Test error")
-        ):
+        with patch.object(bm, "_finalize_save_dir", side_effect=Exception("Test error")):
             await bm._async_init()
 
             # Should raise error when waiting for initialization

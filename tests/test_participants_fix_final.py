@@ -103,6 +103,4 @@ def test_participants_includes_both_agents_and_observers():
         print(f"  - {role}: {desc}")
 
     print(f"\n✓ Total participants: {len(all_participants)} (2 agents + 2 observers)")
-    print(
-        "✓ Host agents will now receive the complete list of participants in ConductorRequest"
-    )
+    print("✓ Host agents will now receive the complete list of participants in ConductorRequest")

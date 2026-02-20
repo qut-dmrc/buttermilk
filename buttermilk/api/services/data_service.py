@@ -23,9 +23,7 @@ class DataService:
     _session_config = SessionConfig()
 
     @staticmethod
-    async def get_criteria_for_flow(
-        flow_name: str, flow_runner: FlowRunner
-    ) -> list[str]:
+    async def get_criteria_for_flow(flow_name: str, flow_runner: FlowRunner) -> list[str]:
         """Get criteria for a flow
 
         Args:
@@ -61,9 +59,7 @@ class DataService:
             return []
 
     @staticmethod
-    async def get_datasets_for_flow(
-        flow_name: str, flow_runner: FlowRunner
-    ) -> list[str]:
+    async def get_datasets_for_flow(flow_name: str, flow_runner: FlowRunner) -> list[str]:
         """Get available dataset names for a flow
 
         Args:
@@ -105,9 +101,7 @@ class DataService:
             # Get the specified storage configuration
             if dataset_key not in flow_runner.flows[flow_name].storage:
                 available_datasets = list(flow_runner.flows[flow_name].storage.keys())
-                raise ValueError(
-                    f"Dataset '{dataset_key}' not found in flow '{flow_name}'. Available datasets: {available_datasets}"
-                )
+                raise ValueError(f"Dataset '{dataset_key}' not found in flow '{flow_name}'. Available datasets: {available_datasets}")
 
             # Use unified storage system instead of deprecated create_data_loader
             storage = bm.get_storage(flow_runner.flows[flow_name].storage[dataset_key])
@@ -115,9 +109,7 @@ class DataService:
             for record in storage:
                 # Use the actual Record object, optionally enhancing metadata
                 if include_scores:
-                    raise NotImplementedError(
-                        "Score inclusion feature is not yet implemented"
-                    )
+                    raise NotImplementedError("Score inclusion feature is not yet implemented")
 
                 records.append(record)
 
@@ -128,9 +120,7 @@ class DataService:
             return []
 
     @staticmethod
-    async def get_run_history(
-        flow_name: str, criteria: str, record_id: str, flow_runner
-    ) -> list[dict[str, Any]]:
+    async def get_run_history(flow_name: str, criteria: str, record_id: str, flow_runner) -> list[dict[str, Any]]:
         """Get run history for a flow, criteria, and record
 
         Args:
@@ -146,9 +136,7 @@ class DataService:
         raise NotImplementedError("Run history retrieval is not yet implemented")
 
     @classmethod
-    def safely_get_session_data(
-        cls, websocket_manager, session_id: str
-    ) -> dict[str, Any]:
+    def safely_get_session_data(cls, websocket_manager, session_id: str) -> dict[str, Any]:
         """Safely get session data, ensuring default values if keys don't exist
 
         Args:
@@ -178,15 +166,9 @@ class DataService:
 
             # Sanitize the response to ensure all expected keys are present
             return {
-                "scores": defaults[
-                    "scores"
-                ],  # This will be populated later by MessageService
-                "outcomes": defaults[
-                    "outcomes"
-                ],  # This will be populated later by MessageService
-                "pending_agents": progress.get(
-                    "pending_agents", defaults["pending_agents"]
-                ),
+                "scores": defaults["scores"],  # This will be populated later by MessageService
+                "outcomes": defaults["outcomes"],  # This will be populated later by MessageService
+                "pending_agents": progress.get("pending_agents", defaults["pending_agents"]),
                 "progress": progress,
             }
         except Exception as e:
@@ -195,9 +177,7 @@ class DataService:
             return cls._session_config.defaults.model_dump()
 
     @staticmethod
-    async def get_record_by_id(
-        record_id: str, flow_name: str, flow_runner, dataset_key: str | None = None
-    ) -> Record | None:
+    async def get_record_by_id(record_id: str, flow_name: str, flow_runner, dataset_key: str | None = None) -> Record | None:
         """Get a single record by ID for a specific flow
 
         Args:
@@ -214,15 +194,11 @@ class DataService:
             # Get the appropriate storage configuration
             if dataset_key:
                 if dataset_key not in flow_runner.flows[flow_name].storage:
-                    raise ValueError(
-                        f"Dataset '{dataset_key}' not found in flow '{flow_name}'"
-                    )
+                    raise ValueError(f"Dataset '{dataset_key}' not found in flow '{flow_name}'")
                 storage_config_raw = flow_runner.flows[flow_name].storage[dataset_key]
             else:
                 # Fallback to first storage configuration for backward compatibility
-                storage_config_raw = list(
-                    flow_runner.flows[flow_name].storage.values()
-                )[0]
+                storage_config_raw = list(flow_runner.flows[flow_name].storage.values())[0]
 
             # Use unified storage system instead of deprecated create_data_loader
             storage = bm.get_storage(storage_config_raw)
@@ -235,20 +211,14 @@ class DataService:
                 record.metadata.update(
                     {
                         "dataset": flow_name,
-                        "word_count": len(str(record.content).split())
-                        if isinstance(record.content, str)
-                        else 0,
-                        "char_count": len(str(record.content))
-                        if isinstance(record.content, str)
-                        else 0,
+                        "word_count": len(str(record.content).split()) if isinstance(record.content, str) else 0,
+                        "char_count": len(str(record.content)) if isinstance(record.content, str) else 0,
                     },
                 )
                 return record
             return None
         except Exception as e:
-            logger.warning(
-                f"Error getting record {record_id} for flow {flow_name}: {e}"
-            )
+            logger.warning(f"Error getting record {record_id} for flow {flow_name}: {e}")
             return None
 
     @staticmethod
@@ -275,9 +245,7 @@ class DataService:
         inputs_data = json.loads(row["inputs"]) if row["inputs"] else {}
         outputs_data = row["outputs"]
         metadata_data = json.loads(row["metadata"]) if row["metadata"] else {}
-        session_info_data = (
-            json.loads(row["session_info"]) if row["session_info"] else {}
-        )
+        session_info_data = json.loads(row["session_info"]) if row["session_info"] else {}
         messages_data = json.loads(row["messages"]) if row["messages"] else []
         error_data = json.loads(row["error"]) if row["error"] else []
 
@@ -295,9 +263,7 @@ class DataService:
 
         # Create ExecutionTrace
         agent_trace = ExecutionTrace(
-            timestamp=row["timestamp"]
-            if isinstance(row["timestamp"], datetime.datetime)
-            else datetime.datetime.fromisoformat(row["timestamp"]),
+            timestamp=row["timestamp"] if isinstance(row["timestamp"], datetime.datetime) else datetime.datetime.fromisoformat(row["timestamp"]),
             call_id=row["call_id"],
             metadata=metadata_data,
             outputs=outputs_data,
@@ -332,35 +298,25 @@ class DataService:
         """
         try:
             bq_client = bm.bq
-            query_runner = QueryRunner(
-                bq_client=bq_client
-            )  # Use the provided flow runner to access flow configuration and save settings
+            query_runner = QueryRunner(bq_client=bq_client)  # Use the provided flow runner to access flow configuration and save settings
 
             # Get the save configuration from the flow parameters
             if flow_name not in flow_runner.flows:
-                raise ValueError(
-                    f"Flow '{flow_name}' not found in flow runner. Available flows: {list(flow_runner.flows.keys())}"
-                )
+                raise ValueError(f"Flow '{flow_name}' not found in flow runner. Available flows: {list(flow_runner.flows.keys())}")
 
             flow_config = flow_runner.flows[flow_name]
             save_config = flow_config.parameters.get("save", {})
 
             if not save_config or save_config.get("type") != "bigquery":
-                raise ValueError(
-                    f"Flow '{flow_name}' does not have BigQuery save configuration. Cannot query scores."
-                )
+                raise ValueError(f"Flow '{flow_name}' does not have BigQuery save configuration. Cannot query scores.")
 
             dataset_id = save_config.get("dataset_id")
             table_id = save_config.get("table_id")
 
             if not dataset_id:
-                raise ValueError(
-                    f"Flow '{flow_name}' is missing required 'dataset_id' in save configuration"
-                )
+                raise ValueError(f"Flow '{flow_name}' is missing required 'dataset_id' in save configuration")
             if not table_id:
-                raise ValueError(
-                    f"Flow '{flow_name}' is missing required 'table_id' in save configuration"
-                )
+                raise ValueError(f"Flow '{flow_name}' is missing required 'table_id' in save configuration")
 
             # Build the query for scores using the correct table reference
             where_clause = f"WHERE record_id = '{record_id}'"
@@ -406,9 +362,7 @@ class DataService:
             return agent_traces
 
         except Exception as e:
-            logger.error(
-                f"Error getting scores for record {record_id}: {e}", exc_info=True
-            )
+            logger.error(f"Error getting scores for record {record_id}: {e}", exc_info=True)
             return []
 
     @staticmethod
@@ -441,29 +395,21 @@ class DataService:
 
             # Get the save configuration from the flow parameters
             if flow_name not in flow_runner.flows:
-                raise ValueError(
-                    f"Flow '{flow_name}' not found in flow runner. Available flows: {list(flow_runner.flows.keys())}"
-                )
+                raise ValueError(f"Flow '{flow_name}' not found in flow runner. Available flows: {list(flow_runner.flows.keys())}")
 
             flow_config = flow_runner.flows[flow_name]
             save_config = flow_config.parameters.get("save", {})
 
             if not save_config or save_config.get("type") != "bigquery":
-                raise ValueError(
-                    f"Flow '{flow_name}' does not have BigQuery save configuration. Cannot query scores."
-                )
+                raise ValueError(f"Flow '{flow_name}' does not have BigQuery save configuration. Cannot query scores.")
 
             dataset_id = save_config.get("dataset_id")
             table_id = save_config.get("table_id")
 
             if not dataset_id:
-                raise ValueError(
-                    f"Flow '{flow_name}' is missing required 'dataset_id' in save configuration"
-                )
+                raise ValueError(f"Flow '{flow_name}' is missing required 'dataset_id' in save configuration")
             if not table_id:
-                raise ValueError(
-                    f"Flow '{flow_name}' is missing required 'table_id' in save configuration"
-                )
+                raise ValueError(f"Flow '{flow_name}' is missing required 'table_id' in save configuration")
 
             # Build the query for detailed responses
             where_clause = f"WHERE record_id = '{record_id}'"
@@ -510,7 +456,5 @@ class DataService:
             return agent_traces
 
         except Exception as e:
-            logger.error(
-                f"Error getting responses for record {record_id}: {e}", exc_info=True
-            )
+            logger.error(f"Error getting responses for record {record_id}: {e}", exc_info=True)
             return []

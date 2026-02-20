@@ -28,17 +28,11 @@ def test_session_scoped_instances(real_bm):
 
     # Verify new session has different ID but works correctly
     assert new_session.session_info.job == "new_task", "New session should have new job"
-    assert new_session.session_info.project_name == "test-project", (
-        "New session should have new name"
-    )
-    assert new_session.session_info.session_id != real_bm.session_info.session_id, (
-        "Different sessions have different IDs"
-    )
+    assert new_session.session_info.project_name == "test-project", "New session should have new name"
+    assert new_session.session_info.session_id != real_bm.session_info.session_id, "Different sessions have different IDs"
 
     # Original singleton should be unchanged
-    assert real_bm.session_info.job == "testing", (
-        "Original singleton should be unchanged"
-    )
+    assert real_bm.session_info.job == "testing", "Original singleton should be unchanged"
 
 
 @pytest.fixture
@@ -58,20 +52,12 @@ def test_singleton_between_modules(real_bm, second_module_access):
     bm2 = second_module_access  # second_module_access is already the result of get_bm()
 
     # Both should be the same instance
-    assert bm1 is bm2, (
-        "BM should be the same instance across different module functions"
-    )
+    assert bm1 is bm2, "BM should be the same instance across different module functions"
 
     # Properties should be the same (using session_info)
-    assert bm2.session_info.project_name == "buttermilk", (
-        "Property 'name' should be maintained across modules"
-    )
-    assert bm2.session_info.job == "testing", (
-        "Property 'job' should be maintained across modules"
-    )
-    assert bm2.session_info.session_id == bm1.session_info.session_id, (
-        "Property 'session_id' should be maintained across modules"
-    )
+    assert bm2.session_info.project_name == "buttermilk", "Property 'name' should be maintained across modules"
+    assert bm2.session_info.job == "testing", "Property 'job' should be maintained across modules"
+    assert bm2.session_info.session_id == bm1.session_info.session_id, "Property 'session_id' should be maintained across modules"
 
 
 @pytest.mark.anyio
@@ -123,9 +109,7 @@ async def test_init_async_without_config_dir_uses_default():
     assert bm.session_info.project_name == "buttermilk"
 
 
-@pytest.mark.skip(
-    reason="Hydra config composition issues with copied configs - needs refactoring"
-)
+@pytest.mark.skip(reason="Hydra config composition issues with copied configs - needs refactoring")
 @pytest.mark.anyio
 async def test_init_async_with_relative_config_dir(tmp_path, monkeypatch):
     """Test that init_async(config_dir='conf') resolves against CWD."""
@@ -146,18 +130,14 @@ async def test_init_async_with_relative_config_dir(tmp_path, monkeypatch):
     monkeypatch.chdir(project_dir)
 
     # Act: Initialize with relative path
-    bm = await init_async(
-        job="test_relative", project_name="buttermilk", config_dir="conf"
-    )
+    bm = await init_async(job="test_relative", project_name="buttermilk", config_dir="conf")
 
     # Assert: Should use the config from CWD/conf
     assert bm is not None
     assert bm.session_info.job == "test_relative"
 
 
-@pytest.mark.skip(
-    reason="Hydra config composition issues with copied configs - needs refactoring"
-)
+@pytest.mark.skip(reason="Hydra config composition issues with copied configs - needs refactoring")
 @pytest.mark.anyio
 async def test_init_async_with_absolute_config_dir(tmp_path):
     """Test that init_async(config_dir='/abs/path') uses absolute path."""
@@ -173,18 +153,14 @@ async def test_init_async_with_absolute_config_dir(tmp_path):
     shutil.copytree(src_conf, abs_conf_dir, dirs_exist_ok=True)
 
     # Act: Initialize with absolute path
-    bm = await init_async(
-        job="test_absolute", project_name="buttermilk", config_dir=str(abs_conf_dir)
-    )
+    bm = await init_async(job="test_absolute", project_name="buttermilk", config_dir=str(abs_conf_dir))
 
     # Assert: Should use the specified absolute config path
     assert bm is not None
     assert bm.session_info.job == "test_absolute"
 
 
-@pytest.mark.skip(
-    reason="Hydra config composition issues with copied configs - needs refactoring"
-)
+@pytest.mark.skip(reason="Hydra config composition issues with copied configs - needs refactoring")
 @pytest.mark.anyio
 async def test_multiple_sessions_different_config_dirs(tmp_path, monkeypatch):
     """Test that different sessions can use different config directories."""

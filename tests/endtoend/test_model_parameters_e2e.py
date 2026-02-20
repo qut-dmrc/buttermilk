@@ -11,7 +11,6 @@ NO mocks - validates the complete workflow from YAML config to API call.
 import pytest
 from autogen_core.models import UserMessage
 
-from buttermilk import BM
 from buttermilk._core.llms import LLMs, ModelParameters
 
 
@@ -34,12 +33,8 @@ async def test_model_parameters_loaded_from_yaml(real_llms: LLMs):
         if isinstance(params, dict):
             params = ModelParameters(**params)
 
-        assert params.temperature == 0.5, (
-            f"Expected temperature=0.5 from debug.yaml, got {params.temperature}"
-        )
-        assert params.max_tokens == 2048, (
-            f"Expected max_tokens=2048 from debug.yaml, got {params.max_tokens}"
-        )
+        assert params.temperature == 0.5, f"Expected temperature=0.5 from debug.yaml, got {params.temperature}"
+        assert params.max_tokens == 2048, f"Expected max_tokens=2048 from debug.yaml, got {params.max_tokens}"
 
 
 @pytest.mark.anyio
@@ -53,17 +48,11 @@ async def test_get_merged_parameters_returns_yaml_values(real_llms: LLMs):
     # Get merged parameters for a model with YAML overrides
     merged = real_llms.get_merged_parameters("gemini-flash")
 
-    assert isinstance(merged, ModelParameters), (
-        f"Expected ModelParameters, got {type(merged)}"
-    )
+    assert isinstance(merged, ModelParameters), f"Expected ModelParameters, got {type(merged)}"
 
     # YAML values should override any models.json defaults
-    assert merged.temperature == 0.5, (
-        f"Expected temperature=0.5 from YAML override, got {merged.temperature}"
-    )
-    assert merged.max_tokens == 2048, (
-        f"Expected max_tokens=2048 from YAML override, got {merged.max_tokens}"
-    )
+    assert merged.temperature == 0.5, f"Expected temperature=0.5 from YAML override, got {merged.temperature}"
+    assert merged.max_tokens == 2048, f"Expected max_tokens=2048 from YAML override, got {merged.max_tokens}"
 
 
 @pytest.mark.anyio
@@ -75,9 +64,7 @@ async def test_get_merged_parameters_model_without_yaml_override(real_llms: LLMs
         if model_name not in real_llms.model_parameters:
             merged = real_llms.get_merged_parameters(model_name)
             # Should still return valid ModelParameters (from LLMConfig or empty)
-            assert isinstance(merged, ModelParameters), (
-                f"Expected ModelParameters for {model_name}, got {type(merged)}"
-            )
+            assert isinstance(merged, ModelParameters), f"Expected ModelParameters for {model_name}, got {type(merged)}"
             break
 
 
@@ -88,9 +75,7 @@ async def test_parameters_passed_to_llm_api_call(real_llm, session_runner):
     Parameterized over all cheap chat models.
     """
     # Verify the wrapper has default_parameters attribute
-    assert hasattr(real_llm, "default_parameters"), (
-        "Wrapper should have default_parameters attribute"
-    )
+    assert hasattr(real_llm, "default_parameters"), "Wrapper should have default_parameters attribute"
 
     # Make a real API call to verify the wrapper works end-to-end
     messages = [
