@@ -6,9 +6,6 @@ treating the --- as part of the body content unless it is a valid frontmatter de
 Previously, this raised ProcessingError due to ambiguity, but we now allow it.
 """
 
-import pytest
-
-from buttermilk._core.exceptions import ProcessingError
 from buttermilk.utils.templating import _parse_prompty
 
 
