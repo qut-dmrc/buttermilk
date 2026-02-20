@@ -128,9 +128,6 @@ _CLAUDE_MODEL_PATTERNS = ("claude", "anthropic")
 # Model name patterns that indicate OpenAI/GPT models
 _OPENAI_MODEL_PATTERNS = ("gpt", "grok")
 
-# Model name patterns that indicate Llama/Meta models
-_LLAMA_MODEL_PATTERNS = ("llama", "meta/")
-
 # Model name patterns that indicate Llama/Meta models (use OpenAI batch format on Vertex)
 _LLAMA_MODEL_PATTERNS = ("llama", "meta/")
 

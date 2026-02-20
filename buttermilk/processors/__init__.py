@@ -12,15 +12,17 @@ from .jmespath_transform import JMESPathTransform
 from .parallel import ParallelProcessor
 from .unified_processors import GroupchatProcessor, LLMProcessor, ParameterExpansionProcessor
 from .variants import VariantProcessor
-from .vertex_batch import VertexBatchProcessor
+from .vertex_batch import BatchLLMProcessor, OpenAIBatchProcessor, VertexBatchProcessor
 
 __all__ = [
     "BatchAccumulator",
+    "BatchLLMProcessor",
     "ChromaDBUploader",
     "EmbeddingGenerator",
     "GroupchatProcessor",
     "JMESPathTransform",
     "LLMProcessor",
+    "OpenAIBatchProcessor",
     "ParallelProcessor",
     "ParameterExpansionProcessor",
     "VariantProcessor",
