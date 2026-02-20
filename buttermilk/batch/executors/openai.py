@@ -50,8 +50,7 @@ def _create_openai_batch_client(model_name: str) -> tuple[Any, str]:
             )
         if not config.api_key:
             raise ValueError(
-                f"Model '{model_name}' is configured as Azure (ClientType.AZURE) but "
-                f"'api_key' is not set. Please provide your Azure OpenAI API key."
+                f"Model '{model_name}' is configured as Azure (ClientType.AZURE) but 'api_key' is not set. Please provide your Azure OpenAI API key."
             )
         api_version = config.configs.get("api_version", "2024-12-01-preview")
         client = AzureOpenAI(
