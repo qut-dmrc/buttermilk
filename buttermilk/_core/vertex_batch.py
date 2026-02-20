@@ -1,20 +1,6 @@
-"""Vertex AI batch prediction utilities.
-<!-- NS TODO: let's fix the name collision between this and processors.vertex_batch -->
-This module provides utilities for submitting and managing batch prediction
-jobs on Vertex AI, with support for both Gemini and Claude models.
+"""Vertex AI batch prediction utilities (Deprecated).
 
-Uses buttermilk's existing save utilities for GCS operations.
-
-Usage:
-    from buttermilk._core.vertex_batch import BatchJobManager
-    from buttermilk import bm
-
-    manager = BatchJobManager(client=bm.genai)
-    job = await manager.submit_batch(
-        model="gemini-2.5-flash",
-        requests=requests,
-    )
-    results = await manager.wait_for_results(job)
+This module is deprecated. Use `buttermilk.batch.managers.vertex` and other submodules in `buttermilk.batch` instead.
 """
 
 from __future__ import annotations
