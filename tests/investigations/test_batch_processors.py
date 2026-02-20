@@ -6,7 +6,8 @@ import pytest
 from buttermilk._core.dmrc import set_bm
 from buttermilk._core.llms import ClientType
 from buttermilk._core.vertex_batch import _DEEPSEEK_MODEL_PATTERNS, BatchJobManager, OpenAIMessageConverter, _is_deepseek_model
-from buttermilk.processors.openai_batch import OpenAIBatchJobManager, OpenAIBatchProcessor
+from buttermilk.batch.managers.openai import OpenAIBatchJobManager
+from buttermilk.processors.openai_batch import OpenAIBatchProcessor
 
 
 @pytest.fixture(scope="function", autouse=True)
@@ -58,7 +59,8 @@ def test_openai_message_converter_endpoints():
 
 def test_openai_batch_manager_jsonl_generation():
     # Test that manager passes endpoint to converter and generates correct JSONL
-    manager = OpenAIBatchJobManager(client=MagicMock(), endpoint="/chat/completions")
+    # Updated: Must provide jsonl_url explicitly if it differs from default
+    manager = OpenAIBatchJobManager(client=MagicMock(), endpoint="/chat/completions", jsonl_url="/chat/completions")
 
     request = MagicMock()
     request.custom_id = "123"

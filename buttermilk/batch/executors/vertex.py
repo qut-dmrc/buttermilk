@@ -1,7 +1,7 @@
 from buttermilk import logger
 from buttermilk._core.processor_core import BatchProcessorCore
 from buttermilk._core.types import BaseRecord
-from buttermilk._core.vertex_batch import BatchJobManager
+from buttermilk.batch.managers.vertex import BatchJobManager
 from buttermilk.batch.executors.base import BatchExecutor
 from buttermilk.batch.result import BatchExecutionResult, BatchJobStatus
 

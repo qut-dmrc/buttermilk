@@ -17,6 +17,7 @@ from buttermilk.batch.converters import (
     OpenAIMessageConverter,
     _is_claude_model,
     _is_llama_model,
+    _is_deepseek_model,
     get_message_converter,
 )
 from buttermilk.batch.manifests import BatchJobManifest
@@ -279,6 +280,12 @@ class BatchJobManager(BaseModel):
             if model_name.lower().startswith("meta/"):
                 model_name = model_name[len("meta/") :]
             return f"publishers/meta/models/{model_name}"
+        elif _is_deepseek_model(resolved_model):
+            # DeepSeek models use publisher path: deepseek-ai/... -> publishers/deepseek-ai/models/...
+            model_name = resolved_model
+            if model_name.lower().startswith("deepseek-ai/"):
+                model_name = model_name[len("deepseek-ai/") :]
+            return f"publishers/deepseek-ai/models/{model_name}"
         else:
             # Gemini models - strip google/ prefix if present (Batch API expects bare names)
             if resolved_model.startswith("google/"):

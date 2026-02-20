@@ -45,14 +45,14 @@ from buttermilk import logger
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.processor_core import BatchProcessorCore
 from buttermilk._core.types import BaseRecord
-from buttermilk._core.vertex_batch import BatchResult
+from buttermilk.batch.types import BatchResult, BatchRequest
 from buttermilk.utils.import_utils import load_class
 from buttermilk.utils.templating import make_messages, render_template
 
 if TYPE_CHECKING:
     from google.genai.types import BatchJob
 
-    from buttermilk._core.vertex_batch import BatchJobManager
+    from buttermilk.batch.managers.vertex import BatchJobManager
 
 
 # =============================================================================
@@ -208,7 +208,7 @@ class BatchLLMProcessor(BatchProcessorCore):
             List of BatchRequest objects
         """
         from buttermilk._core.llms import autogen_to_litellm_messages
-        from buttermilk._core.vertex_batch import BatchRequest
+        from buttermilk.batch.types import BatchRequest
 
         requests: list[BatchRequest] = []
 
@@ -530,7 +530,7 @@ class VertexBatchProcessor(BatchLLMProcessor):
     def _resolve_output_schema(self) -> dict[str, Any] | None:
         """Resolve output_class to a Vertex AI-appropriate JSON schema dict.
 
-        Applies Vertex AI transforms (resolve $refs, make all required,
+        Applies Vertex AI transforms (resolve , make all required,
         convert enum values for Gemini).
 
         Returns:
@@ -540,7 +540,7 @@ class VertexBatchProcessor(BatchLLMProcessor):
             return None
 
         from buttermilk._core.json_schema import prepare_schema_for_vertex
-        from buttermilk._core.vertex_batch import _is_claude_model, _is_llama_model
+        from buttermilk.batch.converters import _is_claude_model, _is_llama_model
 
         # Gemini requires enum values converted to strings; Claude and Llama do not
         is_gemini = not _is_claude_model(self.model) and not _is_llama_model(self.model)
@@ -570,7 +570,7 @@ class VertexBatchProcessor(BatchLLMProcessor):
 
     def _ensure_manager(self) -> BatchJobManager:
         """Lazily initialize the BatchJobManager via buttermilk infrastructure."""
-        from buttermilk._core.vertex_batch import BatchJobManager as _BatchJobManager
+        from buttermilk.batch.managers.vertex import BatchJobManager as _BatchJobManager
 
         if self._manager is None:
             from google import genai
