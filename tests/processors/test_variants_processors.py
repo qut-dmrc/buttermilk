@@ -4,8 +4,8 @@ import asyncio
 
 import pytest
 
-from buttermilk._core.types import BaseRecord
 from buttermilk._core.processing_context import ProcessingContext
+from buttermilk._core.types import BaseRecord
 from buttermilk.processors.variants import VariantProcessor
 
 
@@ -99,10 +99,7 @@ class TestVariantProcessorIntegration:
         """Test that all variants produce outputs."""
         proc = variant_processor_with_mocks
         record = BaseRecord(record_id="test-1", content="hello")
-        context = ProcessingContext(
-            record=record,
-            session_id="test/00.Variant/abc123"
-        )
+        context = ProcessingContext(record=record, session_id="test/00.Variant/abc123")
 
         outputs = []
         async for output in proc.process(context):
@@ -117,10 +114,7 @@ class TestVariantProcessorIntegration:
         """Test that variant metadata is added to outputs."""
         proc = variant_processor_with_mocks
         record = BaseRecord(record_id="test-1", content="hello")
-        context = ProcessingContext(
-            record=record,
-            session_id="test/00.Variant/abc123"
-        )
+        context = ProcessingContext(record=record, session_id="test/00.Variant/abc123")
 
         outputs = []
         async for output in proc.process(context):
@@ -138,10 +132,7 @@ class TestVariantProcessorIntegration:
         """Test that faster variants yield results first."""
         proc = variant_processor_with_mocks
         record = BaseRecord(record_id="test-1", content="hello")
-        context = ProcessingContext(
-            record=record,
-            session_id="test/00.Variant/abc123"
-        )
+        context = ProcessingContext(record=record, session_id="test/00.Variant/abc123")
 
         # Track order of completion
         completion_order = []
@@ -175,10 +166,7 @@ class TestVariantProcessorIntegration:
         ]
 
         record = BaseRecord(record_id="test-1", content="hello")
-        context = ProcessingContext(
-            record=record,
-            session_id="test/00.Variant/abc123"
-        )
+        context = ProcessingContext(record=record, session_id="test/00.Variant/abc123")
 
         outputs = []
         async for output in proc.process(context):
@@ -212,10 +200,7 @@ class TestVariantProcessorIntegration:
         ]
 
         record = BaseRecord(record_id="test-1", content="hello")
-        context = ProcessingContext(
-            record=record,
-            session_id="test/00.Variant/abc123"
-        )
+        context = ProcessingContext(record=record, session_id="test/00.Variant/abc123")
 
         with pytest.raises(ValueError, match="configured to fail"):
             async for _ in proc.process(context):
@@ -226,10 +211,7 @@ class TestVariantProcessorIntegration:
         """Test that original record_id is preserved in outputs."""
         proc = variant_processor_with_mocks
         record = BaseRecord(record_id="original-id-123", content="hello")
-        context = ProcessingContext(
-            record=record,
-            session_id="test/00.Variant/abc123"
-        )
+        context = ProcessingContext(record=record, session_id="test/00.Variant/abc123")
 
         async for output in proc.process(context):
             assert output.record_id == "original-id-123"
