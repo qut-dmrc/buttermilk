@@ -1,0 +1,58 @@
+# Reusable gatekeeper agent workflow.
+# Called by pr-checks.yml to run alignment and quality gate review.
+
+name: Agent – Gatekeeper
+
+on:
+  workflow_call:
+    inputs:
+      pr_number:
+        required: true
+        type: string
+      head_ref:
+        required: true
+        type: string
+
+jobs:
+  gatekeeper:
+    name: Gatekeeper
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pr-gatekeeper-${{ inputs.pr_number }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+      issues: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.head_ref }}
+
+      - name: Read gatekeeper instructions
+        id: gatekeeper-prompt
+        run: |
+          PROMPT=$(cat .github/agents/gatekeeper.md)
+          {
+            echo "prompt<<GATEKEEPER_EOF"
+            echo "$PROMPT"
+            echo "GATEKEEPER_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run Gatekeeper Agent
+        uses: anthropics/claude-code-action@v1
+        with:
+          allowed_bots: "claude[bot]"
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            ${{ steps.gatekeeper-prompt.outputs.prompt }}
+
+            ---
+
+            Review PR #${{ inputs.pr_number }} in repository ${{ github.repository }}.
+            Use `gh pr view ${{ inputs.pr_number }}` and `gh pr diff ${{ inputs.pr_number }}` to gather information.
+
+          claude_args: '--allowed-tools "Bash(gh:*),Read"'

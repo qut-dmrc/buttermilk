@@ -1,5 +1,5 @@
-# Checks that run on every PR to dev: lint, gatekeeper, and type-check.
-# Lint and gatekeeper run in parallel; type-check runs after lint passes.
+# Checks that run on every PR to dev: lint, gatekeeper, type-check, unit-tests.
+# Lint and gatekeeper run in parallel; type-check and unit-tests run after lint.
 # The review pipeline (pr-review-pipeline.yml) starts only after ALL jobs
 # here pass, via a workflow_run trigger.
 
@@ -10,6 +10,10 @@ on:
     branches: [dev]
     types: [opened, synchronize, assigned]
 
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   # ──────────────────────────────────────────────
   # Stage 1: Lint
@@ -19,9 +23,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    concurrency:
-      group: pr-checks-${{ github.event.pull_request.number }}
-      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,7 +40,7 @@ jobs:
           version: "latest"
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --dev
 
       # Initial check: identify problems but don't fail the job yet
       - name: Ruff lint (initial)
@@ -87,49 +88,14 @@ jobs:
   # ──────────────────────────────────────────────
   gatekeeper:
     name: Gatekeeper
-    runs-on: ubuntu-latest
-    concurrency:
-      group: pr-gatekeeper-${{ github.event.pull_request.number }}
-      cancel-in-progress: true
-    permissions:
-      contents: read
-      pull-requests: write
-      id-token: write
-      issues: write
-      actions: read
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.ref }}
-
-      - name: Read gatekeeper instructions
-        id: gatekeeper-prompt
-        run: |
-          PROMPT=$(cat .github/agents/gatekeeper.md)
-          {
-            echo "prompt<<GATEKEEPER_EOF"
-            echo "$PROMPT"
-            echo "GATEKEEPER_EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Run Gatekeeper Agent
-        uses: anthropics/claude-code-action@v1
-        with:
-          allowed_bots: "claude[bot]"
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          prompt: |
-            ${{ steps.gatekeeper-prompt.outputs.prompt }}
-
-            ---
-
-            Review PR #${{ github.event.pull_request.number }} in repository ${{ github.repository }}.
-            Use `gh pr view ${{ github.event.pull_request.number }}` and `gh pr diff ${{ github.event.pull_request.number }}` to gather information.
-
-          claude_args: '--allowed-tools "Bash(gh:*),Read"'
+    uses: ./.github/workflows/agent-gatekeeper.yml
+    with:
+      pr_number: ${{ github.event.pull_request.number }}
+      head_ref: ${{ github.event.pull_request.head.ref }}
+    secrets: inherit
 
   # ──────────────────────────────────────────────
-  # Stage 2: Type Check
+  # Stage 2: Type Check (after lint)
   # ──────────────────────────────────────────────
   type-check:
     name: Type Check
@@ -137,6 +103,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -149,7 +117,48 @@ jobs:
           version: "latest"
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --dev
 
       - name: Run mypy
         run: uv run mypy buttermilk --ignore-missing-imports
+
+  # ──────────────────────────────────────────────
+  # Stage 2: Unit Tests (after lint, on auto-fixed code)
+  # ──────────────────────────────────────────────
+  unit-tests:
+    name: Unit Tests
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Run unit tests
+        run: |
+          uv run pytest tests/ \
+            -m "not integration" \
+            --cov=buttermilk \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            -v
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
