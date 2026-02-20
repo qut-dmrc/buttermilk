@@ -21,6 +21,9 @@ _OPENAI_MODEL_PATTERNS = ("gpt", "grok")
 _LLAMA_MODEL_PATTERNS = ("llama", "meta/")
 
 
+
+# Model name patterns that indicate DeepSeek models
+_DEEPSEEK_MODEL_PATTERNS = ("deepseek", "deepseek-ai")
 class BatchMessageConverter(ABC):
     """Abstract base for converting LiteLLM messages to provider-specific batch format."""
 
@@ -296,6 +299,12 @@ def _is_llama_model(model: str) -> bool:
     return any(pattern in model_lower for pattern in _LLAMA_MODEL_PATTERNS)
 
 
+def _is_deepseek_model(model: str) -> bool:
+    """Check if model identifier indicates a DeepSeek model."""
+    model_lower = model.lower()
+    return any(pattern in model_lower for pattern in _DEEPSEEK_MODEL_PATTERNS)
+
+
 def get_message_converter(model: str, **kwargs: Any) -> BatchMessageConverter:
     """Factory function to get the appropriate converter for a model.
 
@@ -309,6 +318,6 @@ def get_message_converter(model: str, **kwargs: Any) -> BatchMessageConverter:
     """
     if _is_claude_model(model):
         return ClaudeMessageConverter(max_tokens=kwargs.get("max_tokens"))
-    if _is_openai_model(model) or _is_llama_model(model):
+    if _is_openai_model(model) or _is_llama_model(model) or _is_deepseek_model(model):
         return OpenAIMessageConverter(max_tokens=kwargs.get("max_tokens"), model=model)
     return GeminiMessageConverter()

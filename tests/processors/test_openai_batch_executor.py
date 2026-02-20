@@ -273,6 +273,7 @@ class TestOpenAIBatchExecutor:
         """Completed job should return COMPLETED status."""
         mock_manifest = MagicMock()
         mock_manifest.openai_batch_id = "batch_abc123"
+        mock_manifest.model = "gpt-chat"
 
         mock_manager = MagicMock()
         mock_manager._load_manifest.return_value = mock_manifest
@@ -288,6 +289,7 @@ class TestOpenAIBatchExecutor:
         """In-progress job should return RUNNING status."""
         mock_manifest = MagicMock()
         mock_manifest.openai_batch_id = "batch_abc123"
+        mock_manifest.model = "gpt-chat"
 
         mock_manager = MagicMock()
         mock_manager._load_manifest.return_value = mock_manifest
@@ -303,6 +305,7 @@ class TestOpenAIBatchExecutor:
         """Failed job should return FAILED status."""
         mock_manifest = MagicMock()
         mock_manifest.openai_batch_id = "batch_abc123"
+        mock_manifest.model = "gpt-chat"
 
         mock_manager = MagicMock()
         mock_manager._load_manifest.return_value = mock_manifest
