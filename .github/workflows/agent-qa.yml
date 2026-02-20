@@ -1,0 +1,55 @@
+# Reusable QA agent workflow.
+# Called by pr-review-pipeline.yml for acceptance criteria verification.
+
+name: Agent – QA
+
+on:
+  workflow_call:
+    inputs:
+      pr_number:
+        required: true
+        type: string
+      head_ref:
+        required: true
+        type: string
+
+jobs:
+  qa:
+    name: QA
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+      issues: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.head_ref }}
+
+      - name: Read QA instructions
+        id: qa-prompt
+        run: |
+          PROMPT=$(cat .github/agents/qa.md)
+          {
+            echo "prompt<<QA_EOF"
+            echo "$PROMPT"
+            echo "QA_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run QA Agent
+        uses: anthropics/claude-code-action@v1
+        with:
+          allowed_bots: "claude[bot]"
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            ${{ steps.qa-prompt.outputs.prompt }}
+
+            ---
+
+            Review PR #${{ inputs.pr_number }} in repository ${{ github.repository }}.
+            Use `gh pr view ${{ inputs.pr_number }}`, `gh pr diff ${{ inputs.pr_number }}`, and `gh pr checks ${{ inputs.pr_number }}` to gather information.
+
+          claude_args: '--allowed-tools "Bash(gh:*),Read"'
