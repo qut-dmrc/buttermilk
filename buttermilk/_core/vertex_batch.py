@@ -114,8 +114,11 @@ _CLAUDE_MODEL_PATTERNS = ("claude", "anthropic")
 # Model name patterns that indicate OpenAI/GPT models
 _OPENAI_MODEL_PATTERNS = ("gpt", "grok")
 
-# Model name patterns that indicate Llama/Meta models (use OpenAI batch format on Vertex)
+# Model name patterns that indicate Llama/Meta models
 _LLAMA_MODEL_PATTERNS = ("llama", "meta/")
+
+# Model name patterns that indicate DeepSeek models
+_DEEPSEEK_MODEL_PATTERNS = ("deepseek", "deepseek-ai")
 
 
 class BatchMessageConverter(ABC):
@@ -299,7 +302,7 @@ class OpenAIMessageConverter(BatchMessageConverter):
     """Convert messages to/from OpenAI Batch API format.
 
     OpenAI batch format:
-    - Input: {"custom_id": ..., "method": "POST", "url": "/v1/chat/completions",
+    - Input: {"custom_id": ..., "method": "POST", "url": self.endpoint,
               "body": {"model": ..., "messages": [...], ...}}
     - Output: {"id": ..., "custom_id": ..., "response": {"status_code": 200,
               "body": {"choices": [...], "usage": {...}}}, "error": null}
@@ -308,9 +311,10 @@ class OpenAIMessageConverter(BatchMessageConverter):
     Structured output uses native response_format with json_schema.
     """
 
-    def __init__(self, max_tokens: int | None = None, model: str | None = None):
+    def __init__(self, max_tokens: int | None = None, model: str | None = None, endpoint: str = "/v1/chat/completions"):
         self.max_tokens = max_tokens
         self.model = model
+        self.endpoint = endpoint
 
     def build_request(self, request: BatchRequest) -> dict[str, Any]:
         """Build an OpenAI batch request entry.
@@ -341,7 +345,7 @@ class OpenAIMessageConverter(BatchMessageConverter):
         return {
             "custom_id": request.custom_id,
             "method": "POST",
-            "url": "/v1/chat/completions",
+            "url": self.endpoint,
             "body": body,
         }
 
@@ -392,6 +396,12 @@ def _is_llama_model(model: str) -> bool:
     return any(pattern in model_lower for pattern in _LLAMA_MODEL_PATTERNS)
 
 
+def _is_deepseek_model(model: str) -> bool:
+    """Check if model identifier indicates a DeepSeek model."""
+    model_lower = model.lower()
+    return any(pattern in model_lower for pattern in _DEEPSEEK_MODEL_PATTERNS)
+
+
 def get_message_converter(model: str, **kwargs: Any) -> BatchMessageConverter:
     """Factory function to get the appropriate converter for a model.
 
@@ -405,9 +415,7 @@ def get_message_converter(model: str, **kwargs: Any) -> BatchMessageConverter:
     """
     if _is_claude_model(model):
         return ClaudeMessageConverter(max_tokens=kwargs.get("max_tokens"))
-    if _is_openai_model(model) or _is_llama_model(model):
-        return OpenAIMessageConverter(max_tokens=kwargs.get("max_tokens"), model=model)
-    if _is_llama_model(model):
+    if _is_openai_model(model) or _is_llama_model(model) or _is_deepseek_model(model):
         return OpenAIMessageConverter(max_tokens=kwargs.get("max_tokens"), model=model)
     return GeminiMessageConverter()
 
@@ -770,6 +778,12 @@ class BatchJobManager(BaseModel):
             if model_name.lower().startswith("meta/"):
                 model_name = model_name[len("meta/") :]
             return f"publishers/meta/models/{model_name}"
+        elif _is_deepseek_model(resolved_model):
+            # DeepSeek models use publisher path: deepseek-ai/... -> publishers/deepseek-ai/models/...
+            model_name = resolved_model
+            if model_name.lower().startswith("deepseek-ai/"):
+                model_name = model_name[len("deepseek-ai/") :]
+            return f"publishers/deepseek-ai/models/{model_name}"
         else:
             # Gemini models - strip google/ prefix if present (Batch API expects bare names)
             if resolved_model.startswith("google/"):
@@ -1615,7 +1629,7 @@ class OpenAIBatchJobManager(BaseModel):
         Returns:
             JSONL string ready for upload
         """
-        converter = OpenAIMessageConverter(max_tokens=max_tokens, model=model)
+        converter = OpenAIMessageConverter(max_tokens=max_tokens, model=model, endpoint=self.endpoint)
         lines = [json.dumps(converter.build_request(request)) for request in requests]
         return "\n".join(lines)
 
