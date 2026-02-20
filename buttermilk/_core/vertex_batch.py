@@ -2,30 +2,31 @@
 
 This module is deprecated. Use `buttermilk.batch` submodules instead.
 """
+
 from __future__ import annotations
 
-# Re-export from new locations for backward compatibility
-from buttermilk.batch.types import BatchRequest, BatchResult
+from buttermilk._core.log import logger
 from buttermilk.batch.converters import (
+    _CLAUDE_MODEL_PATTERNS,
+    _DEEPSEEK_MODEL_PATTERNS,
+    _LLAMA_MODEL_PATTERNS,
+    _OPENAI_MODEL_PATTERNS,
     BatchMessageConverter,
-    GeminiMessageConverter,
     ClaudeMessageConverter,
+    GeminiMessageConverter,
     OpenAIMessageConverter,
     _is_claude_model,
-    _is_openai_model,
-    _is_llama_model,
     _is_deepseek_model,
+    _is_llama_model,
+    _is_openai_model,
     get_message_converter,
-    _CLAUDE_MODEL_PATTERNS,
-    _OPENAI_MODEL_PATTERNS,
-    _LLAMA_MODEL_PATTERNS,
-    _DEEPSEEK_MODEL_PATTERNS,
 )
 from buttermilk.batch.managers.openai import OpenAIBatchJobManager
 from buttermilk.batch.managers.vertex import BatchJobManager
-from buttermilk.batch.manifests import OpenAIBatchManifest, BatchJobManifest
+from buttermilk.batch.manifests import BatchJobManifest, OpenAIBatchManifest
 
-from buttermilk._core.log import logger
+# Re-export from new locations for backward compatibility
+from buttermilk.batch.types import BatchRequest, BatchResult
 
 __all__ = [
     "BatchRequest",

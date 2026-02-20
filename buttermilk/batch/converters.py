@@ -21,9 +21,10 @@ _OPENAI_MODEL_PATTERNS = ("gpt", "grok")
 _LLAMA_MODEL_PATTERNS = ("llama", "meta/")
 
 
-
 # Model name patterns that indicate DeepSeek models
 _DEEPSEEK_MODEL_PATTERNS = ("deepseek", "deepseek-ai")
+
+
 class BatchMessageConverter(ABC):
     """Abstract base for converting LiteLLM messages to provider-specific batch format."""
 
