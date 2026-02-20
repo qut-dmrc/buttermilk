@@ -135,6 +135,7 @@ _LLAMA_MODEL_PATTERNS = ("llama", "meta/")
 _DEEPSEEK_MODEL_PATTERNS = ("deepseek", "deepseek-ai")
 
 
+
 class BatchMessageConverter(ABC):
     """Abstract base for converting LiteLLM messages to provider-specific batch format."""
 
@@ -316,7 +317,7 @@ class OpenAIMessageConverter(BatchMessageConverter):
     """Convert messages to/from OpenAI Batch API format.
 
     OpenAI batch format:
-    - Input: {"custom_id": ..., "method": "POST", "url": "/v1/chat/completions",
+    - Input: {"custom_id": ..., "method": "POST", "url": self.endpoint,
               "body": {"model": ..., "messages": [...], ...}}
     - Output: {"id": ..., "custom_id": ..., "response": {"status_code": 200,
               "body": {"choices": [...], "usage": {...}}}, "error": null}
@@ -325,9 +326,10 @@ class OpenAIMessageConverter(BatchMessageConverter):
     Structured output uses native response_format with json_schema.
     """
 
-    def __init__(self, max_tokens: int | None = None, model: str | None = None):
+    def __init__(self, max_tokens: int | None = None, model: str | None = None, endpoint: str = "/v1/chat/completions"):
         self.max_tokens = max_tokens
         self.model = model
+        self.endpoint = endpoint
 
     def build_request(self, request: BatchRequest) -> dict[str, Any]:
         """Build an OpenAI batch request entry.
@@ -358,7 +360,7 @@ class OpenAIMessageConverter(BatchMessageConverter):
         return {
             "custom_id": request.custom_id,
             "method": "POST",
-            "url": "/v1/chat/completions",
+            "url": self.endpoint,
             "body": body,
         }
 
@@ -1642,7 +1644,7 @@ class OpenAIBatchJobManager(BaseModel):
         Returns:
             JSONL string ready for upload
         """
-        converter = OpenAIMessageConverter(max_tokens=max_tokens, model=model)
+        converter = OpenAIMessageConverter(max_tokens=max_tokens, model=model, endpoint=self.endpoint)
         lines = [json.dumps(converter.build_request(request)) for request in requests]
         return "\n".join(lines)
 
