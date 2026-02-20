@@ -1,17 +1,9 @@
-"""Test that _parse_prompty() raises ProcessingError when templates contain ambiguous --- markers.
+"""Test that _parse_prompty() allows horizontal rules (---) in template bodies.
 
-This tests the fail-fast principle: Templates with horizontal rules (---) in the body
-that could be misinterpreted as Prompty frontmatter delimiters should raise
-ProcessingError instead of silently stripping content or producing malformed output.
+Templates with horizontal rules (---) in the body should be parsed correctly,
+treating the --- as part of the body content unless it is a valid frontmatter delimiter.
 
-The bug: _parse_prompty() uses a regex pattern that matches ANY occurrence of
-`---` in the template, even when those markers are part of the body content
-rather than frontmatter delimiters.
-
-Expected behavior:
-- Templates with --- pairs in the body → ProcessingError (ambiguous format)
-- Templates with valid frontmatter only → parse correctly
-- Templates with no frontmatter → return as-is
+Previously, this raised ProcessingError due to ambiguity, but we now allow it.
 """
 
 import pytest
@@ -20,8 +12,8 @@ from buttermilk._core.exceptions import ProcessingError
 from buttermilk.utils.templating import _parse_prompty
 
 
-def test_parse_prompty_raises_on_horizontal_rule_in_body_no_frontmatter():
-    """Test that templates with --- in body (no frontmatter) raise ProcessingError.
+def test_parse_prompty_allows_horizontal_rule_in_body_no_frontmatter():
+    """Test that templates with --- in body (no frontmatter) are returned as-is.
 
     Template format:
     ```
@@ -30,8 +22,7 @@ def test_parse_prompty_raises_on_horizontal_rule_in_body_no_frontmatter():
     user: What is this?
     ```
 
-    The --- here is a horizontal rule in the body, NOT a frontmatter delimiter.
-    _parse_prompty() should detect this ambiguity and raise ProcessingError.
+    The --- here is a horizontal rule in the body.
     """
     template_with_horizontal_rule = """system: You are a helpful assistant.
 
@@ -39,17 +30,12 @@ def test_parse_prompty_raises_on_horizontal_rule_in_body_no_frontmatter():
 
 user: What is the meaning of this horizontal rule?"""
 
-    # This should raise ProcessingError because --- appears in body
-    # without proper frontmatter structure
-    with pytest.raises(
-        ProcessingError,
-        match="horizontal rule|ambiguous|frontmatter|--- marker",
-    ):
-        _parse_prompty(template_with_horizontal_rule)
+    result = _parse_prompty(template_with_horizontal_rule)
+    assert result == template_with_horizontal_rule
 
 
-def test_parse_prompty_raises_on_horizontal_rule_after_valid_frontmatter():
-    """Test that templates with valid frontmatter AND --- in body raise ProcessingError.
+def test_parse_prompty_allows_horizontal_rule_after_valid_frontmatter():
+    """Test that templates with valid frontmatter AND --- in body work correctly.
 
     Template format:
     ```
@@ -63,7 +49,7 @@ def test_parse_prompty_raises_on_horizontal_rule_after_valid_frontmatter():
 
     The first --- pair is valid frontmatter.
     The third --- is a horizontal rule in the body content.
-    This ambiguous structure should raise ProcessingError.
+    This should be parsed, returning the body with the --- intact.
     """
     template_with_frontmatter_and_horizontal_rule = """---
 name: test_template
@@ -75,13 +61,14 @@ system: You are a helpful assistant.
 
 user: What is the meaning of this horizontal rule?"""
 
-    # This should raise ProcessingError because there's a second --- pair
-    # in the body content after the frontmatter
-    with pytest.raises(
-        ProcessingError,
-        match="horizontal rule|ambiguous|frontmatter|--- marker",
-    ):
-        _parse_prompty(template_with_frontmatter_and_horizontal_rule)
+    expected_body = """system: You are a helpful assistant.
+
+---
+
+user: What is the meaning of this horizontal rule?"""
+
+    result = _parse_prompty(template_with_frontmatter_and_horizontal_rule)
+    assert result == expected_body
 
 
 def test_parse_prompty_succeeds_with_valid_frontmatter_only():
@@ -122,8 +109,8 @@ user: Hello!"""
     assert result == template_without_frontmatter
 
 
-def test_parse_prompty_multiple_horizontal_rules_in_body():
-    """Test that multiple --- markers in body content raise ProcessingError.
+def test_parse_prompty_allows_multiple_horizontal_rules_in_body():
+    """Test that multiple --- markers in body content are allowed.
 
     Template with multiple horizontal rules for visual separation:
     ```
@@ -144,10 +131,5 @@ user: First question
 
 user: Second question"""
 
-    # Multiple --- markers create extreme ambiguity
-    # This should definitely raise ProcessingError
-    with pytest.raises(
-        ProcessingError,
-        match="horizontal rule|ambiguous|frontmatter|--- marker",
-    ):
-        _parse_prompty(template_with_multiple_horizontal_rules)
+    result = _parse_prompty(template_with_multiple_horizontal_rules)
+    assert result == template_with_multiple_horizontal_rules

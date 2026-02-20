@@ -368,10 +368,6 @@ def _parse_prompty(string_template: str) -> str:
         str: The main content of the Prompty template (after the frontmatter),
              or the original string if no frontmatter is found.
 
-    Raises:
-        ProcessingError: If template contains ambiguous --- horizontal rule markers
-                        in the body content that could be confused with frontmatter.
-
     """
     # Horizontal rule pattern: --- at start of line (with optional trailing whitespace)
     horizontal_rule_pattern = r"^-{3,}\s*$"
@@ -393,24 +389,9 @@ def _parse_prompty(string_template: str) -> str:
 
         body_content = match.group(2)
 
-        # Check body for additional horizontal rules
-        if re.search(horizontal_rule_pattern, body_content, re.MULTILINE):
-            raise ProcessingError(
-                "Template contains ambiguous --- horizontal rule markers in body content "
-                "after frontmatter. These could be confused with Prompty frontmatter delimiters. "
-                "Please remove horizontal rules or use alternative formatting."
-            )
-
         return body_content.strip()
 
     else:
-        # No frontmatter - check entire template for horizontal rules
-        if re.search(horizontal_rule_pattern, string_template, re.MULTILINE):
-            raise ProcessingError(
-                "Template contains ambiguous --- horizontal rule markers in body content. "
-                "These could be confused with Prompty frontmatter delimiters. "
-                "Please remove horizontal rules or use alternative formatting."
-            )
         return string_template
 
 
