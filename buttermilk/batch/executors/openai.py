@@ -197,6 +197,7 @@ class OpenAIBatchExecutor(BatchExecutor):
                 # requires a client in init. We'll use a mock-like client
                 # just for manifest loading.
                 from buttermilk._core.vertex_batch import OpenAIBatchJobManager
+
                 manager = OpenAIBatchJobManager(client=object(), endpoint="")
 
             manifest = manager._load_manifest(job_id)
