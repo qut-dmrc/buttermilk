@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from abc import ABC, abstractmethod
 from typing import Any
 
 from buttermilk.batch.types import BatchRequest
+
 
 # =============================================================================
 # Message Format Converters

@@ -637,7 +637,7 @@ class OpenAIBatchJobManager(BaseModel):
             "total_cost_usd": total_cost_usd,
         }
 
-        logger.info(f"Processed OpenAI batch results for job {job_id}. Total cost: {total_cost_usd:.4f} USD")
+        logger.info(f"Processed OpenAI batch results for job {job_id}. Total cost: ")
 
         return {
             "summary": summary,
