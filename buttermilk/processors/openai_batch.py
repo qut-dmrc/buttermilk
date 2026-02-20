@@ -318,6 +318,17 @@ class OpenAIBatchProcessor(BatchProcessorCore):
 
             results = manager.download_results(openai_batch_id, requests)
 
+            # Calculate costs for each result (download_results returns raw results without cost)
+            from buttermilk.utils.pricing import calculate_token_cost
+
+            for result in results:
+                if result.usage:
+                    _, _, cost = calculate_token_cost(
+                        model=self.model,
+                        usage_dict=result.usage,
+                    )
+                    result.cost_usd = cost
+
             output_records = await self._map_results_to_records(
                 records=records,
                 results=results,
@@ -358,8 +369,6 @@ class OpenAIBatchProcessor(BatchProcessorCore):
 
     def _handle_dry_run(self, records: list[BaseRecord], requests: list[Any]) -> list[BaseRecord]:
         """Handle dry-run mode."""
-        import uuid
-
         from buttermilk.utils.save import upload_text
 
         manager = self._ensure_manager()
