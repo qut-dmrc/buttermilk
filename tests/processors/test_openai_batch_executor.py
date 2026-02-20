@@ -505,3 +505,96 @@ class TestBatchLLMProcessor:
             assert result.status == BatchJobStatus.PENDING
             assert result.job_id == "batch_20260219_xyz"
             mock_prepare.assert_called_once()
+
+
+# =============================================================================
+# OpenAIBatchProcessor Tests
+# =============================================================================
+
+
+class TestOpenAIBatchProcessor:
+    """Tests for OpenAIBatchProcessor."""
+
+    @pytest.mark.anyio
+    async def test_process_batch_success(self):
+        """OpenAIBatchProcessor._process_batch() should submit, wait, and return records."""
+        from buttermilk._core.vertex_batch import BatchResult
+        from buttermilk.processors.vertex_batch import OpenAIBatchProcessor
+
+        processor = OpenAIBatchProcessor(
+            model="gpt-chat",
+            template="test_template",
+            wait_for_completion=True,
+        )
+
+        mock_record = MagicMock()
+        mock_record.record_id = "rec_001"
+        mock_record.metadata = {}
+        mock_record.model_copy.return_value = mock_record
+
+        mock_result = BatchResult(
+            custom_id="test_001",
+            record_id="rec_001",
+            response="LLM Response",
+            usage={"total_tokens": 10},
+        )
+
+        mock_manager = MagicMock()
+        mock_manager.submit_batch = AsyncMock(
+            return_value={
+                "openai_batch_id": "batch_abc123",
+                "job_id": "batch_20260219_xyz",
+            }
+        )
+        mock_manager.wait_for_completion = AsyncMock()
+        mock_manager.fetch_results.return_value = {"batch_results": [mock_result]}
+
+        with (
+            patch.object(OpenAIBatchProcessor, "_ensure_manager", return_value=mock_manager),
+            patch.object(OpenAIBatchProcessor, "prepare_batch_requests", return_value=[MagicMock()]),
+            patch.object(OpenAIBatchProcessor, "_get_resolved_max_tokens", return_value=4096),
+            patch.object(OpenAIBatchProcessor, "_map_results_to_records", return_value=[mock_record]) as mock_map,
+        ):
+            results = await processor._process_batch([mock_record])
+
+            assert results == [mock_record]
+            mock_manager.submit_batch.assert_called_once()
+            mock_manager.wait_for_completion.assert_called_once_with("batch_abc123")
+            mock_manager.fetch_results.assert_called_once_with("batch_20260219_xyz")
+            mock_map.assert_called_once()
+
+    @pytest.mark.anyio
+    async def test_process_batch_non_blocking(self):
+        """OpenAIBatchProcessor should return pending records when wait_for_completion=False."""
+        from buttermilk.processors.vertex_batch import OpenAIBatchProcessor
+
+        processor = OpenAIBatchProcessor(
+            model="gpt-chat",
+            template="test_template",
+            wait_for_completion=False,
+        )
+
+        mock_record = MagicMock()
+        mock_record.record_id = "rec_001"
+        mock_record.metadata = {}
+
+        mock_manager = MagicMock()
+        mock_manager.submit_batch = AsyncMock(
+            return_value={
+                "openai_batch_id": "batch_abc123",
+                "job_id": "batch_20260219_xyz",
+            }
+        )
+
+        with (
+            patch.object(OpenAIBatchProcessor, "_ensure_manager", return_value=mock_manager),
+            patch.object(OpenAIBatchProcessor, "prepare_batch_requests", return_value=[MagicMock()]),
+            patch.object(OpenAIBatchProcessor, "_get_resolved_max_tokens", return_value=4096),
+            patch.object(OpenAIBatchProcessor, "_create_pending_records", return_value=[mock_record]) as mock_pending,
+        ):
+            results = await processor._process_batch([mock_record])
+
+            assert results == [mock_record]
+            mock_manager.submit_batch.assert_called_once()
+            mock_manager.wait_for_completion.assert_not_called()
+            mock_pending.assert_called_once_with([mock_record], "batch_20260219_xyz")

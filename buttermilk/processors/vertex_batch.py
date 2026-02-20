@@ -471,6 +471,120 @@ class BatchLLMProcessor(BatchProcessorCore):
 
 
 # =============================================================================
+# OpenAIBatchProcessor -- OpenAI/Azure-specific subclass
+# =============================================================================
+
+
+class OpenAIBatchProcessor(BatchLLMProcessor):
+    """Batch processor using OpenAI/Azure Batch API.
+
+    Extends BatchLLMProcessor with OpenAI-specific batch submission,
+    polling, and result mapping. Supports both direct OpenAI and Azure.
+
+    Usage:
+        ```yaml
+        processors:
+          - _target_: buttermilk.processors.BatchAccumulator
+            batch_size: 50
+            batch_processors:
+              - _target_: buttermilk.processors.OpenAIBatchProcessor
+                model: gpt-4o
+                template: judge_template
+        ```
+    """
+
+    # Internal components
+    _manager: Any = PrivateAttr(default=None)
+
+    def _ensure_manager(self) -> Any:
+        """Lazily initialize the OpenAIBatchJobManager via buttermilk infrastructure."""
+        if self._manager is None:
+            from buttermilk._core.vertex_batch import OpenAIBatchJobManager as _OpenAIBatchJobManager
+            from buttermilk.batch.executors.openai import _create_openai_batch_client
+
+            # Create client from the buttermilk model registry
+            client, endpoint = _create_openai_batch_client(self.model)
+
+            self._manager = _OpenAIBatchJobManager(
+                client=client,
+                endpoint=endpoint,
+                poll_interval=self.poll_interval,
+                max_wait_hours=self.max_wait_hours,
+            )
+        return self._manager
+
+    async def _process_batch(
+        self,
+        records: list[BaseRecord],
+    ) -> list[BaseRecord]:
+        """Process a batch of records through OpenAI/Azure Batch API.
+
+        Args:
+            records: List of BaseRecord objects to process
+
+        Returns:
+            List of processed BaseRecord objects with LLM outputs
+        """
+        if not records:
+            return []
+
+        start_time = time.time()
+
+        # Prepare batch requests
+        requests = self.prepare_batch_requests(records)
+
+        manager = self._ensure_manager()
+
+        logger.info(
+            f"Submitting OpenAI batch job with {len(requests)} requests",
+            model=self.model,
+            wait_for_completion=self.wait_for_completion,
+        )
+
+        # Submit the batch job
+        submit_result = await manager.submit_batch(
+            model=self.model,
+            requests=requests,
+            max_tokens=self._get_resolved_max_tokens(),
+        )
+
+        batch_job_id = submit_result["job_id"]
+        openai_batch_id = submit_result["openai_batch_id"]
+
+        if not self.wait_for_completion:
+            # Non-blocking mode: return records with job_id in metadata
+            return self._create_pending_records(records, batch_job_id)
+
+        # Blocking mode: wait for completion and parse results
+        try:
+            await manager.wait_for_completion(openai_batch_id)
+        except (TimeoutError, RuntimeError) as e:
+            logger.error(f"OpenAI batch job failed: {e}")
+            return self._create_error_records(records, str(e), batch_job_id, start_time)
+
+        # Download results and process (calculates cost, saves combined log)
+        processed = manager.fetch_results(batch_job_id)
+        results = processed["batch_results"]
+
+        # Map results back to records
+        output_records = await self._map_results_to_records(
+            records=records,
+            results=results,
+            batch_job_id=batch_job_id,
+            start_time=start_time,
+        )
+
+        logger.info(
+            f"OpenAIBatchProcessor processed {len(records)} records via batch API",
+            model=self.model,
+            batch_job_id=batch_job_id,
+            duration_ms=(time.time() - start_time) * 1000,
+        )
+
+        return output_records
+
+
+# =============================================================================
 # VertexBatchProcessor -- Vertex AI-specific subclass
 # =============================================================================
 
