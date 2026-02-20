@@ -22,8 +22,8 @@ from buttermilk import logger
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.processor_core import BatchProcessorCore
 from buttermilk._core.types import BaseRecord
-from buttermilk.batch.types import BatchRequest, BatchResult
 from buttermilk.batch.managers.openai import OpenAIBatchJobManager
+from buttermilk.batch.types import BatchRequest, BatchResult
 from buttermilk.utils.import_utils import load_class
 from buttermilk.utils.templating import make_messages, render_template
 
