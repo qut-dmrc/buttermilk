@@ -14,7 +14,9 @@ from buttermilk._core.config_bootstrap import resolve_config_dir
 class TestInitConfigDirResolution:
     """Test that init() correctly resolves config_dir parameter."""
 
-    def test_resolve_config_dir_with_relative_path_from_cwd(self, tmp_path, monkeypatch):
+    def test_resolve_config_dir_with_relative_path_from_cwd(
+        self, tmp_path, monkeypatch
+    ):
         """Test that relative config_dir is resolved against CWD, not package dir."""
         # Arrange: Create a test project structure
         project_dir = tmp_path / "myproject"
@@ -93,7 +95,9 @@ class TestInitConfigDirResolution:
         assert Path(result).is_absolute()
         assert result == str(conf_dir.resolve())
 
-    def test_resolve_config_dir_does_not_use_package_dir_for_relative_paths(self, tmp_path, monkeypatch):
+    def test_resolve_config_dir_does_not_use_package_dir_for_relative_paths(
+        self, tmp_path, monkeypatch
+    ):
         """Test that relative paths are NOT resolved relative to the package directory.
 
         This is the core bug we're fixing: when a user specifies config_dir="conf",
@@ -117,7 +121,9 @@ class TestInitConfigDirResolution:
 
         # Also verify it's not using the package directory
         package_dir = Path(__file__).parent.parent / "buttermilk" / "conf"
-        assert result != str(package_dir.resolve()), f"config_dir should not resolve to package directory {package_dir}"
+        assert result != str(package_dir.resolve()), (
+            f"config_dir should not resolve to package directory {package_dir}"
+        )
 
 
 if __name__ == "__main__":

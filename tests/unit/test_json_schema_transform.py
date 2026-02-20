@@ -1,5 +1,7 @@
 """Unit tests for JSON schema transformation utilities."""
 
+import pytest
+
 from buttermilk._core.json_schema import make_all_properties_required, resolve_json_schema_refs
 
 

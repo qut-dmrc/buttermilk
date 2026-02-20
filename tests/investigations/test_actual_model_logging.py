@@ -15,8 +15,9 @@ import pytest
 from buttermilk._core.llm_core import LLMCore
 from buttermilk._core.types import BaseRecord
 
-pytestmark = pytest.mark.slow
+import pytest
 
+pytestmark = pytest.mark.slow
 
 @pytest.mark.anyio
 async def test_actual_model_logging():
@@ -44,7 +45,9 @@ async def test_actual_model_logging():
             print("✓ Processing completed successfully")
             model_name = result.metadata.get("test", {}).get("model")
             print(f"  Model name logged: {model_name}")
-            print(f"  (Should be actual model from API, or config name '{llm_core.model}' as fallback)")
+            print(
+                f"  (Should be actual model from API, or config name '{llm_core.model}' as fallback)"
+            )
 
             # Verify model field exists
             assert "model" in result.metadata.get("test", {}), "Missing 'model' field"

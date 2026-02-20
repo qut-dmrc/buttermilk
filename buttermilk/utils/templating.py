@@ -60,14 +60,18 @@ def _get_template_search_paths() -> list[str]:
         path_str = str(path)  # Ensure it's a string
         if path_str not in final_paths:
             final_paths.append(path_str)
-            final_paths.extend([str(p) for p in Path(path_str).rglob("*") if p.is_dir()])
+            final_paths.extend(
+                [str(p) for p in Path(path_str).rglob("*") if p.is_dir()]
+            )
 
     return final_paths
 
 
 # Session-scoped cache for Jinja2 environments
 # Uses WeakValueDictionary so environments are garbage collected when session ends
-_session_jinja_envs: WeakValueDictionary[str, sandbox.SandboxedEnvironment] = WeakValueDictionary()
+_session_jinja_envs: WeakValueDictionary[str, sandbox.SandboxedEnvironment] = (
+    WeakValueDictionary()
+)
 
 
 def _get_cached_jinja_environment(
@@ -147,7 +151,9 @@ class KeyValueCollector(BaseModel):
 
     """
 
-    _data: dict[str, list[Any]] = PrivateAttr(default_factory=dict)  # Values are always lists
+    _data: dict[str, list[Any]] = PrivateAttr(
+        default_factory=dict
+    )  # Values are always lists
 
     def update(self, incoming: dict[str, Any]) -> None:
         """Updates the collector with key-value pairs from an incoming dictionary.
@@ -178,7 +184,9 @@ class KeyValueCollector(BaseModel):
             return
 
         # Ensure that value is treated as a list of items to be added
-        items_to_add = value if isinstance(value, list) and not isinstance(value, str) else [value]
+        items_to_add = (
+            value if isinstance(value, list) and not isinstance(value, str) else [value]
+        )
 
         if key in self._data:
             self._data[key].extend(items_to_add)
@@ -286,7 +294,9 @@ def calculate_template_hash(template_name: str) -> tuple[str, str]:
             break
 
     if template_path is None:
-        raise FatalError(f"Template file '{template_filename}' not found in {search_paths} or their subdirectories.")
+        raise FatalError(
+            f"Template file '{template_filename}' not found in {search_paths} or their subdirectories."
+        )
 
     try:
         # Calculate hash using unified hashing module
@@ -295,10 +305,14 @@ def calculate_template_hash(template_name: str) -> tuple[str, str]:
         hash_value = compute_template_hash_from_file(template_path)
         return hash_value, str(template_path)
     except Exception as e:
-        raise FatalError(f"Failed to read template file '{template_path}' for hash calculation: {e!s}") from e
+        raise FatalError(
+            f"Failed to read template file '{template_path}' for hash calculation: {e!s}"
+        ) from e
 
 
-def get_templates(pattern: str = "", parent: str = "", extension: str = ".jinja2") -> list[tuple[str, str]]:  # Added default extension
+def get_templates(
+    pattern: str = "", parent: str = "", extension: str = ".jinja2"
+) -> list[tuple[str, str]]:  # Added default extension
     """Lists template files and their content from the configured `TEMPLATES_PATH`.
 
     Args:
@@ -327,10 +341,14 @@ def get_templates(pattern: str = "", parent: str = "", extension: str = ".jinja2
         extension=effective_extension,
     )
     # Strip the .jinja2 (or any extension) part for the template name
-    return [(Path(tpl_path).stem, content) for tpl_path, content in templates_with_content]
+    return [
+        (Path(tpl_path).stem, content) for tpl_path, content in templates_with_content
+    ]
 
 
-def get_template_names(pattern: str = "", parent: str = "", extension: str = "jinja2") -> list[str]:
+def get_template_names(
+    pattern: str = "", parent: str = "", extension: str = "jinja2"
+) -> list[str]:
     """Lists the names of template files found in the configured `TEMPLATES_PATH`.
 
     Args:
@@ -388,7 +406,8 @@ def _parse_prompty(string_template: str) -> str:
 
         if not match:
             raise ProcessingError(
-                "Template starts with --- but does not have valid frontmatter structure. Expected: ---\\nfrontmatter\\n---\\ncontent"
+                "Template starts with --- but does not have valid frontmatter structure. "
+                "Expected: ---\\nfrontmatter\\n---\\ncontent"
             )
 
         body_content = match.group(2)
@@ -483,7 +502,9 @@ def load_template(
             f"Failed to load Jinja2 template '{template_filename}': {err!s}",
             exc_info=True,
         )
-        raise FatalError(f"Template '{template}' (file: '{template_filename}') could not be loaded.") from err
+        raise FatalError(
+            f"Template '{template}' (file: '{template_filename}') could not be loaded."
+        ) from err
 
     # Exclude 'record' and 'context' from Jinja2 rendering - these are handled
     # specially by make_messages() as placeholder roles, not template variables.
@@ -499,14 +520,18 @@ def load_template(
         template_hash, _ = calculate_template_hash(template)
     except FatalError:
         # If hash calculation fails, re-raise as the template loading should have also failed
-        logger.warning(f"Could not calculate hash for template '{template}' - this may indicate a template loading issue")
+        logger.warning(
+            f"Could not calculate hash for template '{template}' - this may indicate a template loading issue"
+        )
         raise
 
     # Check for unfilled parameters if requested (fail-fast)
     # Exclude placeholder keys (record, context) - these are handled by make_messages, not Jinja2
     unfilled_vars = set(collected_undefined_vars) - placeholder_keys
     if effective_vars.get("fail_on_unfilled_parameters") and unfilled_vars:
-        raise FatalError(f"Template '{template}' has unfilled parameters: {', '.join(sorted(unfilled_vars))}")
+        raise FatalError(
+            f"Template '{template}' has unfilled parameters: {', '.join(sorted(unfilled_vars))}"
+        )
 
     return rendered_string, unfilled_vars, template_hash
 
@@ -585,7 +610,9 @@ def render_template(
     # Fail-fast on unfilled variables if requested
     # Use FatalError for consistency with load_template (config/setup error, not runtime)
     if unfilled_vars and fail_on_unfilled:
-        raise FatalError(f"Template '{template}' has unfilled parameters: {', '.join(sorted(unfilled_vars))}")
+        raise FatalError(
+            f"Template '{template}' has unfilled parameters: {', '.join(sorted(unfilled_vars))}"
+        )
 
     return TemplateRenderResult(
         rendered=rendered_str,
@@ -631,12 +658,16 @@ def _deduplicate_messages(messages: list[LLMMessage]) -> list[LLMMessage]:
             )
 
     if len(deduplicated) < len(messages):
-        logger.info("Removed duplicate messages", count=len(messages) - len(deduplicated))
+        logger.info(
+            "Removed duplicate messages", count=len(messages) - len(deduplicated)
+        )
 
     return deduplicated
 
 
-def _parse_chat_messages(chat_str: str, valid_roles: list[str] | None = None) -> list[dict[str, str]]:
+def _parse_chat_messages(
+    chat_str: str, valid_roles: list[str] | None = None
+) -> list[dict[str, str]]:
     """Simple chat message parser for Prompty-style format.
 
     Parses chat strings like:
@@ -673,7 +704,9 @@ def _parse_chat_messages(chat_str: str, valid_roles: list[str] | None = None) ->
 
         # Try matching with optional # prefix
         for role in valid_roles:
-            if stripped.lower().startswith(f"# {role}:") or stripped.lower().startswith(f"{role}:"):
+            if stripped.lower().startswith(f"# {role}:") or stripped.lower().startswith(
+                f"{role}:"
+            ):
                 role_match = role
                 # Extract content after the role marker
                 if stripped.lower().startswith(f"# {role}:"):
@@ -702,7 +735,9 @@ def _parse_chat_messages(chat_str: str, valid_roles: list[str] | None = None) ->
 
     # Don't forget the last message
     if current_role is not None:
-        messages.append({"role": current_role, "content": "\n".join(current_content).strip()})
+        messages.append(
+            {"role": current_role, "content": "\n".join(current_content).strip()}
+        )
 
     return messages
 
@@ -762,7 +797,9 @@ def make_messages(  # noqa: PLR0912
         # Parse main content from Prompty string (strips frontmatter)
         prompty_content_str = _parse_prompty(local_template)
     except Exception as e:  # Broad catch if _parse_prompty itself fails
-        err_msg = f"Unable to decode template string expecting Prompty format. Error: {e!s}"
+        err_msg = (
+            f"Unable to decode template string expecting Prompty format. Error: {e!s}"
+        )
         raise ProcessingError(err_msg) from e
 
     # Parse chat messages using our own parser (no promptflow dependency)
@@ -786,16 +823,22 @@ def make_messages(  # noqa: PLR0912
         # Normalize content for placeholder matching: lowercase, alphanumeric only
         normalized_placeholder_key = re.sub(r"[^\w\d_]+", "", content_str).lower()
 
-        if not content_str and role_lower != "placeholder":  # Skip empty non-placeholder messages
+        if (
+            not content_str and role_lower != "placeholder"
+        ):  # Skip empty non-placeholder messages
             logger.debug("Skipping message with empty content", role=role_lower)
             continue
 
         if role_lower in ("developer", "system"):
             output_messages.append(SystemMessage(content=content_str))
         elif role_lower in ("user", "human"):
-            output_messages.append(UserMessage(content=content_str, source="template_user"))  # Add source
+            output_messages.append(
+                UserMessage(content=content_str, source="template_user")
+            )  # Add source
         elif role_lower == "assistant":
-            output_messages.append(AssistantMessage(content=content_str, source="template_assistant"))  # Add source
+            output_messages.append(
+                AssistantMessage(content=content_str, source="template_assistant")
+            )  # Add source
         elif role_lower == "placeholder":
             if normalized_placeholder_key == "context" and context:
                 output_messages.extend(context)
@@ -804,13 +847,19 @@ def make_messages(  # noqa: PLR0912
             elif normalized_placeholder_key == "record" and record:
                 output_messages.append(record.as_message())
                 processed_placeholders.add("record")
-            elif content_str.strip():  # Non-empty placeholder content that's not context/record
+            elif (
+                content_str.strip()
+            ):  # Non-empty placeholder content that's not context/record
                 # Treat as user message - this handles templates where "placeholder:"
                 # is used as a marker with rendered Jinja variables
-                output_messages.append(UserMessage(content=content_str, source="template_placeholder"))
+                output_messages.append(
+                    UserMessage(content=content_str, source="template_placeholder")
+                )
             # else: empty placeholder, skip it
         else:  # Unrecognized role
-            raise ProcessingError(f"Unrecognized role '{msg_dict.get('role')}' in Prompty template message.")
+            raise ProcessingError(
+                f"Unrecognized role '{msg_dict.get('role')}' in Prompty template message."
+            )
 
     # Fail-fast: Empty messages list indicates template format issue
     # This catches missing role markers (system:, user:, etc.) early

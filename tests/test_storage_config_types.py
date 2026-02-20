@@ -105,7 +105,9 @@ class TestTypeSpecificStorageConfigs:
 
     def test_huggingface_config_has_relevant_fields_only(self):
         """HuggingFace configs should only have HF-specific fields."""
-        config = HuggingFaceStorageConfig(type="huggingface", dataset_id="imdb", split="train")
+        config = HuggingFaceStorageConfig(
+            type="huggingface", dataset_id="imdb", split="train"
+        )
 
         # Should have HuggingFace-specific fields
         assert hasattr(config, "dataset_id")
@@ -193,7 +195,9 @@ class TestTypeSpecificStorageConfigs:
 
         for config in configs:
             for field in common_fields:
-                assert hasattr(config, field), f"{config.__class__.__name__} missing common field: {field}"
+                assert hasattr(config, field), (
+                    f"{config.__class__.__name__} missing common field: {field}"
+                )
 
     def test_type_validation_enforced(self):
         """Type fields should enforce allowed values."""

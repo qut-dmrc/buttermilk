@@ -100,7 +100,9 @@ class FileStorage(Storage):
                         record = self._dict_to_record(data, line_num)
                         records.append(record)
                     except Exception as e:
-                        logger.warning(f"Error processing JSON array item {line_num}: {e}")
+                        logger.warning(
+                            f"Error processing JSON array item {line_num}: {e}"
+                        )
             else:
                 # Handle JSONL format (one JSON object per line)
                 for line_num, line_str in enumerate(file_obj, 1):
@@ -164,7 +166,9 @@ class FileStorage(Storage):
                 try:
                     data.append(self._record_to_dict(record))
                 except Exception as e:
-                    logger.warning(f"Failed to convert record at index {idx} to dict: {e}. Writing raw JSON if possible.")
+                    logger.warning(
+                        f"Failed to convert record at index {idx} to dict: {e}. Writing raw JSON if possible."
+                    )
                     try:
                         # Best-effort fallback with scrub_serializable
                         if hasattr(record, "model_dump"):
@@ -174,7 +178,9 @@ class FileStorage(Storage):
                         else:
                             data.append({"record": str(record)})
                     except Exception as e2:
-                        logger.error(f"Could not serialize record at index {idx}: {e2}. Skipping.")
+                        logger.error(
+                            f"Could not serialize record at index {idx}: {e2}. Skipping."
+                        )
                         continue
 
             file_format = self._get_format()
@@ -302,7 +308,9 @@ class FileStorage(Storage):
             # Apply column mapping if configured
             if self.config.columns:
                 mapped_data = {}
-                consumed_source_fields = set()  # Track which source fields should be removed
+                consumed_source_fields = (
+                    set()
+                )  # Track which source fields should be removed
 
                 # Collect all source fields that will be mapped
                 all_source_fields = set()
@@ -362,7 +370,9 @@ class FileStorage(Storage):
 
                 # Get all direct mapping source fields (not nested metadata)
                 direct_source_fields = [
-                    old_key for new_key, old_key in self.config.columns.items() if new_key != "metadata" and isinstance(old_key, str)
+                    old_key
+                    for new_key, old_key in self.config.columns.items()
+                    if new_key != "metadata" and isinstance(old_key, str)
                 ]
 
                 # Get all metadata source fields
@@ -375,11 +385,17 @@ class FileStorage(Storage):
                     should_remove = False
 
                     # Remove if it's a direct mapping source field that's being renamed
-                    if field in direct_source_fields and field not in self.config.columns.keys():
+                    if (
+                        field in direct_source_fields
+                        and field not in self.config.columns.keys()
+                    ):
                         should_remove = True
 
                     # Remove if it's only used for metadata mapping and not a target field
-                    if field in metadata_source_fields and field not in self.config.columns.keys():
+                    if (
+                        field in metadata_source_fields
+                        and field not in self.config.columns.keys()
+                    ):
                         should_remove = True
 
                     if should_remove:
@@ -444,7 +460,9 @@ class FileStorage(Storage):
                 return self._create_record(**data)
             except Exception as e:
                 # If Record creation fails, create minimal valid record
-                logger.warning(f"Failed to create Record from data at index {index}: {e}")
+                logger.warning(
+                    f"Failed to create Record from data at index {index}: {e}"
+                )
                 return Record(
                     record_id=str(data.get("record_id", f"error_{index}")),
                     dataset_name=str(data.get("dataset_name", "default")),
@@ -458,7 +476,9 @@ class FileStorage(Storage):
             logger.warning(f"Error converting data to Record at index {index}: {e}")
             # Create a safer error record with string representation of data
             try:
-                safe_data = str(data)[:1000]  # Limit length to avoid huge error messages
+                safe_data = str(data)[
+                    :1000
+                ]  # Limit length to avoid huge error messages
                 safe_metadata = {"parse_error": str(e)}
                 # Don't include original_data as it might not be serializable
                 return Record(

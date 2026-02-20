@@ -1,4 +1,6 @@
 """Tests for trace analysis models."""
+import pytest
+from datetime import datetime
 
 from buttermilk.debug.trace_models import TraceSummary
 

@@ -67,7 +67,9 @@ def test_calculate_template_hash_nonexistent():
     """Test that calculate_template_hash raises error for non-existent template."""
     from buttermilk._core.exceptions import FatalError
 
-    with pytest.raises(FatalError, match="Template file 'nonexistent.jinja2' not found"):
+    with pytest.raises(
+        FatalError, match="Template file 'nonexistent.jinja2' not found"
+    ):
         calculate_template_hash("nonexistent")
 
 
@@ -152,7 +154,9 @@ def test_parse_with_surrounding_text():
     assert result["number"] == 42
 
 
-@pytest.mark.skipif(not CHATPARSER_AVAILABLE, reason="ChatParser not available in current codebase")
+@pytest.mark.skipif(
+    not CHATPARSER_AVAILABLE, reason="ChatParser not available in current codebase"
+)
 def test_parse_invalid_json():
     parser = ChatParser(on_error="ignore")
     invalid_json = "{ This is not valid JSON }"
@@ -165,7 +169,9 @@ def test_parse_invalid_json():
     assert result["error"] == "Unable to decode JSON in result"
 
 
-@pytest.mark.skipif(not CHATPARSER_AVAILABLE, reason="ChatParser not available in current codebase")
+@pytest.mark.skipif(
+    not CHATPARSER_AVAILABLE, reason="ChatParser not available in current codebase"
+)
 def test_parse_raises_error():
     parser = ChatParser(on_error="raise")
     invalid_json = "{ This is not valid JSON }"

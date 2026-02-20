@@ -59,7 +59,9 @@ def test_run_flow_html(client, flow_request_data: dict[str, Any]):
     response = client.post("/html/flow/test_flow", json=flow_request_data)
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
-    assert "Sample text" in response.text  # Check if the response contains the expected text
+    assert (
+        "Sample text" in response.text
+    )  # Check if the response contains the expected text
 
 
 def test_get_runs(client):

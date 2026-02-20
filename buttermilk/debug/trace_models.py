@@ -14,10 +14,14 @@ class TraceSummary(BaseModel):
     error_count: int = Field(..., description="Number of traces with errors")
     agents: list[str] = Field(..., description="List of unique agent names")
     execution_path: list[str] = Field(..., description="Sequence of execution steps")
-    time_range: tuple[datetime, datetime] | None = Field(..., description="Start and end time of traces, if available")
+    time_range: tuple[datetime, datetime] | None = Field(
+        ..., description="Start and end time of traces, if available"
+    )
     session_id: str | None = Field(..., description="Session identifier, if available")
     by_agent: dict[str, int] = Field(..., description="Trace count by agent name")
-    by_error_status: dict[str, int] = Field(..., description="Trace count by error status")
+    by_error_status: dict[str, int] = Field(
+        ..., description="Trace count by error status"
+    )
 
 
 class ErrorContext(BaseModel):
@@ -31,7 +35,10 @@ class ErrorContext(BaseModel):
     timestamp: datetime = Field(..., description="When the error occurred")
     inputs_summary: str = Field(..., description="Summary of inputs that led to the error")
     parent_call_id: str | None = Field(None, description="Parent call ID if this was a nested call")
-    preceding_trace_ids: list[str] = Field(default_factory=list, description="Call IDs of traces that preceded this error in the execution path")
+    preceding_trace_ids: list[str] = Field(
+        default_factory=list,
+        description="Call IDs of traces that preceded this error in the execution path"
+    )
 
 
 class TimelineEvent(BaseModel):
@@ -41,7 +48,9 @@ class TimelineEvent(BaseModel):
     timestamp: datetime = Field(..., description="When the event occurred")
     agent_name: str = Field(..., description="Name of the agent")
     agent_role: str = Field(..., description="Role of the agent")
-    event_type: Literal["start", "success", "error"] = Field(..., description="Type of event")
+    event_type: Literal["start", "success", "error"] = Field(
+        ..., description="Type of event"
+    )
     duration_ms: float | None = Field(None, description="Duration in milliseconds if available")
     summary: str = Field(..., description="Brief summary of what happened")
 
@@ -51,7 +60,10 @@ class TraceFile(BaseModel):
 
     path: Path = Field(..., description="Path to the trace file")
     traces: list[Any] = Field(..., description="List of ExecutionTrace objects")
-    loaded_at: datetime = Field(default_factory=datetime.now, description="When the file was loaded")
+    loaded_at: datetime = Field(
+        default_factory=datetime.now,
+        description="When the file was loaded"
+    )
 
 
 class TraceDiff(BaseModel):
@@ -59,6 +71,15 @@ class TraceDiff(BaseModel):
 
     trace1_id: str = Field(..., description="Call ID of the first trace")
     trace2_id: str = Field(..., description="Call ID of the second trace")
-    differences: dict[str, Any] = Field(..., description="Field-level differences between traces")
-    only_in_trace1: list[str] = Field(..., description="Fields present only in trace1")
-    only_in_trace2: list[str] = Field(..., description="Fields present only in trace2")
+    differences: dict[str, Any] = Field(
+        ...,
+        description="Field-level differences between traces"
+    )
+    only_in_trace1: list[str] = Field(
+        ...,
+        description="Fields present only in trace1"
+    )
+    only_in_trace2: list[str] = Field(
+        ...,
+        description="Fields present only in trace2"
+    )

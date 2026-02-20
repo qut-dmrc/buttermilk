@@ -50,7 +50,11 @@ def test_upload_dataframe_json_success(gcs_test_path, gcs_client, real_bm):
     Validates complete round-trip: DataFrame -> GCS -> verification.
     """
     # ARRANGE: Create test DataFrame with realistic data
-    test_df = pd.DataFrame({"col1": [1, 2, 3], "col2": ["a", "b", "c"], "col3": [1.5, 2.5, 3.5]})
+    test_df = pd.DataFrame({
+        "col1": [1, 2, 3],
+        "col2": ["a", "b", "c"],
+        "col3": [1.5, 2.5, 3.5]
+    })
 
     try:
         # ACT: Upload to real GCS

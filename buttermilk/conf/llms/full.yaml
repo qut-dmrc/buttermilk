@@ -14,7 +14,6 @@ judgers:
   - deepseek-v3
   - gpt-mini
   - gpt-nano
-  - grok-fast
 
 synthesisers:
   - gemini-pro
@@ -34,8 +33,6 @@ model_parameters:
   claude-sonnet:
     temperature: 1.0
   llama-maverick:
-    temperature: 1.0
-  grok-fast:
     temperature: 1.0
   deepseek-r1:
     temperature: 1.0

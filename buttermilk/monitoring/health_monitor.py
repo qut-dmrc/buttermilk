@@ -36,7 +36,9 @@ class ComponentHealth:
     error_message: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
-    def update_health(self, status: HealthStatus, error_message: Optional[str] = None, **metadata):
+    def update_health(
+        self, status: HealthStatus, error_message: Optional[str] = None, **metadata
+    ):
         """Update component health status."""
         self.status = status
         self.last_check = datetime.now()
@@ -93,7 +95,9 @@ class HealthMonitor:
             components_by_status[health.status.value].append(
                 {
                     "name": component_name,
-                    "last_check": health.last_check.isoformat() if health.last_check else None,
+                    "last_check": health.last_check.isoformat()
+                    if health.last_check
+                    else None,
                     "error_message": health.error_message,
                 }
             )
@@ -138,7 +142,9 @@ class HealthMonitor:
 
             # Update component health
             if "system_resources" not in self.component_health:
-                self.component_health["system_resources"] = ComponentHealth(component_name="system_resources")
+                self.component_health["system_resources"] = ComponentHealth(
+                    component_name="system_resources"
+                )
 
             self.component_health["system_resources"].update_health(
                 status=status,
@@ -150,7 +156,9 @@ class HealthMonitor:
 
         except Exception as e:
             if "system_resources" not in self.component_health:
-                self.component_health["system_resources"] = ComponentHealth(component_name="system_resources")
+                self.component_health["system_resources"] = ComponentHealth(
+                    component_name="system_resources"
+                )
 
             self.component_health["system_resources"].update_health(
                 status=HealthStatus.UNKNOWN,
@@ -160,7 +168,9 @@ class HealthMonitor:
 
     def _register_basic_system_check(self):
         """Register basic system health component."""
-        self.component_health["system_resources"] = ComponentHealth(component_name="system_resources")
+        self.component_health["system_resources"] = ComponentHealth(
+            component_name="system_resources"
+        )
         # Perform initial check
         self.check_basic_system_health()
 

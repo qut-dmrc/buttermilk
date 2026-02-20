@@ -13,7 +13,9 @@ import pytest
 from buttermilk._core.vertex_batch import (
     BatchJobManager,
     BatchRequest,
+    BatchResult,
 )
+
 
 # =============================================================================
 # Sample fixtures

@@ -18,9 +18,13 @@ class RecoveryRunner(BaseModel):
 
     mode: str = Field(default="recovery", description="Runner mode")
     ui: str = Field(default="console", description="UI type")
-    backup_dir: str | None = Field(default=None, description="Directory to scan for failed uploads")
+    backup_dir: str | None = Field(
+        default=None, description="Directory to scan for failed uploads"
+    )
     schema: str | None = Field(default=None, description="Path to BigQuery schema file")
-    dataset: str | None = Field(default=None, description="BigQuery dataset ID (project.dataset.table)")
+    dataset: str | None = Field(
+        default=None, description="BigQuery dataset ID (project.dataset.table)"
+    )
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -76,18 +80,24 @@ class RecoveryRunner(BaseModel):
                     successful_recoveries += 1
 
                     # Move or delete the recovered file
-                    recovered_path = file_path.with_suffix(file_path.suffix + ".recovered")
+                    recovered_path = file_path.with_suffix(
+                        file_path.suffix + ".recovered"
+                    )
                     file_path.rename(recovered_path)
                     logger.info(f"Marked as recovered: {recovered_path}")
                 else:
-                    logger.warning(f"Recovery upload returned no result for {file_path}")
+                    logger.warning(
+                        f"Recovery upload returned no result for {file_path}"
+                    )
                     failed_recoveries += 1
 
             except Exception as e:
                 logger.error(f"Failed to recover {file_path}: {e}")
                 failed_recoveries += 1
 
-        logger.info(f"Recovery complete: {successful_recoveries} successful, {failed_recoveries} failed")
+        logger.info(
+            f"Recovery complete: {successful_recoveries} successful, {failed_recoveries} failed"
+        )
 
 
 def create_recovery_runner(**kwargs) -> RecoveryRunner:

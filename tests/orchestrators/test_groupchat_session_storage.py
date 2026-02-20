@@ -16,7 +16,9 @@ class TestAutogenOrchestratorSessionStorage:
     """Test session storage integration in AutogenOrchestrator."""
 
     @pytest.mark.anyio
-    async def test_orchestrator_calls_finalize_session_after_run_completes(self, real_bm):
+    async def test_orchestrator_calls_finalize_session_after_run_completes(
+        self, real_bm
+    ):
         """Test that AutogenOrchestrator calls SessionStorageService.finalize_session() after run completes.
 
         This test should FAIL because AutogenOrchestrator currently does not:
@@ -59,7 +61,9 @@ class TestAutogenOrchestratorSessionStorage:
             mock_termination.has_terminated = True
             mock_interrupt = Mock()
 
-            with patch.object(orchestrator, "_setup", return_value=(mock_termination, mock_interrupt)):
+            with patch.object(
+                orchestrator, "_setup", return_value=(mock_termination, mock_interrupt)
+            ):
                 # Run the orchestrator
                 # The finally block should call finalize_session
                 try:
@@ -73,11 +77,15 @@ class TestAutogenOrchestratorSessionStorage:
         # 1. SessionStorageService is not imported in groupchat.py
         # 2. _storage_service attribute is not created
         # 3. finalize_session() is not called in the finally block
-        assert mock_storage.finalize_session.called, "finalize_session was not called - SessionStorageService not wired in AutogenOrchestrator"
+        assert (
+            mock_storage.finalize_session.called
+        ), "finalize_session was not called - SessionStorageService not wired in AutogenOrchestrator"
 
         if mock_storage.finalize_session.called:
             call_args = mock_storage.finalize_session.call_args
-            assert call_args[0][0] == session_id, f"Expected session_id {session_id}, got {call_args[0][0]}"
+            assert (
+                call_args[0][0] == session_id
+            ), f"Expected session_id {session_id}, got {call_args[0][0]}"
             assert call_args[0][1] in [
                 "completed",
                 "failed",

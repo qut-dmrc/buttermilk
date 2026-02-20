@@ -72,7 +72,9 @@ class TestStorageRecordClass:
 
     def test_storage_invalid_record_class_falls_back(self):
         """Test that invalid record class falls back to BaseRecord."""
-        config = BaseStorageConfig(type="test", dataset_name="test", record_class="nonexistent.module.Class")
+        config = BaseStorageConfig(
+            type="test", dataset_name="test", record_class="nonexistent.module.Class"
+        )
 
         class TestStorage(Storage):
             def __iter__(self):
@@ -135,7 +137,9 @@ class TestStorageRecordClass:
         storage = TestStorage(config)
 
         # Create a record
-        record = storage._create_record(record_id="123", content="test content", dataset_name="test")
+        record = storage._create_record(
+            record_id="123", content="test content", dataset_name="test"
+        )
 
         assert isinstance(record, BaseRecord)
         assert record.record_id == "123"
@@ -162,7 +166,9 @@ class TestStorageRecordClass:
         storage = TestStorage(config)
 
         # Create a Title record
-        record = storage._create_record(record_id="tmdb_123", title="Test Movie", year=2024)
+        record = storage._create_record(
+            record_id="tmdb_123", title="Test Movie", year=2024
+        )
 
         assert isinstance(record, Title)
         assert record.record_id == "tmdb_123"

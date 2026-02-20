@@ -43,7 +43,9 @@ async def test_debug_agent_puppet_mode():
 
         # Display key messages
         for i, msg in enumerate(messages[-3:], 1):  # Show last 3 messages
-            print(f"   Message {i}: {msg.get('type', 'unknown')} - {str(msg.get('content', ''))[:100]}...")
+            print(
+                f"   Message {i}: {msg.get('type', 'unknown')} - {str(msg.get('content', ''))[:100]}..."
+            )
 
         # Step 4: Get flow summary
         print("\n4. Getting flow summary...")
@@ -55,7 +57,9 @@ async def test_debug_agent_puppet_mode():
         # Step 5: Send a response if needed
         if summary.get("flow_state") == "waiting_for_input":
             print("\n5. Sending response to flow...")
-            await debug_agent.puppet_send_response("Please focus on pedagogical approaches")
+            await debug_agent.puppet_send_response(
+                "Please focus on pedagogical approaches"
+            )
             print("✓ Response sent successfully")
 
             # Wait for processing
@@ -63,7 +67,9 @@ async def test_debug_agent_puppet_mode():
 
             # Check updated state
             updated_summary = debug_agent.puppet_get_summary()
-            print(f"   Updated Flow State: {updated_summary.get('flow_state', 'unknown')}")
+            print(
+                f"   Updated Flow State: {updated_summary.get('flow_state', 'unknown')}"
+            )
 
         # Step 6: Monitor for completion
         print("\n6. Monitoring for flow completion...")
@@ -85,12 +91,16 @@ async def test_debug_agent_puppet_mode():
         print(f"Agents Involved: {final_summary.get('active_agents', [])}")
 
         # Get completion messages
-        final_messages = debug_agent.puppet_get_messages(last_n=5, message_type="ui_message")
+        final_messages = debug_agent.puppet_get_messages(
+            last_n=5, message_type="ui_message"
+        )
         if final_messages:
             print("\nFinal agent outputs:")
             for msg in final_messages[-2:]:
                 if "agent" in str(msg).lower():
-                    print(f"  - {msg.get('type', 'unknown')}: {str(msg.get('content', ''))[:150]}...")
+                    print(
+                        f"  - {msg.get('type', 'unknown')}: {str(msg.get('content', ''))[:150]}..."
+                    )
 
         print("\n✓ Debug Agent Puppet Mode demonstration completed successfully!")
 

@@ -100,13 +100,17 @@ class RunConfig(BaseModel):
         default=None,
         description="Unified limit for records/jobs to process (replaces max_records/max_jobs)",
     )
-    record_id: str | None = Field(default=None, description="Specific record ID for console mode testing")
+    record_id: str | None = Field(
+        default=None, description="Specific record ID for console mode testing"
+    )
 
     # API mode settings
     host: str = Field(default="0.0.0.0", description="API server host (api mode)")
     port: int = Field(default=8000, description="API server port (api mode)")
     workers: int = Field(default=1, description="Number of worker processes (api mode)")
-    reload: bool = Field(default=False, description="Enable hot reloading for development (api mode)")
+    reload: bool = Field(
+        default=False, description="Enable hot reloading for development (api mode)"
+    )
     log_level: str = Field(default="info", description="Logging level (api mode)")
 
     # Pipeline mode configuration
@@ -115,7 +119,9 @@ class RunConfig(BaseModel):
     )
 
     # Storage override for batch modes
-    storage_config: dict[str, Any] | None = Field(default=None, description="Storage configuration override for batch modes")
+    storage_config: dict[str, Any] | None = Field(
+        default=None, description="Storage configuration override for batch modes"
+    )
 
     model_config = {
         "extra": "allow",  # Allow additional fields for flexibility
@@ -137,5 +143,7 @@ class RunConfig(BaseModel):
                 return RunMode(v)
             except ValueError:
                 valid_modes = [m.value for m in RunMode]
-                raise ValueError(f"Invalid run mode: {v}. Must be one of: {', '.join(valid_modes)}")
+                raise ValueError(
+                    f"Invalid run mode: {v}. Must be one of: {', '.join(valid_modes)}"
+                )
         raise ValueError(f"Mode must be a string or RunMode, got {type(v)}")

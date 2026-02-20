@@ -107,7 +107,10 @@ class TestSessionStorageService:
 
         # Create session file in JSONL format
         session_file = self.temp_storage_dir / f"{session_id}.jsonl"
-        session_file.write_text(json.dumps({"_type": "session_init", "_timestamp": "2024-01-01T10:00:00Z"}) + "\n")
+        session_file.write_text(
+            json.dumps({"_type": "session_init", "_timestamp": "2024-01-01T10:00:00Z"})
+            + "\n"
+        )
 
         # Now it should exist
         assert self.storage_service.session_exists(session_id)
@@ -234,7 +237,9 @@ class TestWebSocketMessagePersistence:
                 await mock_storage_service.save_message("test-session", formatted)
 
             # Verify save was called
-            mock_storage_service.save_message.assert_called_once_with("test-session", formatted)
+            mock_storage_service.save_message.assert_called_once_with(
+                "test-session", formatted
+            )
 
 
 @pytest.mark.anyio
@@ -417,7 +422,9 @@ class TestSessionGCSArchival:
         # Mock the save method to simulate GCS save
         from unittest.mock import Mock
 
-        real_bm.save = Mock(return_value="gs://my-bucket/sessions/session_test-session_archived.json")
+        real_bm.save = Mock(
+            return_value="gs://my-bucket/sessions/session_test-session_archived.json"
+        )
 
         result = self.storage_service.archive_to_gcs(session_id)
         assert result is True
@@ -438,7 +445,9 @@ class TestSessionGCSArchival:
         real_bm.session_info.save_dir = "gs://my-bucket/sessions"
         from unittest.mock import Mock
 
-        real_bm.save = Mock(return_value="gs://my-bucket/sessions/session_test-session_archived.json")
+        real_bm.save = Mock(
+            return_value="gs://my-bucket/sessions/session_test-session_archived.json"
+        )
 
         self.storage_service.finalize_session(session_id, "completed")
 
@@ -461,7 +470,9 @@ class TestSessionGCSArchival:
         real_bm.session_info.save_dir = "gs://my-bucket/sessions"
         from unittest.mock import Mock
 
-        real_bm.save = Mock(return_value="gs://my-bucket/sessions/session_test-session_archived.json")
+        real_bm.save = Mock(
+            return_value="gs://my-bucket/sessions/session_test-session_archived.json"
+        )
 
         self.storage_service.finalize_session(session_id, "failed")
 

@@ -47,14 +47,22 @@ async def test_zotero_sets_pdf_metadata_as_content_when_no_fulltext(real_bm):
         with patch("pyzotero.zotero.Zotero") as MockZotero:
             mock_zot = MagicMock()
             mock_zot.fulltext_item.side_effect = Exception("No fulltext available")
-            mock_zot.dump = MagicMock(side_effect=lambda key, path: Path(path).write_bytes(b"%PDF-1.4\n" + b"x" * 100000))
+            mock_zot.dump = MagicMock(
+                side_effect=lambda key, path: Path(path).write_bytes(
+                    b"%PDF-1.4\n" + b"x" * 100000
+                )
+            )
             MockZotero.return_value = mock_zot
 
-            downloader = ZoteroDownloadProcessor(library_id="test_library")
+            downloader = ZoteroDownloadProcessor(
+                library_id="test_library"
+            )
 
             # Process the record
             results = []
-            async for result in downloader.process(test_record, processor_stage="download"):
+            async for result in downloader.process(
+                test_record, processor_stage="download"
+            ):
                 results.append(result)
 
             # Verify we got a result
@@ -113,18 +121,24 @@ async def test_zotero_uses_fulltext_when_available(real_bm):
             }
             MockZotero.return_value = mock_zot
 
-            downloader = ZoteroDownloadProcessor(library_id="test_library")
+            downloader = ZoteroDownloadProcessor(
+                library_id="test_library"
+            )
 
             # Process the record
             results = []
-            async for result in downloader.process(test_record, processor_stage="download"):
+            async for result in downloader.process(
+                test_record, processor_stage="download"
+            ):
                 results.append(result)
 
             assert len(results) == 1
             result = results[0]
 
             # Verify Zotero fulltext was used
-            assert result.content == "This is the extracted text from Zotero fulltext API"
+            assert (
+                result.content == "This is the extracted text from Zotero fulltext API"
+            )
             assert "[PDF Document:" not in result.content
 
             print(f"\n✅ Zotero fulltext used: {result.content[:50]}...")
@@ -166,7 +180,9 @@ async def test_pdftotext_processor_replaces_metadata_content():
         with patch("asyncio.create_subprocess_shell", new_callable=AsyncMock) as mock_subprocess:
             # Create an async mock process
             mock_process = AsyncMock()
-            mock_process.communicate = AsyncMock(return_value=(b"Extracted text from PDF", b""))
+            mock_process.communicate = AsyncMock(
+                return_value=(b"Extracted text from PDF", b"")
+            )
             mock_process.returncode = 0
 
             # AsyncMock will properly await and return the mock_process

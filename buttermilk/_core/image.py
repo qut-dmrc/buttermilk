@@ -48,7 +48,9 @@ class ImageRecord(BaseModel):
         if error is None:
             return False
 
-        error_str = error if isinstance(error, str) else (error.get("message", "") if isinstance(error, dict) else str(error))
+        error_str = error if isinstance(error, str) else (
+            error.get("message", "") if isinstance(error, dict) else str(error)
+        )
 
         # Normalize to lowercase for case-insensitive matching
         error_lower = error_str.lower()
@@ -82,7 +84,10 @@ class ImageRecord(BaseModel):
                 if cls._is_refusal_error(obj.error):
                     obj.image = Image.open("tests/data/sadrobot.jpg")
                 else:
-                    raise ValueError(f"Image generation failed due to a technical error. Error details: {obj.error}")
+                    raise ValueError(
+                        "Image generation failed due to a technical error. "
+                        f"Error details: {obj.error}"
+                    )
             else:
                 raise ValueError(
                     "Image is required, unless an error has occured and the 'error' field is set.",

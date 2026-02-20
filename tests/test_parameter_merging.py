@@ -7,7 +7,9 @@ from buttermilk._core.types import RunRequest
 def test_parameter_merging_string_overrides_list():
     """Test that params.parameters (string) overrides flow_default_parameters (list)."""
     # Setup
-    flow_default_parameters = {"criteria": ["trans_simplified", "cte", "tja", "glaad", "hrc", "trans_factored"]}
+    flow_default_parameters = {
+        "criteria": ["trans_simplified", "cte", "tja", "glaad", "hrc", "trans_factored"]
+    }
 
     params_parameters = {"criteria": "glaad"}
 
@@ -31,7 +33,9 @@ def test_agent_variants_parameter_merging():
     run_request = RunRequest(flow="test_flow", parameters={"criteria": "glaad"})
 
     # Flow default parameters with list criteria
-    flow_default_parameters = {"criteria": ["trans_simplified", "cte", "tja", "glaad", "hrc", "trans_factored"]}
+    flow_default_parameters = {
+        "criteria": ["trans_simplified", "cte", "tja", "glaad", "hrc", "trans_factored"]
+    }
 
     # Mock the AgentRegistry to avoid registration issues
     from unittest.mock import MagicMock, patch
@@ -41,7 +45,9 @@ def test_agent_variants_parameter_merging():
     with patch("buttermilk._core.variants.AgentRegistry") as mock_registry:
         mock_registry.get.return_value = mock_agent_class
 
-        configs = agent_variants.get_configs(params=run_request, flow_default_params=flow_default_parameters)
+        configs = agent_variants.get_configs(
+            params=run_request, flow_default_params=flow_default_parameters
+        )
 
         # Should generate one config
         assert len(configs) == 1
@@ -81,7 +87,9 @@ def test_variant_filtering_with_runrequest_override():
         role="TEST_AGENT",
         agent_obj="LLMAgent",
         parameters={},
-        variants={"criteria": ["variant1", "variant2", "variant3"]},  # This should be filtered out
+        variants={
+            "criteria": ["variant1", "variant2", "variant3"]
+        },  # This should be filtered out
     )
 
     # Create RunRequest that overrides criteria

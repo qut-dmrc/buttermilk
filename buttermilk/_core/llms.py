@@ -152,7 +152,6 @@ class ClientType(Enum):
     LLAMA_VERTEX = "llama_vertex"  # Llama models on Vertex AI via native LiteLLM
     DEEPSEEK_VERTEX = "deepseek_vertex"  # DeepSeek models on Vertex AI via native LiteLLM
     HUGGINGFACE = "huggingface"  # HuggingFace Inference API (serverless or dedicated)
-    XAI = "xai"  # xAI (Grok) via OpenAI-compatible API
     ZENTROPI = "zentropi"  # Zentropi toxicity/content moderation API
 
 
@@ -1382,7 +1381,6 @@ class LLMs(BaseModel):
             "deepseek_vertex": "vertex_ai",  # DeepSeek on Vertex via native LiteLLM support
             "anthropic_vertex": "vertex_ai",  # Anthropic-on-Vertex
             "anthropic": "anthropic",
-            "xai": "xai",  # xAI (Grok) via OpenAI-compatible API
             "zentropi": "zentropi",  # Zentropi custom API
         }
         return prefix_map.get(client_type, client_type)  # fallback / extension
@@ -1398,7 +1396,6 @@ class LLMs(BaseModel):
             "huggingface",
             "vertex_ai",
             "anthropic",
-            "xai",
         }
 
         if "/" not in model_name:

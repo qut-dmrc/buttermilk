@@ -61,7 +61,9 @@ def refreshable_cached_property(
         cached_value = getattr(self, attr_name, None)
 
         # Initialize if not yet initialized or refresh if needed
-        if cached_value is None or (should_refresh and should_refresh(self, cached_value)):
+        if cached_value is None or (
+            should_refresh and should_refresh(self, cached_value)
+        ):
             cached_value = initialize_func(self)
             setattr(self, attr_name, cached_value)
 

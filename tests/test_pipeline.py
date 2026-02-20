@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from buttermilk._core.types import BaseRecord
 from buttermilk.pipeline import PipelineOrchestrator
 from buttermilk.tools.catalog_test import Observation, Title, TMDBTool
 from buttermilk.utils.uploader import AsyncDataUploader
@@ -52,7 +53,9 @@ class FakeUploader:
             context: ProcessingContext containing the record to process.
         """
         record = context.record  # Extract record from ProcessingContext
-        print(f"  Uploading: {type(record).__name__} - {record.record_id} - provider: {getattr(record, 'provider_name', 'N/A')}")
+        print(
+            f"  Uploading: {type(record).__name__} - {record.record_id} - provider: {getattr(record, 'provider_name', 'N/A')}"
+        )
         self.uploaded.append(record)
         yield record  # Pass through unchanged
 
@@ -151,7 +154,9 @@ async def test_multi_processor_pipeline(real_bm):
     print("About to iterate over orchestrator...")
     async for record in orchestrator():
         print(f"Got record: {record}")
-        print(f"Final output: {type(record).__name__} - {record.record_id} - provider: {getattr(record, 'provider_name', 'N/A')}")
+        print(
+            f"Final output: {type(record).__name__} - {record.record_id} - provider: {getattr(record, 'provider_name', 'N/A')}"
+        )
         results.append(record)
     print(f"Iteration complete, got {len(results)} results")
 
@@ -182,7 +187,9 @@ class MetadataAddingProcessor:
     async def process(self, context, **kwargs):
         """Add metadata to record without changing record_id."""
         record = context.record  # Extract record from ProcessingContext
-        print(f"  MetadataAddingProcessor processing: {record.record_id} - {self.metadata_key}")
+        print(
+            f"  MetadataAddingProcessor processing: {record.record_id} - {self.metadata_key}"
+        )
 
         # Create updated record with additional metadata but same record_id
         updated_metadata = record.metadata.copy() if record.metadata else {}
@@ -249,7 +256,9 @@ async def test_metadata_accumulation_and_record_id_preservation():
     print("Starting to iterate over orchestrator...")
     async for record in orchestrator():
         print(f"Got record: {record}")
-        print(f"Final result: {record.record_id} - metadata keys: {list(record.metadata.keys())}")
+        print(
+            f"Final result: {record.record_id} - metadata keys: {list(record.metadata.keys())}"
+        )
         results.append(record)
     print(f"Finished iteration, got {len(results)} results")
 
@@ -404,7 +413,9 @@ async def test_pipeline_tracks_processing_summary():
     async def source():
         from buttermilk._core.types import Record
 
-        records = [Record(record_id=f"test_{i}", content=f"Content {i}") for i in range(3)]
+        records = [
+            Record(record_id=f"test_{i}", content=f"Content {i}") for i in range(3)
+        ]
         for record in records:
             yield record
 
@@ -722,12 +733,14 @@ async def test_1_to_n_expansion_with_batch_accumulator():
     # CRITICAL ASSERTION: We should have 6 results (2 inputs × 3 splits each)
     # Before the fix, only 2 results would be produced (first split from each input)
     assert len(results) == 6, (
-        f"Expected 6 results (2 inputs × 3 splits), got {len(results)}. This indicates RecordBufferedException is breaking 1:N expansion."
+        f"Expected 6 results (2 inputs × 3 splits), got {len(results)}. "
+        "This indicates RecordBufferedException is breaking 1:N expansion."
     )
 
     # Verify the batch processor received all 6 records
     assert len(processed_records) == 6, (
-        f"Expected batch processor to receive 6 records, got {len(processed_records)}. Some variants were lost during buffering."
+        f"Expected batch processor to receive 6 records, got {len(processed_records)}. "
+        "Some variants were lost during buffering."
     )
 
     # Verify we have both input records represented in the results
@@ -800,7 +813,8 @@ async def test_1_to_n_expansion_partial_batch_flush():
 
     # CRITICAL: We should have 6 results (3 inputs × 2 splits each)
     assert len(results) == 6, (
-        f"Expected 6 results (3 inputs × 2 splits), got {len(results)}. This indicates RecordBufferedException is breaking 1:N expansion."
+        f"Expected 6 results (3 inputs × 2 splits), got {len(results)}. "
+        "This indicates RecordBufferedException is breaking 1:N expansion."
     )
 
     # Verify batch processor was called (at least once for full batch, possibly once for flush)
@@ -808,4 +822,6 @@ async def test_1_to_n_expansion_partial_batch_flush():
 
     # Verify total records processed across all batches
     total_batched = sum(batch_calls)
-    assert total_batched == 6, f"Expected 6 total records through batch processor, got {total_batched}"
+    assert total_batched == 6, (
+        f"Expected 6 total records through batch processor, got {total_batched}"
+    )

@@ -74,7 +74,9 @@ async def test_rag_zotero_with_structured_output(model_name, real_bm):
         result = await agent.invoke(agent_input)
 
         # Verify the output structure
-        assert hasattr(result, "outputs"), f"{model_name}: Result should have outputs attribute"
+        assert hasattr(result, "outputs"), (
+            f"{model_name}: Result should have outputs attribute"
+        )
 
         # Check if it's the expected structured output
         if isinstance(result.outputs, ZoteroResearchResult):
@@ -91,24 +93,36 @@ async def test_rag_zotero_with_structured_output(model_name, real_bm):
                 data = json.loads(result.outputs)
                 research_result = ZoteroResearchResult(**data)
             except Exception:
-                pytest.fail(f"{model_name}: Could not parse structured output from string: {result.outputs[:200]}")
+                pytest.fail(
+                    f"{model_name}: Could not parse structured output from string: {result.outputs[:200]}"
+                )
         else:
             pytest.fail(f"{model_name}: Unexpected output type: {type(result.outputs)}")
 
         # Validate the research result
-        assert isinstance(research_result.literature, list), f"{model_name}: literature should be a list"
-        assert len(research_result.literature) > 0, f"{model_name}: Should have at least one reference"
+        assert isinstance(research_result.literature, list), (
+            f"{model_name}: literature should be a list"
+        )
+        assert len(research_result.literature) > 0, (
+            f"{model_name}: Should have at least one reference"
+        )
 
         # Check first reference
         first_ref = research_result.literature[0]
-        assert isinstance(first_ref, ZoteroReference), f"{model_name}: References should be ZoteroReference objects"
+        assert isinstance(first_ref, ZoteroReference), (
+            f"{model_name}: References should be ZoteroReference objects"
+        )
         assert first_ref.summary, f"{model_name}: Reference should have a summary"
         assert first_ref.source, f"{model_name}: Reference should have a source"
         assert first_ref.citation, f"{model_name}: Reference should have a citation"
 
         # Check response
-        assert research_result.response, f"{model_name}: Should have a synthesized response"
-        assert len(research_result.response) > 50, f"{model_name}: Response should be substantive"
+        assert research_result.response, (
+            f"{model_name}: Should have a synthesized response"
+        )
+        assert len(research_result.response) > 50, (
+            f"{model_name}: Response should be substantive"
+        )
 
         print(f"✅ {model_name}: Successfully generated structured Zotero output")
         print(f"   - References: {len(research_result.literature)}")
@@ -117,7 +131,9 @@ async def test_rag_zotero_with_structured_output(model_name, real_bm):
     except Exception as e:
         # Check if this is the specific error mentioned
         if "Error code: 500" in str(e) and "Internal error encountered" in str(e):
-            pytest.fail(f"{model_name}: Got internal server error (500) - this is the issue to fix: {e}")
+            pytest.fail(
+                f"{model_name}: Got internal server error (500) - this is the issue to fix: {e}"
+            )
         else:
             # Log other errors for debugging
             print(f"❌ {model_name}: Error during RAG Zotero test: {e}")
@@ -172,7 +188,9 @@ async def test_rag_zotero_llama4_specific(real_bm):
 
     try:
         response = await llm_client.call_chat(
-            messages=[UserMessage(content="Say hello with confidence 0.9", source="user")],
+            messages=[
+                UserMessage(content="Say hello with confidence 0.9", source="user")
+            ],
             schema=SimpleOutput,
             cancellation_token=CancellationToken(),
         )
@@ -243,7 +261,9 @@ async def test_rag_zotero_llama4_specific(real_bm):
     except Exception as e:
         print(f"❌ Structured output WITH tools failed: {e}")
         if "Error code: 500" in str(e):
-            print("   This is the core issue - llama-maverick fails with tools + structured output!")
+            print(
+                "   This is the core issue - llama-maverick fails with tools + structured output!"
+            )
 
     # Sixth test: Complex structured output WITH tools (like the real agent)
     print("\n6. Testing complex structured output WITH tools (like real RagAgent)...")
@@ -264,4 +284,6 @@ async def test_rag_zotero_llama4_specific(real_bm):
     except Exception as e:
         print(f"❌ Complex structured output WITH tools failed: {e}")
         if "Error code: 500" in str(e):
-            print("   Confirmed: llama-maverick cannot handle tools + complex structured output together")
+            print(
+                "   Confirmed: llama-maverick cannot handle tools + complex structured output together"
+            )

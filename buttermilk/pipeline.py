@@ -60,7 +60,6 @@ from typing import Any, AsyncGenerator, AsyncIterator, Mapping, Optional
 
 import hydra
 import pydantic
-
 # weave import removed
 from omegaconf import DictConfig
 from opentelemetry import trace
@@ -142,51 +141,12 @@ class PipelineOrchestrator(BaseModel):
     @pydantic.model_validator(mode="before")
     @classmethod
     def _instantiate_components(cls, values: dict) -> dict:
-        """Automatically instantiate source and processors from config.
-
-        Supports shorthand for variant processors: if a processor config
-        contains a 'variants' key, it's automatically wrapped in a
-        VariantProcessor.
-        """
+        """Automatically instantiate source and processors from config."""
         if "source" in values and isinstance(values["source"], Mapping):
             # Instantiate source if it's a DictConfig or dict
             values["source"] = bm.get_storage(values.get("source"))
 
-        processors = []
-        for p in values.get("processors", []):
-            if isinstance(p, (dict, DictConfig)) and "variants" in p:
-                # Shorthand for VariantProcessor (similar to AgentVariants in agentchat)
-                # Note: we must avoid circular import by importing here
-                from buttermilk.processors.variants import VariantProcessor
-
-                # Extract _target_ as the processor_obj
-                # If it's a DictConfig, we can use pop() or access
-                processor_obj = p.get("_target_")
-                if not processor_obj:
-                    raise ValueError(f"Processor variant config must include '_target_': {p}")
-
-                # Collect variants and parameters
-                # Parameters are everything except _target_ and variants
-                variants = p.get("variants")
-                parameters = {k: v for k, v in p.items() if k not in ["variants", "_target_"]}
-
-                # Create the VariantProcessor
-                processors.append(
-                    VariantProcessor(
-                        processor_obj=processor_obj,
-                        variants=variants,
-                        parameters=parameters,
-                    )
-                )
-                logger.info(
-                    f"Wrapped processor '{processor_obj}' in VariantProcessor",
-                    variants=list(variants.keys()),
-                )
-            else:
-                # Normal instantiation
-                processors.append(hydra.utils.instantiate(p) if isinstance(p, DictConfig) else p)
-
-        values["processors"] = processors
+        values["processors"] = [hydra.utils.instantiate(p) if isinstance(p, DictConfig) else p for p in values.get("processors", [])]
         return values
 
     @pydantic.model_validator(mode="after")
@@ -1337,7 +1297,8 @@ class PipelineOrchestrator(BaseModel):
                     self._summary.increment_processed()
 
                 logger.info(
-                    f"📊 STATS: reconciled {pending_count} pending sources: {processed_to_mark} processed, {failed_to_mark} failed",
+                    f"📊 STATS: reconciled {pending_count} pending sources: "
+                    f"{processed_to_mark} processed, {failed_to_mark} failed",
                     pending_count=pending_count,
                     processed_marked=processed_to_mark,
                     failed_marked=failed_to_mark,

@@ -1,5 +1,5 @@
 ---
-description: 
+description:
 ---
 
 ## Buttermilk-Specific Requirements

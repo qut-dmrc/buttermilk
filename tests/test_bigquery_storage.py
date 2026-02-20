@@ -330,7 +330,6 @@ class TestCustomQueryPlaceholders:
 
         # Should raise StorageError when trying to iterate without limit
         import pytest
-
         from buttermilk._core.exceptions import StorageError
 
         with pytest.raises(StorageError, match="limit"):

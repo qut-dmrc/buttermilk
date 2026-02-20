@@ -17,7 +17,9 @@ class TestMessageServiceTokenExtraction:
 
     @patch("buttermilk.api.services.message_service.calculate_token_cost")
     @patch("buttermilk.api.services.message_service.extract_usage_from_metadata")
-    def test_format_message_extracts_tokens_from_agent_output(self, mock_extract, mock_calculate, real_bm):
+    def test_format_message_extracts_tokens_from_agent_output(
+        self, mock_extract, mock_calculate, real_bm
+    ):
         """Test that tokens are extracted from AgentOutput metadata."""
         # Setup mocks
         mock_extract.return_value = {"prompt_tokens": 100, "completion_tokens": 50}
@@ -65,7 +67,9 @@ class TestMessageServiceTokenExtraction:
 
     @patch("buttermilk.api.services.message_service.calculate_token_cost")
     @patch("buttermilk.api.services.message_service.extract_usage_from_metadata")
-    def test_format_message_extracts_tokens_from_agent_trace(self, mock_extract, mock_calculate, real_bm):
+    def test_format_message_extracts_tokens_from_agent_trace(
+        self, mock_extract, mock_calculate, real_bm
+    ):
         """Test that tokens are extracted from ExecutionTrace metadata."""
         mock_extract.return_value = {"input_tokens": 200, "output_tokens": 75}
         mock_calculate.return_value = (200, 75, 0.005)
@@ -116,7 +120,9 @@ class TestMessageServiceTokenExtraction:
 
         error_event = ErrorEvent(source="test_agent", content="Test error")
 
-        agent_output = AgentOutput(agent_id="test_agent", outputs=None, error=[error_event])
+        agent_output = AgentOutput(
+            agent_id="test_agent", outputs=None, error=[error_event]
+        )
 
         # Mock getattr to return agent_config when 'agent_info' is requested
         original_getattr = getattr
@@ -158,4 +164,6 @@ class TestMessageServiceTokenExtraction:
         assert result.completion_tokens == 25
         assert result.cost_usd == 0.001
 
-        mock_calculate.assert_called_with(model="gpt41mini", usage_dict={"prompt_tokens": 50, "completion_tokens": 25})
+        mock_calculate.assert_called_with(
+            model="gpt41mini", usage_dict={"prompt_tokens": 50, "completion_tokens": 25}
+        )
