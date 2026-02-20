@@ -60,6 +60,7 @@ from typing import Any, AsyncGenerator, AsyncIterator, Mapping, Optional
 
 import hydra
 import pydantic
+
 # weave import removed
 from omegaconf import DictConfig
 from opentelemetry import trace
@@ -1297,8 +1298,7 @@ class PipelineOrchestrator(BaseModel):
                     self._summary.increment_processed()
 
                 logger.info(
-                    f"📊 STATS: reconciled {pending_count} pending sources: "
-                    f"{processed_to_mark} processed, {failed_to_mark} failed",
+                    f"📊 STATS: reconciled {pending_count} pending sources: {processed_to_mark} processed, {failed_to_mark} failed",
                     pending_count=pending_count,
                     processed_marked=processed_to_mark,
                     failed_marked=failed_to_mark,

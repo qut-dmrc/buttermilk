@@ -123,9 +123,7 @@ class TestAPISpecCompliance:
             "/api/flows/{flow}/records": "GET",
         }
 
-        actual_routes = {
-            route.path: list(route.methods)[0] for route in flow_data_router.routes
-        }
+        actual_routes = {route.path: list(route.methods)[0] for route in flow_data_router.routes}
 
         for path, method in spec_endpoints.items():
             assert path in actual_routes, f"Missing endpoint: {method} {path}"

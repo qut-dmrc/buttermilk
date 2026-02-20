@@ -37,9 +37,7 @@ class ClassificationOutput(BaseModel):
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("model", ["gpt-oss-safeguard-20b"])
-async def test_huggingface_classifier_e2e(
-    real_bm, session_runner, text_record: BaseRecord, model: str
-):
+async def test_huggingface_classifier_e2e(real_bm, session_runner, text_record: BaseRecord, model: str):
     """Test HuggingFaceClassifier with real model via LiteLLM.
 
     Uses:
@@ -62,9 +60,7 @@ async def test_huggingface_classifier_e2e(
 
     # ACT: Process text record through real classifier
     results = []
-    async for result in classifier.process(
-        text_record, processor_stage="test_hf_classify"
-    ):
+    async for result in classifier.process(text_record, processor_stage="test_hf_classify"):
         results.append(result)
 
     # ASSERT: Verify complete classification workflow
@@ -123,9 +119,7 @@ async def test_zentropi_classifier_e2e(real_bm, session_runner, text_record: Bas
 
     # ACT: Process text record through real classifier
     results = []
-    async for result in classifier.process(
-        text_record, processor_stage="test_zentropi_classify"
-    ):
+    async for result in classifier.process(text_record, processor_stage="test_zentropi_classify"):
         results.append(result)
 
     # ASSERT: Verify complete classification workflow
@@ -147,9 +141,7 @@ async def test_zentropi_classifier_e2e(real_bm, session_runner, text_record: Bas
 
     # Check metadata contains processing info
     assert result.metadata is not None, "Result should have metadata"
-    assert (
-        "test_zentropi_classify" in result.metadata
-    ), "Should have processor stage metadata"
+    assert "test_zentropi_classify" in result.metadata, "Should have processor stage metadata"
 
     stage_metadata = result.metadata["test_zentropi_classify"]
     assert stage_metadata["classifier"] == "ZentropiClassifier"
@@ -163,9 +155,7 @@ async def test_zentropi_classifier_e2e(real_bm, session_runner, text_record: Bas
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("model", ["gpt-oss-safeguard-20b"])
-async def test_huggingface_classifier_input_tracing(
-    real_bm, session_runner, text_record: BaseRecord, model: str
-):
+async def test_huggingface_classifier_input_tracing(real_bm, session_runner, text_record: BaseRecord, model: str):
     """Test that HuggingFaceClassifier correctly stores rendered_prompt in ExecutionTrace.inputs.
 
     This validates that:
@@ -192,9 +182,7 @@ async def test_huggingface_classifier_input_tracing(
 
     # ACT: Process text record
     results = []
-    async for result in classifier.process(
-        text_record, processor_stage=processor_stage
-    ):
+    async for result in classifier.process(text_record, processor_stage=processor_stage):
         results.append(result)
 
     # ASSERT: Basic classification worked
@@ -221,9 +209,7 @@ async def test_huggingface_classifier_input_tracing(
     df = real_bm.run_query(query)
 
     # ASSERT: Trace was uploaded
-    assert df.shape[0] > 0, (
-        f"Expected at least one trace in BigQuery for processor_stage={processor_stage}"
-    )
+    assert df.shape[0] > 0, f"Expected at least one trace in BigQuery for processor_stage={processor_stage}"
 
     trace_row = df.iloc[0]
 
@@ -234,15 +220,11 @@ async def test_huggingface_classifier_input_tracing(
 
     # ASSERT: rendered_prompt exists in inputs
     assert inputs is not None, "Inputs should not be None"
-    assert "rendered_prompt" in inputs, (
-        f"Inputs should contain 'rendered_prompt'. Got keys: {inputs.keys()}"
-    )
+    assert "rendered_prompt" in inputs, f"Inputs should contain 'rendered_prompt'. Got keys: {inputs.keys()}"
 
     rendered_prompt = inputs["rendered_prompt"]
     assert rendered_prompt is not None, "rendered_prompt should not be None"
-    assert len(rendered_prompt) > 50, (
-        "rendered_prompt should contain substantial template content"
-    )
+    assert len(rendered_prompt) > 50, "rendered_prompt should contain substantial template content"
 
     # ASSERT: Content and record_id are also stored
     assert "content" in inputs, "Inputs should contain 'content'"
@@ -265,9 +247,7 @@ async def test_huggingface_classifier_input_tracing(
         template="test/classify",
         template_vars={},
     )
-    assert metadata["template_hash"] == expected_template_hash, (
-        "template_hash should match recomputed hash"
-    )
+    assert metadata["template_hash"] == expected_template_hash, "template_hash should match recomputed hash"
     logger.info(f"✅ template_hash validated: {metadata['template_hash'][:16]}...")
 
 
@@ -276,9 +256,7 @@ async def test_huggingface_classifier_input_tracing(
     not os.environ.get("ZENTROPI_API_KEY"),
     reason="ZENTROPI_API_KEY not set",
 )
-async def test_zentropi_classifier_input_tracing(
-    real_bm, session_runner, text_record: BaseRecord
-):
+async def test_zentropi_classifier_input_tracing(real_bm, session_runner, text_record: BaseRecord):
     """Test that ZentropiClassifier correctly stores rendered_prompt in ExecutionTrace.inputs.
 
     This validates that:
@@ -304,9 +282,7 @@ async def test_zentropi_classifier_input_tracing(
 
     # ACT: Process text record
     results = []
-    async for result in classifier.process(
-        text_record, processor_stage=processor_stage
-    ):
+    async for result in classifier.process(text_record, processor_stage=processor_stage):
         results.append(result)
 
     # ASSERT: Basic classification worked
@@ -333,9 +309,7 @@ async def test_zentropi_classifier_input_tracing(
     df = real_bm.run_query(query)
 
     # ASSERT: Trace was uploaded
-    assert df.shape[0] > 0, (
-        f"Expected at least one trace in BigQuery for processor_stage={processor_stage}"
-    )
+    assert df.shape[0] > 0, f"Expected at least one trace in BigQuery for processor_stage={processor_stage}"
 
     trace_row = df.iloc[0]
 
@@ -346,15 +320,11 @@ async def test_zentropi_classifier_input_tracing(
 
     # ASSERT: rendered_prompt exists in inputs (contains criteria from template)
     assert inputs is not None, "Inputs should not be None"
-    assert "rendered_prompt" in inputs, (
-        f"Inputs should contain 'rendered_prompt'. Got keys: {inputs.keys()}"
-    )
+    assert "rendered_prompt" in inputs, f"Inputs should contain 'rendered_prompt'. Got keys: {inputs.keys()}"
 
     rendered_prompt = inputs["rendered_prompt"]
     assert rendered_prompt is not None, "rendered_prompt should not be None"
-    assert len(rendered_prompt) > 20, (
-        "rendered_prompt should contain classification criteria from template"
-    )
+    assert len(rendered_prompt) > 20, "rendered_prompt should contain classification criteria from template"
 
     # ASSERT: Content and record_id are also stored
     assert "content" in inputs, "Inputs should contain 'content'"
@@ -377,7 +347,5 @@ async def test_zentropi_classifier_input_tracing(
         template="test/classify",
         template_vars={},
     )
-    assert metadata["template_hash"] == expected_template_hash, (
-        "template_hash should match recomputed hash"
-    )
+    assert metadata["template_hash"] == expected_template_hash, "template_hash should match recomputed hash"
     logger.info(f"✅ template_hash validated: {metadata['template_hash'][:16]}...")

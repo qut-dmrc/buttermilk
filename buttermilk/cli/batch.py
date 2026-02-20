@@ -179,9 +179,7 @@ def status(job_id: str, json_output: bool, save_dir: str | None, search: bool) -
             click.echo(json.dumps({"error": msg, "job_id": job_id}))
         else:
             click.echo(f"Error: {msg}", err=True)
-            click.echo(
-                "Make sure you're using the correct save_dir or session.", err=True
-            )
+            click.echo("Make sure you're using the correct save_dir or session.", err=True)
         sys.exit(1)
     except Exception as e:
         logger.error(f"Failed to get job status: {e}")
@@ -297,9 +295,7 @@ def fetch(job_id: str, json_output: bool, output: str | None, save_dir: str | No
             click.echo(json.dumps({"error": msg, "job_id": job_id}))
         else:
             click.echo(f"Error: {msg}", err=True)
-            click.echo(
-                "Make sure you're using the correct save_dir or session.", err=True
-            )
+            click.echo("Make sure you're using the correct save_dir or session.", err=True)
         sys.exit(1)
     except Exception as e:
         logger.error(f"Failed to fetch results: {e}")
@@ -359,16 +355,16 @@ def list_jobs(json_output: bool, limit: int, save_dir: str | None) -> None:
                 continue
 
             try:
-                manifest = BatchJobManifest.model_validate_json(
-                    manifest_path.read_text()
+                manifest = BatchJobManifest.model_validate_json(manifest_path.read_text())
+                jobs.append(
+                    {
+                        "job_id": manifest.job_id,
+                        "model": manifest.model,
+                        "submitted_at": manifest.submitted_at,
+                        "request_count": manifest.request_count,
+                        "vertex_job_name": manifest.vertex_job_name,
+                    }
                 )
-                jobs.append({
-                    "job_id": manifest.job_id,
-                    "model": manifest.model,
-                    "submitted_at": manifest.submitted_at,
-                    "request_count": manifest.request_count,
-                    "vertex_job_name": manifest.vertex_job_name,
-                })
             except Exception as e:
                 logger.warning(f"Failed to parse manifest {manifest_path}: {e}")
                 continue

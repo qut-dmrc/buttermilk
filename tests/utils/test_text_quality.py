@@ -21,9 +21,7 @@ def test_detect_text_corruption_with_cid_patterns():
     """
     # Arrange: Create text with 25 CID patterns (well above threshold of 20)
     cid_patterns = " ".join(f"(cid:{i})" for i in range(25))
-    text_with_cid = (
-        f"This is a heavily corrupted document with {cid_patterns} patterns."
-    )
+    text_with_cid = f"This is a heavily corrupted document with {cid_patterns} patterns."
 
     # Act
     result = detect_text_corruption(text_with_cid)
@@ -35,13 +33,9 @@ def test_detect_text_corruption_with_cid_patterns():
     assert "cid_count" in result, "Should have cid_count key"
     assert "detected_language" in result, "Should have detected_language key"
 
-    assert result["is_corrupted"] is True, (
-        "Text with 20+ CID patterns should be marked as corrupted"
-    )
+    assert result["is_corrupted"] is True, "Text with 20+ CID patterns should be marked as corrupted"
     assert result["cid_count"] == 25, "Should detect 25 CID patterns"
-    assert result["cid_count"] >= 20, (
-        "CID count should be >= 20 to trigger corruption flag"
-    )
+    assert result["cid_count"] >= 20, "CID count should be >= 20 to trigger corruption flag"
 
 
 def test_detect_text_corruption_with_clean_text():
@@ -54,13 +48,9 @@ def test_detect_text_corruption_with_clean_text():
 
     # Assert
     assert isinstance(result, dict)
-    assert result["is_corrupted"] is False, (
-        "Clean text should not be marked as corrupted"
-    )
+    assert result["is_corrupted"] is False, "Clean text should not be marked as corrupted"
     assert result["cid_count"] == 0, "Clean text should have 0 CID patterns"
-    assert result["corruption_percentage"] == 0.0, (
-        "Clean text should have 0% corruption"
-    )
+    assert result["corruption_percentage"] == 0.0, "Clean text should have 0% corruption"
 
 
 def test_detect_text_corruption_with_empty_text():
@@ -70,9 +60,7 @@ def test_detect_text_corruption_with_empty_text():
 
     # Assert
     assert result["is_corrupted"] is True, "Empty text should be marked as corrupted"
-    assert result["corruption_percentage"] == 100.0, (
-        "Empty text should be 100% corrupted"
-    )
+    assert result["corruption_percentage"] == 100.0, "Empty text should be 100% corrupted"
 
 
 def test_analyze_document_quality_aggregates_chunks():
@@ -141,12 +129,8 @@ John Smith, Privacy Law in the Digital Age, 45 Tech. L. Rev. 123 (2019).
 
     # Assert
     assert result["cid_count"] == 1, "Should detect the single CID pattern"
-    assert result["is_corrupted"] is False, (
-        "Minor CID count in header should NOT flag document as corrupted"
-    )
-    assert result["corruption_percentage"] < 1.0, (
-        "Minor CID should result in very low corruption percentage"
-    )
+    assert result["is_corrupted"] is False, "Minor CID count in header should NOT flag document as corrupted"
+    assert result["corruption_percentage"] < 1.0, "Minor CID should result in very low corruption percentage"
 
 
 @pytest.mark.parametrize(
@@ -160,9 +144,7 @@ John Smith, Privacy Law in the Digital Age, 45 Tech. L. Rev. 123 (2019).
         (1, 3, 50.0, False),  # 33.33% corrupt - should NOT flag at 50% threshold
     ],
 )
-def test_is_document_corrupt_threshold(
-    corrupted_chunk_count, total_chunks, threshold, expected_corrupt
-):
+def test_is_document_corrupt_threshold(corrupted_chunk_count, total_chunks, threshold, expected_corrupt):
     """Test is_document_corrupt() with various corruption percentages and thresholds.
 
     Function should analyze chunks, count how many are corrupt, and return
@@ -200,12 +182,9 @@ def test_is_document_corrupt_threshold(
 
     # Assert - verify corruption detection logic
     expected_rate = (corrupted_chunk_count / total_chunks) * 100
-    assert result["corruption_rate"] == pytest.approx(expected_rate, rel=0.01), (
-        f"Corruption rate should be {expected_rate}%"
-    )
+    assert result["corruption_rate"] == pytest.approx(expected_rate, rel=0.01), f"Corruption rate should be {expected_rate}%"
     assert result["is_corrupt"] is expected_corrupt, (
-        f"With {expected_rate}% corruption and {threshold}% threshold, "
-        f"is_corrupt should be {expected_corrupt}"
+        f"With {expected_rate}% corruption and {threshold}% threshold, is_corrupt should be {expected_corrupt}"
     )
     assert result["corrupted_chunks"] == corrupted_chunk_count
     assert result["total_chunks"] == total_chunks
@@ -282,15 +261,9 @@ d
     result = detect_text_corruption(corrupted_text)
 
     # Assert
-    assert result["is_corrupted"], (
-        "Character separation should be detected as corruption"
-    )
-    assert result["avg_line_length"] < 10, (
-        f"Average line length should be < 10, got {result['avg_line_length']}"
-    )
-    assert result["corruption_percentage"] > 0, (
-        "Should have non-zero corruption percentage"
-    )
+    assert result["is_corrupted"], "Character separation should be detected as corruption"
+    assert result["avg_line_length"] < 10, f"Average line length should be < 10, got {result['avg_line_length']}"
+    assert result["corruption_percentage"] > 0, "Should have non-zero corruption percentage"
 
 
 def test_excessive_newline_corruption():
@@ -306,9 +279,7 @@ def test_excessive_newline_corruption():
 
     # Assert
     assert result["is_corrupted"], "Excessive newlines should be detected as corruption"
-    assert result["newline_ratio"] > 10.0, (
-        f"Newline ratio should be > 10%, got {result['newline_ratio']}"
-    )
+    assert result["newline_ratio"] > 10.0, f"Newline ratio should be > 10%, got {result['newline_ratio']}"
 
 
 def test_clean_text_not_flagged():
@@ -326,9 +297,7 @@ This represents what we expect from good quality OCR or native digital text.
     result = detect_text_corruption(clean_text)
 
     # Assert
-    assert not result["is_corrupted"], (
-        f"Clean text should not be flagged as corrupted: {result}"
-    )
+    assert not result["is_corrupted"], f"Clean text should not be flagged as corrupted: {result}"
 
 
 def test_short_text_not_corrupted():
@@ -341,9 +310,7 @@ def test_short_text_not_corrupted():
 
     # Assert
     # Short text with reasonable structure should not be flagged
-    assert not result["is_corrupted"], (
-        f"Short valid text should not be corrupted: {result}"
-    )
+    assert not result["is_corrupted"], f"Short valid text should not be corrupted: {result}"
 
 
 def test_whitespace_only_is_corrupted():
@@ -353,9 +320,7 @@ def test_whitespace_only_is_corrupted():
 
     # Assert
     assert result["is_corrupted"], "Whitespace-only text should be corrupted"
-    assert result["corruption_percentage"] == 100.0, (
-        "Whitespace-only should have 100% corruption"
-    )
+    assert result["corruption_percentage"] == 100.0, "Whitespace-only should have 100% corruption"
 
 
 @pytest.mark.parametrize(

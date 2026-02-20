@@ -148,9 +148,7 @@ class HuggingFaceDataLoader(DataLoader):
             if "record_id" not in record_kwargs:
                 record_kwargs["record_id"] = f"{self.config.path}:{idx}"
             if "content" not in record_kwargs:
-                record_kwargs["content"] = processed_item.get(
-                    "text", str(processed_item)
-                )
+                record_kwargs["content"] = processed_item.get("text", str(processed_item))
 
             # Add loader metadata
             base_metadata = {
@@ -225,9 +223,7 @@ class JSONLDataLoader(DataLoader):
                 if "record_id" not in record_kwargs:
                     record_kwargs["record_id"] = f"{self.config.path}:{line_num}"
                 if "content" not in record_kwargs:
-                    record_kwargs["content"] = processed_item.get(
-                        "text", str(processed_item)
-                    )
+                    record_kwargs["content"] = processed_item.get("text", str(processed_item))
 
                 # Add loader metadata
                 base_metadata = {
@@ -297,9 +293,7 @@ class CSVDataLoader(DataLoader):
                 if "record_id" not in record_kwargs:
                     record_kwargs["record_id"] = f"{self.config.path}:{row_num}"
                 if "content" not in record_kwargs:
-                    record_kwargs["content"] = processed_row.get(
-                        "text", str(processed_row)
-                    )
+                    record_kwargs["content"] = processed_row.get("text", str(processed_row))
 
                 # Add loader metadata
                 base_metadata = {
@@ -378,9 +372,7 @@ class PlaintextDataLoader(DataLoader):
                                     mapped_kwargs[new_name] = original_data[old_name]
                                 else:
                                     # Map to metadata
-                                    record_kwargs["metadata"][new_name] = original_data[
-                                        old_name
-                                    ]
+                                    record_kwargs["metadata"][new_name] = original_data[old_name]
 
                         # Override with mapped values
                         record_kwargs.update(mapped_kwargs)
@@ -428,12 +420,8 @@ def create_data_loader(config: "DataSourceConfig") -> DataLoader:
             "type": config_dict["type"],
             "path": config_dict.get("path"),
             "columns": config_dict.get("columns", {}),
-            "randomize": config_dict.get("randomize")
-            if config_dict.get("randomize") is not None
-            else True,
-            "batch_size": config_dict.get("batch_size")
-            if config_dict.get("batch_size") is not None
-            else 1000,
+            "randomize": config_dict.get("randomize") if config_dict.get("randomize") is not None else True,
+            "batch_size": config_dict.get("batch_size") if config_dict.get("batch_size") is not None else 1000,
             "limit": config_dict.get("limit"),
             "name": config_dict.get("name", ""),
             "split": config_dict.get("split", "train"),
@@ -457,9 +445,7 @@ def create_data_loader(config: "DataSourceConfig") -> DataLoader:
 
     except Exception as e:
         # Fallback to old implementation if new system fails
-        logger.warning(
-            f"Failed to use new storage system, falling back to legacy loaders: {e}"
-        )
+        logger.warning(f"Failed to use new storage system, falling back to legacy loaders: {e}")
 
     # Legacy implementation (fallback)
     if config.type == "huggingface":
@@ -481,9 +467,7 @@ def create_data_loader(config: "DataSourceConfig") -> DataLoader:
         from buttermilk._core.storage_config import StorageConfig
 
         # Convert DataSourceConfig to StorageConfig
-        storage_config = StorageConfig(
-            type="bigquery", **config.model_dump(exclude={"type"})
-        )
+        storage_config = StorageConfig(type="bigquery", **config.model_dump(exclude={"type"}))
 
         storage = bm.get_storage(storage_config)
         return DataLoaderWrapper(storage)

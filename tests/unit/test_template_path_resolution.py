@@ -99,11 +99,7 @@ async def test_template_paths_resolve_against_config_source_dir(tmp_path: Path):
     # Should resolve to the external templates directory
     expected_path = templates_dir.resolve()
 
-    assert (
-        resolved_path == expected_path
-    ), f"Expected {expected_path}, got {resolved_path}"
+    assert resolved_path == expected_path, f"Expected {expected_path}, got {resolved_path}"
 
     # Verify the resolved path actually contains our template
-    assert (resolved_path / "test.jinja2").exists(), (
-        f"Template file not found at resolved path {resolved_path}"
-    )
+    assert (resolved_path / "test.jinja2").exists(), f"Template file not found at resolved path {resolved_path}"

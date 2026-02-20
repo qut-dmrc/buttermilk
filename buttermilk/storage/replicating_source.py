@@ -86,11 +86,7 @@ class ReplicatingSource:
             BaseRecord objects with replication metadata added
         """
         # Ensure we have an async iterator
-        source_iter = (
-            self.source
-            if hasattr(self.source, "__anext__")
-            else self.source.__aiter__()
-        )
+        source_iter = self.source if hasattr(self.source, "__anext__") else self.source.__aiter__()
 
         record_count = 0
         async for record in source_iter:
@@ -107,9 +103,7 @@ class ReplicatingSource:
                 }
 
                 # Create replicated record with metadata only (preserve original record_id)
-                replicated_record = record.model_copy(
-                    update={"metadata": metadata}
-                )
+                replicated_record = record.model_copy(update={"metadata": metadata})
 
                 logger.debug(
                     f"🔄 Yielding replicated record {run_index + 1}/{self.num_runs}",

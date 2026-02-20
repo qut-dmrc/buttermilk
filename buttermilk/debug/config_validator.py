@@ -1,10 +1,13 @@
 """Configuration validator stub."""
+
 from pathlib import Path
+
 from pydantic import BaseModel
 
 
 class ValidationIssue(BaseModel):
     """Validation issue details."""
+
     component: str
     field: str
     message: str
@@ -14,6 +17,7 @@ class ValidationIssue(BaseModel):
 
 class ValidationReport(BaseModel):
     """Configuration validation report."""
+
     total_files_checked: int = 0
     errors: list[ValidationIssue] = []
     warnings: list[ValidationIssue] = []
@@ -32,8 +36,4 @@ def validate_configuration(config_path: str | Path) -> ValidationReport:
     Returns:
         ValidationReport with results
     """
-    return ValidationReport(
-        total_files_checked=0,
-        is_valid=True,
-        passed_checks=["Configuration validation not implemented"]
-    )
+    return ValidationReport(total_files_checked=0, is_valid=True, passed_checks=["Configuration validation not implemented"])

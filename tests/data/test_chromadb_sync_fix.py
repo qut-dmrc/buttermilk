@@ -19,18 +19,12 @@ class TestChromaDBSyncFix:
         """Test that sync method contains the critical fixes."""
         import inspect
 
-        sync_source = inspect.getsource(
-            ChromaDBEmbeddings._sync_local_changes_to_remote
-        )
+        sync_source = inspect.getsource(ChromaDBEmbeddings._sync_local_changes_to_remote)
 
         # Check for key fixes
         assert "_original_remote_path" in sync_source, "Should use original remote path"
-        assert "Path(self.persist_directory)" in sync_source, (
-            "Should use persist_directory as cache path"
-        )
-        assert "raise RuntimeError" in sync_source, (
-            "Should raise errors instead of warnings"
-        )
+        assert "Path(self.persist_directory)" in sync_source, "Should use persist_directory as cache path"
+        assert "raise RuntimeError" in sync_source, "Should raise errors instead of warnings"
         assert "logger.error" in sync_source, "Should log critical errors"
 
     def test_manual_sync_method_exists(self):

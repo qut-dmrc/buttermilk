@@ -1,21 +1,26 @@
 import asyncio
 import time
-import pytest
 from typing import AsyncGenerator
-from buttermilk._core.processor_core import ProcessorCore, BatchProcessorCore
-from buttermilk._core.types import BaseRecord
+
+import pytest
+
 from buttermilk._core.processing_context import ProcessingContext
-from buttermilk.batch.runner import BatchPipelineRunner
+from buttermilk._core.processor_core import BatchProcessorCore, ProcessorCore
+from buttermilk._core.types import BaseRecord
 from buttermilk.batch.executors.sync import SyncBatchExecutor
+from buttermilk.batch.runner import BatchPipelineRunner
+
 
 class SlowExpander(ProcessorCore):
     async def _process_record(self, context: ProcessingContext) -> AsyncGenerator[BaseRecord, None]:
         await asyncio.sleep(0.1)
         yield context.record
 
+
 class FastBatchProcessor(BatchProcessorCore):
     async def _process_batch(self, records: list[BaseRecord]) -> list[BaseRecord]:
         return records
+
 
 @pytest.mark.anyio
 async def test_performance_batch_runner_expanders():
@@ -23,11 +28,7 @@ async def test_performance_batch_runner_expanders():
     records = [BaseRecord(record_id=f"rec-{i}", content=f"content-{i}") for i in range(num_records)]
 
     runner = BatchPipelineRunner(
-        name="test_runner",
-        source=records,
-        batch_processor=FastBatchProcessor(),
-        expanders=[SlowExpander()],
-        executor=SyncBatchExecutor()
+        name="test_runner", source=records, batch_processor=FastBatchProcessor(), expanders=[SlowExpander()], executor=SyncBatchExecutor()
     )
 
     start_time = time.perf_counter()
