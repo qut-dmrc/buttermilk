@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 from buttermilk import bm, logger
 from buttermilk._core.contract import ErrorEvent
-from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk._core.processor_core import ObservabilityMixin
 
 if TYPE_CHECKING:
@@ -488,12 +488,20 @@ class LLMCore(ObservabilityMixin):
         logger.debug(f"LLMCore: Using template '{self.template}'")
 
         # Render template using shared utility (handles merging and fail-on-unfilled)
-        result = render_template(
-            template=self.template,
-            template_vars=template_vars,
-            base_template_vars=self.template_vars,
-            fail_on_unfilled=self.fail_on_unfilled_parameters,
-        )
+        try:
+            result = render_template(
+                template=self.template,
+                template_vars=template_vars,
+                base_template_vars=self.template_vars,
+                fail_on_unfilled=self.fail_on_unfilled_parameters,
+            )
+        except FatalError as e:
+            # Convert unfilled-parameter errors to ProcessingError (non-fatal, known condition).
+            # Other FatalErrors (e.g., template not found) propagate and are wrapped by the
+            # outer except-Exception handler in process_with_llm as "LLMCore processing failed".
+            if "unfilled parameters" in str(e):
+                raise ProcessingError(str(e)) from e
+            raise
 
         # Convert to LLM messages
         try:

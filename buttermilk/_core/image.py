@@ -80,12 +80,12 @@ class ImageRecord(BaseModel):
             if obj.error is not None:
                 # Only add sad robot for content policy refusals, not general API errors
                 if cls._is_refusal_error(obj.error):
-                    obj.image = Image.open("tests/data/sadrobot.jpg")
+                    obj.image = Image.open(Path(__file__).parent / "assets" / "sadrobot.jpg")
                 else:
                     raise ValueError(f"Image generation failed due to a technical error. Error details: {obj.error}")
             else:
                 raise ValueError(
-                    "Image is required, unless an error has occured and the 'error' field is set.",
+                    "Image is required, unless an error has occurred and the 'error' field is set.",
                 )
         if isinstance(obj.image, genai.types.Image):
             # convert to PIL Image

@@ -11,7 +11,7 @@ from autogen_core.models import UserMessage
 
 from buttermilk._core.llms import ClientType, LiteLLMWrapper
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.slow]
 
 
 @pytest.mark.anyio
