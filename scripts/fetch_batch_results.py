@@ -129,7 +129,7 @@ async def _fetch_vertex_results(job_id: str, manifest_data: dict) -> None:
         await manager.wait_for_completion(vertex_job)
     except Exception as e:
         logger.error(f"Error checking/waiting for job: {e}")
-        sys.exit(1)
+        raise
 
     # Parse Results
     logger.info(f"Job completed. Fetching results from {manifest.output_uri}...")
@@ -138,8 +138,7 @@ async def _fetch_vertex_results(job_id: str, manifest_data: dict) -> None:
         _print_summary_and_save(job_id, results, len(manifest.requests))
     except Exception as e:
         logger.error(f"Failed to parse results: {e}")
-        await bm.graceful_shutdown()
-        sys.exit(1)
+        raise
 
 
 def _fetch_openai_results(job_id: str, manifest_data: dict) -> None:
@@ -170,7 +169,7 @@ def _fetch_openai_results(job_id: str, manifest_data: dict) -> None:
 
     if "error" in result:
         logger.error(f"Fetch failed: {result['error']}")
-        sys.exit(1)
+        raise RuntimeError(result["error"])
     elif "summary" in result and "results" in result:
         summary = result["summary"]
         results_data = result["results"]
@@ -241,15 +240,16 @@ async def fetch_results(job_id: str):
         sys.exit(1)
 
     # 3. Detect manifest type and route
-    if "openai_batch_id" in manifest_data:
-        logger.info("Detected OpenAI/Azure batch manifest.")
-        _fetch_openai_results(job_id, manifest_data)
-    else:
-        logger.info("Detected Vertex AI batch manifest.")
-        await _fetch_vertex_results(job_id, manifest_data)
-
-    # Ensure all logs and traces are flushed before exiting
-    await bm.graceful_shutdown()
+    try:
+        if "openai_batch_id" in manifest_data:
+            logger.info("Detected OpenAI/Azure batch manifest.")
+            _fetch_openai_results(job_id, manifest_data)
+        else:
+            logger.info("Detected Vertex AI batch manifest.")
+            await _fetch_vertex_results(job_id, manifest_data)
+    finally:
+        # Ensure all logs and traces are flushed before exiting, even on error
+        await bm.graceful_shutdown()
 
 
 def main():

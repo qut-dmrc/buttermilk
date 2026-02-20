@@ -270,6 +270,7 @@ def status(job_id: str, json_output: bool, save_dir: str | None, search: bool) -
                 "completed": status_info.get("completed", 0),
                 "failed": status_info.get("failed", 0),
                 "total": status_info.get("total", 0),
+                "error": status_info.get("error"),
             }
         else:
             from buttermilk._core.vertex_batch import BatchJobManager

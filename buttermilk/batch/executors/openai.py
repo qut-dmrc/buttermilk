@@ -42,6 +42,17 @@ def _create_openai_batch_client(model_name: str) -> tuple[Any, str]:
     if config.client_type == ClientType.AZURE:
         from openai import AzureOpenAI
 
+        if not config.base_url:
+            raise ValueError(
+                f"Model '{model_name}' is configured as Azure (ClientType.AZURE) but "
+                f"'base_url' is not set. Please set 'base_url' to your Azure OpenAI endpoint URL "
+                f"(e.g. 'https://<resource>.openai.azure.com/')."
+            )
+        if not config.api_key:
+            raise ValueError(
+                f"Model '{model_name}' is configured as Azure (ClientType.AZURE) but "
+                f"'api_key' is not set. Please provide your Azure OpenAI API key."
+            )
         api_version = config.configs.get("api_version", "2024-12-01-preview")
         client = AzureOpenAI(
             api_key=config.api_key,
