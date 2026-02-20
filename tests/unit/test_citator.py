@@ -5,7 +5,9 @@ from buttermilk.tools.citator import Citator, FormattedCitation
 
 def test_citator_initialization():
     """Test that Citator can be initialized with required parameters."""
-    citator = Citator(parameters={"model": "gemini-1.5-flash-latest", "template": "citator"})
+    citator = Citator(
+        parameters={"model": "gemini-1.5-flash-latest", "template": "citator"}
+    )
 
     # Check that agent_id is generated (not empty)
     assert citator.agent_id
@@ -36,7 +38,10 @@ def test_formatted_citation_model():
     )
 
     assert citation.title == "Example Article"
-    assert citation.citation == "Smith, J. (2023). Example Article. Journal of Examples, 1(1), 1-10."
+    assert (
+        citation.citation
+        == "Smith, J. (2023). Example Article. Journal of Examples, 1(1), 1-10."
+    )
     assert citation.style == "APA"
     assert citation.error is None
 

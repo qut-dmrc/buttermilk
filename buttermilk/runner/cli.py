@@ -43,7 +43,11 @@ def _validate_flow_config(conf: DictConfig, mode: str) -> None:
         ValueError: If required configuration is missing or invalid
     """
     # Convert mode to string if it's an enum
-    mode_str = str(mode).split(".")[-1].lower() if hasattr(mode, "value") else str(mode).lower()
+    mode_str = (
+        str(mode).split(".")[-1].lower()
+        if hasattr(mode, "value")
+        else str(mode).lower()
+    )
 
     # Modes that require a flow to be specified
     flow_required_modes = {"console"}
@@ -61,8 +65,12 @@ def _validate_flow_config(conf: DictConfig, mode: str) -> None:
         # Check if the flow exists in the configuration
         flow_name = conf.run.flow
         if not hasattr(conf.run, "flows") or flow_name not in conf.run.flows:
-            available_flows = list(conf.run.flows.keys()) if hasattr(conf.run, "flows") else []
-            flows_list = ", ".join(available_flows) if available_flows else "none configured"
+            available_flows = (
+                list(conf.run.flows.keys()) if hasattr(conf.run, "flows") else []
+            )
+            flows_list = (
+                ", ".join(available_flows) if available_flows else "none configured"
+            )
             raise ValueError(
                 f"Flow '{flow_name}' not found in configuration.\n"
                 f"Available flows: {flows_list}\n"
@@ -118,7 +126,6 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
     config_source_dir = None
     try:
         from hydra.core.hydra_config import HydraConfig
-
         hydra_cfg = HydraConfig.get()
         for src in hydra_cfg.runtime.config_sources:
             if src.schema == "file":
@@ -131,7 +138,7 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
     bm = asyncio.run(
         init_async(
             config=conf,  # Pass the existing Hydra configuration
-            config_source_dir=config_source_dir,
+            config_source_dir=config_source_dir
         )
     )
     conf = bm.cfg  # Use the typed config from BM
@@ -176,7 +183,9 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
             logger.info(f"Starting flow '{run_request.flow}'...")
 
             async def run_with_shutdown() -> None:
-                await flow_runner.run_flow(run_request=run_request, wait_for_completion=True)
+                await flow_runner.run_flow(
+                    run_request=run_request, wait_for_completion=True
+                )
                 await bm.graceful_shutdown()
 
             try:
@@ -205,8 +214,13 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
 
             # Verify app is ready instead of sleeping
             logger.debug("Verifying FastAPI app readiness...")
-            if not hasattr(fastapi_app.state, "flow_runner") or not fastapi_app.state.flow_runner:
-                raise RuntimeError("FlowRunner not properly initialized in FastAPI app state")
+            if (
+                not hasattr(fastapi_app.state, "flow_runner")
+                or not fastapi_app.state.flow_runner
+            ):
+                raise RuntimeError(
+                    "FlowRunner not properly initialized in FastAPI app state"
+                )
             logger.debug("✓ FastAPI app readiness verified")
 
             uvicorn_config = uvicorn.Config(

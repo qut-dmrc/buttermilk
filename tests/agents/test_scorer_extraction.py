@@ -145,9 +145,13 @@ class TestScoreTemplateRendering:
         # Extract values using scorer.yaml JMESPath expressions
         source = jmespath.search("FETCH.outputs.content", flow_state)
         expected = jmespath.search("FETCH.outputs.ground_truth", flow_state)
-        instructions = jmespath.search("JUDGE.messages[0].content || SYNTHESISER.messages[0].content", flow_state)
+        instructions = jmespath.search(
+            "JUDGE.messages[0].content || SYNTHESISER.messages[0].content",
+            flow_state
+        )
         answers = jmespath.search(
-            "[JUDGE,SYNTHESISER][].{agent_id: agent_info.agent_id, result: outputs, answer_id: call_id, error: error}", flow_state
+            "[JUDGE,SYNTHESISER][].{agent_id: agent_info.agent_id, result: outputs, answer_id: call_id, error: error}",
+            flow_state
         )
 
         # Render template
@@ -206,7 +210,8 @@ class TestScoreTemplateRendering:
     def test_template_renders_multiple_answers(self, flow_state):
         """Verify template renders all answers from multiple agents."""
         answers = jmespath.search(
-            "[JUDGE,SYNTHESISER][].{agent_id: agent_info.agent_id, result: outputs, answer_id: call_id, error: error}", flow_state
+            "[JUDGE,SYNTHESISER][].{agent_id: agent_info.agent_id, result: outputs, answer_id: call_id, error: error}",
+            flow_state
         )
 
         rendered, _, _ = load_template(

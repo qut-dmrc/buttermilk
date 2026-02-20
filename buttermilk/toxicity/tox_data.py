@@ -156,12 +156,10 @@ class DragQueens(ToxicPipe):
             lines=True,
         )
         df["path"] = df["img"].apply(
-            lambda name: (
-                CloudPath(
-                    "gs://dmrc-platforms/data/Drag queens and white supremacists/",
-                )
-                / name
-            ),
+            lambda name: CloudPath(
+                "gs://dmrc-platforms/data/Drag queens and white supremacists/",
+            )
+            / name,
         )
 
         # shuffle
@@ -244,9 +242,15 @@ class RealToxicityPrompts(ToxicDataSetPipe):
                 source=self.name,
                 labels=record["toxicity"],
                 text=[record["prompt"]["text"], record["continuation"].get("text", "")],
-                prompt={k: PerspectiveScore(type=k, measure="PROBABILITY", value=v) for k, v in record["prompt"].items() if isinstance(v, float)},
+                prompt={
+                    k: PerspectiveScore(type=k, measure="PROBABILITY", value=v)
+                    for k, v in record["prompt"].items()
+                    if isinstance(v, float)
+                },
                 response={
-                    k: PerspectiveScore(type=k, measure="PROBABILITY", value=v) for k, v in record["continuation"].items() if isinstance(v, float)
+                    k: PerspectiveScore(type=k, measure="PROBABILITY", value=v)
+                    for k, v in record["continuation"].items()
+                    if isinstance(v, float)
                 },
                 challenging=record["challenging"],
             )

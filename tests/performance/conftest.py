@@ -13,7 +13,9 @@ def pytest_configure(config):
     )
 
     # Disable xdist for performance tests (benchmarks can't run in parallel)
-    if config.getoption("markexpr") == "performance" or "performance" in str(config.invocation_params.dir):
+    if config.getoption("markexpr") == "performance" or "performance" in str(
+        config.invocation_params.dir
+    ):
         config.option.numprocesses = None
         config.option.dist = "no"
 

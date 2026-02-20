@@ -55,7 +55,9 @@ def record_agent_cfg(
 
 
 @pytest.mark.anyio
-@pytest.mark.skip(reason="Test uses outdated AgentInput API that no longer accepts 'records' parameter")
+@pytest.mark.skip(
+    reason="Test uses outdated AgentInput API that no longer accepts 'records' parameter"
+)
 async def test_run_record_agent(
     runtime,
     record_agent_cfg,

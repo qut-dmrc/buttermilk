@@ -4,17 +4,21 @@ Tests the OpenAI Batch API job manager: JSONL building, file upload,
 batch creation, polling, result downloading, and manifest persistence.
 """
 
+import io
 import json
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 
 from buttermilk._core.vertex_batch import (
     BatchRequest,
+    BatchResult,
     OpenAIBatchJobManager,
     OpenAIBatchManifest,
+    OpenAIMessageConverter,
 )
+
 
 # =============================================================================
 # Fixtures
@@ -68,8 +72,7 @@ def _make_openai_result_line(custom_id: str, content: str, usage: dict | None = 
                         "finish_reason": "stop",
                     }
                 ],
-                "usage": usage
-                or {
+                "usage": usage or {
                     "prompt_tokens": 50,
                     "completion_tokens": 20,
                     "total_tokens": 70,
@@ -352,13 +355,11 @@ class TestOpenAIBatchJobManagerDownload:
         mock_openai_client.batches.retrieve.return_value = mock_batch
 
         # Mock file content
-        output_lines = "\n".join(
-            [
-                _make_openai_result_line("req_0", "Response 0"),
-                _make_openai_result_line("req_1", "Response 1"),
-                _make_openai_result_line("req_2", "Response 2"),
-            ]
-        )
+        output_lines = "\n".join([
+            _make_openai_result_line("req_0", "Response 0"),
+            _make_openai_result_line("req_1", "Response 1"),
+            _make_openai_result_line("req_2", "Response 2"),
+        ])
         mock_content = MagicMock()
         mock_content.content = output_lines.encode("utf-8")
         mock_openai_client.files.content.return_value = mock_content
@@ -382,12 +383,10 @@ class TestOpenAIBatchJobManagerDownload:
         mock_openai_client.batches.retrieve.return_value = mock_batch
 
         # Output file has 2 successes
-        output_lines = "\n".join(
-            [
-                _make_openai_result_line("req_0", "Response 0"),
-                _make_openai_result_line("req_1", "Response 1"),
-            ]
-        )
+        output_lines = "\n".join([
+            _make_openai_result_line("req_0", "Response 0"),
+            _make_openai_result_line("req_1", "Response 1"),
+        ])
         mock_output_content = MagicMock()
         mock_output_content.content = output_lines.encode("utf-8")
 
@@ -448,7 +447,9 @@ class TestOpenAIBatchJobManagerDownload:
             "custom_id": "req_0",
             "response": {
                 "status_code": 400,
-                "body": {"error": {"message": "Invalid request parameters"}},
+                "body": {
+                    "error": {"message": "Invalid request parameters"}
+                },
             },
             "error": None,
         }
@@ -570,7 +571,6 @@ class TestOpenAIBatchManifest:
         assert manifest.submitted_at is not None
         # Should be a valid ISO timestamp
         import datetime
-
         datetime.datetime.fromisoformat(manifest.submitted_at)
 
 
@@ -605,12 +605,10 @@ class TestOpenAIBatchJobManagerIntegration:
         mock_openai_client.batches.retrieve.return_value = mock_batch_done
 
         # Mock result download
-        output_lines = "\n".join(
-            [
-                _make_openai_result_line("req_0", "Answer 0"),
-                _make_openai_result_line("req_1", "Answer 1"),
-            ]
-        )
+        output_lines = "\n".join([
+            _make_openai_result_line("req_0", "Answer 0"),
+            _make_openai_result_line("req_1", "Answer 1"),
+        ])
         mock_content = MagicMock()
         mock_content.content = output_lines.encode("utf-8")
         mock_openai_client.files.content.return_value = mock_content

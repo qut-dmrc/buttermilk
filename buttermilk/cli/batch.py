@@ -1,9 +1,8 @@
 """CLI commands for batch processing operations.
 
 These commands allow submitting, monitoring, and fetching batch jobs
-without requiring a continuous process. Supports both Vertex AI and
-OpenAI/Azure batch providers. Jobs can be managed from any machine
-with storage access.
+without requiring a continuous process. Jobs can be managed from any
+machine with GCS access.
 
 Usage:
     bm batch submit <config>      Submit batch job, print job_id, exit
@@ -21,96 +20,19 @@ import click
 from buttermilk import logger
 
 
-def _detect_manifest_type(manifest_data: dict) -> str:
-    """Detect whether a manifest is Vertex AI or OpenAI/Azure.
-
-    Returns:
-        "openai" if manifest contains openai_batch_id, "vertex" otherwise.
-    """
-    if "openai_batch_id" in manifest_data:
-        return "openai"
-    return "vertex"
-
-
-def _load_manifest_data(job_id: str, save_dir_override: str | None = None, search: bool = False) -> dict:
-    """Load raw manifest JSON for a job_id.
-
-    Uses the same multi-strategy lookup as BatchJobManager._load_manifest
-    but returns raw dict so the caller can detect manifest type.
-
-    Raises:
-        FileNotFoundError: If manifest not found
-    """
-    from cloudpathlib import AnyPath
-
-    from buttermilk import bm
-
-    session = bm.session_info
-    if save_dir_override:
-        session.save_dir = save_dir_override
-
-    manifest_path = None
-
-    # Strategy 1: Check stable persistent path
-    if session.save_dir_base:
-        try:
-            base = AnyPath(session.save_dir_base)
-            stable_path = base / session.project_name / "_batches" / job_id / "manifest.json"
-            if stable_path.exists():
-                manifest_path = stable_path
-        except Exception:
-            pass
-
-    # Strategy 2: Check current session path
-    if not manifest_path and session.save_dir:
-        try:
-            session_path = AnyPath(f"{session.save_dir}/batch/{job_id}/manifest.json")
-            if session_path.exists():
-                manifest_path = session_path
-        except Exception:
-            pass
-
-    # Strategy 3: Deep search across bucket
-    if not manifest_path and search and session.save_dir:
-        try:
-            parts = session.save_dir.split("/")
-            if len(parts) > 4 and "gs:" in parts[0]:
-                bucket = parts[2]
-                runs_root = f"gs://{bucket}/runs"
-                runs_path = AnyPath(runs_root)
-                found = list(runs_path.glob(f"**/batch/{job_id}/manifest.json"))
-                if found:
-                    manifest_path = found[0]
-        except Exception:
-            pass
-
-    if not manifest_path:
-        raise FileNotFoundError(f"Manifest not found for job: {job_id}")
-
-    return json.loads(manifest_path.read_text())
-
-
 @click.group()
 def batch() -> None:
-    """Batch processing commands for managing async batch jobs.
+    """Batch processing commands for managing async Vertex AI batch jobs.
 
-    Supports both Vertex AI and OpenAI/Azure batch providers.
     Submit jobs, check status, and fetch results without requiring
-    a continuous process.
+    a continuous process. Works from any machine with GCS access.
     """
 
 
 @batch.command()
 @click.argument("config", type=click.Path(exists=True, path_type=Path))
 @click.option("--json-output", "-j", is_flag=True, help="Output as JSON")
-@click.option(
-    "--provider",
-    "-p",
-    type=click.Choice(["vertex", "openai"], case_sensitive=False),
-    default="vertex",
-    help="Batch provider: vertex (default) or openai (for OpenAI/Azure/xAI)",
-)
-def submit(config: Path, json_output: bool, provider: str) -> None:
+def submit(config: Path, json_output: bool) -> None:
     """Submit a batch job from a config file.
 
     CONFIG is a YAML/JSON config file specifying the batch job parameters.
@@ -118,7 +40,6 @@ def submit(config: Path, json_output: bool, provider: str) -> None:
 
     Example:
         bm batch submit batch_config.yaml
-        bm batch submit batch_config.yaml --provider openai
     """
     import asyncio
 
@@ -135,55 +56,45 @@ def submit(config: Path, json_output: bool, provider: str) -> None:
     else:
         batch_config = json.loads(config_content)
 
+    # Initialize buttermilk
     async def run_submit() -> dict:
         bm = await init_async(job="batch-submit")
 
-        from buttermilk._core.vertex_batch import BatchRequest
+        from buttermilk._core.vertex_batch import BatchJobManager, BatchRequest
 
+        manager = BatchJobManager(client=bm.genai)
+
+        # Extract batch parameters from config
         model = batch_config.get("model", "gemini-2.5-flash")
         requests_data = batch_config.get("requests", [])
+
+        # Convert raw request dicts to BatchRequest objects
         requests = [BatchRequest(**r) for r in requests_data]
 
         if not requests:
             raise ValueError("No requests found in config file")
 
-        if provider == "openai":
-            from buttermilk._core.vertex_batch import OpenAIBatchJobManager
-            from buttermilk.batch.executors.openai import _create_openai_batch_client
+        # Submit the batch job
+        job = await manager.submit_batch(
+            model=model,
+            requests=requests,
+        )
 
-            client, endpoint = _create_openai_batch_client(model)
-            manager = OpenAIBatchJobManager(client=client, endpoint=endpoint)
+        # Extract job_id from the internal tracking
+        # The job_id is the last part of the job name
+        job_id = None
+        for jid, info in manager._active_jobs.items():
+            if info["job"].name == job.name:
+                job_id = jid
+                break
 
-            result = await manager.submit_batch(model=model, requests=requests)
-
-            return {
-                "job_id": result["job_id"],
-                "openai_batch_id": result["openai_batch_id"],
-                "provider": "openai",
-                "model": model,
-                "request_count": len(requests),
-                "save_dir": bm.session_info.save_dir,
-            }
-        else:
-            from buttermilk._core.vertex_batch import BatchJobManager
-
-            manager = BatchJobManager(client=bm.genai)
-            job = await manager.submit_batch(model=model, requests=requests)
-
-            job_id = None
-            for jid, info in manager._active_jobs.items():
-                if info["job"].name == job.name:
-                    job_id = jid
-                    break
-
-            return {
-                "job_id": job_id,
-                "vertex_job_name": job.name,
-                "provider": "vertex",
-                "model": model,
-                "request_count": len(requests),
-                "save_dir": bm.session_info.save_dir,
-            }
+        return {
+            "job_id": job_id,
+            "vertex_job_name": job.name,
+            "model": model,
+            "request_count": len(requests),
+            "save_dir": bm.session_info.save_dir,
+        }
 
     try:
         result = asyncio.run(run_submit())
@@ -192,12 +103,8 @@ def submit(config: Path, json_output: bool, provider: str) -> None:
             click.echo(json.dumps(result, indent=2))
         else:
             click.echo("Job submitted successfully!")
-            click.echo(f"  Provider: {result['provider']}")
             click.echo(f"  Job ID: {result['job_id']}")
-            if result.get("vertex_job_name"):
-                click.echo(f"  Vertex Job: {result['vertex_job_name']}")
-            if result.get("openai_batch_id"):
-                click.echo(f"  OpenAI Batch ID: {result['openai_batch_id']}")
+            click.echo(f"  Vertex Job: {result['vertex_job_name']}")
             click.echo(f"  Model: {result['model']}")
             click.echo(f"  Requests: {result['request_count']}")
             click.echo(f"\nTo check status: bm batch status {result['job_id']}")
@@ -230,7 +137,6 @@ def status(job_id: str, json_output: bool, save_dir: str | None, search: bool) -
     """Check the status of a batch job.
 
     JOB_ID is the job identifier returned by the submit command.
-    Auto-detects whether the job is Vertex AI or OpenAI/Azure.
 
     Example:
         bm batch status batch_abc123def456
@@ -243,42 +149,15 @@ def status(job_id: str, json_output: bool, save_dir: str | None, search: bool) -
     async def run_status() -> dict:
         bm = await init_async(job="batch-status")
 
-        manifest_data = _load_manifest_data(job_id, save_dir_override=save_dir, search=search)
-        manifest_type = _detect_manifest_type(manifest_data)
+        from buttermilk._core.vertex_batch import BatchJobManager
 
-        if manifest_type == "openai":
-            from buttermilk._core.vertex_batch import OpenAIBatchJobManager, OpenAIBatchManifest
-            from buttermilk.batch.executors.openai import _create_openai_batch_client
+        manager = BatchJobManager(client=bm.genai)
 
-            manifest = OpenAIBatchManifest(**manifest_data)
-            try:
-                client, endpoint = _create_openai_batch_client(manifest.model)
-            except ValueError:
-                from openai import OpenAI
+        # Override save_dir if provided
+        if save_dir:
+            bm.session_info.save_dir = save_dir
 
-                client = OpenAI()
-                endpoint = "/v1/chat/completions"
-
-            manager = OpenAIBatchJobManager(client=client, endpoint=endpoint)
-            status_info = manager.get_batch_status(manifest.openai_batch_id)
-
-            return {
-                "provider": "openai",
-                "state": status_info["status"],
-                "is_complete": status_info["is_complete"],
-                "is_success": status_info["is_success"],
-                "completed": status_info.get("completed", 0),
-                "failed": status_info.get("failed", 0),
-                "total": status_info.get("total", 0),
-                "error": status_info.get("error"),
-            }
-        else:
-            from buttermilk._core.vertex_batch import BatchJobManager
-
-            manager = BatchJobManager(client=bm.genai)
-            if save_dir:
-                bm.session_info.save_dir = save_dir
-            return manager.get_job_status(job_id, search=search)
+        return manager.get_job_status(job_id, search=search)
 
     try:
         result = asyncio.run(run_status())
@@ -286,14 +165,11 @@ def status(job_id: str, json_output: bool, save_dir: str | None, search: bool) -
         if json_output:
             click.echo(json.dumps(result, indent=2))
         else:
-            provider = result.get("provider", "vertex")
-            click.echo(f"Job Status: {job_id} ({provider})")
-            click.echo(f"  State: {result.get('state', 'unknown')}")
-            click.echo(f"  Complete: {'Yes' if result.get('is_complete') else 'No'}")
-            if result.get("is_complete"):
-                click.echo(f"  Success: {'Yes' if result.get('is_success') else 'No'}")
-            if result.get("completed") is not None and result.get("total"):
-                click.echo(f"  Progress: {result['completed']}/{result['total']}")
+            click.echo(f"Job Status: {job_id}")
+            click.echo(f"  State: {result['state']}")
+            click.echo(f"  Complete: {'Yes' if result['is_complete'] else 'No'}")
+            if result["is_complete"]:
+                click.echo(f"  Success: {'Yes' if result['is_success'] else 'No'}")
             if result.get("error"):
                 click.echo(f"  Error: {result['error']}")
 
@@ -303,7 +179,9 @@ def status(job_id: str, json_output: bool, save_dir: str | None, search: bool) -
             click.echo(json.dumps({"error": msg, "job_id": job_id}))
         else:
             click.echo(f"Error: {msg}", err=True)
-            click.echo("Make sure you're using the correct save_dir or session.", err=True)
+            click.echo(
+                "Make sure you're using the correct save_dir or session.", err=True
+            )
         sys.exit(1)
     except Exception as e:
         logger.error(f"Failed to get job status: {e}")
@@ -333,7 +211,6 @@ def fetch(job_id: str, json_output: bool, output: str | None, save_dir: str | No
     """Fetch results from a completed batch job.
 
     JOB_ID is the job identifier returned by the submit command.
-    Auto-detects whether the job is Vertex AI or OpenAI/Azure.
     If the job is still running, returns status instead of results.
 
     Example:
@@ -348,31 +225,15 @@ def fetch(job_id: str, json_output: bool, output: str | None, save_dir: str | No
     async def run_fetch() -> dict | list:
         bm = await init_async(job="batch-fetch")
 
-        manifest_data = _load_manifest_data(job_id, save_dir_override=save_dir, search=search)
-        manifest_type = _detect_manifest_type(manifest_data)
+        from buttermilk._core.vertex_batch import BatchJobManager
 
-        if manifest_type == "openai":
-            from buttermilk._core.vertex_batch import OpenAIBatchJobManager, OpenAIBatchManifest
-            from buttermilk.batch.executors.openai import _create_openai_batch_client
+        manager = BatchJobManager(client=bm.genai)
 
-            manifest = OpenAIBatchManifest(**manifest_data)
-            try:
-                client, endpoint = _create_openai_batch_client(manifest.model)
-            except ValueError:
-                from openai import OpenAI
+        # Override save_dir if provided
+        if save_dir:
+            bm.session_info.save_dir = save_dir
 
-                client = OpenAI()
-                endpoint = "/v1/chat/completions"
-
-            manager = OpenAIBatchJobManager(client=client, endpoint=endpoint)
-            return manager.fetch_results(job_id)
-        else:
-            from buttermilk._core.vertex_batch import BatchJobManager
-
-            manager = BatchJobManager(client=bm.genai)
-            if save_dir:
-                bm.session_info.save_dir = save_dir
-            return manager.fetch_results(job_id, search=search)
+        return manager.fetch_results(job_id, search=search)
 
     try:
         result = asyncio.run(run_fetch())
@@ -436,7 +297,9 @@ def fetch(job_id: str, json_output: bool, output: str | None, save_dir: str | No
             click.echo(json.dumps({"error": msg, "job_id": job_id}))
         else:
             click.echo(f"Error: {msg}", err=True)
-            click.echo("Make sure you're using the correct save_dir or session.", err=True)
+            click.echo(
+                "Make sure you're using the correct save_dir or session.", err=True
+            )
         sys.exit(1)
     except Exception as e:
         logger.error(f"Failed to fetch results: {e}")
@@ -459,7 +322,6 @@ def list_jobs(json_output: bool, limit: int, save_dir: str | None) -> None:
     """List recent batch jobs from the save directory.
 
     Shows job IDs, submission times, and current status.
-    Lists both Vertex AI and OpenAI/Azure batch jobs.
 
     Example:
         bm batch list
@@ -470,7 +332,7 @@ def list_jobs(json_output: bool, limit: int, save_dir: str | None) -> None:
     from cloudpathlib import AnyPath
 
     from buttermilk import init_async
-    from buttermilk._core.vertex_batch import BatchJobManifest, OpenAIBatchManifest
+    from buttermilk._core.vertex_batch import BatchJobManifest
 
     async def run_list() -> list[dict]:
         bm = await init_async(job="batch-list")
@@ -497,33 +359,16 @@ def list_jobs(json_output: bool, limit: int, save_dir: str | None) -> None:
                 continue
 
             try:
-                raw = json.loads(manifest_path.read_text())
-                manifest_type = _detect_manifest_type(raw)
-
-                if manifest_type == "openai":
-                    manifest = OpenAIBatchManifest.model_validate(raw)
-                    jobs.append(
-                        {
-                            "job_id": manifest.job_id,
-                            "provider": "openai",
-                            "model": manifest.model,
-                            "submitted_at": manifest.submitted_at,
-                            "request_count": manifest.request_count,
-                            "openai_batch_id": manifest.openai_batch_id,
-                        }
-                    )
-                else:
-                    manifest = BatchJobManifest.model_validate(raw)
-                    jobs.append(
-                        {
-                            "job_id": manifest.job_id,
-                            "provider": "vertex",
-                            "model": manifest.model,
-                            "submitted_at": manifest.submitted_at,
-                            "request_count": manifest.request_count,
-                            "vertex_job_name": manifest.vertex_job_name,
-                        }
-                    )
+                manifest = BatchJobManifest.model_validate_json(
+                    manifest_path.read_text()
+                )
+                jobs.append({
+                    "job_id": manifest.job_id,
+                    "model": manifest.model,
+                    "submitted_at": manifest.submitted_at,
+                    "request_count": manifest.request_count,
+                    "vertex_job_name": manifest.vertex_job_name,
+                })
             except Exception as e:
                 logger.warning(f"Failed to parse manifest {manifest_path}: {e}")
                 continue
@@ -541,8 +386,7 @@ def list_jobs(json_output: bool, limit: int, save_dir: str | None) -> None:
         else:
             click.echo(f"Recent batch jobs ({len(jobs)} found):\n")
             for job in jobs:
-                provider = job.get("provider", "vertex")
-                click.echo(f"  {job['job_id']} [{provider}]")
+                click.echo(f"  {job['job_id']}")
                 click.echo(f"    Model: {job['model']}")
                 click.echo(f"    Submitted: {job['submitted_at']}")
                 click.echo(f"    Requests: {job['request_count']}")

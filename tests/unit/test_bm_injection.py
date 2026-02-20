@@ -103,8 +103,14 @@ class TestDocumentedBehavior:
         api_session_2.set_session_bm(bm_session_2)
 
         # Verify each session has isolated observability context
-        assert api_session_1.get_effective_bm().session_info.session_id == "api-session-abc123"
-        assert api_session_2.get_effective_bm().session_info.session_id == "api-session-def456"
+        assert (
+            api_session_1.get_effective_bm().session_info.session_id
+            == "api-session-abc123"
+        )
+        assert (
+            api_session_2.get_effective_bm().session_info.session_id
+            == "api-session-def456"
+        )
 
         # This solves the original problem: no more shared run_ids between sessions
         assert api_session_1.get_effective_bm() is not api_session_2.get_effective_bm()

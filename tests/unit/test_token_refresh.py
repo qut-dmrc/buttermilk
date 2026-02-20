@@ -64,9 +64,14 @@ async def test_concurrent_token_refresh_is_thread_safe(real_bm: BM):
         return TokenState.FRESH if current_token != initial_token else TokenState.STALE
 
     # Patch both the refresh method and token_state property
-    with (
-        patch.object(cloud_manager.gcp_credentials, "refresh", side_effect=mock_refresh),
-        patch.object(type(cloud_manager.gcp_credentials), "token_state", property(lambda self: mock_token_state())),
+    with patch.object(
+        cloud_manager.gcp_credentials,
+        "refresh",
+        side_effect=mock_refresh
+    ), patch.object(
+        type(cloud_manager.gcp_credentials),
+        "token_state",
+        property(lambda self: mock_token_state())
     ):
         # Create threads that will call get_access_token concurrently
         num_threads = 10
@@ -149,7 +154,8 @@ async def test_litellm_wrapper_accepts_token_provider():
     )
 
     assert wrapper.token_provider == get_fresh_token, (
-        f"token_provider was not set correctly. Expected {get_fresh_token}, got {getattr(wrapper, 'token_provider', None)}"
+        f"token_provider was not set correctly. "
+        f"Expected {get_fresh_token}, got {getattr(wrapper, 'token_provider', None)}"
     )
 
 
@@ -242,13 +248,15 @@ async def test_litellm_create_uses_token_provider_for_auth():
     # First call should use fresh_token_1
     assert "Authorization" in captured_headers[0], "Authorization header missing from first call"
     assert "fresh_token_1" in captured_headers[0]["Authorization"], (
-        f"Expected fresh_token_1 in Authorization header, got: {captured_headers[0].get('Authorization')}"
+        f"Expected fresh_token_1 in Authorization header, "
+        f"got: {captured_headers[0].get('Authorization')}"
     )
 
     # Second call should use fresh_token_2
     assert "Authorization" in captured_headers[1], "Authorization header missing from second call"
     assert "fresh_token_2" in captured_headers[1]["Authorization"], (
-        f"Expected fresh_token_2 in Authorization header, got: {captured_headers[1].get('Authorization')}"
+        f"Expected fresh_token_2 in Authorization header, "
+        f"got: {captured_headers[1].get('Authorization')}"
     )
 
 
@@ -304,9 +312,14 @@ async def test_token_refresh_retries_on_transient_failure(real_bm: BM):
         return TokenState.FRESH if current_token != initial_token else TokenState.STALE
 
     # Patch both the refresh method and token_state property
-    with (
-        patch.object(cloud_manager.gcp_credentials, "refresh", side_effect=mock_refresh),
-        patch.object(type(cloud_manager.gcp_credentials), "token_state", property(lambda self: mock_token_state())),
+    with patch.object(
+        cloud_manager.gcp_credentials,
+        "refresh",
+        side_effect=mock_refresh
+    ), patch.object(
+        type(cloud_manager.gcp_credentials),
+        "token_state",
+        property(lambda self: mock_token_state())
     ):
         # Call get_access_token() - should retry on transient failures
         token = cloud_manager.get_access_token()
@@ -321,7 +334,9 @@ async def test_token_refresh_retries_on_transient_failure(real_bm: BM):
     )
 
     # ASSERT: Eventually succeeded and got valid token
-    assert token == "refreshed_token_success", f"Expected successful token after retries, got {token}"
+    assert token == "refreshed_token_success", (
+        f"Expected successful token after retries, got {token}"
+    )
 
 
 @pytest.mark.anyio
@@ -361,7 +376,8 @@ async def test_get_autogen_chat_client_passes_token_provider_for_vertex(real_bm:
 
     vertex_types = {ClientType.GEMINI_VERTEX, ClientType.VERTEX_OPENAI, ClientType.ANTHROPIC_VERTEX}
     assert config.client_type in vertex_types, (
-        f"Model {model_name} uses {config.client_type}, expected a Vertex type. This test requires a Vertex model to verify token_provider is passed."
+        f"Model {model_name} uses {config.client_type}, expected a Vertex type. "
+        f"This test requires a Vertex model to verify token_provider is passed."
     )
 
     # Get LiteLLMWrapper via get_autogen_chat_client
@@ -369,7 +385,10 @@ async def test_get_autogen_chat_client_passes_token_provider_for_vertex(real_bm:
     wrapper = llms.get_autogen_chat_client(model_name)
 
     # ASSERT: wrapper should be LiteLLMWrapper (not AutoGenWrapper)
-    assert isinstance(wrapper, LiteLLMWrapper), f"Expected LiteLLMWrapper for Vertex model {model_name}, got {type(wrapper).__name__}"
+    assert isinstance(wrapper, LiteLLMWrapper), (
+        f"Expected LiteLLMWrapper for Vertex model {model_name}, "
+        f"got {type(wrapper).__name__}"
+    )
 
     # ASSERT: wrapper should have token_provider field
     # EXPECTED TO FAIL: Currently LiteLLMWrapper doesn't have token_provider field
@@ -388,15 +407,20 @@ async def test_get_autogen_chat_client_passes_token_provider_for_vertex(real_bm:
     )
 
     # ASSERT: token_provider should be callable
-    assert callable(wrapper.token_provider), f"token_provider is not callable, got {type(wrapper.token_provider)}"
+    assert callable(wrapper.token_provider), (
+        f"token_provider is not callable, got {type(wrapper.token_provider)}"
+    )
 
     # ASSERT: calling token_provider() should return a valid token string
     token = wrapper.token_provider()
-    assert isinstance(token, str), f"token_provider() should return str, got {type(token)}"
+    assert isinstance(token, str), (
+        f"token_provider() should return str, got {type(token)}"
+    )
     assert len(token) > 0, "token_provider() returned empty string"
 
     # ASSERT: token should match what bm.get_gcp_access_token() returns
     expected_token = real_bm.get_gcp_access_token()
     assert token == expected_token, (
-        f"token_provider() returned different token than bm.get_gcp_access_token(). Expected: {expected_token[:50]}..., got: {token[:50]}..."
+        f"token_provider() returned different token than bm.get_gcp_access_token(). "
+        f"Expected: {expected_token[:50]}..., got: {token[:50]}..."
     )

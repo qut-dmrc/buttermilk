@@ -33,7 +33,9 @@ async def test_wrapper_type_is_litellm(
     wrapper = real_llms[model_name]
 
     # Verify the wrapper type is LiteLLMWrapper
-    assert isinstance(wrapper, LiteLLMWrapper), f"Expected LiteLLMWrapper but got {type(wrapper).__name__}"
+    assert isinstance(
+        wrapper, LiteLLMWrapper
+    ), f"Expected LiteLLMWrapper but got {type(wrapper).__name__}"
 
 
 @pytest.mark.slow
@@ -61,7 +63,9 @@ async def test_litellm_wrapper_creates_functional_wrapper(
 
     # Make a simple call to verify functionality
     # Note: This is a real API call, so we keep it minimal
-    messages = [UserMessage(content="Say 'test successful' and nothing else.", source="user")]
+    messages = [
+        UserMessage(content="Say 'test successful' and nothing else.", source="user")
+    ]
 
     response = await wrapper.create(messages=messages)
 

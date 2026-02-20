@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 """Quick test to verify Title objects are loaded from BigQuery storage."""
-
 import pytest
 from omegaconf import OmegaConf
 

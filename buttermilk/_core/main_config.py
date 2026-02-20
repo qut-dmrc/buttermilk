@@ -22,13 +22,19 @@ class TracingProviderConfig(BaseModel):
     Note: Weave/W&B support has been removed in favor of Google Cloud Trace.
     """
 
-    enabled: bool = Field(default=False, description="Whether this tracing provider is enabled")
-    project_id: str | None = Field(default=None, description="Project/entity ID for the tracing provider")
+    enabled: bool = Field(
+        default=False, description="Whether this tracing provider is enabled"
+    )
+    project_id: str | None = Field(
+        default=None, description="Project/entity ID for the tracing provider"
+    )
     api_key: str | None = Field(
         default=None,
         description="API key for authentication (may be None for local/OTEL)",
     )
-    endpoint: str | None = Field(default=None, description="Custom endpoint URL for the tracing provider")
+    endpoint: str | None = Field(
+        default=None, description="Custom endpoint URL for the tracing provider"
+    )
 
     model_config = {
         "extra": "allow",  # Allow provider-specific fields
@@ -64,7 +70,9 @@ class InfrastructureConfig(BaseModel):
     """
 
     # Cloud providers (GCP, AWS, Azure)
-    clouds: list[CloudProvider] = Field(default_factory=list, description="List of cloud provider configurations")
+    clouds: list[CloudProvider] = Field(
+        default_factory=list, description="List of cloud provider configurations"
+    )
 
     # LLM configurations
     llms: dict[str, Any] = Field(
@@ -73,13 +81,19 @@ class InfrastructureConfig(BaseModel):
     )
 
     # Unified tracing configuration
-    tracing: TracingConfig | dict[str, Any] = Field(default_factory=TracingConfig, description="Tracing provider configurations")
+    tracing: TracingConfig | dict[str, Any] = Field(
+        default_factory=TracingConfig, description="Tracing provider configurations"
+    )
 
     # Logging configuration
-    logging: LoggerConfig | dict[str, Any] | None = Field(default=None, description="Logging configuration")
+    logging: LoggerConfig | dict[str, Any] | None = Field(
+        default=None, description="Logging configuration"
+    )
 
     # Dataset configurations
-    datasets: dict[str, BaseStorageConfig] = Field(default_factory=dict, description="Named dataset storage configurations")
+    datasets: dict[str, BaseStorageConfig] = Field(
+        default_factory=dict, description="Named dataset storage configurations"
+    )
 
     model_config = {
         "extra": "allow",  # Allow additional infrastructure components
@@ -136,7 +150,9 @@ class ButtermilkConfig(BaseModel):
     )
 
     # Session information (direct, no wrapper)
-    session: SessionInfo = Field(description="Session-specific information and tracking")
+    session: SessionInfo = Field(
+        description="Session-specific information and tracking"
+    )
 
     # Infrastructure configuration
     infrastructure: InfrastructureConfig = Field(
@@ -149,7 +165,9 @@ class ButtermilkConfig(BaseModel):
     #     flows: dict[str, Any] = Field(default_factory=dict, description="Flow definitions keyed by flow name")
 
     # Storage configurations
-    storage: dict[str, BaseStorageConfig | dict[str, Any]] = Field(default_factory=dict, description="Named storage configurations")
+    storage: dict[str, BaseStorageConfig | dict[str, Any]] = Field(
+        default_factory=dict, description="Named storage configurations"
+    )
 
     model_config = {
         "extra": "allow",  # Allow additional fields for flexibility
@@ -206,13 +224,14 @@ class ButtermilkConfig(BaseModel):
         Raises:
             AttributeError: If run doesn't exist or run.pipeline is None
         """
-        if not hasattr(self, "run"):
+        if not hasattr(self, 'run'):
             raise AttributeError("ButtermilkConfig has no 'run' attribute")
-        if not hasattr(self.run, "pipeline"):
+        if not hasattr(self.run, 'pipeline'):
             raise AttributeError("RunConfig has no 'pipeline' attribute")
         if self.run.pipeline is None:
             raise AttributeError(
-                "run.pipeline is None. Did you mean to access pipelines.{pipeline_name}? run.pipeline is only set when mode=pipeline"
+                "run.pipeline is None. Did you mean to access pipelines.{pipeline_name}? "
+                "run.pipeline is only set when mode=pipeline"
             )
         return self.run.pipeline
 

@@ -48,8 +48,8 @@ We mock only at system boundaries—where our code interfaces with external syst
 **E2E tests must**:
 
 1. ✅ Use `real_bm` fixture
-2. ✅ Call real APIs 
-3. ✅ Store in real databases 
+2. ✅ Call real APIs
+3. ✅ Store in real databases
 4. ✅ Exercise complete workflow
 5. ✅ Validate end-to-end behavior
 6. ✅ Use realistic test data

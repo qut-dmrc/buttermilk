@@ -58,9 +58,13 @@ class JMESPathTransform(BaseModel):
                     expression=expression,
                     error=str(e),
                 )
-                raise ValueError(f"Invalid JMESPath expression for field '{field_name}': {expression}") from e
+                raise ValueError(
+                    f"Invalid JMESPath expression for field '{field_name}': {expression}"
+                ) from e
 
-    async def process(self, record: BaseRecord, *, processor_stage: str, **kwargs) -> AsyncGenerator[BaseRecord, None]:
+    async def process(
+        self, record: BaseRecord, *, processor_stage: str, **kwargs
+    ) -> AsyncGenerator[BaseRecord, None]:
         """Process a record by applying JMESPath transformations.
 
         Args:
@@ -114,7 +118,9 @@ class JMESPathTransform(BaseModel):
                     error=str(e),
                     processor_stage=processor_stage,
                 )
-                raise ValueError(f"Error applying JMESPath for field '{field_name}': {str(e)}") from e
+                raise ValueError(
+                    f"Error applying JMESPath for field '{field_name}': {str(e)}"
+                ) from e
 
         # Create new record with additional fields
         # BaseRecord has extra="allow" and frozen=True, so we need to reconstruct it

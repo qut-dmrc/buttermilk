@@ -91,7 +91,9 @@ def measure_startup_time(timeout=60):
                     # Quick test to make sure it's working
                     data = response.json()
                     if "flow_choices" in data:
-                        print(f"✅ Server functional with {len(data['flow_choices'])} flows")
+                        print(
+                            f"✅ Server functional with {len(data['flow_choices'])} flows"
+                        )
 
                     return startup_time, True
             except requests.exceptions.RequestException:

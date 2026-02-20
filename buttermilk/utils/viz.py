@@ -333,7 +333,9 @@ def _apply_plotly_style(profile: dict, palette: dict, theme: str) -> None:
 
     # Layout defaults
     template.layout = go.Layout(
-        font=dict(family="sans-serif", size=profile["font_size"], color=palette["text"]),
+        font=dict(
+            family="sans-serif", size=profile["font_size"], color=palette["text"]
+        ),
         plot_bgcolor=palette["background"],
         paper_bgcolor=palette["background"],
         title=dict(font=dict(size=profile["title_size"], color=palette["text"])),
@@ -379,7 +381,9 @@ def get_palette(theme: ThemeType = "cyberpunk") -> dict:
     return PALETTES[theme].copy()
 
 
-def get_categorical_colors(theme: ThemeType = "cyberpunk", n: int | None = None) -> list[str]:
+def get_categorical_colors(
+    theme: ThemeType = "cyberpunk", n: int | None = None
+) -> list[str]:
     """Get categorical color list.
 
     Args:
@@ -398,7 +402,9 @@ def get_categorical_colors(theme: ThemeType = "cyberpunk", n: int | None = None)
     return [colors[i % len(colors)] for i in range(n)]
 
 
-def get_sequential_colors(theme: ThemeType = "cyberpunk", n: int = 6, reverse: bool = False) -> list[str]:
+def get_sequential_colors(
+    theme: ThemeType = "cyberpunk", n: int = 6, reverse: bool = False
+) -> list[str]:
     """Get sequential color gradient.
 
     Args:
@@ -421,7 +427,10 @@ def get_sequential_colors(theme: ThemeType = "cyberpunk", n: int = 6, reverse: b
     from matplotlib.colors import LinearSegmentedColormap
 
     cmap = LinearSegmentedColormap.from_list("custom", colors, N=n)
-    return [f"#{int(r * 255):02x}{int(g * 255):02x}{int(b * 255):02x}" for r, g, b, _ in cmap(np.linspace(0, 1, n))]
+    return [
+        f"#{int(r * 255):02x}{int(g * 255):02x}{int(b * 255):02x}"
+        for r, g, b, _ in cmap(np.linspace(0, 1, n))
+    ]
 
 
 def quick_figure(
@@ -512,7 +521,9 @@ class temp_style:
         >>> # Original style restored
     """
 
-    def __init__(self, profile: ProfileType | None = None, theme: ThemeType | None = None):
+    def __init__(
+        self, profile: ProfileType | None = None, theme: ThemeType | None = None
+    ):
         self.profile = profile
         self.theme = theme
         self.old_rc = None

@@ -22,7 +22,9 @@ from buttermilk.agents.flowcontrol.structured_llmhost import StructuredLLMHostAg
 
 pytestmark = [
     pytest.mark.anyio,
-    pytest.mark.skip(reason="Tests for future agent-centric tool calling functionality"),
+    pytest.mark.skip(
+        reason="Tests for future agent-centric tool calling functionality"
+    ),
 ]
 
 
@@ -92,8 +94,12 @@ async def test_agent_tool_definition():
 
     # Validate structure
     assert tool_def["name"] == "call_researcher"
-    assert "Use this tool when you need to" in tool_def["description"]  # Enhanced description
-    assert "researches topics" in tool_def["description"].lower()  # Contains original description
+    assert (
+        "Use this tool when you need to" in tool_def["description"]
+    )  # Enhanced description
+    assert (
+        "researches topics" in tool_def["description"].lower()
+    )  # Contains original description
     assert "input_schema" in tool_def
     assert tool_def["input_schema"]["type"] == "object"
     assert "prompt" in tool_def["input_schema"]["properties"]
@@ -109,7 +115,9 @@ async def test_agent_announcement():
     agent = MockSimpleAgent("ANALYZER", "Analyzes data")
 
     # Create announcement
-    announcement = agent.create_announcement(announcement_type="initial", status="joining")
+    announcement = agent.create_announcement(
+        announcement_type="initial", status="joining"
+    )
 
     print(f"✅ Announcement: {announcement}")
 

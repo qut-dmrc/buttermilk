@@ -39,7 +39,8 @@ def format_slack_reasons(result: ExecutionTrace) -> dict:
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": "*Error!*\n" + "\n".join(format_response(result_copy.outputs.get("error"))),
+                    "text": "*Error!*\n"
+                    + "\n".join(format_response(result_copy.outputs.get("error"))),
                 },
             },
         )
@@ -83,7 +84,9 @@ def format_slack_reasons(result: ExecutionTrace) -> dict:
             if outputs.get("labels"):
                 labels = outputs.pop("labels", [])
                 if labels:
-                    label_text = "*Labels:* " + " ".join([f"`{label}`" for label in labels])
+                    label_text = "*Labels:* " + " ".join(
+                        [f"`{label}`" for label in labels]
+                    )
                     blocks.append(
                         {
                             "type": "section",
@@ -95,7 +98,12 @@ def format_slack_reasons(result: ExecutionTrace) -> dict:
                     )
 
             # Handle any remaining fields in outputs
-            remaining_outputs = {k: v for k, v in outputs.items() if k not in ["reasons", "prediction", "confidence", "severity", "labels"]}
+            remaining_outputs = {
+                k: v
+                for k, v in outputs.items()
+                if k
+                not in ["reasons", "prediction", "confidence", "severity", "labels"]
+            }
 
             if remaining_outputs:
                 for text in format_response(remaining_outputs):
@@ -157,7 +165,13 @@ def format_slack_reasons(result: ExecutionTrace) -> dict:
     blocks = blocks[:50]  # Slack's block limit
 
     # Also provide a text fallback for clients that don't support blocks
-    fallback_text = header_text + "\n" + pprint.pformat(result_copy, indent=2)[: SLACK_MAX_MESSAGE_LENGTH - len(header_text) - 10]
+    fallback_text = (
+        header_text
+        + "\n"
+        + pprint.pformat(result_copy, indent=2)[
+            : SLACK_MAX_MESSAGE_LENGTH - len(header_text) - 10
+        ]
+    )
 
     return {
         "blocks": blocks,

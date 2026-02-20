@@ -50,10 +50,14 @@ class TestToxicityModelProcess:
         )
 
     @pytest.mark.anyio
-    async def test_process_yields_enriched_record(self, mock_toxicity_model, test_record):
+    async def test_process_yields_enriched_record(
+        self, mock_toxicity_model, test_record
+    ):
         """process() should yield record with toxicity results in metadata."""
         results = []
-        async for result in mock_toxicity_model.process(test_record, processor_stage="toxicity_check"):
+        async for result in mock_toxicity_model.process(
+            test_record, processor_stage="toxicity_check"
+        ):
             results.append(result)
 
         assert len(results) == 1
@@ -72,10 +76,14 @@ class TestToxicityModelProcess:
         assert tox_result["labels"] == ["toxic"]
 
     @pytest.mark.anyio
-    async def test_process_preserves_existing_metadata(self, mock_toxicity_model, test_record):
+    async def test_process_preserves_existing_metadata(
+        self, mock_toxicity_model, test_record
+    ):
         """process() should preserve existing metadata."""
         results = []
-        async for result in mock_toxicity_model.process(test_record, processor_stage="tox"):
+        async for result in mock_toxicity_model.process(
+            test_record, processor_stage="tox"
+        ):
             results.append(result)
 
         result = results[0]
@@ -94,7 +102,9 @@ class TestToxicityModelProcess:
         empty_record = BaseRecord(record_id="empty_test", content=None)
 
         with pytest.raises(ValueError, match="no content"):
-            async for _ in mock_toxicity_model.process(empty_record, processor_stage="tox"):
+            async for _ in mock_toxicity_model.process(
+                empty_record, processor_stage="tox"
+            ):
                 pass
 
     @pytest.mark.anyio

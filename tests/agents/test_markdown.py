@@ -153,7 +153,11 @@ class TestResearchResultMarkdown:
         call_id = "7890QRST"
 
         output = ResearchResult(
-            literature=[Reference(summary="Study on climate impacts", citation="Smith et al., 2024")],
+            literature=[
+                Reference(
+                    summary="Study on climate impacts", citation="Smith et al., 2024"
+                )
+            ],
             response="Based on the literature...",
             summary="Climate change has significant impacts",
         )
@@ -198,7 +202,9 @@ class TestExecutionTraceMarkdown:
 
     def test_agent_trace_with_judge_output(self):
         """Test ExecutionTrace formatting with JudgeReasons output."""
-        config = AgentConfig(agent_id="JUDGE-gpt4", agent_name="judge_agent", agent_type="Judge")
+        config = AgentConfig(
+            agent_id="JUDGE-gpt4", agent_name="judge_agent", agent_type="Judge"
+        )
 
         output = JudgeReasons(
             conclusion="Content is safe",

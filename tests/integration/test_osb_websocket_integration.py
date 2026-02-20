@@ -18,7 +18,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi.websockets import WebSocketState
 
-pytestmark = pytest.mark.skip(reason="TDD tests for future OSB WebSocket implementation")
+pytestmark = pytest.mark.skip(
+    reason="TDD tests for future OSB WebSocket implementation"
+)
 
 
 class TestOSBWebSocketIntegration:
@@ -85,7 +87,9 @@ class TestOSBWebSocketIntegration:
         assert "missing required fields" in error_msg.lower()
 
     @pytest.mark.anyio
-    async def test_osb_session_creation_via_websocket(self, mock_websocket, real_flow_runner):
+    async def test_osb_session_creation_via_websocket(
+        self, mock_websocket, real_flow_runner
+    ):
         """
         FAILING TEST: OSB sessions should be created with specific configuration.
 
@@ -117,8 +121,12 @@ class TestOSBWebSocketIntegration:
             create_osb_session,
         )  # TO BE IMPLEMENTED
 
-        with pytest.raises(NotImplementedError, match="OSB session creation not implemented"):
-            session = await create_osb_session(session_id, mock_websocket, osb_session_config)
+        with pytest.raises(
+            NotImplementedError, match="OSB session creation not implemented"
+        ):
+            session = await create_osb_session(
+                session_id, mock_websocket, osb_session_config
+            )
 
             # Validate OSB session properties
             assert session.flow_name == "osb"
@@ -127,7 +135,9 @@ class TestOSBWebSocketIntegration:
             assert session.parameters["osb_features"]["enable_case_tracking"] is True
 
     @pytest.mark.anyio
-    async def test_osb_multi_agent_query_routing(self, osb_query_message, real_flow_runner):
+    async def test_osb_multi_agent_query_routing(
+        self, osb_query_message, real_flow_runner
+    ):
         """
         FAILING TEST: OSB queries should route to appropriate agents in sequence.
 
@@ -151,7 +161,9 @@ class TestOSBWebSocketIntegration:
             process_osb_query,
         )  # TO BE IMPLEMENTED
 
-        with pytest.raises(NotImplementedError, match="OSB multi-agent processing not implemented"):
+        with pytest.raises(
+            NotImplementedError, match="OSB multi-agent processing not implemented"
+        ):
             result = await process_osb_query(osb_query_message, real_flow_runner)
 
             # Validate multi-agent processing
@@ -165,7 +177,9 @@ class TestOSBWebSocketIntegration:
                 assert "confidence" in agent_response
 
     @pytest.mark.anyio
-    async def test_osb_websocket_response_streaming(self, osb_query_message, mock_websocket):
+    async def test_osb_websocket_response_streaming(
+        self, osb_query_message, mock_websocket
+    ):
         """
         FAILING TEST: OSB should stream partial responses during long queries.
 
@@ -181,7 +195,9 @@ class TestOSBWebSocketIntegration:
             stream_osb_response,
         )  # TO BE IMPLEMENTED
 
-        with pytest.raises(NotImplementedError, match="OSB response streaming not implemented"):
+        with pytest.raises(
+            NotImplementedError, match="OSB response streaming not implemented"
+        ):
             async for message in stream_osb_response(osb_query_message, mock_websocket):
                 # Validate streaming message format
                 assert "type" in message
@@ -214,7 +230,9 @@ class TestOSBWebSocketIntegration:
             handle_concurrent_osb_sessions,
         )  # TO BE IMPLEMENTED
 
-        with pytest.raises(NotImplementedError, match="OSB session isolation not implemented"):
+        with pytest.raises(
+            NotImplementedError, match="OSB session isolation not implemented"
+        ):
             # Process both queries concurrently
             results = await asyncio.gather(
                 handle_concurrent_osb_sessions(session_1_id, query_1),
@@ -253,7 +271,9 @@ class TestOSBWebSocketErrorHandling:
             handle_osb_disconnection,
         )  # TO BE IMPLEMENTED
 
-        with pytest.raises(NotImplementedError, match="OSB connection recovery not implemented"):
+        with pytest.raises(
+            NotImplementedError, match="OSB connection recovery not implemented"
+        ):
             recovery_info = await handle_osb_disconnection(session_id)
 
             # Validate recovery information
@@ -285,7 +305,9 @@ class TestOSBWebSocketErrorHandling:
             "session_id": "test-session",
         }
 
-        with pytest.raises(NotImplementedError, match="OSB agent failure handling not implemented"):
+        with pytest.raises(
+            NotImplementedError, match="OSB agent failure handling not implemented"
+        ):
             recovery_response = await handle_osb_agent_failure(error_context)
 
             # Validate graceful degradation
@@ -295,7 +317,9 @@ class TestOSBWebSocketErrorHandling:
                 "fact_checker",
                 "explorer",
             ]
-            assert recovery_response["fallback_strategy"] == "continue_without_researcher"
+            assert (
+                recovery_response["fallback_strategy"] == "continue_without_researcher"
+            )
 
 
 # Mock functions that document the expected API for Phase 1 implementation

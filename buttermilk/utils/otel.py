@@ -51,10 +51,14 @@ from buttermilk import bm, logger
 from buttermilk._core.config import Tracing
 
 # Suppress noisy OpenTelemetry instrumentation debug logs for non-OpenAI models
-logging.getLogger("opentelemetry.instrumentation.openai.shared").setLevel(logging.WARNING)
+logging.getLogger("opentelemetry.instrumentation.openai.shared").setLevel(
+    logging.WARNING
+)
 
 
-def setup_tracing_otel_with_execution_context(tracing_cfg: Tracing, execution_context) -> None:
+def setup_tracing_otel_with_execution_context(
+    tracing_cfg: Tracing, execution_context
+) -> None:
     """Initialize OpenTelemetry with OTLP exporters using ExecutionContext infrastructure."""
     # Get credentials from ExecutionContext instead of BM singleton
     creds = execution_context.gcp_credentials
@@ -64,7 +68,9 @@ def setup_tracing_otel_with_execution_context(tracing_cfg: Tracing, execution_co
     if project_id is None:
         project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
         if project_id is None:
-            raise RuntimeError("OTEL tracing requires a project_id but none found in config or GOOGLE_CLOUD_PROJECT environment variable")
+            raise RuntimeError(
+                "OTEL tracing requires a project_id but none found in config or GOOGLE_CLOUD_PROJECT environment variable"
+            )
 
     # Get service name (preserve if already set by config_bootstrap.py)
     # Default to "buttermilk" if not set
@@ -72,7 +78,9 @@ def setup_tracing_otel_with_execution_context(tracing_cfg: Tracing, execution_co
 
     # Set OTEL_RESOURCE_ATTRIBUTES with BOTH service.name and gcp.project_id
     # This preserves the service name that was set in config_bootstrap.py
-    os.environ["OTEL_RESOURCE_ATTRIBUTES"] = f"service.name={service_name},gcp.project_id={project_id}"
+    os.environ["OTEL_RESOURCE_ATTRIBUTES"] = (
+        f"service.name={service_name},gcp.project_id={project_id}"
+    )
     os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = project_id
     os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = tracing_cfg.endpoint
 
@@ -146,7 +154,9 @@ def _clean_attrs(attrs: dict | None) -> dict:
     return {k: v for k, v in attrs.items() if v is not None}
 
 
-def attach_session_baggage(session_id: str | None, extra: dict | None = None) -> object | None:
+def attach_session_baggage(
+    session_id: str | None, extra: dict | None = None
+) -> object | None:
     """Attach session metadata as OTEL baggage to current context.
 
     Returns a context token that must be detached later. Safe no-op if session_id is None.
@@ -200,7 +210,11 @@ def span_with_session(
     project_name = "unknown"
     try:
         # Access BM instance to get project name
-        if bm is not None and hasattr(bm, "session_info") and hasattr(bm.session_info, "project_name"):
+        if (
+            bm is not None
+            and hasattr(bm, "session_info")
+            and hasattr(bm.session_info, "project_name")
+        ):
             project_name = bm.session_info.project_name
     except Exception:
         # BM not available or no project name set - use unknown
@@ -217,7 +231,9 @@ def span_with_session(
     tracer = trace.get_tracer(__name__)
     token = attach_session_baggage(session_id)
     try:
-        with tracer.start_as_current_span(name, kind=span_kind, attributes=all_attrs) as span:
+        with tracer.start_as_current_span(
+            name, kind=span_kind, attributes=all_attrs
+        ) as span:
             yield span
     finally:
         detach_session_baggage(token)
@@ -281,7 +297,9 @@ def start_root_span(
         yield span
 
 
-def begin_span(name: str, attributes: dict | None = None, kind: str | _SpanKind | None = None):
+def begin_span(
+    name: str, attributes: dict | None = None, kind: str | _SpanKind | None = None
+):
     """Simple span context manager without session baggage binding."""
     if isinstance(kind, str):
         kind_map = {
@@ -295,7 +313,9 @@ def begin_span(name: str, attributes: dict | None = None, kind: str | _SpanKind 
     else:
         span_kind = kind or _SpanKind.INTERNAL
     tracer = trace.get_tracer(__name__)
-    return tracer.start_as_current_span(name, kind=span_kind, attributes=_clean_attrs(attributes))
+    return tracer.start_as_current_span(
+        name, kind=span_kind, attributes=_clean_attrs(attributes)
+    )
 
 
 def start_session_root_span(session_id: str | None, attributes: dict | None = None):
@@ -306,7 +326,9 @@ def start_session_root_span(session_id: str | None, attributes: dict | None = No
     tracer = trace.get_tracer(__name__)
     base_attrs = {"buttermilk.session.id": session_id} if session_id else {}
     attrs = _clean_attrs({**base_attrs, **(attributes or {})})
-    span = tracer.start_span("buttermilk.session", kind=_SpanKind.INTERNAL, attributes=attrs)
+    span = tracer.start_span(
+        "buttermilk.session", kind=_SpanKind.INTERNAL, attributes=attrs
+    )
     token = otel_context.attach(_set_span_in_context(span))
     return span, token
 
@@ -359,11 +381,15 @@ def setup_traceloop_otel() -> OTLPHttpSpanExporter | None:
         creds = bm.credentials
 
         traceloop_api_key = os.getenv("TRACELOOP_API_KEY") or creds["TRACELOOP_API_KEY"]
-        traceloop_base_url = os.getenv("TRACELOOP_BASE_URL") or creds["TRACELOOP_BASE_URL"]
+        traceloop_base_url = (
+            os.getenv("TRACELOOP_BASE_URL") or creds["TRACELOOP_BASE_URL"]
+        )
         traceloop_endpoint = f"{traceloop_base_url}/v1/traces"
         # Do not URL-encode Authorization headers
         traceloop_headers = {"Authorization": f"Bearer {traceloop_api_key}"}
-        traceloop_exporter = OTLPHttpSpanExporter(endpoint=traceloop_endpoint, headers=traceloop_headers)
+        traceloop_exporter = OTLPHttpSpanExporter(
+            endpoint=traceloop_endpoint, headers=traceloop_headers
+        )
         return traceloop_exporter
 
     except Exception as e_traceloop:

@@ -160,7 +160,11 @@ class TestOSBTemplate:
         # Should have at least one system message with instructions
         assert any(isinstance(msg, SystemMessage) for msg in messages)
         # The prompt is rendered into the template, not a placeholder
-        assert any("Analyze this case" in msg.content for msg in messages if hasattr(msg, "content"))
+        assert any(
+            "Analyze this case" in msg.content
+            for msg in messages
+            if hasattr(msg, "content")
+        )
 
 
 class TestAnalystTemplate:
@@ -228,7 +232,11 @@ class TestAnalystTemplate:
         # Should have replaced record placeholder
         assert "record" in placeholders or "records" in placeholders
         # The record content should appear in messages
-        assert any("Test record content" in msg.content for msg in messages if hasattr(msg, "content"))
+        assert any(
+            "Test record content" in msg.content
+            for msg in messages
+            if hasattr(msg, "content")
+        )
 
 
 class TestRAGTemplate:
@@ -320,7 +328,11 @@ New question here"""
         # Should have replaced context placeholder
         assert "context" in placeholders
         # Should include previous messages
-        assert any("Previous question" in msg.content for msg in messages if hasattr(msg, "content"))
+        assert any(
+            "Previous question" in msg.content
+            for msg in messages
+            if hasattr(msg, "content")
+        )
 
     def test_make_messages_with_record_placeholder(self):
         """Test that record placeholder gets replaced."""
@@ -347,7 +359,11 @@ Analyze this record
         # Should have replaced record placeholder
         assert "record" in placeholders or "records" in placeholders
         # Should include record content
-        assert any("Record content" in msg.content for msg in messages if hasattr(msg, "content"))
+        assert any(
+            "Record content" in msg.content
+            for msg in messages
+            if hasattr(msg, "content")
+        )
 
     def test_make_messages_deduplication(self):
         """Test that duplicate messages are removed."""
@@ -409,11 +425,14 @@ class TestTemplateIntegration:
         # Verify
         assert len(messages) > 0
         assert len(hash_val) == 64  # SHA256 hex length
-        assert any("helpful paralegal" in msg.content for msg in messages if hasattr(msg, "content"))
+        assert any(
+            "helpful paralegal" in msg.content
+            for msg in messages
+            if hasattr(msg, "content")
+        )
 
     def test_full_workflow_analyst(self):
         """Test complete workflow with analyst template."""
-
         # Create a mock record for the placeholder
         class MockRecord(BaseRecord):
             text: str = "Case details content"
@@ -442,7 +461,11 @@ class TestTemplateIntegration:
         # Should have replaced record placeholder
         assert "record" in placeholders or "records" in placeholders
         # Verify record content appears in messages
-        assert any("Case details content" in msg.content for msg in messages if hasattr(msg, "content"))
+        assert any(
+            "Case details content" in msg.content
+            for msg in messages
+            if hasattr(msg, "content")
+        )
 
     def test_undefined_variables_tracking(self):
         """Test that undefined variables are properly tracked."""

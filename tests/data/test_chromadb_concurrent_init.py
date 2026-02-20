@@ -63,8 +63,12 @@ class TestConcurrentChromaDBEmbeddingsInit:
             elapsed = time.time() - start_time
 
             # Verify initialized exactly once
-            assert embeddings._cache_initialized, "Cache should be initialized after concurrent calls"
-            assert embeddings._client is not None, "ChromaDB client should exist after initialization"
+            assert embeddings._cache_initialized, (
+                "Cache should be initialized after concurrent calls"
+            )
+            assert embeddings._client is not None, (
+                "ChromaDB client should exist after initialization"
+            )
 
             # Verify collection is accessible and functional
             collection = embeddings.collection
@@ -106,9 +110,13 @@ class TestConcurrentChromaDBEmbeddingsInit:
             max_time = max(times)
             avg_time = sum(times) / len(times)
 
-            assert max_time < 0.01, f"Subsequent calls should be <10ms, got max={max_time * 1000:.1f}ms"
+            assert max_time < 0.01, (
+                f"Subsequent calls should be <10ms, got max={max_time * 1000:.1f}ms"
+            )
 
-            print(f"\nSubsequent call times: avg={avg_time * 1000:.2f}ms, max={max_time * 1000:.2f}ms")
+            print(
+                f"\nSubsequent call times: avg={avg_time * 1000:.2f}ms, max={max_time * 1000:.2f}ms"
+            )
 
     async def test_concurrent_init_with_collection_access(self):
         """Test concurrent initialization mixed with collection access.
@@ -139,14 +147,18 @@ class TestConcurrentChromaDBEmbeddingsInit:
                 return count
 
             # Mix of initialization and collection access tasks
-            tasks = [init_task() for _ in range(5)] + [collection_access_task() for _ in range(5)]
+            tasks = [init_task() for _ in range(5)] + [
+                collection_access_task() for _ in range(5)
+            ]
 
             # All should complete without exceptions
             results = await asyncio.gather(*tasks)
 
             # Collection access tasks return counts, init tasks return None
             counts = [r for r in results if r is not None]
-            assert all(count == 0 for count in counts), "All collection access should see empty collection"
+            assert all(count == 0 for count in counts), (
+                "All collection access should see empty collection"
+            )
 
             # Verify final state is initialized and consistent
             assert embeddings._cache_initialized
@@ -227,4 +239,6 @@ class TestConcurrentInitEdgeCases:
 
             # Performance expectation: should be much faster than N sequential inits
             # If it took >5s for 100 tasks, something is wrong with concurrency
-            assert elapsed < 5.0, f"100 concurrent tasks took {elapsed:.1f}s (should be <5s)"
+            assert elapsed < 5.0, (
+                f"100 concurrent tasks took {elapsed:.1f}s (should be <5s)"
+            )

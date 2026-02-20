@@ -164,7 +164,9 @@ async def check_flow_responsiveness(
     Returns whether the flow is responding within the specified timeout.
     """
     try:
-        is_responsive = health_monitor.check_flow_responsiveness(flow_name, timeout_seconds)
+        is_responsive = health_monitor.check_flow_responsiveness(
+            flow_name, timeout_seconds
+        )
 
         return {
             "flow_name": flow_name,
@@ -173,8 +175,12 @@ async def check_flow_responsiveness(
             "timestamp": datetime.now(UTC).isoformat(),
         }
     except Exception as e:
-        logger.error("Failed to check flow responsiveness", flow_name=flow_name, error=e)
-        raise HTTPException(status_code=500, detail="Failed to check flow responsiveness")
+        logger.error(
+            "Failed to check flow responsiveness", flow_name=flow_name, error=e
+        )
+        raise HTTPException(
+            status_code=500, detail="Failed to check flow responsiveness"
+        )
 
 
 @monitoring_router.get("/sessions/{session_id}/ui-timeout")
@@ -189,7 +195,9 @@ async def check_interactive_ui_timeout(
     Returns whether the interactive session is still active or stuck without UI.
     """
     try:
-        is_ui_active = health_monitor.check_interactive_flow_ui_timeout(session_id, timeout_seconds)
+        is_ui_active = health_monitor.check_interactive_flow_ui_timeout(
+            session_id, timeout_seconds
+        )
 
         return {
             "session_id": session_id,
@@ -198,7 +206,9 @@ async def check_interactive_ui_timeout(
             "timestamp": datetime.now(UTC).isoformat(),
         }
     except Exception as e:
-        logger.error("Failed to check UI timeout for session", session_id=session_id, error=e)
+        logger.error(
+            "Failed to check UI timeout for session", session_id=session_id, error=e
+        )
         raise HTTPException(status_code=500, detail="Failed to check UI timeout")
 
 
@@ -219,4 +229,6 @@ async def get_monitoring_status():
         }
     except Exception as e:
         logger.error("Failed to get monitoring status", error=e)
-        raise HTTPException(status_code=500, detail="Failed to retrieve monitoring status")
+        raise HTTPException(
+            status_code=500, detail="Failed to retrieve monitoring status"
+        )

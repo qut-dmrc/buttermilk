@@ -17,7 +17,6 @@ def _get_cost_per_token():
     if not _cost_per_token_loaded:
         try:
             from litellm.cost_calculator import cost_per_token
-
             _cost_per_token = cost_per_token
         except ImportError:
             logger.warning("litellm not installed. Token cost tracking will be disabled.")
@@ -37,14 +36,6 @@ _MODEL_MAPPINGS = {
     "claude-sonnet": "vertex_ai/claude-sonnet-4@20250514",
     "claude-haiku": "vertex_ai/claude-3-5-haiku@20241022",
     "claude-opus": "vertex_ai/claude-opus-4@20250514",
-    # Azure/GPT batch model aliases
-    "gpt-nano": "azure/gpt-4.1-nano",
-    "gpt-mini": "azure/gpt-4.1-mini",
-    "gpt-chat": "azure/gpt-4.1",
-    "gpt-4o": "azure/gpt-4o",
-    "gpt-4o-mini": "azure/gpt-4o-mini",
-    # xAI/Grok batch model alias
-    "grok-fast": "xai/grok-3",
 }
 
 

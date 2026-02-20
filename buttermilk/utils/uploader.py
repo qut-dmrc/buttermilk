@@ -33,7 +33,9 @@ class AsyncDataUploader:
         use_timestamp_suffix: bool | None = None,
         output_col: str = "uri",
     ):
-        self.storage: Storage = bm.get_storage(storage) if not isinstance(storage, Storage) else storage
+        self.storage: Storage = (
+            bm.get_storage(storage) if not isinstance(storage, Storage) else storage
+        )
 
         self.buffer_size = buffer_size
         self.flush_interval = flush_interval
@@ -47,7 +49,9 @@ class AsyncDataUploader:
             self.use_timestamp_suffix = use_timestamp_suffix
         else:
             # No explicit value - auto-detect based on file existence
-            self.use_timestamp_suffix = hasattr(self.storage, "exists") and self.storage.exists()
+            self.use_timestamp_suffix = (
+                hasattr(self.storage, "exists") and self.storage.exists()
+            )
 
         self.original_storage = self.storage  # Keep reference to original
 
@@ -125,7 +129,7 @@ class AsyncDataUploader:
             The same record (pass-through behavior)
         """
         # Extract record from ProcessingContext if needed
-        record = context.record if hasattr(context, "record") else context
+        record = context.record if hasattr(context, 'record') else context
         await self.add(record)
         yield record  # Pass through unchanged
 
@@ -141,7 +145,10 @@ class AsyncDataUploader:
                     pass
 
                 # Check if we should flush
-                should_flush = len(self.buffer) >= self.buffer_size or time.time() - self.last_flush >= self.flush_interval
+                should_flush = (
+                    len(self.buffer) >= self.buffer_size
+                    or time.time() - self.last_flush >= self.flush_interval
+                )
 
                 if should_flush and self.buffer:
                     await self._flush()
@@ -299,7 +306,9 @@ class AsyncDataUploader:
                 target_storage.save(self.buffer)
                 self.buffer = []  # Clear buffer to prevent double-flush by worker
             except Exception as e:
-                logger.error(f"Error during final sync flush: {e}. Falling back to emergency save.")
+                logger.error(
+                    f"Error during final sync flush: {e}. Falling back to emergency save."
+                )
                 bm.save(self.buffer, extension=".json")
 
                 # Clean backup files synchronously

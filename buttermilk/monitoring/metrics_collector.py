@@ -34,7 +34,9 @@ class FlowMetrics:
         self.total_executions += 1
 
         # Simple moving average for execution time
-        self.avg_execution_time = (self.avg_execution_time * (self.total_executions - 1) + execution_time) / self.total_executions
+        self.avg_execution_time = (
+            self.avg_execution_time * (self.total_executions - 1) + execution_time
+        ) / self.total_executions
 
         if success:
             self.successful_executions += 1
@@ -65,7 +67,9 @@ class AgentMetrics:
         self.total_invocations += 1
 
         # Simple moving average for response time
-        self.avg_response_time = (self.avg_response_time * (self.total_invocations - 1) + response_time) / self.total_invocations
+        self.avg_response_time = (
+            self.avg_response_time * (self.total_invocations - 1) + response_time
+        ) / self.total_invocations
 
         self.last_invocation = datetime.now()
 
@@ -122,7 +126,9 @@ class MetricsCollector:
             "total_sessions_created": 0,
         }
 
-    def record_flow_execution(self, flow_name: str, execution_time: float, success: bool):
+    def record_flow_execution(
+        self, flow_name: str, execution_time: float, success: bool
+    ):
         """Record flow execution metrics."""
         if flow_name not in self.flow_metrics:
             self.flow_metrics[flow_name] = FlowMetrics(flow_name=flow_name)
@@ -135,11 +141,15 @@ class MetricsCollector:
             success=success,
         )
 
-    def record_agent_invocation(self, agent_name: str, flow_name: str, response_time: float, success: bool):
+    def record_agent_invocation(
+        self, agent_name: str, flow_name: str, response_time: float, success: bool
+    ):
         """Record agent invocation metrics."""
         agent_key = f"{flow_name}.{agent_name}"
         if agent_key not in self.agent_metrics:
-            self.agent_metrics[agent_key] = AgentMetrics(agent_name=agent_name, flow_name=flow_name)
+            self.agent_metrics[agent_key] = AgentMetrics(
+                agent_name=agent_name, flow_name=flow_name
+            )
 
         self.agent_metrics[agent_key].update_invocation(response_time, success)
         logger.debug(
@@ -161,12 +171,16 @@ class MetricsCollector:
             self.system_metrics["total_sessions_created"] += 1
             self._update_active_session_count()
 
-            logger.debug("Started session tracking", session_id=session_id, flow_name=flow_name)
+            logger.debug(
+                "Started session tracking", session_id=session_id, flow_name=flow_name
+            )
 
     def update_session_activity(self, session_id: str, error_occurred: bool = False):
         """Update session activity metrics."""
         if session_id in self.session_metrics:
-            self.session_metrics[session_id].update_activity(error_occurred=error_occurred)
+            self.session_metrics[session_id].update_activity(
+                error_occurred=error_occurred
+            )
 
     def end_session_tracking(self, session_id: str):
         """End session tracking and mark as inactive."""
@@ -186,19 +200,31 @@ class MetricsCollector:
         self.system_metrics["total_memory_mb"] = memory_mb
         # Ignore cpu_percent and websocket_connections for simplified version
 
-    def get_flow_metrics(self, flow_name: Optional[str] = None) -> Dict[str, FlowMetrics]:
+    def get_flow_metrics(
+        self, flow_name: Optional[str] = None
+    ) -> Dict[str, FlowMetrics]:
         """Get flow metrics for specific flow or all flows."""
         if flow_name:
-            return {flow_name: self.flow_metrics.get(flow_name, FlowMetrics(flow_name=flow_name))}
+            return {
+                flow_name: self.flow_metrics.get(
+                    flow_name, FlowMetrics(flow_name=flow_name)
+                )
+            }
         return dict(self.flow_metrics)
 
-    def get_agent_metrics(self, flow_name: Optional[str] = None) -> Dict[str, AgentMetrics]:
+    def get_agent_metrics(
+        self, flow_name: Optional[str] = None
+    ) -> Dict[str, AgentMetrics]:
         """Get agent metrics for specific flow or all agents."""
         if flow_name:
-            return {k: v for k, v in self.agent_metrics.items() if v.flow_name == flow_name}
+            return {
+                k: v for k, v in self.agent_metrics.items() if v.flow_name == flow_name
+            }
         return dict(self.agent_metrics)
 
-    def get_session_metrics(self, active_only: bool = False) -> Dict[str, SessionMetrics]:
+    def get_session_metrics(
+        self, active_only: bool = False
+    ) -> Dict[str, SessionMetrics]:
         """Get session metrics, optionally filtered to active sessions only."""
         if active_only:
             return {k: v for k, v in self.session_metrics.items() if v.is_active}
@@ -217,7 +243,11 @@ class MetricsCollector:
         for flow_name, metrics in self.flow_metrics.items():
             flow_summary[flow_name] = {
                 "total_executions": metrics.total_executions,
-                "success_rate": (metrics.successful_executions / metrics.total_executions if metrics.total_executions > 0 else 0.0),
+                "success_rate": (
+                    metrics.successful_executions / metrics.total_executions
+                    if metrics.total_executions > 0
+                    else 0.0
+                ),
                 "avg_execution_time": metrics.avg_execution_time,
                 "error_rate": metrics.error_rate,
             }
@@ -228,7 +258,11 @@ class MetricsCollector:
             agent_summary[agent_key] = {
                 "total_invocations": metrics.total_invocations,
                 "avg_response_time": metrics.avg_response_time,
-                "success_rate": (metrics.successful_invocations / metrics.total_invocations if metrics.total_invocations > 0 else 0.0),
+                "success_rate": (
+                    metrics.successful_invocations / metrics.total_invocations
+                    if metrics.total_invocations > 0
+                    else 0.0
+                ),
             }
 
         # Session summary
