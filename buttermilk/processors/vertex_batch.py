@@ -34,6 +34,7 @@ Usage with Vertex AI executor (unchanged):
 
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from typing import TYPE_CHECKING, Any
@@ -108,7 +109,6 @@ class BatchLLMProcessor(BatchProcessorCore):
         description="Index of this processor in a multi-processor pipeline (for manifest traceability)",
     )
 
-    # Internal components
     _output_class: type[BaseModel] | None = PrivateAttr(default=None)
     _output_schema: dict[str, Any] | None = PrivateAttr(default=None)
 
@@ -127,6 +127,32 @@ class BatchLLMProcessor(BatchProcessorCore):
             template=self.template,
             output_model=self.output_model,
         )
+
+    def _resolve_field(self, field_name: str, record: BaseRecord) -> Any:
+        """Resolve a configuration field, checking for overrides in record metadata.
+
+        Resolution order:
+        1. record.metadata[field_name]
+        2. self[field_name] (configured default)
+
+        Args:
+            field_name: Name of the field to resolve (e.g., 'model', 'template')
+            record: Record to check metadata
+
+        Returns:
+            Resolved value for the field.
+        """
+        # 1. Check record metadata
+        if record.metadata:
+            if field_name in record.metadata:
+                return record.metadata[field_name]
+            # Also check nested 'variant_params' from VariantProcessor
+            variant_params = record.metadata.get("variant_params", {})
+            if isinstance(variant_params, dict) and field_name in variant_params:
+                return variant_params[field_name]
+
+        # 2. Fallback to configured default
+        return getattr(self, field_name, None)
 
     def _resolve_output_schema(self) -> dict[str, Any] | None:
         """Resolve output_class to a JSON schema dict.
@@ -187,6 +213,10 @@ class BatchLLMProcessor(BatchProcessorCore):
         requests: list[BatchRequest] = []
 
         for record in records:
+            # Dynamically resolve model and template for this record
+            resolved_model = self._resolve_field("model", record)
+            resolved_template = self._resolve_field("template", record)
+
             # Prepare template variables
             # Mix in record fields so template can access {{ record.foo }} or {{ foo }}
             if hasattr(record, "model_dump"):
@@ -212,7 +242,7 @@ class BatchLLMProcessor(BatchProcessorCore):
             # This uses the standard LLMCore logic via utility functions
             try:
                 result = render_template(
-                    template=self.template,
+                    template=resolved_template,
                     template_vars=variant_vars,
                     base_template_vars=self.template_vars,
                     fail_on_unfilled=self.fail_on_unfilled_parameters,
@@ -257,16 +287,16 @@ class BatchLLMProcessor(BatchProcessorCore):
             # Build structured variant with full model info for traceability
             # This ensures manifests contain complete provenance information
             structured_variant: dict[str, Any] = {
-                "template": self.template,
-                "model": self.model,
+                "template": resolved_template,
+                "model": resolved_model,
             }
             # Include model parameters from config if available
             from buttermilk import bm
 
-            if self.model in bm.llms.connections:
-                config = bm.llms.connections[self.model]
+            if resolved_model in bm.llms.connections:
+                config = bm.llms.connections[resolved_model]
                 structured_variant["model_config"] = {
-                    "resolved_model": config.configs.get("model", self.model),
+                    "resolved_model": config.configs.get("model", resolved_model),
                     "region": config.configs.get("region"),
                     "max_output_tokens": self._get_resolved_max_tokens(),
                 }
@@ -281,7 +311,7 @@ class BatchLLMProcessor(BatchProcessorCore):
                 custom_id=str(uuid.uuid4()),
                 record_id=record.record_id,
                 messages=litellm_messages,
-                model=self.model,
+                model=resolved_model,
                 variant=structured_variant,
                 processor_index=processor_index,
                 response_schema=self._output_schema,
@@ -519,6 +549,9 @@ class OpenAIBatchProcessor(BatchLLMProcessor):
     ) -> list[BaseRecord]:
         """Process a batch of records through OpenAI/Azure Batch API.
 
+        Supports mixed models in a single batch by splitting into multiple
+        OpenAI batch jobs automatically.
+
         Args:
             records: List of BaseRecord objects to process
 
@@ -530,54 +563,93 @@ class OpenAIBatchProcessor(BatchLLMProcessor):
 
         start_time = time.time()
 
-        # Prepare batch requests
+        # Prepare batch requests (handles dynamic model resolution per record)
         requests = self.prepare_batch_requests(records)
+
+        # Group requests by model
+        from collections import defaultdict
+
+        requests_by_model = defaultdict(list)
+        for req in requests:
+            requests_by_model[req.model].append(req)
 
         manager = self._ensure_manager()
 
+        # Internal helper to handle a single model's batch job
+        async def handle_model_batch(model_name: str, model_requests: list[Any]) -> list[BatchResult]:
+            logger.info(
+                f"Submitting OpenAI batch job for model {model_name} with {len(model_requests)} requests",
+                model=model_name,
+                wait_for_completion=self.wait_for_completion,
+            )
+
+            # Submit the batch job
+            submit_result = await manager.submit_batch(
+                model=model_name,
+                requests=model_requests,
+                max_tokens=self._get_resolved_max_tokens(),
+            )
+
+            batch_job_id = submit_result["job_id"]
+            openai_batch_id = submit_result["openai_batch_id"]
+
+            if not self.wait_for_completion:
+                # In non-blocking mode, return pending results
+                return [
+                    BatchResult(
+                        custom_id=req.custom_id,
+                        record_id=req.record_id,
+                        error="PENDING",
+                        model=model_name,
+                    )
+                    for req in model_requests
+                ]
+
+            # Blocking mode: wait for completion and parse results
+            try:
+                await manager.wait_for_completion(openai_batch_id)
+            except (TimeoutError, RuntimeError) as e:
+                logger.error(f"OpenAI batch job for {model_name} failed: {e}")
+                return [
+                    BatchResult(
+                        custom_id=req.custom_id,
+                        record_id=req.record_id,
+                        error=str(e),
+                        model=model_name,
+                    )
+                    for req in model_requests
+                ]
+
+            # Download results and process
+            processed = manager.fetch_results(batch_job_id)
+            return processed["batch_results"]
+
+        # Run all model batches in parallel
         logger.info(
-            f"Submitting OpenAI batch job with {len(requests)} requests",
-            model=self.model,
-            wait_for_completion=self.wait_for_completion,
+            f"OpenAIBatchProcessor splitting {len(requests)} requests across {len(requests_by_model)} models",
+            models=list(requests_by_model.keys()),
         )
 
-        # Submit the batch job
-        submit_result = await manager.submit_batch(
-            model=self.model,
-            requests=requests,
-            max_tokens=self._get_resolved_max_tokens(),
-        )
+        all_model_tasks = [handle_model_batch(m, reqs) for m, reqs in requests_by_model.items()]
+        batch_results_lists = await asyncio.gather(*all_model_tasks)
 
-        batch_job_id = submit_result["job_id"]
-        openai_batch_id = submit_result["openai_batch_id"]
+        # Flatten results
+        all_results = [res for sublist in batch_results_lists for res in sublist]
 
         if not self.wait_for_completion:
-            # Non-blocking mode: return records with job_id in metadata
-            return self._create_pending_records(records, batch_job_id)
-
-        # Blocking mode: wait for completion and parse results
-        try:
-            await manager.wait_for_completion(openai_batch_id)
-        except (TimeoutError, RuntimeError) as e:
-            logger.error(f"OpenAI batch job failed: {e}")
-            return self._create_error_records(records, str(e), batch_job_id, start_time)
-
-        # Download results and process (calculates cost, saves combined log)
-        processed = manager.fetch_results(batch_job_id)
-        results = processed["batch_results"]
+            return self._create_pending_records(records, "multi_oai_batch_pending")
 
         # Map results back to records
         output_records = await self._map_results_to_records(
             records=records,
-            results=results,
-            batch_job_id=batch_job_id,
+            results=all_results,
+            batch_job_id="multi_oai_batch",
             start_time=start_time,
         )
 
         logger.info(
-            f"OpenAIBatchProcessor processed {len(records)} records via batch API",
-            model=self.model,
-            batch_job_id=batch_job_id,
+            f"OpenAIBatchProcessor processed {len(records)} records via {len(requests_by_model)} batch API jobs",
+            batch_job_count=len(requests_by_model),
             duration_ms=(time.time() - start_time) * 1000,
         )
 
@@ -704,6 +776,9 @@ class VertexBatchProcessor(BatchLLMProcessor):
     ) -> list[BaseRecord]:
         """Process a batch of records through Vertex AI Batch Prediction API.
 
+        Supports mixed models in a single batch by splitting into multiple
+        Vertex AI batch jobs automatically.
+
         Args:
             records: List of BaseRecord objects to process
 
@@ -715,58 +790,103 @@ class VertexBatchProcessor(BatchLLMProcessor):
 
         start_time = time.time()
 
-        # Prepare batch requests
+        # Prepare batch requests (handles dynamic model resolution per record)
         requests = self.prepare_batch_requests(records)
 
         # Dry-run mode: log prepared requests and return placeholder records
-        # Check before _ensure_manager() to avoid requiring bm initialization
         if self.dry_run:
             return self._handle_dry_run(records, requests)
 
+        # Group requests by model for Vertex AI (which requires one model per job)
+        from collections import defaultdict
+
+        requests_by_model = defaultdict(list)
+        for req in requests:
+            requests_by_model[req.model].append(req)
+
         manager = self._ensure_manager()
 
+        # Internal helper to handle a single model's batch job
+        async def handle_model_batch(model_name: str, model_requests: list[Any]) -> list[BatchResult]:
+            logger.info(
+                f"Submitting batch job for model {model_name} with {len(model_requests)} requests",
+                model=model_name,
+                wait_for_completion=self.wait_for_completion,
+            )
+
+            # Submit the batch job
+            job: BatchJob = await manager.submit_batch(
+                model=model_name,
+                requests=model_requests,
+            )
+
+            # Extract job_id from the job name for tracing
+            batch_job_id = job.name.split("/")[-1] if job.name else "unknown"
+
+            if not self.wait_for_completion:
+                # In non-blocking mode, we can't easily return results now
+                # We return a special result indicating pending status
+                return [
+                    BatchResult(
+                        custom_id=req.custom_id,
+                        record_id=req.record_id,
+                        error="PENDING",
+                        model=model_name,
+                    )
+                    for req in model_requests
+                ]
+
+            # Blocking mode: wait for completion and parse results
+            try:
+                completed_job = await manager.wait_for_completion(job)
+            except (TimeoutError, RuntimeError) as e:
+                logger.error(f"Batch job for {model_name} failed: {e}")
+                return [
+                    BatchResult(
+                        custom_id=req.custom_id,
+                        record_id=req.record_id,
+                        error=str(e),
+                        model=model_name,
+                    )
+                    for req in model_requests
+                ]
+
+            # Combined processing: join manifest, calculate costs, and save combined results/summary to GCS
+            processed = manager.process_job_results(batch_job_id)
+            return processed["batch_results"]
+
+        # Run all model batches in parallel
         logger.info(
-            f"Submitting batch job with {len(requests)} requests",
-            model=self.model,
-            wait_for_completion=self.wait_for_completion,
+            f"VertexBatchProcessor splitting {len(requests)} requests across {len(requests_by_model)} models",
+            models=list(requests_by_model.keys()),
         )
 
-        # Submit the batch job
-        job: BatchJob = await manager.submit_batch(
-            model=self.model,
-            requests=requests,
-        )
+        all_model_tasks = [handle_model_batch(m, reqs) for m, reqs in requests_by_model.items()]
+        batch_results_lists = await asyncio.gather(*all_model_tasks)
 
-        # Extract job_id from the job name for tracing
-        batch_job_id = job.name.split("/")[-1] if job.name else "unknown"
+        # Flatten results
+        all_results = [res for sublist in batch_results_lists for res in sublist]
 
+        # In non-blocking mode, some results might be placeholders with "PENDING" error
+        # We need to handle this by creating pending records
         if not self.wait_for_completion:
-            # Non-blocking mode: return records with job_id in metadata
-            return self._create_pending_records(records, batch_job_id)
-
-        # Blocking mode: wait for completion and parse results
-        try:
-            job = await manager.wait_for_completion(job)
-        except (TimeoutError, RuntimeError) as e:
-            logger.error(f"Batch job failed: {e}")
-            return self._create_error_records(records, str(e), batch_job_id, start_time)
-
-        # Combined processing: join manifest, calculate costs, and save combined results/summary to GCS
-        processed = manager.process_job_results(batch_job_id)
-        results = processed["batch_results"]
+            # For simplicity, if ANY job was non-blocking, we mark all records as pending
+            # (In practice, wait_for_completion is a processor-level flag)
+            # Use a dummy job ID or the first one found
+            dummy_job_id = "multi_batch_pending"
+            return self._create_pending_records(records, dummy_job_id)
 
         # Map results back to records
         output_records = await self._map_results_to_records(
             records=records,
-            results=results,
-            batch_job_id=batch_job_id,
+            results=all_results,
+            batch_job_id="multi_batch",
             start_time=start_time,
         )
 
         logger.info(
-            f"VertexBatchProcessor processed {len(records)} records via batch API",
-            model=self.model,
-            batch_job_id=batch_job_id,
+            f"VertexBatchProcessor processed {len(records)} records via {len(requests_by_model)} batch API jobs",
+            batch_job_count=len(requests_by_model),
             duration_ms=(time.time() - start_time) * 1000,
         )
 
