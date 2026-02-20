@@ -1,3 +1,4 @@
+import asyncio
 from typing import AsyncGenerator
 
 from pydantic import ConfigDict, Field
@@ -119,14 +120,19 @@ class BatchPipelineRunner(ProcessorCore):
 
         current_records = records
         for proc in self.expanders:
-            next_records = []
-            for record in current_records:
+
+            async def _process_single(record: BaseRecord) -> list[BaseRecord]:
+                """Process a single record and collect results."""
                 # Create context for each record
                 # TODO: Use shared session ID
                 ctx = ProcessingContext(session_id="batch_preproc", record=record)
-                async for res in proc.process(ctx):
-                    next_records.append(res)
-            current_records = next_records
+                return [res async for res in proc.process(ctx)]
+
+            # Parallelize processing of all records for the current expander
+            results = await asyncio.gather(*(_process_single(record) for record in current_records))
+
+            # Flatten results for the next expander (or final output)
+            current_records = [res for record_list in results for res in record_list]
 
         return current_records
 
