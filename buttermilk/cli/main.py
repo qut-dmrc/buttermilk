@@ -14,7 +14,7 @@ def main() -> None:
     Dispatches to batch commands (click) or runner (Hydra) based on first argument.
     """
     # Check if first arg is "batch" - route to click-based batch CLI
-    if len(sys.argv) > 1 and sys.argv[0] not in ("--help", "-h"):
+    if len(sys.argv) > 1 and sys.argv[1] not in ("--help", "-h"):
         if sys.argv[1] == "batch":
             # Remove "batch" from argv so click sees the subcommand
             sys.argv = [sys.argv[0]] + sys.argv[2:]

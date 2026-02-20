@@ -202,6 +202,7 @@ buttermilk = [
   "toxicity/**/*.yaml",
   "toxicity/**/*.txt",
   "toxicity/**/*.jinja2",
+  "_core/assets/*",
 ]
 
 [tool.mypy]
@@ -328,8 +329,4 @@ max-complexity = 15 # Buttermilk is more complex than bot
   "PLR2004", # Magic values OK in tests
 ]
 
-[dependency-groups]
-dev = [
-    "pytest>=9.0.2",
-    "pytest-xdist>=3.8.0",
-]
+
