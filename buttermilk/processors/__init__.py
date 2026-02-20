@@ -13,7 +13,7 @@ from .openai_batch import OpenAIBatchProcessor
 from .parallel import ParallelProcessor
 from .unified_processors import GroupchatProcessor, LLMProcessor, ParameterExpansionProcessor
 from .variants import VariantProcessor
-from .vertex_batch import BatchLLMProcessor, OpenAIBatchProcessor, VertexBatchProcessor
+from .vertex_batch import BatchLLMProcessor, VertexBatchProcessor
 
 __all__ = [
     "BatchAccumulator",
@@ -28,5 +28,4 @@ __all__ = [
     "ParameterExpansionProcessor",
     "VariantProcessor",
     "VertexBatchProcessor",
-    "OpenAIBatchProcessor",
 ]

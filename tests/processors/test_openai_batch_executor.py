@@ -519,7 +519,7 @@ class TestOpenAIBatchProcessor:
     async def test_process_batch_success(self):
         """OpenAIBatchProcessor._process_batch() should submit, wait, and return records."""
         from buttermilk._core.vertex_batch import BatchResult
-        from buttermilk.processors.vertex_batch import OpenAIBatchProcessor
+        from buttermilk.processors.openai_batch import OpenAIBatchProcessor
 
         processor = OpenAIBatchProcessor(
             model="gpt-chat",
@@ -547,7 +547,7 @@ class TestOpenAIBatchProcessor:
             }
         )
         mock_manager.wait_for_completion = AsyncMock()
-        mock_manager.fetch_results.return_value = {"batch_results": [mock_result]}
+        mock_manager.download_results.return_value = [mock_result]
 
         with (
             patch.object(OpenAIBatchProcessor, "_ensure_manager", return_value=mock_manager),
@@ -560,13 +560,13 @@ class TestOpenAIBatchProcessor:
             assert results == [mock_record]
             mock_manager.submit_batch.assert_called_once()
             mock_manager.wait_for_completion.assert_called_once_with("batch_abc123")
-            mock_manager.fetch_results.assert_called_once_with("batch_20260219_xyz")
+            mock_manager.download_results.assert_called_once()
             mock_map.assert_called_once()
 
     @pytest.mark.anyio
     async def test_process_batch_non_blocking(self):
         """OpenAIBatchProcessor should return pending records when wait_for_completion=False."""
-        from buttermilk.processors.vertex_batch import OpenAIBatchProcessor
+        from buttermilk.processors.openai_batch import OpenAIBatchProcessor
 
         processor = OpenAIBatchProcessor(
             model="gpt-chat",
