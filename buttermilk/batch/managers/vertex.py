@@ -454,7 +454,11 @@ class BatchJobManager(BaseModel):
                             except json.JSONDecodeError:
                                 error_msg = status_str  # Use raw string if not JSON
                         if not error_msg:
-                            error_msg = entry.get("error", {}).get("message")
+                            error_obj = entry.get("error")
+                            if isinstance(error_obj, dict):
+                                error_msg = error_obj.get("message")
+                            elif error_obj:
+                                error_msg = str(error_obj)
 
                         result = BatchResult(
                             custom_id=custom_id,
@@ -911,7 +915,7 @@ class BatchJobManager(BaseModel):
         )
 
         logger.info(
-            f"Processed results for job {job_id}. Total cost: . Summary at {summary_uri}",
+            f"Processed results for job {job_id}. Total cost: {total_cost_usd:.4f} USD. Summary at {summary_uri}",
             job_id=job_id,
             total_cost=total_cost_usd,
             summary_uri=summary_uri,
