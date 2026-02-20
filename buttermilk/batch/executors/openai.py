@@ -181,30 +181,46 @@ class OpenAIBatchExecutor(BatchExecutor):
     async def get_status(self, job_id: str) -> BatchJobStatus:
         """Get status of an OpenAI batch job.
 
-        Note: This requires the manager to have been created previously
-        (i.e., execute() was called first for the relevant model).
+        Loads manifest to find model and openai_batch_id, then checks status via API.
+        This is process-restart safe as it doesn't depend on existing managers.
         """
-        for manager in self._managers.values():
-            try:
-                # Try to load manifest and check status
-                manifest = manager._load_manifest(job_id)
-                status_info = manager.get_batch_status(manifest.openai_batch_id)
+        try:
+            # 1. Load manifest to find model and openai_batch_id
+            # We need a manager instance to call _load_manifest, but loading
+            # doesn't actually use the client. Use any existing manager or
+            # a temporary one.
+            manager = None
+            if self._managers:
+                manager = next(iter(self._managers.values()))
+            else:
+                # Need to load manifest to find model, but OpenAIBatchJobManager
+                # requires a client in init. We'll use a mock-like client
+                # just for manifest loading.
+                from buttermilk._core.vertex_batch import OpenAIBatchJobManager
+                manager = OpenAIBatchJobManager(client=object(), endpoint="")
 
-                status_map = {
-                    "completed": BatchJobStatus.COMPLETED,
-                    "failed": BatchJobStatus.FAILED,
-                    "expired": BatchJobStatus.FAILED,
-                    "cancelled": BatchJobStatus.CANCELLED,
-                    "in_progress": BatchJobStatus.RUNNING,
-                    "validating": BatchJobStatus.PENDING,
-                    "finalizing": BatchJobStatus.RUNNING,
-                }
-                return status_map.get(status_info["status"], BatchJobStatus.RUNNING)
-            except FileNotFoundError:
-                continue
-            except Exception as e:
-                logger.warning(f"Error checking job status with manager: {e}")
-                continue
+            manifest = manager._load_manifest(job_id)
 
-        logger.error(f"Could not find manager for job {job_id}")
-        return BatchJobStatus.FAILED
+            # 2. Get the real manager for the specific model
+            real_manager = self._get_manager(manifest.model)
+
+            # 3. Check status via API
+            status_info = real_manager.get_batch_status(manifest.openai_batch_id)
+
+            status_map = {
+                "completed": BatchJobStatus.COMPLETED,
+                "failed": BatchJobStatus.FAILED,
+                "expired": BatchJobStatus.FAILED,
+                "cancelled": BatchJobStatus.CANCELLED,
+                "in_progress": BatchJobStatus.RUNNING,
+                "validating": BatchJobStatus.PENDING,
+                "finalizing": BatchJobStatus.RUNNING,
+            }
+            return status_map.get(status_info["status"], BatchJobStatus.RUNNING)
+
+        except FileNotFoundError:
+            logger.error(f"Manifest not found for job {job_id}")
+            return BatchJobStatus.FAILED
+        except Exception as e:
+            logger.warning(f"Error checking job status for {job_id}: {e}")
+            return BatchJobStatus.FAILED
