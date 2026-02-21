@@ -1,30 +1,32 @@
 """Tests for VariantProcessor."""
 
 import asyncio
+from typing import Any, AsyncGenerator
+from unittest.mock import patch
 
 import pytest
 
+from buttermilk._core.processing_context import ProcessingContext
+from buttermilk._core.processor_core import ProcessorCore
 from buttermilk._core.types import BaseRecord
 from buttermilk.processors.variants import VariantProcessor
 
 
-class MockProcessor:
-    """Simple mock processor for testing."""
+class MockProcessor(ProcessorCore):
+    """Simple mock processor for testing.
 
-    def __init__(self, suffix: str = "", delay: float = 0.0, fail: bool = False):
-        self.suffix = suffix
-        self.delay = delay
-        self.fail = fail
-        self.call_count = 0
+    A proper ProcessorCore subclass with _process_record.
+    """
 
-    async def process(
+    suffix: str = ""
+    delay: float = 0.0
+    fail: bool = False
+    call_count: int = 0
+
+    async def _process_record(
         self,
-        record: BaseRecord,
-        *,
-        processor_stage: str,
-        parent_trace_id: str | None = None,
-        **kwargs,
-    ):
+        context: ProcessingContext,
+    ) -> AsyncGenerator[Any, None]:
         """Process record, optionally with delay or failure."""
         self.call_count += 1
 
@@ -34,10 +36,9 @@ class MockProcessor:
         if self.fail:
             raise ValueError(f"MockProcessor configured to fail: {self.suffix}")
 
-        # Yield modified record
-        yield record.model_copy(
+        yield context.record.model_copy(
             update={
-                "content": f"{record.content}_{self.suffix}",
+                "content": f"{context.record.content}_{self.suffix}",
             }
         )
 
@@ -47,8 +48,6 @@ class TestVariantProcessorUnit:
 
     def test_instantiation_no_variants(self):
         """Test instantiation with no variants creates single processor."""
-        # This will fail because we need a real processor class path
-        # But we can test the config validation
         with pytest.raises(ValueError, match="Failed to load processor class"):
             VariantProcessor(
                 processor_obj="nonexistent.Processor",
@@ -58,13 +57,51 @@ class TestVariantProcessorUnit:
 
     def test_instantiation_with_mock_path(self):
         """Test that instantiation tries to load the processor class."""
-        # VariantProcessor requires a valid processor_obj path
-        # This tests that validation happens at instantiation
         with pytest.raises(ValueError):
             VariantProcessor(
                 processor_obj="invalid.path.Processor",
                 variants={"param": ["a", "b"]},
             )
+
+    def test_fail_fast_invalid_variant_keys(self):
+        """Test that invalid variant keys raise ValueError at init time."""
+        with pytest.raises((ValueError, Exception), match="does not accept variant params"):
+            VariantProcessor(
+                processor_obj="buttermilk.processors.JMESPathTransform",
+                variants={"nonexistent_field": ["a", "b"]},
+            )
+
+    def test_fail_fast_invalid_parameter_keys(self):
+        """Test that invalid parameter keys raise ValueError at init time."""
+        with pytest.raises((ValueError, Exception), match="does not accept parameters"):
+            VariantProcessor(
+                processor_obj="buttermilk.processors.JMESPathTransform",
+                parameters={"nonexistent_field": "value"},
+            )
+
+    def test_valid_variant_keys_accepted(self):
+        """Test that valid variant keys are accepted."""
+        proc = VariantProcessor(
+            processor_obj="buttermilk.processors.JMESPathTransform",
+            variants={"mappings": [{"out1": "content"}, {"out2": "metadata"}]},
+        )
+        assert len(proc._processors) == 2
+
+
+def _make_variant_processor_with_mocks(
+    mocks: list[MockProcessor],
+    fail_on_error: bool = False,
+) -> VariantProcessor:
+    """Create VariantProcessor bypassing model_post_init, injecting mock processors."""
+    with patch.object(VariantProcessor, "model_post_init", lambda self, ctx: None):
+        proc = VariantProcessor(
+            processor_obj="mock.Processor",
+            variants={"suffix": ["A", "B", "C"]},
+            parameters={},
+            fail_on_error=fail_on_error,
+        )
+    proc._processors = mocks
+    return proc
 
 
 class TestVariantProcessorIntegration:
@@ -73,35 +110,24 @@ class TestVariantProcessorIntegration:
     @pytest.fixture
     def variant_processor_with_mocks(self):
         """Create VariantProcessor and inject mock processors."""
-        # Create with a placeholder (will fail to instantiate)
-        # We'll manually inject mock processors
-        proc = object.__new__(VariantProcessor)
-        # Initialize Pydantic model fields manually
-        proc.__dict__.update(
-            {
-                "processor_obj": "mock.Processor",
-                "variants": {"suffix": ["A", "B", "C"]},
-                "num_runs": 1,
-                "parameters": {},
-                "fail_on_error": False,
-            }
+        return _make_variant_processor_with_mocks(
+            mocks=[
+                MockProcessor(suffix="A", delay=0.1),
+                MockProcessor(suffix="B", delay=0.05),
+                MockProcessor(suffix="C", delay=0.15),
+            ],
+            fail_on_error=False,
         )
-        # Inject mock processors directly
-        proc._processors = [
-            MockProcessor(suffix="A", delay=0.1),
-            MockProcessor(suffix="B", delay=0.05),
-            MockProcessor(suffix="C", delay=0.15),
-        ]
-        return proc
 
     @pytest.mark.anyio
     async def test_parallel_execution_yields_all_results(self, variant_processor_with_mocks):
         """Test that all variants produce outputs."""
         proc = variant_processor_with_mocks
         record = BaseRecord(record_id="test-1", content="hello")
+        context = ProcessingContext(session_id="test", record=record)
 
         outputs = []
-        async for output in proc.process(record, processor_stage="test/00.Variant/abc123"):
+        async for output in proc.process(context):
             outputs.append(output)
 
         assert len(outputs) == 3
@@ -113,9 +139,10 @@ class TestVariantProcessorIntegration:
         """Test that variant metadata is added to outputs."""
         proc = variant_processor_with_mocks
         record = BaseRecord(record_id="test-1", content="hello")
+        context = ProcessingContext(session_id="test", record=record)
 
         outputs = []
-        async for output in proc.process(record, processor_stage="test/00.Variant/abc123"):
+        async for output in proc.process(context):
             outputs.append(output)
 
         for output in outputs:
@@ -123,17 +150,17 @@ class TestVariantProcessorIntegration:
             assert "index" in output.metadata["variant"]
             assert "total" in output.metadata["variant"]
             assert output.metadata["variant"]["total"] == 3
-            assert output.metadata["variant"]["stage"] == "test/00.Variant/abc123"
+            assert "params" in output.metadata["variant"]
 
     @pytest.mark.anyio
     async def test_results_stream_as_completed(self, variant_processor_with_mocks):
         """Test that faster variants yield results first."""
         proc = variant_processor_with_mocks
         record = BaseRecord(record_id="test-1", content="hello")
+        context = ProcessingContext(session_id="test", record=record)
 
-        # Track order of completion
         completion_order = []
-        async for output in proc.process(record, processor_stage="test/00.Variant/abc123"):
+        async for output in proc.process(context):
             completion_order.append(output.content)
 
         # B (0.05s) should complete before A (0.1s) before C (0.15s)
@@ -144,57 +171,40 @@ class TestVariantProcessorIntegration:
     @pytest.mark.anyio
     async def test_failed_variant_continues_others(self):
         """Test that one failing variant doesn't stop others."""
-        proc = object.__new__(VariantProcessor)
-        proc.__dict__.update(
-            {
-                "processor_obj": "mock.Processor",
-                "variants": {},
-                "num_runs": 1,
-                "parameters": {},
-                "fail_on_error": False,
-            }
+        proc = _make_variant_processor_with_mocks(
+            mocks=[
+                MockProcessor(suffix="OK1"),
+                MockProcessor(suffix="FAIL", fail=True),
+                MockProcessor(suffix="OK2"),
+            ],
+            fail_on_error=False,
         )
-        proc._processors = [
-            MockProcessor(suffix="OK1"),
-            MockProcessor(suffix="FAIL", fail=True),
-            MockProcessor(suffix="OK2"),
-        ]
-
         record = BaseRecord(record_id="test-1", content="hello")
+        context = ProcessingContext(session_id="test", record=record)
 
         outputs = []
-        async for output in proc.process(record, processor_stage="test/00.Variant/abc123"):
+        async for output in proc.process(context):
             outputs.append(output)
 
-        # Should get 2 successful outputs (failed variant is logged but doesn't yield)
         assert len(outputs) == 2
-
-        # Check successful outputs
         contents = {o.content for o in outputs}
         assert contents == {"hello_OK1", "hello_OK2"}
 
     @pytest.mark.anyio
     async def test_fail_on_error_raises(self):
         """Test that fail_on_error=True raises on first failure."""
-        proc = object.__new__(VariantProcessor)
-        proc.__dict__.update(
-            {
-                "processor_obj": "mock.Processor",
-                "variants": {},
-                "num_runs": 1,
-                "parameters": {},
-                "fail_on_error": True,
-            }
+        proc = _make_variant_processor_with_mocks(
+            mocks=[
+                MockProcessor(suffix="OK"),
+                MockProcessor(suffix="FAIL", fail=True),
+            ],
+            fail_on_error=True,
         )
-        proc._processors = [
-            MockProcessor(suffix="OK"),
-            MockProcessor(suffix="FAIL", fail=True),
-        ]
-
         record = BaseRecord(record_id="test-1", content="hello")
+        context = ProcessingContext(session_id="test", record=record)
 
         with pytest.raises(ValueError, match="configured to fail"):
-            async for _ in proc.process(record, processor_stage="test/00.Variant/abc123"):
+            async for _ in proc.process(context):
                 pass
 
     @pytest.mark.anyio
@@ -202,9 +212,26 @@ class TestVariantProcessorIntegration:
         """Test that original record_id is preserved in outputs."""
         proc = variant_processor_with_mocks
         record = BaseRecord(record_id="original-id-123", content="hello")
+        context = ProcessingContext(session_id="test", record=record)
 
-        async for output in proc.process(record, processor_stage="test/00.Variant/abc123"):
+        async for output in proc.process(context):
             assert output.record_id == "original-id-123"
+
+    @pytest.mark.anyio
+    async def test_flush_delegates_to_children(self):
+        """Test that flush() delegates to all child processors."""
+        proc = _make_variant_processor_with_mocks(
+            mocks=[
+                MockProcessor(suffix="A"),
+                MockProcessor(suffix="B"),
+            ],
+        )
+
+        # flush() should not raise - default ProcessorCore.flush() yields nothing
+        outputs = []
+        async for output in proc.flush():
+            outputs.append(output)
+        assert len(outputs) == 0
 
 
 class TestProcessorVariantsConfig:
@@ -214,57 +241,48 @@ class TestProcessorVariantsConfig:
         """Test expanding a single variant parameter."""
         from buttermilk._core.pipeline_config import ProcessorVariants
 
-        # Use a real processor path that exists
         cfg = ProcessorVariants(
             processor_obj="buttermilk.processors.JMESPathTransform",
-            variants={"expression": ["content", "metadata"]},
-            parameters={"output_field": "result"},
+            variants={"mappings": [{"out1": "content"}, {"out2": "metadata"}]},
         )
 
         configs = cfg.get_configs()
         assert len(configs) == 2
 
-        # Check parameters were expanded correctly
         params = [c[1] for c in configs]
-        expressions = {p["expression"] for p in params}
-        assert expressions == {"content", "metadata"}
-
-        # Check base params preserved
-        for p in params:
-            assert p["output_field"] == "result"
+        mappings_set = [p["mappings"] for p in params]
+        assert {"out1": "content"} in mappings_set
+        assert {"out2": "metadata"} in mappings_set
 
     def test_expand_multiple_variants(self):
-        """Test expanding multiple variant parameters (cartesian product)."""
+        """Test expanding multiple variant parameters (cartesian product).
+
+        Uses MockProcessor since JMESPathTransform only has one field.
+        """
         from buttermilk._core.pipeline_config import ProcessorVariants
 
+        # Use the test MockProcessor path for multi-field expansion
         cfg = ProcessorVariants(
-            processor_obj="buttermilk.processors.JMESPathTransform",
+            processor_obj=f"{MockProcessor.__module__}.MockProcessor",
             variants={
-                "expression": ["content", "metadata"],
-                "output_field": ["out1", "out2"],
+                "suffix": ["A", "B"],
+                "delay": [0.0, 0.1],
             },
         )
 
         configs = cfg.get_configs()
-        # 2 expressions × 2 output_fields = 4 combinations
+        # 2 suffixes x 2 delays = 4 combinations
         assert len(configs) == 4
 
     def test_num_runs_does_not_multiply_configs(self):
-        """Test that num_runs doesn't multiply configs (it's handled at source level).
-
-        NOTE: For repeated runs (num_runs), use ReplicatingSource at the pipeline
-        source level instead of replicating processors. This prevents exponential
-        API call multiplication.
-        """
+        """Test that num_runs doesn't multiply configs (it's handled at source level)."""
         from buttermilk._core.pipeline_config import ProcessorVariants
 
         cfg = ProcessorVariants(
             processor_obj="buttermilk.processors.JMESPathTransform",
-            variants={"expression": ["content"]},
-            num_runs=3,  # This is intentionally NOT used in get_configs
+            variants={"mappings": [{"out": "content"}]},
+            num_runs=3,
         )
 
         configs = cfg.get_configs()
-        # num_runs doesn't multiply configs - only variants do
-        # Replication is handled at the source level instead
         assert len(configs) == 1

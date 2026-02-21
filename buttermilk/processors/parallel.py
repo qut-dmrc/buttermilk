@@ -9,13 +9,15 @@ LLM-based and API-based classifiers.
 import asyncio
 from typing import Any, AsyncGenerator
 
-from pydantic import BaseModel, Field
+from opentelemetry import trace
+from pydantic import Field
 
 from buttermilk._core.log import logger
-from buttermilk._core.types import BaseRecord
+from buttermilk._core.processing_context import ProcessingContext
+from buttermilk._core.processor_core import ProcessorCore
 
 
-class ParallelProcessor(BaseModel):
+class ParallelProcessor(ProcessorCore):
     """Run multiple different processors in parallel on the same input record.
 
     This processor enables combining different processor types (e.g., LLMCore + ToxicityModel)
@@ -51,26 +53,17 @@ class ParallelProcessor(BaseModel):
         description="If True, raise on first processor failure. If False, log and continue but raise if ALL fail.",
     )
 
-    model_config = {"arbitrary_types_allowed": True}
-
-    async def process(
+    async def _process_record(
         self,
-        record: BaseRecord,
-        *,
-        processor_stage: str,
-        parent_trace_id: str | None = None,
-        **kwargs: Any,
-    ) -> AsyncGenerator[BaseRecord, None]:
+        context: ProcessingContext,
+    ) -> AsyncGenerator[Any, None]:
         """Run all processors in parallel on the same input, yield results as they complete.
 
         Args:
-            record: Input record to process (same record goes to all processors)
-            processor_stage: Unique stage identifier for caching
-            parent_trace_id: Optional trace ID for distributed tracing
-            **kwargs: Additional arguments passed to processors
+            context: ProcessingContext with record and session state
 
         Yields:
-            BaseRecord outputs from all processors, with parallel metadata added
+            Output objects from all processors, with parallel metadata added
 
         Raises:
             Exception: If fail_on_error=True and any processor fails.
@@ -79,25 +72,28 @@ class ParallelProcessor(BaseModel):
 
         async def stream_processor_outputs(processor: Any, proc_idx: int, output_queue: asyncio.Queue) -> None:
             """Stream outputs from one processor to the queue as they're produced."""
-            proc_stage = f"{processor_stage}_p{proc_idx}"
             try:
-                async for output in processor.process(
-                    record,
-                    processor_stage=proc_stage,
-                    parent_trace_id=parent_trace_id,
-                    **kwargs,
-                ):
-                    # Add parallel metadata immediately and put in queue
-                    metadata = output.metadata.copy() if output.metadata else {}
-                    metadata["parallel"] = {
-                        "processor_index": proc_idx,
-                        "total_processors": len(self.processors),
-                        "processor_class": type(processor).__name__,
-                        "stage": processor_stage,
-                    }
-                    await output_queue.put((proc_idx, output.model_copy(update={"metadata": metadata}), None))
+                # Create child context for this processor
+                child_context = ProcessingContext(
+                    session_id=context.session_id,
+                    batch_id=context.batch_id,
+                    record=context.record,
+                    span=trace.get_current_span(),
+                    resources=context.resources,
+                    metadata=context.metadata.copy(),
+                )
+                async for output in processor.process(child_context):
+                    # Add parallel metadata if output is a BaseRecord-like object
+                    if hasattr(output, "metadata") and hasattr(output, "model_copy"):
+                        metadata = output.metadata.copy() if output.metadata else {}
+                        metadata["parallel"] = {
+                            "processor_index": proc_idx,
+                            "total_processors": len(self.processors),
+                            "processor_class": type(processor).__name__,
+                        }
+                        output = output.model_copy(update={"metadata": metadata})
+                    await output_queue.put((proc_idx, output, None))
             except Exception as e:
-                # Put error in queue
                 await output_queue.put((proc_idx, None, e))
 
         # Create queue for streaming results
@@ -108,7 +104,6 @@ class ParallelProcessor(BaseModel):
 
         logger.debug(
             f"ParallelProcessor running {len(tasks)} processors in parallel",
-            processor_stage=processor_stage,
             processor_count=len(tasks),
         )
 
@@ -121,7 +116,7 @@ class ParallelProcessor(BaseModel):
         # Yield results as they arrive in the queue
         while completed_count < original_task_count or not output_queue.empty():
             # Check if any tasks completed (successfully or with error)
-            for task in list(tasks):  # Iterate over copy to allow removal
+            for task in list(tasks):
                 if task.done() and not task.cancelled():
                     completed_count += 1
                     tasks.remove(task)
@@ -131,33 +126,34 @@ class ParallelProcessor(BaseModel):
                 proc_idx, output, error = await asyncio.wait_for(output_queue.get(), timeout=0.1)
 
                 if error is not None:
-                    # Handle error
                     logger.warning(
                         f"Processor {proc_idx} failed in parallel execution",
-                        processor_stage=processor_stage,
                         processor_idx=proc_idx,
-                        processor_class=type(self.processors[proc_idx]).__name__ if proc_idx >= 0 else "unknown",
+                        processor_class=type(self.processors[proc_idx]).__name__ if proc_idx < len(self.processors) else "unknown",
                         error=str(error),
                     )
 
                     if self.fail_on_error:
-                        # Cancel remaining tasks and raise
                         for task in tasks:
                             task.cancel()
                         raise error
 
-                    # Track first error for potential re-raise
                     if first_error is None:
                         first_error = error
                 else:
-                    # Yield successful output immediately
                     success_count += 1
                     yield output
 
             except asyncio.TimeoutError:
-                # No items in queue yet, continue checking tasks
                 continue
 
         # If ALL processors failed, raise the first error
         if success_count == 0 and first_error is not None:
             raise first_error
+
+    async def flush(self) -> AsyncGenerator[Any, None]:
+        """Flush any buffered records from all child processors."""
+        for proc in self.processors:
+            if hasattr(proc, "flush"):
+                async for output in proc.flush():
+                    yield output

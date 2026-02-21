@@ -8,13 +8,15 @@ them in parallel on each input record, yielding results as they complete.
 import asyncio
 from typing import Any, AsyncGenerator
 
-from pydantic import BaseModel, Field, PrivateAttr
+from opentelemetry import trace
+from pydantic import Field, PrivateAttr
 
 from buttermilk._core.log import logger
-from buttermilk._core.types import BaseRecord
+from buttermilk._core.processing_context import ProcessingContext
+from buttermilk._core.processor_core import ProcessorCore
 
 
-class VariantProcessor(BaseModel):
+class VariantProcessor(ProcessorCore):
     """Run multiple processor variants in parallel, yielding results as they complete.
 
     This processor enables A/B testing of different processor configurations
@@ -47,7 +49,7 @@ class VariantProcessor(BaseModel):
             "index": 0,           # Which variant produced this
             "total": 3,           # Total number of variants
             "processor_class": "LLMCore",
-            "stage": "pipeline/00.VariantProcessor/abc123",
+            "params": {...},      # Variant-specific config
         }
         ```
     """
@@ -65,13 +67,37 @@ class VariantProcessor(BaseModel):
         default=True,
         description="If True, raise on first variant failure. If False, log and continue.",
     )
-    model_config = {"arbitrary_types_allowed": True}
 
     _processors: list[Any] = PrivateAttr(default_factory=list)
 
     def model_post_init(self, __context: Any) -> None:
-        """Instantiate variant processors after model creation."""
+        """Instantiate variant processors and validate params after model creation."""
         from buttermilk._core.pipeline_config import ProcessorVariants
+        from buttermilk.utils.validators import import_class_from_path
+
+        # Load processor class for fail-fast validation
+        try:
+            processor_class = import_class_from_path(self.processor_obj)
+        except (ImportError, AttributeError, ValueError) as e:
+            raise ValueError(f"Failed to load processor class from '{self.processor_obj}': {e}") from e
+
+        # Fail-fast: validate variant keys against processor's declared fields
+        if hasattr(processor_class, "model_fields"):
+            valid_fields = set(processor_class.model_fields.keys())
+
+            invalid_variant_keys = set(self.variants.keys()) - valid_fields
+            if invalid_variant_keys:
+                raise ValueError(
+                    f"Processor '{processor_class.__name__}' does not accept variant params: "
+                    f"{sorted(invalid_variant_keys)}. Valid fields: {sorted(valid_fields)}"
+                )
+
+            invalid_param_keys = set(self.parameters.keys()) - valid_fields
+            if invalid_param_keys:
+                raise ValueError(
+                    f"Processor '{processor_class.__name__}' does not accept parameters: "
+                    f"{sorted(invalid_param_keys)}. Valid fields: {sorted(valid_fields)}"
+                )
 
         variant_cfg = ProcessorVariants(
             processor_obj=self.processor_obj,
@@ -87,24 +113,17 @@ class VariantProcessor(BaseModel):
             variant_count=len(self._processors),
         )
 
-    async def process(
+    async def _process_record(
         self,
-        record: BaseRecord,
-        *,
-        processor_stage: str,
-        parent_trace_id: str | None = None,
-        **kwargs: Any,
-    ) -> AsyncGenerator[BaseRecord, None]:
+        context: ProcessingContext,
+    ) -> AsyncGenerator[Any, None]:
         """Run all variants in parallel, yield results as they complete.
 
         Args:
-            record: Input record to process
-            processor_stage: Unique stage identifier for caching
-            parent_trace_id: Optional trace ID for distributed tracing
-            **kwargs: Additional arguments passed to variant processors
+            context: ProcessingContext with record and session state
 
         Yields:
-            BaseRecord outputs from each variant, with variant metadata added.
+            Output objects from each variant, with variant metadata added.
 
         Raises:
             Exception: If fail_on_error=True and any variant fails.
@@ -113,26 +132,29 @@ class VariantProcessor(BaseModel):
 
         async def stream_variant_outputs(processor: Any, variant_idx: int, output_queue: asyncio.Queue) -> None:
             """Stream outputs from one variant processor to the queue as they're produced."""
-            variant_stage = f"{processor_stage}_v{variant_idx}"
             try:
-                async for output in processor.process(
-                    record,
-                    processor_stage=variant_stage,
-                    parent_trace_id=parent_trace_id,
-                    **kwargs,
-                ):
-                    # Add variant metadata immediately and put in queue
-                    metadata = output.metadata.copy() if output.metadata else {}
-                    metadata["variant"] = {
-                        "index": variant_idx,
-                        "total": len(self._processors),
-                        "processor_class": type(processor).__name__,
-                        "stage": processor_stage,
-                    }
-                    # Put (variant_idx, output, None) - None means no error
-                    await output_queue.put((variant_idx, output.model_copy(update={"metadata": metadata}), None))
+                # Create child context for this variant
+                child_context = ProcessingContext(
+                    session_id=context.session_id,
+                    batch_id=context.batch_id,
+                    record=context.record,
+                    span=trace.get_current_span(),
+                    resources=context.resources,
+                    metadata=context.metadata.copy(),
+                )
+                async for output in processor.process(child_context):
+                    # Add variant metadata if output is a BaseRecord-like object
+                    if hasattr(output, "metadata") and hasattr(output, "model_copy"):
+                        metadata = output.metadata.copy() if output.metadata else {}
+                        metadata["variant"] = {
+                            "index": variant_idx,
+                            "total": len(self._processors),
+                            "processor_class": type(processor).__name__,
+                            "params": getattr(processor, "config_dict", {}),
+                        }
+                        output = output.model_copy(update={"metadata": metadata})
+                    await output_queue.put((variant_idx, output, None))
             except Exception as e:
-                # Put (variant_idx, None, error) - signal failure
                 await output_queue.put((variant_idx, None, e))
 
         # Create queue for streaming results
@@ -150,7 +172,7 @@ class VariantProcessor(BaseModel):
         # Yield results as they arrive in the queue
         while completed_count < original_task_count or not output_queue.empty():
             # Check if any tasks completed (successfully or with error)
-            for task in list(tasks):  # Iterate over copy to allow removal
+            for task in list(tasks):
                 if task.done() and not task.cancelled():
                     completed_count += 1
                     tasks.remove(task)
@@ -160,32 +182,32 @@ class VariantProcessor(BaseModel):
                 variant_idx, output, error = await asyncio.wait_for(output_queue.get(), timeout=0.1)
 
                 if error is not None:
-                    # Handle error
                     logger.warning(
                         f"Variant {variant_idx} failed: {error}",
-                        record_id=record.record_id,
-                        processor_stage=processor_stage,
+                        record_id=getattr(context.record, "record_id", None),
                         variant_idx=variant_idx,
                         error=str(error),
                     )
 
                     if self.fail_on_error:
-                        # Cancel remaining tasks and raise
                         for task in tasks:
                             task.cancel()
                         raise error
 
-                    # Track first error for potential re-raise
                     if first_error is None:
                         first_error = error
                 else:
-                    # Success - yield the output
                     success_count += 1
                     yield output
             except asyncio.TimeoutError:
-                # No items in queue yet, continue checking tasks
                 continue
 
         # If ALL variants failed, raise the first error
         if success_count == 0 and first_error is not None:
             raise first_error
+
+    async def flush(self) -> AsyncGenerator[Any, None]:
+        """Flush any buffered records from all variant processors."""
+        for proc in self._processors:
+            async for output in proc.flush():
+                yield output
