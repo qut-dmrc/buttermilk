@@ -306,6 +306,16 @@ class OpenAIBatchProcessor(BatchProcessorCore):
         if not requests:
             raise FatalError("No valid records found for batch processing")
 
+        # Enforce that all requests use the same model.  Mixed-model batches are not
+        # supported: the batch submission and cost calculation both use a single model
+        # identifier.  If different models are needed, use separate processor instances.
+        models_in_batch = {req.model for req in requests}
+        if len(models_in_batch) > 1:
+            raise FatalError(
+                f"Mixed models in a single OpenAI batch are not supported: {models_in_batch}. "
+                "Use a separate OpenAIBatchProcessor instance for each model."
+            )
+
         return requests
 
     async def _process_batch(

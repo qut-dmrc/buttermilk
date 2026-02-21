@@ -6,6 +6,7 @@ import pytest
 
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord
+from buttermilk.pipeline import RecordBufferedException
 from buttermilk.processors.variants import VariantProcessor
 
 
@@ -38,6 +39,27 @@ class MockProcessor:
                 "content": f"{record.content}_{self.suffix}",
             }
         )
+
+
+class MockBufferingProcessor:
+    """Mock processor that simulates a BatchAccumulator by raising RecordBufferedException."""
+
+    def __init__(self, suffix: str = ""):
+        self.suffix = suffix
+        self.buffered: list = []
+        self.name = None
+
+    async def process(self, context: ProcessingContext):
+        """Buffer the record and raise RecordBufferedException (no yield)."""
+        self.buffered.append(context.record)
+        raise RecordBufferedException(f"Buffered by MockBufferingProcessor({self.suffix})")
+        yield  # Make this an async generator
+
+    async def flush(self):
+        """Flush buffered records as outputs."""
+        for record in self.buffered:
+            yield record.model_copy(update={"content": f"{record.content}_{self.suffix}"})
+        self.buffered.clear()
 
 
 class TestVariantProcessorUnit:
@@ -215,6 +237,113 @@ class TestVariantProcessorIntegration:
 
         async for output in proc.process(context):
             assert output.record_id == "original-id-123"
+
+    @pytest.mark.anyio
+    async def test_buffering_variant_does_not_cancel_siblings(self):
+        """Test that a variant raising RecordBufferedException doesn't cancel other variants.
+
+        Regression test for Issue #347: previously RecordBufferedException would cancel
+        all sibling tasks immediately, so batch variants never got to buffer their records.
+        """
+        buf1 = MockBufferingProcessor(suffix="BUF1")
+        buf2 = MockBufferingProcessor(suffix="BUF2")
+
+        proc = object.__new__(VariantProcessor)
+        proc.__dict__.update(
+            {
+                "name": None,
+                "enabled": True,
+                "processor_obj": "mock.Processor",
+                "variants": {},
+                "num_runs": 1,
+                "parameters": {},
+                "fail_on_error": False,
+            }
+        )
+        proc._processors = [buf1, buf2]
+
+        record = BaseRecord(record_id="buf-test-1", content="hello")
+        context = ProcessingContext(record=record, session_id="test/00.Variant/abc123")
+
+        # All variants buffered → should raise RecordBufferedException, not produce outputs
+        with pytest.raises(RecordBufferedException):
+            async for _ in proc.process(context):
+                pass
+
+        # Both processors must have buffered the record (neither was cancelled)
+        assert len(buf1.buffered) == 1, "buf1 was cancelled before it could buffer"
+        assert len(buf2.buffered) == 1, "buf2 was cancelled before it could buffer"
+
+    @pytest.mark.anyio
+    async def test_buffering_and_success_variants_mixed(self):
+        """Test that buffering variants and successful variants can coexist.
+
+        When some variants buffer and others produce output, the outputs should be
+        yielded normally (the buffered variants are silently absorbed).
+        """
+        buf = MockBufferingProcessor(suffix="BUF")
+        ok = MockProcessor(suffix="OK")
+
+        proc = object.__new__(VariantProcessor)
+        proc.__dict__.update(
+            {
+                "name": None,
+                "enabled": True,
+                "processor_obj": "mock.Processor",
+                "variants": {},
+                "num_runs": 1,
+                "parameters": {},
+                "fail_on_error": False,
+            }
+        )
+        proc._processors = [buf, ok]
+
+        record = BaseRecord(record_id="mixed-test-1", content="hello")
+        context = ProcessingContext(record=record, session_id="test/00.Variant/abc123")
+
+        outputs = []
+        async for output in proc.process(context):
+            outputs.append(output)
+
+        # The successful variant should yield its output
+        assert len(outputs) == 1
+        assert outputs[0].content == "hello_OK"
+
+        # The buffering variant should have buffered the record
+        assert len(buf.buffered) == 1
+
+    @pytest.mark.anyio
+    async def test_flush_delegates_to_inner_processors(self):
+        """Test that VariantProcessor.flush() calls flush() on all inner processors."""
+        buf1 = MockBufferingProcessor(suffix="BUF1")
+        buf2 = MockBufferingProcessor(suffix="BUF2")
+
+        # Pre-populate buffers as if records were already buffered
+        dummy = BaseRecord(record_id="flush-1", content="world")
+        buf1.buffered.append(dummy)
+        buf2.buffered.append(dummy)
+
+        proc = object.__new__(VariantProcessor)
+        proc.__dict__.update(
+            {
+                "name": None,
+                "enabled": True,
+                "processor_obj": "mock.Processor",
+                "variants": {},
+                "num_runs": 1,
+                "parameters": {},
+                "fail_on_error": False,
+            }
+        )
+        proc._processors = [buf1, buf2]
+
+        flushed = []
+        async for output in proc.flush():
+            flushed.append(output)
+
+        assert len(flushed) == 2
+        contents = {o.content for o in flushed}
+        assert contents == {"world_BUF1", "world_BUF2"}
 
 
 class TestProcessorVariantsConfig:

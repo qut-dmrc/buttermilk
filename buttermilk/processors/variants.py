@@ -174,6 +174,7 @@ class VariantProcessor(ProcessorCore):
         original_task_count = len(tasks)
         completed_count = 0
         success_count = 0
+        buffered_count = 0
         first_error: Exception | None = None
 
         # Yield results as they arrive in the queue
@@ -192,14 +193,14 @@ class VariantProcessor(ProcessorCore):
                     variant_idx, output, error = await asyncio.wait_for(output_queue.get(), timeout=0.1)
 
                     if error is not None:
-                        # Issue 1: Handle RecordBufferedException specially
+                        # Handle RecordBufferedException: this variant buffered the record
+                        # (e.g. inside a BatchAccumulator). Do NOT cancel other variants —
+                        # each sibling variant must independently decide to buffer or produce
+                        # output. We raise RecordBufferedException to the pipeline only after
+                        # all variants have completed and none produced any output.
                         if isinstance(error, RecordBufferedException):
-                            # Propagate buffer signal immediately
-                            # This cancels other variants and bubbles up to pipeline
-                            for task in tasks:
-                                if not task.done():
-                                    task.cancel()
-                            raise error
+                            buffered_count += 1
+                            continue
 
                         # Handle variant failure
                         logger.warning(
@@ -234,9 +235,17 @@ class VariantProcessor(ProcessorCore):
             if tasks:
                 await asyncio.gather(*tasks, return_exceptions=True)
 
-        # If ALL variants failed and we haven't raised yet, raise the first error
-        if success_count == 0 and first_error is not None:
-            raise first_error
+        # All variants have completed. Decide how to signal the outcome to the pipeline.
+        if success_count == 0:
+            if buffered_count > 0 and first_error is None:
+                # Every variant either buffered the record (or was skipped).
+                # Signal the pipeline that this record was buffered, not failed.
+                raise RecordBufferedException(
+                    f"All {buffered_count} variant(s) buffered this record for later batch processing"
+                )
+            if first_error is not None:
+                # All non-buffering variants failed; raise the first error seen.
+                raise first_error
 
     async def flush(self) -> AsyncGenerator[BaseRecord, None]:
         """Delegate flush to all inner processors."""
