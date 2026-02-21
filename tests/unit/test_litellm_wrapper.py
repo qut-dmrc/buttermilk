@@ -21,7 +21,13 @@ class TestLiteLLMWrapper:
 
     def test_init_valid_params(self):
         """Test LiteLLMWrapper initialization with valid parameters."""
+<<<<<<< HEAD
         model_info = ModelInfo(vision=False, function_calling=True, json_output=False, family="gpt-4")
+=======
+        model_info = ModelInfo(
+            vision=False, function_calling=True, json_output=False, family="gpt-4"
+        )
+>>>>>>> origin/stable
 
         wrapper = LiteLLMWrapper(
             model="gpt-4",
@@ -102,7 +108,13 @@ class TestLiteLLMWrapperCreate:
 
     async def test_create_basic_completion(self):
         """Test basic completion call."""
+<<<<<<< HEAD
         model_info = ModelInfo(vision=False, function_calling=True, json_output=False, family="gpt-4")
+=======
+        model_info = ModelInfo(
+            vision=False, function_calling=True, json_output=False, family="gpt-4"
+        )
+>>>>>>> origin/stable
 
         wrapper = LiteLLMWrapper(
             model="gpt-4",
@@ -141,7 +153,13 @@ class TestLiteLLMWrapperCreate:
 
     async def test_create_with_retry_on_rate_limit(self):
         """Test retry logic on rate limit errors."""
+<<<<<<< HEAD
         model_info = ModelInfo(vision=False, function_calling=True, json_output=False, family="gpt-4")
+=======
+        model_info = ModelInfo(
+            vision=False, function_calling=True, json_output=False, family="gpt-4"
+        )
+>>>>>>> origin/stable
 
         wrapper = LiteLLMWrapper(
             model="gpt-4",
@@ -176,7 +194,13 @@ class TestLiteLLMWrapperCreate:
 
     async def test_create_failure_after_max_retries(self):
         """Test that error is raised after max retries."""
+<<<<<<< HEAD
         model_info = ModelInfo(vision=False, function_calling=True, json_output=False, family="gpt-4")
+=======
+        model_info = ModelInfo(
+            vision=False, function_calling=True, json_output=False, family="gpt-4"
+        )
+>>>>>>> origin/stable
 
         wrapper = LiteLLMWrapper(
             model="gpt-4",
@@ -207,7 +231,11 @@ class TestLiteLLMWrapperStructuredOutput:
         """Test structured output with Pydantic schema."""
 
         class TestSchema(BaseModel):
+<<<<<<< HEAD
             model_config = ConfigDict(extra="forbid")
+=======
+            model_config = ConfigDict(extra='forbid')
+>>>>>>> origin/stable
 
             summary: str
             sentiment: str
@@ -232,7 +260,13 @@ class TestLiteLLMWrapperStructuredOutput:
         with patch("litellm.acompletion") as mock_acompletion:
             mock_response = MagicMock()
             mock_response.choices = [MagicMock()]
+<<<<<<< HEAD
             mock_response.choices[0].message.content = '{"summary": "Test summary", "sentiment": "positive"}'
+=======
+            mock_response.choices[
+                0
+            ].message.content = '{"summary": "Test summary", "sentiment": "positive"}'
+>>>>>>> origin/stable
             mock_response.choices[0].finish_reason = "stop"
             mock_response.usage = MagicMock(prompt_tokens=10, completion_tokens=20)
             mock_response.cached = False
@@ -251,7 +285,13 @@ class TestLiteLLMWrapperPricing:
 
     def test_calculate_pricing_with_usage(self):
         """Test pricing calculation with valid usage data."""
+<<<<<<< HEAD
         model_info = ModelInfo(vision=False, function_calling=True, json_output=False, family="gpt-4")
+=======
+        model_info = ModelInfo(
+            vision=False, function_calling=True, json_output=False, family="gpt-4"
+        )
+>>>>>>> origin/stable
 
         wrapper = LiteLLMWrapper(
             model="gpt-4",
@@ -274,7 +314,13 @@ class TestLiteLLMWrapperPricing:
 
     def test_calculate_pricing_without_usage(self):
         """Test pricing calculation when usage data is missing."""
+<<<<<<< HEAD
         model_info = ModelInfo(vision=False, function_calling=True, json_output=False, family="gpt-4")
+=======
+        model_info = ModelInfo(
+            vision=False, function_calling=True, json_output=False, family="gpt-4"
+        )
+>>>>>>> origin/stable
 
         wrapper = LiteLLMWrapper(
             model="gpt-4",

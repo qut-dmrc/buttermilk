@@ -1,13 +1,20 @@
 """Core trace analysis functions."""
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/stable
 import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from buttermilk._core.contract import ExecutionTrace
+<<<<<<< HEAD
 
 from .trace_models import ErrorContext, TimelineEvent, TraceDiff, TraceFile, TraceSummary
+=======
+from .trace_models import ErrorContext, TraceFile, TraceSummary, TimelineEvent, TraceDiff
+>>>>>>> origin/stable
 
 
 def load_traces(path: Path) -> list[ExecutionTrace]:
@@ -39,7 +46,11 @@ def load_traces(path: Path) -> list[ExecutionTrace]:
     except json.JSONDecodeError:
         # Try JSONL format
         raw_data = []
+<<<<<<< HEAD
         for line_num, line in enumerate(content.strip().split("\n"), 1):
+=======
+        for line_num, line in enumerate(content.strip().split('\n'), 1):
+>>>>>>> origin/stable
             if not line.strip():
                 continue
             try:
@@ -55,6 +66,7 @@ def load_traces(path: Path) -> list[ExecutionTrace]:
             trace_dict = raw_trace.copy()
 
             # Parse agent_info if it's a string
+<<<<<<< HEAD
             if isinstance(trace_dict.get("agent_info"), str):
                 trace_dict["agent_info"] = json.loads(trace_dict["agent_info"])
 
@@ -66,10 +78,24 @@ def load_traces(path: Path) -> list[ExecutionTrace]:
             if "messages" in trace_dict and isinstance(trace_dict["messages"], list):
                 parsed_messages = []
                 for msg in trace_dict["messages"]:
+=======
+            if isinstance(trace_dict.get('agent_info'), str):
+                trace_dict['agent_info'] = json.loads(trace_dict['agent_info'])
+
+            # Parse inputs if it's a string
+            if isinstance(trace_dict.get('inputs'), str):
+                trace_dict['inputs'] = json.loads(trace_dict['inputs'])
+
+            # Parse messages if they're strings
+            if 'messages' in trace_dict and isinstance(trace_dict['messages'], list):
+                parsed_messages = []
+                for msg in trace_dict['messages']:
+>>>>>>> origin/stable
                     if isinstance(msg, str):
                         parsed_messages.append(json.loads(msg))
                     else:
                         parsed_messages.append(msg)
+<<<<<<< HEAD
                 trace_dict["messages"] = parsed_messages
 
             # Parse timestamp if it's a string
@@ -79,6 +105,17 @@ def load_traces(path: Path) -> list[ExecutionTrace]:
                 for fmt in ["%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f"]:
                     try:
                         trace_dict["timestamp"] = datetime.strptime(timestamp_str, fmt)
+=======
+                trace_dict['messages'] = parsed_messages
+
+            # Parse timestamp if it's a string
+            if isinstance(trace_dict.get('timestamp'), str):
+                # Try multiple datetime formats
+                timestamp_str = trace_dict['timestamp']
+                for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%dT%H:%M:%S.%f']:
+                    try:
+                        trace_dict['timestamp'] = datetime.strptime(timestamp_str, fmt)
+>>>>>>> origin/stable
                         break
                     except ValueError:
                         continue
@@ -100,7 +137,15 @@ def load_trace_file(path: Path) -> TraceFile:
         TraceFile object containing traces and metadata
     """
     traces = load_traces(path)
+<<<<<<< HEAD
     return TraceFile(path=path, traces=traces, loaded_at=datetime.now())
+=======
+    return TraceFile(
+        path=path,
+        traces=traces,
+        loaded_at=datetime.now()
+    )
+>>>>>>> origin/stable
 
 
 def get_trace(traces: list[ExecutionTrace], call_id: str) -> ExecutionTrace | None:
@@ -134,19 +179,31 @@ def get_traces_by_agent(traces: list[ExecutionTrace], agent_name: str) -> list[E
 
     for trace in traces:
         # Check agent_info.role
+<<<<<<< HEAD
         role = trace.agent_info.get("role", "").lower()
+=======
+        role = trace.agent_info.get('role', '').lower()
+>>>>>>> origin/stable
         if role == agent_name_lower:
             matching_traces.append(trace)
             continue
 
         # Check agent_info.component_name
+<<<<<<< HEAD
         component_name = trace.agent_info.get("component_name", "").lower()
+=======
+        component_name = trace.agent_info.get('component_name', '').lower()
+>>>>>>> origin/stable
         if component_name == agent_name_lower:
             matching_traces.append(trace)
             continue
 
         # Check agent_info.agent_name
+<<<<<<< HEAD
         agent_name_field = trace.agent_info.get("agent_name", "").lower()
+=======
+        agent_name_field = trace.agent_info.get('agent_name', '').lower()
+>>>>>>> origin/stable
         if agent_name_field == agent_name_lower:
             matching_traces.append(trace)
 
@@ -159,7 +216,11 @@ def filter_traces(
     has_error: bool | None = None,
     agent_name: str | None = None,
     after: datetime | None = None,
+<<<<<<< HEAD
     before: datetime | None = None,
+=======
+    before: datetime | None = None
+>>>>>>> origin/stable
 ) -> list[ExecutionTrace]:
     """Filter traces by criteria.
 
@@ -208,7 +269,11 @@ def summarize(traces: list[ExecutionTrace]) -> TraceSummary:
             time_range=None,
             session_id=None,
             by_agent={},
+<<<<<<< HEAD
             by_error_status={"success": 0, "error": 0},
+=======
+            by_error_status={"success": 0, "error": 0}
+>>>>>>> origin/stable
         )
 
     # Count errors
@@ -217,10 +282,17 @@ def summarize(traces: list[ExecutionTrace]) -> TraceSummary:
     # Collect unique agents
     agents = set()
     for trace in traces:
+<<<<<<< HEAD
         role = trace.agent_info.get("role")
         if role:
             agents.add(role)
         component_name = trace.agent_info.get("component_name")
+=======
+        role = trace.agent_info.get('role')
+        if role:
+            agents.add(role)
+        component_name = trace.agent_info.get('component_name')
+>>>>>>> origin/stable
         if component_name:
             agents.add(component_name)
 
@@ -242,11 +314,22 @@ def summarize(traces: list[ExecutionTrace]) -> TraceSummary:
     # Count by agent
     by_agent: dict[str, int] = {}
     for trace in traces:
+<<<<<<< HEAD
         role = trace.agent_info.get("role", "unknown")
         by_agent[role] = by_agent.get(role, 0) + 1
 
     # Count by error status
     by_error_status = {"success": len(traces) - error_count, "error": error_count}
+=======
+        role = trace.agent_info.get('role', 'unknown')
+        by_agent[role] = by_agent.get(role, 0) + 1
+
+    # Count by error status
+    by_error_status = {
+        "success": len(traces) - error_count,
+        "error": error_count
+    }
+>>>>>>> origin/stable
 
     return TraceSummary(
         total_traces=len(traces),
@@ -256,7 +339,11 @@ def summarize(traces: list[ExecutionTrace]) -> TraceSummary:
         time_range=time_range,
         session_id=session_id,
         by_agent=by_agent,
+<<<<<<< HEAD
         by_error_status=by_error_status,
+=======
+        by_error_status=by_error_status
+>>>>>>> origin/stable
     )
 
 
@@ -277,17 +364,27 @@ def get_errors(traces: list[ExecutionTrace]) -> list[ErrorContext]:
 
         # Extract error information
         error_dict = trace.error or {}
+<<<<<<< HEAD
         error_message = error_dict.get("event", "Unknown error")
         error_details = error_dict.get("details", {})
 
         # Extract agent info
         agent_name = trace.agent_info.get("component_name", "unknown")
         agent_role = trace.agent_info.get("role", "unknown")
+=======
+        error_message = error_dict.get('event', 'Unknown error')
+        error_details = error_dict.get('details', {})
+
+        # Extract agent info
+        agent_name = trace.agent_info.get('component_name', 'unknown')
+        agent_role = trace.agent_info.get('role', 'unknown')
+>>>>>>> origin/stable
 
         # Summarize inputs
         inputs_summary = str(trace.inputs)[:200] if trace.inputs else "No inputs"
 
         # Find preceding traces (same session, earlier timestamp)
+<<<<<<< HEAD
         preceding = [t.call_id for t in traces if t.session_id == trace.session_id and t.timestamp < trace.timestamp]
 
         errors.append(
@@ -303,6 +400,26 @@ def get_errors(traces: list[ExecutionTrace]) -> list[ErrorContext]:
                 preceding_trace_ids=preceding,
             )
         )
+=======
+        preceding = [
+            t.call_id
+            for t in traces
+            if t.session_id == trace.session_id
+            and t.timestamp < trace.timestamp
+        ]
+
+        errors.append(ErrorContext(
+            call_id=trace.call_id,
+            agent_name=agent_name,
+            agent_role=agent_role,
+            error_message=error_message,
+            error_details=error_details,
+            timestamp=trace.timestamp,
+            inputs_summary=inputs_summary,
+            parent_call_id=trace.parent_call_id,
+            preceding_trace_ids=preceding
+        ))
+>>>>>>> origin/stable
 
     return errors
 
@@ -319,8 +436,13 @@ def get_timeline(traces: list[ExecutionTrace]) -> list[TimelineEvent]:
     events = []
 
     for trace in traces:
+<<<<<<< HEAD
         agent_name = trace.agent_info.get("component_name", "unknown")
         agent_role = trace.agent_info.get("role", "unknown")
+=======
+        agent_name = trace.agent_info.get('component_name', 'unknown')
+        agent_role = trace.agent_info.get('role', 'unknown')
+>>>>>>> origin/stable
 
         # Determine event type
         event_type: Any = "success"
@@ -329,12 +451,17 @@ def get_timeline(traces: list[ExecutionTrace]) -> list[TimelineEvent]:
         if trace.is_error:
             event_type = "error"
             error_dict = trace.error or {}
+<<<<<<< HEAD
             error_msg = error_dict.get("event", "Unknown error")
+=======
+            error_msg = error_dict.get('event', 'Unknown error')
+>>>>>>> origin/stable
             summary = f"{agent_role} failed: {error_msg}"
 
         # Calculate duration if available (would need start/end timestamps)
         duration_ms = None
 
+<<<<<<< HEAD
         events.append(
             TimelineEvent(
                 call_id=trace.call_id,
@@ -346,6 +473,17 @@ def get_timeline(traces: list[ExecutionTrace]) -> list[TimelineEvent]:
                 summary=summary,
             )
         )
+=======
+        events.append(TimelineEvent(
+            call_id=trace.call_id,
+            timestamp=trace.timestamp,
+            agent_name=agent_name,
+            agent_role=agent_role,
+            event_type=event_type,
+            duration_ms=duration_ms,
+            summary=summary
+        ))
+>>>>>>> origin/stable
 
     # Sort chronologically
     events.sort(key=lambda e: e.timestamp)
@@ -367,10 +505,25 @@ def get_llm_conversation(trace: ExecutionTrace) -> list[dict]:
     for msg in trace.messages:
         # Handle both dict and object formats
         if isinstance(msg, dict):
+<<<<<<< HEAD
             messages.append({"type": msg.get("type", "unknown"), "content": msg.get("content", ""), "source": msg.get("source", "")})
         else:
             # Handle Pydantic models
             messages.append({"type": getattr(msg, "type", "unknown"), "content": getattr(msg, "content", ""), "source": getattr(msg, "source", "")})
+=======
+            messages.append({
+                'type': msg.get('type', 'unknown'),
+                'content': msg.get('content', ''),
+                'source': msg.get('source', '')
+            })
+        else:
+            # Handle Pydantic models
+            messages.append({
+                'type': getattr(msg, 'type', 'unknown'),
+                'content': getattr(msg, 'content', ''),
+                'source': getattr(msg, 'source', '')
+            })
+>>>>>>> origin/stable
 
     return messages
 
@@ -384,7 +537,14 @@ def get_inputs_outputs(trace: ExecutionTrace) -> dict:
     Returns:
         Dictionary with 'inputs' and 'outputs' keys
     """
+<<<<<<< HEAD
     return {"inputs": trace.inputs, "outputs": trace.outputs}
+=======
+    return {
+        'inputs': trace.inputs,
+        'outputs': trace.outputs
+    }
+>>>>>>> origin/stable
 
 
 def diff_traces(trace1: ExecutionTrace, trace2: ExecutionTrace) -> TraceDiff:
@@ -415,8 +575,22 @@ def diff_traces(trace1: ExecutionTrace, trace2: ExecutionTrace) -> TraceDiff:
         val2 = dict2[key]
 
         if val1 != val2:
+<<<<<<< HEAD
             differences[key] = {"trace1": val1, "trace2": val2}
 
     return TraceDiff(
         trace1_id=trace1.call_id, trace2_id=trace2.call_id, differences=differences, only_in_trace1=only_in_trace1, only_in_trace2=only_in_trace2
+=======
+            differences[key] = {
+                'trace1': val1,
+                'trace2': val2
+            }
+
+    return TraceDiff(
+        trace1_id=trace1.call_id,
+        trace2_id=trace2.call_id,
+        differences=differences,
+        only_in_trace1=only_in_trace1,
+        only_in_trace2=only_in_trace2
+>>>>>>> origin/stable
     )

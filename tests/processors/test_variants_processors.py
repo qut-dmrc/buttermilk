@@ -95,13 +95,25 @@ class TestVariantProcessorIntegration:
         return proc
 
     @pytest.mark.anyio
+<<<<<<< HEAD
     async def test_parallel_execution_yields_all_results(self, variant_processor_with_mocks):
+=======
+    async def test_parallel_execution_yields_all_results(
+        self, variant_processor_with_mocks
+    ):
+>>>>>>> origin/stable
         """Test that all variants produce outputs."""
         proc = variant_processor_with_mocks
         record = BaseRecord(record_id="test-1", content="hello")
 
         outputs = []
+<<<<<<< HEAD
         async for output in proc.process(record, processor_stage="test/00.Variant/abc123"):
+=======
+        async for output in proc.process(
+            record, processor_stage="test/00.Variant/abc123"
+        ):
+>>>>>>> origin/stable
             outputs.append(output)
 
         assert len(outputs) == 3
@@ -115,7 +127,13 @@ class TestVariantProcessorIntegration:
         record = BaseRecord(record_id="test-1", content="hello")
 
         outputs = []
+<<<<<<< HEAD
         async for output in proc.process(record, processor_stage="test/00.Variant/abc123"):
+=======
+        async for output in proc.process(
+            record, processor_stage="test/00.Variant/abc123"
+        ):
+>>>>>>> origin/stable
             outputs.append(output)
 
         for output in outputs:
@@ -133,7 +151,13 @@ class TestVariantProcessorIntegration:
 
         # Track order of completion
         completion_order = []
+<<<<<<< HEAD
         async for output in proc.process(record, processor_stage="test/00.Variant/abc123"):
+=======
+        async for output in proc.process(
+            record, processor_stage="test/00.Variant/abc123"
+        ):
+>>>>>>> origin/stable
             completion_order.append(output.content)
 
         # B (0.05s) should complete before A (0.1s) before C (0.15s)
@@ -163,7 +187,13 @@ class TestVariantProcessorIntegration:
         record = BaseRecord(record_id="test-1", content="hello")
 
         outputs = []
+<<<<<<< HEAD
         async for output in proc.process(record, processor_stage="test/00.Variant/abc123"):
+=======
+        async for output in proc.process(
+            record, processor_stage="test/00.Variant/abc123"
+        ):
+>>>>>>> origin/stable
             outputs.append(output)
 
         # Should get 2 successful outputs (failed variant is logged but doesn't yield)
@@ -194,7 +224,13 @@ class TestVariantProcessorIntegration:
         record = BaseRecord(record_id="test-1", content="hello")
 
         with pytest.raises(ValueError, match="configured to fail"):
+<<<<<<< HEAD
             async for _ in proc.process(record, processor_stage="test/00.Variant/abc123"):
+=======
+            async for _ in proc.process(
+                record, processor_stage="test/00.Variant/abc123"
+            ):
+>>>>>>> origin/stable
                 pass
 
     @pytest.mark.anyio
@@ -203,7 +239,13 @@ class TestVariantProcessorIntegration:
         proc = variant_processor_with_mocks
         record = BaseRecord(record_id="original-id-123", content="hello")
 
+<<<<<<< HEAD
         async for output in proc.process(record, processor_stage="test/00.Variant/abc123"):
+=======
+        async for output in proc.process(
+            record, processor_stage="test/00.Variant/abc123"
+        ):
+>>>>>>> origin/stable
             assert output.record_id == "original-id-123"
 
 

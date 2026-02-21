@@ -9,7 +9,13 @@ from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 
 
+<<<<<<< HEAD
 def pydantic_to_bigquery_schema(model_class: type[BaseModel], extra_fields: List[Dict[str, str]] = None) -> List[bigquery.SchemaField]:
+=======
+def pydantic_to_bigquery_schema(
+    model_class: type[BaseModel], extra_fields: List[Dict[str, str]] = None
+) -> List[bigquery.SchemaField]:
+>>>>>>> origin/stable
     """Convert a Pydantic model to BigQuery schema fields.
 
     Args:
@@ -49,7 +55,13 @@ def pydantic_to_bigquery_schema(model_class: type[BaseModel], extra_fields: List
     return schema_fields
 
 
+<<<<<<< HEAD
 def _convert_pydantic_field_to_bq(field_name: str, field_info: FieldInfo) -> bigquery.SchemaField:
+=======
+def _convert_pydantic_field_to_bq(
+    field_name: str, field_info: FieldInfo
+) -> bigquery.SchemaField:
+>>>>>>> origin/stable
     """Convert a single Pydantic field to BigQuery SchemaField."""
 
     # Get the field type
@@ -104,7 +116,13 @@ def _convert_pydantic_field_to_bq(field_name: str, field_info: FieldInfo) -> big
     if field_name == "record_id":
         mode = "REQUIRED"
     else:
+<<<<<<< HEAD
         mode = "NULLABLE" if is_optional or field_info.default is not None else "REQUIRED"
+=======
+        mode = (
+            "NULLABLE" if is_optional or field_info.default is not None else "REQUIRED"
+        )
+>>>>>>> origin/stable
 
     return bigquery.SchemaField(
         name=field_name,

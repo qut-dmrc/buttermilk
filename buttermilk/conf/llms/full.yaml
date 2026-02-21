@@ -10,19 +10,27 @@ judgers:
   - gemini-flash
   - claude-sonnet
   - llama-maverick
+<<<<<<< HEAD
   - deepseek-r1
   - deepseek-v3
   - gpt-mini
   - gpt-nano
   - grok-fast
+=======
+  - gpt-mini
+  - gpt-nano
+>>>>>>> origin/stable
 
 synthesisers:
   - gemini-pro
   - gemini-flash
   - claude-sonnet
   - llama-maverick
+<<<<<<< HEAD
   - deepseek-r1
   - deepseek-v3
+=======
+>>>>>>> origin/stable
 
 # Model-specific parameter overrides
 # These override the defaults from models.json for this llms config
@@ -35,9 +43,12 @@ model_parameters:
     temperature: 1.0
   llama-maverick:
     temperature: 1.0
+<<<<<<< HEAD
   grok-fast:
     temperature: 1.0
   deepseek-r1:
     temperature: 1.0
   deepseek-v3:
     temperature: 1.0
+=======
+>>>>>>> origin/stable

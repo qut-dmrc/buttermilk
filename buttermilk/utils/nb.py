@@ -32,7 +32,13 @@ nest_asyncio.apply()
 
 def graph_defaults() -> None:
     """Legacy function - use init_viz() instead for better control."""
+<<<<<<< HEAD
     print("[yellow]⚠️  graph_defaults() is deprecated - use init_viz() for better control[/yellow]")
+=======
+    print(
+        "[yellow]⚠️  graph_defaults() is deprecated - use init_viz() for better control[/yellow]"
+    )
+>>>>>>> origin/stable
     init_viz(profile="notebook", theme="cyberpunk")
     print("✨ Visualization defaults applied (cyberpunk theme)")
 

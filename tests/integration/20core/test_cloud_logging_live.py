@@ -20,7 +20,13 @@ def test_cloud_logging_configured(real_bm):
 
     # Verify cloud manager is configured
     assert real_bm.cloud_manager is not None, "Cloud manager must be available"
+<<<<<<< HEAD
     assert len(real_bm.cloud_manager.clouds) > 0, "At least one cloud must be configured"
+=======
+    assert len(real_bm.cloud_manager.clouds) > 0, (
+        "At least one cloud must be configured"
+    )
+>>>>>>> origin/stable
 
     # Verify first cloud has required fields
     cloud = real_bm.cloud_manager.clouds[0]

@@ -56,7 +56,15 @@ class LimitingSource:
         Yields:
             BaseRecord objects, up to self.limit total
         """
+<<<<<<< HEAD
         source_iter = self.source if hasattr(self.source, "__anext__") else self.source.__aiter__()
+=======
+        source_iter = (
+            self.source
+            if hasattr(self.source, "__anext__")
+            else self.source.__aiter__()
+        )
+>>>>>>> origin/stable
 
         count = 0
         async for record in source_iter:

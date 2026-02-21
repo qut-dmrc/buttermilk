@@ -142,7 +142,13 @@ class ProtectedCharacteristics(BaseModel):
 
 
 # Get all attributes from ProtectedCharacteristics class
+<<<<<<< HEAD
 CHARACTERISTICS: TypeAlias = Literal[tuple(get_type_hints(ProtectedCharacteristics).keys())]  # type: ignore
+=======
+CHARACTERISTICS: TypeAlias = Literal[
+    tuple(get_type_hints(ProtectedCharacteristics).keys())
+]  # type: ignore
+>>>>>>> origin/stable
 
 
 class CharacterGenerator(BaseModel):

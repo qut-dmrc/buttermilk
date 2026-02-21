@@ -33,7 +33,13 @@ class ImageGenerationProcessor(BaseModel):
         description="Optional default TextToImageClient class. If None, reads from record.metadata['model_class']",
     )
 
+<<<<<<< HEAD
     def _resolve_client_class(self, model_class: Type[TextToImageClient] | str) -> Type[TextToImageClient]:
+=======
+    def _resolve_client_class(
+        self, model_class: Type[TextToImageClient] | str
+    ) -> Type[TextToImageClient]:
+>>>>>>> origin/stable
         """Resolve model_class to actual class object.
 
         Args:
@@ -54,9 +60,19 @@ class ImageGenerationProcessor(BaseModel):
             for client_cls in ALL_IMAGE_CLIENTS:
                 if client_cls.__name__ == model_class:
                     return client_cls
+<<<<<<< HEAD
             raise ValueError(f"Unknown model class name: {model_class}. Available: {[cls.__name__ for cls in ALL_IMAGE_CLIENTS]}")
 
         raise ValueError(f"model_class must be a TextToImageClient class or string class name, got: {type(model_class)}")
+=======
+            raise ValueError(
+                f"Unknown model class name: {model_class}. Available: {[cls.__name__ for cls in ALL_IMAGE_CLIENTS]}"
+            )
+
+        raise ValueError(
+            f"model_class must be a TextToImageClient class or string class name, got: {type(model_class)}"
+        )
+>>>>>>> origin/stable
 
     async def process(
         self,
@@ -79,7 +95,13 @@ class ImageGenerationProcessor(BaseModel):
             ValueError: If record.content is empty, None, or model_class cannot be determined
         """
         if not record.content:
+<<<<<<< HEAD
             raise ValueError(f"Record {record.record_id} has empty content - cannot generate image")
+=======
+            raise ValueError(
+                f"Record {record.record_id} has empty content - cannot generate image"
+            )
+>>>>>>> origin/stable
 
         # Determine which client class to use
         if self.client_class is not None:
@@ -90,7 +112,13 @@ class ImageGenerationProcessor(BaseModel):
             # This may be a class object or a string class name (if serialized)
             client_cls = self._resolve_client_class(record.metadata["model_class"])
         else:
+<<<<<<< HEAD
             raise ValueError(f"Record {record.record_id} has no model_class in metadata and ImageGenerationProcessor has no default client_class")
+=======
+            raise ValueError(
+                f"Record {record.record_id} has no model_class in metadata and ImageGenerationProcessor has no default client_class"
+            )
+>>>>>>> origin/stable
 
         # Instantiate the client
         client = client_cls()

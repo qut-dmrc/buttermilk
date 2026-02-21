@@ -51,15 +51,30 @@ class QualityFilterProcessor(BaseModel):
 
     corruption_threshold: float = Field(
         default=95.0,
+<<<<<<< HEAD
         description="Minimum corruption rate (%) to fail document. Documents with >= this percentage of corrupt chunks will raise ProcessingError.",
+=======
+        description="Minimum corruption rate (%) to fail document. "
+        "Documents with >= this percentage of corrupt chunks will raise ProcessingError.",
+>>>>>>> origin/stable
     )
 
     pattern_threshold: float = Field(
         default=80.0,
+<<<<<<< HEAD
         description="Minimum repetitive pattern rate (%) to consider corrupt. Currently used by verification logic, reserved for future use.",
     )
 
     async def process(self, record: Record, *, processor_stage: str, **kwargs) -> AsyncGenerator[Record, None]:
+=======
+        description="Minimum repetitive pattern rate (%) to consider corrupt. "
+        "Currently used by verification logic, reserved for future use.",
+    )
+
+    async def process(
+        self, record: Record, *, processor_stage: str, **kwargs
+    ) -> AsyncGenerator[Record, None]:
+>>>>>>> origin/stable
         """Process a record by analyzing document quality and filtering if corrupt.
 
         This processor expects the record to have a `chunks` attribute from a prior
@@ -80,10 +95,23 @@ class QualityFilterProcessor(BaseModel):
         """
         # Fail-fast: Require chunks attribute from prior stage
         if not hasattr(record, "chunks") or record.chunks is None:
+<<<<<<< HEAD
             raise ValueError(f"Record {record.record_id} has no chunks. QualityFilterProcessor requires chunks from prior chunking stage.")
 
         if len(record.chunks) == 0:
             raise ProcessingError(f"Record {record.record_id} has empty chunks list. Cannot perform quality analysis on document with no chunks.")
+=======
+            raise ValueError(
+                f"Record {record.record_id} has no chunks. "
+                "QualityFilterProcessor requires chunks from prior chunking stage."
+            )
+
+        if len(record.chunks) == 0:
+            raise ProcessingError(
+                f"Record {record.record_id} has empty chunks list. "
+                "Cannot perform quality analysis on document with no chunks."
+            )
+>>>>>>> origin/stable
 
         # Extract chunk texts for quality analysis
         chunk_texts = []
@@ -95,7 +123,13 @@ class QualityFilterProcessor(BaseModel):
                 chunk_texts.append(getattr(chunk, "chunk_text", ""))
 
         # Perform document-level quality analysis
+<<<<<<< HEAD
         quality_result = is_document_corrupt(chunk_texts, threshold=self.corruption_threshold)
+=======
+        quality_result = is_document_corrupt(
+            chunk_texts, threshold=self.corruption_threshold
+        )
+>>>>>>> origin/stable
 
         is_corrupt = quality_result["is_corrupt"]
         corruption_rate = quality_result["corruption_rate"]
@@ -103,7 +137,15 @@ class QualityFilterProcessor(BaseModel):
         corrupted_chunks = quality_result["corrupted_chunks"]
 
         # Get document title for logging
+<<<<<<< HEAD
         title = record.metadata.get("title", record.record_id) if record.metadata else record.record_id
+=======
+        title = (
+            record.metadata.get("title", record.record_id)
+            if record.metadata
+            else record.record_id
+        )
+>>>>>>> origin/stable
 
         # Apply threshold filter - FAIL LOUDLY if corrupt
         if is_corrupt:

@@ -111,16 +111,35 @@ class TestChromaDBUploaderBlocking:
 
             # Calculate metrics
             expected_beats = duration / 0.01
+<<<<<<< HEAD
             blocking_pct = (1 - (heartbeat_count / expected_beats)) * 100 if expected_beats > 0 else 0
+=======
+            blocking_pct = (
+                (1 - (heartbeat_count / expected_beats)) * 100
+                if expected_beats > 0
+                else 0
+            )
+>>>>>>> origin/stable
             max_gap_ms = max_heartbeat_gap * 1000
             duration_ms = duration * 1000
 
             # Report results
             print("\n" + "=" * 80)
+<<<<<<< HEAD
             print(f"ChromaDBUploader._ensure_cache_initialized() x{iterations} Blocking Test")
             print("=" * 80)
             print(f"Duration:        {duration_ms:.2f}ms")
             print(f"Heartbeats:      {heartbeat_count} (expected ~{expected_beats:.0f})")
+=======
+            print(
+                f"ChromaDBUploader._ensure_cache_initialized() x{iterations} Blocking Test"
+            )
+            print("=" * 80)
+            print(f"Duration:        {duration_ms:.2f}ms")
+            print(
+                f"Heartbeats:      {heartbeat_count} (expected ~{expected_beats:.0f})"
+            )
+>>>>>>> origin/stable
             print(f"Blocking:        {blocking_pct:.1f}%")
             print(f"Max gap:         {max_gap_ms:.2f}ms")
             print("=" * 80)
@@ -128,21 +147,45 @@ class TestChromaDBUploaderBlocking:
             # Analysis
             print("\nAnalysis:")
             if max_gap_ms > 200:
+<<<<<<< HEAD
                 print(f"  ❌ BLOCKING DETECTED: Max heartbeat gap is {max_gap_ms:.2f}ms (threshold: 200ms)")
+=======
+                print(
+                    f"  ❌ BLOCKING DETECTED: Max heartbeat gap is {max_gap_ms:.2f}ms (threshold: 200ms)"
+                )
+>>>>>>> origin/stable
                 print("  Operations blocking the event loop:")
                 print("    - Line 185: chromadb.PersistentClient() - NOT WRAPPED")
                 print("    - Line 191: client.get_collection() - NOT WRAPPED")
                 print("    - Line 199: client.create_collection() - NOT WRAPPED")
                 print("\n  Solution: Wrap these operations with asyncio.to_thread()")
             else:
+<<<<<<< HEAD
                 print(f"  ✅ NON-BLOCKING: Max heartbeat gap is {max_gap_ms:.2f}ms (threshold: 200ms)")
                 print("  All ChromaDB operations properly wrapped with asyncio.to_thread()")
+=======
+                print(
+                    f"  ✅ NON-BLOCKING: Max heartbeat gap is {max_gap_ms:.2f}ms (threshold: 200ms)"
+                )
+                print(
+                    "  All ChromaDB operations properly wrapped with asyncio.to_thread()"
+                )
+>>>>>>> origin/stable
 
             # Note about fast systems
             if max_gap_ms < 50 and duration_ms < 500:
                 print("\n  NOTE: ChromaDB operations are very fast on this system.")
+<<<<<<< HEAD
                 print("  Individual operations complete in <5ms, too fast for reliable blocking detection.")
                 print("  In production with slower disks/larger databases, these operations WILL block")
+=======
+                print(
+                    "  Individual operations complete in <5ms, too fast for reliable blocking detection."
+                )
+                print(
+                    "  In production with slower disks/larger databases, these operations WILL block"
+                )
+>>>>>>> origin/stable
                 print("  and MUST be wrapped with asyncio.to_thread().")
 
             # Assert non-blocking behavior
@@ -156,7 +199,13 @@ class TestChromaDBUploaderBlocking:
                 f"  - Line 199: client.create_collection() needs asyncio.to_thread()"
             )
 
+<<<<<<< HEAD
             print("\nTest complete - ChromaDBUploader initialization is non-blocking ✅")
+=======
+            print(
+                "\nTest complete - ChromaDBUploader initialization is non-blocking ✅"
+            )
+>>>>>>> origin/stable
 
     async def test_ensure_cache_initialized_creates_collection(self):
         """Verify _ensure_cache_initialized properly creates collection.

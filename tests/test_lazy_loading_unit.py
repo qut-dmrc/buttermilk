@@ -96,7 +96,13 @@ class TestCachedProperty:
         assert second_duration < 0.001  # Should be very fast (under 1ms)
 
 
+<<<<<<< HEAD
 @pytest.mark.skip(reason="Lazy loading tests need refactoring for new BM structure - TODO")
+=======
+@pytest.mark.skip(
+    reason="Lazy loading tests need refactoring for new BM structure - TODO"
+)
+>>>>>>> origin/stable
 class TestCloudManagerLazyLoading:
     """Test CloudManager lazy loading patterns."""
 
@@ -156,7 +162,13 @@ class TestCloudManagerLazyLoading:
             assert creds1 is creds2
 
 
+<<<<<<< HEAD
 @pytest.mark.skip(reason="Lazy loading tests need refactoring for new BM structure - TODO")
+=======
+@pytest.mark.skip(
+    reason="Lazy loading tests need refactoring for new BM structure - TODO"
+)
+>>>>>>> origin/stable
 class TestLLMManagerLazyLoading:
     """Test LLM manager lazy loading optimizations."""
 
@@ -204,7 +216,13 @@ class TestLLMManagerLazyLoadingReal:
         assert client1 is client2
 
 
+<<<<<<< HEAD
 @pytest.mark.skip(reason="Lazy loading tests need refactoring for new BM structure - TODO")
+=======
+@pytest.mark.skip(
+    reason="Lazy loading tests need refactoring for new BM structure - TODO"
+)
+>>>>>>> origin/stable
 class TestQueryRunnerLazyLoading:
     """Test QueryRunner lazy loading patterns."""
 
@@ -222,7 +240,13 @@ class TestQueryRunnerLazyLoading:
             assert qr.client is fake_client
 
 
+<<<<<<< HEAD
 @pytest.mark.skip(reason="Lazy loading tests need refactoring for new BM structure - TODO")
+=======
+@pytest.mark.skip(
+    reason="Lazy loading tests need refactoring for new BM structure - TODO"
+)
+>>>>>>> origin/stable
 class TestAsyncBackgroundOperations:
     """Test async background operations don't block startup."""
 
@@ -280,7 +304,13 @@ class TestAsyncBackgroundOperations:
             assert bm.session_info.project_name == "test"
 
 
+<<<<<<< HEAD
 @pytest.mark.skip(reason="Lazy loading tests need refactoring for new BM structure - TODO")
+=======
+@pytest.mark.skip(
+    reason="Lazy loading tests need refactoring for new BM structure - TODO"
+)
+>>>>>>> origin/stable
 class TestMemoryEfficiency:
     """Test memory efficiency of lazy loading."""
 

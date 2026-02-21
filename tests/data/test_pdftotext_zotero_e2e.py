@@ -122,7 +122,13 @@ async def test_pdftotext_extracts_from_real_zotero_pdf(real_bm):
     if pdfminer_length > 100:
         # Both should extract similar amounts (within 50% difference)
         ratio = pdftotext_length / pdfminer_length
+<<<<<<< HEAD
         assert 0.5 < ratio < 2.0, f"Extraction lengths differ significantly: {ratio:.2f}x"
+=======
+        assert 0.5 < ratio < 2.0, (
+            f"Extraction lengths differ significantly: {ratio:.2f}x"
+        )
+>>>>>>> origin/stable
 
 
 @pytest.mark.anyio
@@ -161,7 +167,13 @@ async def test_pdftotext_handles_problematic_pdfs_gracefully(real_bm):
         # 1. Raise ProcessingError (preferred)
         # 2. Return minimal/empty text (acceptable)
         try:
+<<<<<<< HEAD
             results = [r async for r in processor.process(record, processor_stage="test")]
+=======
+            results = [
+                r async for r in processor.process(record, processor_stage="test")
+            ]
+>>>>>>> origin/stable
 
             if results:
                 result = results[0]
@@ -170,7 +182,13 @@ async def test_pdftotext_handles_problematic_pdfs_gracefully(real_bm):
 
                 # Very small PDFs typically can't be extracted
                 # pdftotext might return error text or empty string
+<<<<<<< HEAD
                 assert len(result.content) < 1000, "Unexpected: large content from tiny PDF"
+=======
+                assert len(result.content) < 1000, (
+                    "Unexpected: large content from tiny PDF"
+                )
+>>>>>>> origin/stable
 
         except ProcessingError as e:
             # Expected for corrupt PDFs
@@ -227,5 +245,11 @@ async def test_full_pipeline_with_pdftotext(real_bm):
     print(f"{'=' * 60}\n")
 
     # Basic assertions
+<<<<<<< HEAD
     assert results.get("status") in ["completed", "success"], f"Pipeline failed: {results}"
+=======
+    assert results.get("status") in ["completed", "success"], (
+        f"Pipeline failed: {results}"
+    )
+>>>>>>> origin/stable
     assert results.get("records_processed", 0) > 0, "No records were processed"

@@ -1,4 +1,9 @@
 """Tests for trace analysis models."""
+<<<<<<< HEAD
+=======
+import pytest
+from datetime import datetime
+>>>>>>> origin/stable
 
 from buttermilk.debug.trace_models import TraceSummary
 

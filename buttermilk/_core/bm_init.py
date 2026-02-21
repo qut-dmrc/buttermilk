@@ -30,18 +30,30 @@ import os  # For path expansion
 import platform  # For system information like node name
 from pathlib import Path
 from tempfile import mkdtemp  # For creating temporary directories
+<<<<<<< HEAD
 
 # Lazy import cloudpathlib (it pulls in google.cloud.storage at import time)
 # Import TYPE_CHECKING guard for type hints
 from typing import TYPE_CHECKING, Any
+=======
+from typing import Any
+>>>>>>> origin/stable
 
 import psutil  # For system utilities like getting username
 import pydantic  # Pydantic core
 import shortuuid  # For generating short, unique IDs
 from omegaconf import DictConfig
 
+<<<<<<< HEAD
 if TYPE_CHECKING:
     from cloudpathlib import AnyPath
+=======
+# Lazy import cloudpathlib (it pulls in google.cloud.storage at import time)
+# Import TYPE_CHECKING guard for type hints
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from cloudpathlib import AnyPath, CloudPath
+>>>>>>> origin/stable
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -132,16 +144,29 @@ class SessionInfo(BaseModel):
     )
 
     # Basic session info
+<<<<<<< HEAD
     platform: str = Field(default="local", description="Platform where the session is running.")
+=======
+    platform: str = Field(
+        default="local", description="Platform where the session is running."
+    )
+>>>>>>> origin/stable
     project_name: str = Field(..., description="Project name for this session.")
     job: str = Field(..., description="User-defined name for the specific job or task.")
 
     # System information
+<<<<<<< HEAD
     ip: str | None = Field(default=None, description="IP address of the machine, fetched asynchronously.")
+=======
+    ip: str | None = Field(
+        default=None, description="IP address of the machine, fetched asynchronously."
+    )
+>>>>>>> origin/stable
     node_name: str = Field(
         default_factory=lambda: platform.uname().node,
         description="Network name of the machine.",
     )
+<<<<<<< HEAD
     save_dir: str | None = Field(default=None, description="Primary directory for saving session outputs.")
     cache_dir: str = Field(
         default_factory=lambda: os.path.expandvars(os.path.expanduser("~/.cache/buttermilk")),
@@ -149,6 +174,23 @@ class SessionInfo(BaseModel):
     )
     sessions_dir: str = Field(default="data/sessions", description="Directory for storing session data files.")
     flow_api: str | None = Field(default=None, description="URL or identifier for a flow API, if applicable.")
+=======
+    save_dir: str | None = Field(
+        default=None, description="Primary directory for saving session outputs."
+    )
+    cache_dir: str = Field(
+        default_factory=lambda: os.path.expandvars(
+            os.path.expanduser("~/.cache/buttermilk")
+        ),
+        description="Directory for caching session data.",
+    )
+    sessions_dir: str = Field(
+        default="data/sessions", description="Directory for storing session data files."
+    )
+    flow_api: str | None = Field(
+        default=None, description="URL or identifier for a flow API, if applicable."
+    )
+>>>>>>> origin/stable
     save_dir_base: str | None = Field(
         default=None,
         description="Base directory/URI for saving session outputs (e.g., gs://bucket/runs). If None, uses temp directory.",
@@ -156,6 +198,7 @@ class SessionInfo(BaseModel):
 
     # Enhanced observability fields
     status: str = Field(default="initializing", description="Current session status.")
+<<<<<<< HEAD
     started_at: datetime.datetime | None = Field(default=None, description="When the session started execution.")
     completed_at: datetime.datetime | None = Field(default=None, description="When the session completed.")
     error_message: str | None = Field(default=None, description="Error message if session failed.")
@@ -170,6 +213,42 @@ class SessionInfo(BaseModel):
     flow_hash: str | None = Field(default=None, description="Hash of flow configuration for A/B testing.")
     config_uri: str | None = Field(default=None, description="URI to saved initial configuration file.")
     template_paths: list[str] = Field(default_factory=list, description="Paths to search for templates.")
+=======
+    started_at: datetime.datetime | None = Field(
+        default=None, description="When the session started execution."
+    )
+    completed_at: datetime.datetime | None = Field(
+        default=None, description="When the session completed."
+    )
+    error_message: str | None = Field(
+        default=None, description="Error message if session failed."
+    )
+
+    # Metrics
+    records_processed: int = Field(
+        default=0, description="Number of records processed."
+    )
+    outputs_generated: int = Field(
+        default=0, description="Number of outputs generated."
+    )
+
+    # Configuration tracking
+    agent_configs: dict[str, Any] = Field(
+        default_factory=dict, description="Agent configurations used."
+    )
+    flow_config: dict[str, Any] = Field(
+        default_factory=dict, description="Flow configuration for this session."
+    )
+    flow_hash: str | None = Field(
+        default=None, description="Hash of flow configuration for A/B testing."
+    )
+    config_uri: str | None = Field(
+        default=None, description="URI to saved initial configuration file."
+    )
+    template_paths: list[str] = Field(
+        default_factory=list, description="Paths to search for templates."
+    )
+>>>>>>> origin/stable
     llm_wrapper: str = Field(
         default="litellm",
         description="Global LLM wrapper selection (autogen or litellm). Per-model use_litellm overrides this.",
@@ -208,7 +287,14 @@ class SessionInfo(BaseModel):
         # Update timestamps based on status
         if status in ["active", "running"] and self.started_at is None:
             self.started_at = current_time
+<<<<<<< HEAD
         elif status in ["completed", "failed", "error", "terminated"] and self.completed_at is None:
+=======
+        elif (
+            status in ["completed", "failed", "error", "terminated"]
+            and self.completed_at is None
+        ):
+>>>>>>> origin/stable
             self.completed_at = current_time
 
         # Set error message if provided
@@ -258,7 +344,13 @@ class SessionInfo(BaseModel):
         if self.started_at and self.completed_at:
             duration = (self.completed_at - self.started_at).total_seconds()
         elif self.started_at:
+<<<<<<< HEAD
             duration = (datetime.datetime.now(datetime.UTC) - self.started_at).total_seconds()
+=======
+            duration = (
+                datetime.datetime.now(datetime.UTC) - self.started_at
+            ).total_seconds()
+>>>>>>> origin/stable
 
         return {
             "session_id": self.session_id,
@@ -269,7 +361,13 @@ class SessionInfo(BaseModel):
             "platform": self.platform,
             "timing": {
                 "started_at": self.started_at.isoformat() if self.started_at else None,
+<<<<<<< HEAD
                 "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+=======
+                "completed_at": self.completed_at.isoformat()
+                if self.completed_at
+                else None,
+>>>>>>> origin/stable
                 "duration_seconds": duration,
             },
             "metrics": {
@@ -389,7 +487,13 @@ class BM(BaseModel):
     _secret_manager: Any = PrivateAttr(default=None)  # Will be injected
     _llms_instance: Any = PrivateAttr(default=None)  # Will be injected
     _query_runner: Any = PrivateAttr(default=None)  # Will be injected
+<<<<<<< HEAD
     _logger_cfg: Any = PrivateAttr(default=None)  # Will be injected from ExecutionContext
+=======
+    _logger_cfg: Any = PrivateAttr(
+        default=None
+    )  # Will be injected from ExecutionContext
+>>>>>>> origin/stable
     _config: Any = PrivateAttr(default=None)  # Will store the full Hydra config
 
     # Session-specific state
@@ -397,7 +501,13 @@ class BM(BaseModel):
     _initialization_error: Exception | None = PrivateAttr(default=None)
 
     # OTEL context management
+<<<<<<< HEAD
     _otel_baggage_token: Any = PrivateAttr(default=None)  # Token for cleaning up OTEL baggage
+=======
+    _otel_baggage_token: Any = PrivateAttr(
+        default=None
+    )  # Token for cleaning up OTEL baggage
+>>>>>>> origin/stable
 
     # Allow attaching test doubles/mocks to instances (e.g., real_bm.get_storage = Mock(...))
     # This relaxes Pydantic's attribute setting restrictions for testing convenience.
@@ -434,7 +544,13 @@ class BM(BaseModel):
             f"save_dir_base must be a string, Path, or CloudPath, got {type(save_dir_base)}",
         )
 
+<<<<<<< HEAD
     @pydantic.model_validator(mode="before")  # Changed to model_validator for Pydantic v2
+=======
+    @pydantic.model_validator(
+        mode="before"
+    )  # Changed to model_validator for Pydantic v2
+>>>>>>> origin/stable
     @classmethod
     def _remove_target(cls, values: dict[str, Any]) -> dict[str, Any]:
         """Removes the `_target_` attribute commonly added by Hydra from input values.
@@ -585,7 +701,13 @@ class BM(BaseModel):
             try:
                 from buttermilk._core.log import setup_cloud_logging
 
+<<<<<<< HEAD
                 setup_cloud_logging(self._logger_cfg, self._cloud_manager, self.session_info)
+=======
+                setup_cloud_logging(
+                    self._logger_cfg, self._cloud_manager, self.session_info
+                )
+>>>>>>> origin/stable
                 logger.info(
                     "Cloud logging configured for session",
                     session_id=self.session_info.session_id,
@@ -655,7 +777,16 @@ class BM(BaseModel):
         collapsed_dir = f"{exec_timestamp}-{exec_slug}-{session_slug}"
 
         # Construct full save directory path
+<<<<<<< HEAD
         save_dir_path = AnyPath(self.save_dir_base) / self.session_info.project_name / self.session_info.job / collapsed_dir
+=======
+        save_dir_path = (
+            AnyPath(self.save_dir_base)
+            / self.session_info.project_name
+            / self.session_info.job
+            / collapsed_dir
+        )
+>>>>>>> origin/stable
         self.session_info.save_dir = str(save_dir_path)
         logger.debug(f"Finalized session save_dir: {self.session_info.save_dir}")
 
@@ -668,7 +799,13 @@ class BM(BaseModel):
         # Ensure session initialization is complete
         await self._initialization_complete.wait()
         if self._initialization_error:
+<<<<<<< HEAD
             raise RuntimeError(f"Session initialization failed: {self._initialization_error}") from self._initialization_error
+=======
+            raise RuntimeError(
+                f"Session initialization failed: {self._initialization_error}"
+            ) from self._initialization_error
+>>>>>>> origin/stable
         logger.debug("Session initialization verified complete")
 
     async def cleanup(self) -> None:
@@ -736,28 +873,52 @@ class BM(BaseModel):
     def cloud_manager(self) -> Any:
         """Provides access to the CloudManager instance."""
         if self._cloud_manager is None:
+<<<<<<< HEAD
             raise RuntimeError("CloudManager not available. Ensure infrastructure is properly injected.")
+=======
+            raise RuntimeError(
+                "CloudManager not available. Ensure infrastructure is properly injected."
+            )
+>>>>>>> origin/stable
         return self._cloud_manager
 
     @property
     def secret_manager(self) -> Any:
         """Provides access to the SecretsManager instance."""
         if self._secret_manager is None:
+<<<<<<< HEAD
             raise RuntimeError("SecretsManager not available. Ensure infrastructure is properly injected.")
+=======
+            raise RuntimeError(
+                "SecretsManager not available. Ensure infrastructure is properly injected."
+            )
+>>>>>>> origin/stable
         return self._secret_manager
 
     @property
     def llms(self) -> Any:
         """Provides access to the LLMs manager instance."""
         if self._llms_instance is None:
+<<<<<<< HEAD
             raise RuntimeError("LLMs instance not available. Ensure infrastructure is properly injected.")
+=======
+            raise RuntimeError(
+                "LLMs instance not available. Ensure infrastructure is properly injected."
+            )
+>>>>>>> origin/stable
         return self._llms_instance
 
     @property
     def query_runner(self) -> Any:
         """Provides access to the QueryRunner instance."""
         if self._query_runner is None:
+<<<<<<< HEAD
             raise RuntimeError("QueryRunner not available. Ensure infrastructure is properly injected.")
+=======
+            raise RuntimeError(
+                "QueryRunner not available. Ensure infrastructure is properly injected."
+            )
+>>>>>>> origin/stable
         return self._query_runner
 
     @property
@@ -793,7 +954,13 @@ class BM(BaseModel):
         Returns:
             None: Weave is no longer used
         """
+<<<<<<< HEAD
         logger.debug("get_weave_client called but weave has been removed, returning None")
+=======
+        logger.debug(
+            "get_weave_client called but weave has been removed, returning None"
+        )
+>>>>>>> origin/stable
 
     @property
     def credentials(self) -> dict[str, str]:
@@ -804,13 +971,25 @@ class BM(BaseModel):
         """
         # Check if secret manager is available
         if self._secret_manager is None:
+<<<<<<< HEAD
             logger.debug("No secret manager configured, returning only environment variables as credentials.")
+=======
+            logger.debug(
+                "No secret manager configured, returning only environment variables as credentials."
+            )
+>>>>>>> origin/stable
             return os.environ.copy()  # Return environment variables as fallback
 
         try:
             return self.secret_manager.get_secret(cfg_key="credentials_secret")
         except Exception as e:
+<<<<<<< HEAD
             logger.warning(f"Failed to fetch credentials from secret manager: {e}. Returning only environment variables as credentials.")
+=======
+            logger.warning(
+                f"Failed to fetch credentials from secret manager: {e}. Returning only environment variables as credentials."
+            )
+>>>>>>> origin/stable
             return os.environ.copy()  # Return environment variables as fallback
 
     @property
@@ -841,14 +1020,26 @@ class BM(BaseModel):
             loop = asyncio.get_event_loop()
             if loop.is_running():
                 # Start task only if it hasn't been started or is already done
+<<<<<<< HEAD
                 if self.session_info._get_ip_task is None or self.session_info._get_ip_task.done():
+=======
+                if (
+                    not hasattr(self, "_get_ip_task")
+                    or self._get_ip_task is None
+                    or self._get_ip_task.done()
+                ):
+>>>>>>> origin/stable
 
                     async def _fetch_and_set_ip() -> None:
                         ip = await get_ip()
                         self.session_info.ip = ip
                         logger.debug(f"Fetched IP address: {ip}")
 
+<<<<<<< HEAD
                     self.session_info._get_ip_task = asyncio.create_task(_fetch_and_set_ip())
+=======
+                    self._get_ip_task = asyncio.create_task(_fetch_and_set_ip())
+>>>>>>> origin/stable
             # else: No event loop running, cannot start async task
         except RuntimeError:  # No current event loop
             logger.debug("No running event loop, skipping async IP fetch task.")
@@ -889,7 +1080,13 @@ class BM(BaseModel):
         else:
             # Fallback to a temporary directory if no save_dir is configured
             effective_save_dir_str = mkdtemp()
+<<<<<<< HEAD
             logger.warning(f"No save_dir specified or configured in BM; using temporary directory: {effective_save_dir_str}")
+=======
+            logger.warning(
+                f"No save_dir specified or configured in BM; using temporary directory: {effective_save_dir_str}"
+            )
+>>>>>>> origin/stable
 
         # Ensure extension starts with a dot if provided, otherwise default to .json
         effective_extension = extension or ".json"
@@ -903,7 +1100,13 @@ class BM(BaseModel):
             # Call the utility save function
             saved_file_path = save.save(
                 data=data,
+<<<<<<< HEAD
                 save_dir=AnyPath(effective_save_dir_str),  # Convert to AnyPath for utility
+=======
+                save_dir=AnyPath(
+                    effective_save_dir_str
+                ),  # Convert to AnyPath for utility
+>>>>>>> origin/stable
                 extension=effective_extension,
                 **kwargs,
             )
@@ -913,7 +1116,13 @@ class BM(BaseModel):
             )
             return str(saved_file_path)  # Return path as string
         except Exception as e:
+<<<<<<< HEAD
             logger.error(f"Failed to save data to '{effective_save_dir_str}' with extension '{effective_extension}': {e!s}")
+=======
+            logger.error(
+                f"Failed to save data to '{effective_save_dir_str}' with extension '{effective_extension}': {e!s}"
+            )
+>>>>>>> origin/stable
             return None  # Indicate save failure
 
     def run_query(  # noqa: PLR0913
@@ -962,7 +1171,13 @@ class BM(BaseModel):
             return_df=return_df,
         )
 
+<<<<<<< HEAD
     def get_storage(self, config: StorageConfig | dict | DictConfig | None = None) -> Any:
+=======
+    def get_storage(
+        self, config: StorageConfig | dict | DictConfig | None = None
+    ) -> Any:
+>>>>>>> origin/stable
         """Factory method to create unified storage instances.
 
         Creates the appropriate storage class based on the configuration type,
@@ -990,7 +1205,13 @@ class BM(BaseModel):
 
         return StorageFactory.create_storage(config)
 
+<<<<<<< HEAD
     async def get_storage_async(self, config: BaseStorageConfig | dict | None = None) -> Any:
+=======
+    async def get_storage_async(
+        self, config: BaseStorageConfig | dict | None = None
+    ) -> Any:
+>>>>>>> origin/stable
         """Async factory method that creates and auto-initializes storage instances.
 
         For ChromaDB with remote storage (gs://, s3://, etc.), this automatically calls
@@ -1023,8 +1244,17 @@ class BM(BaseModel):
         if hasattr(storage, "ensure_cache_initialized"):
             # Check if it's remote storage requiring initialization
             if hasattr(storage, "persist_directory") and storage.persist_directory:
+<<<<<<< HEAD
                 if storage.persist_directory.startswith(("gs://", "gcs://", "s3://", "azure://")):
                     logger.info(f"🔄 Auto-initializing remote storage: {storage.persist_directory}")
+=======
+                if storage.persist_directory.startswith(
+                    ("gs://", "gcs://", "s3://", "azure://")
+                ):
+                    logger.info(
+                        f"🔄 Auto-initializing remote storage: {storage.persist_directory}"
+                    )
+>>>>>>> origin/stable
                     await storage.ensure_cache_initialized()
                     logger.info("✅ Storage ready for use")
 
@@ -1063,6 +1293,7 @@ class BM(BaseModel):
         """
         logger.info(f"Starting graceful shutdown (timeout={timeout}s)...")
 
+<<<<<<< HEAD
         # CRITICAL: Flush trace_writer first, before waiting for/cancelling tasks.
         # The trace_writer uses AsyncDataUploader with a background worker task.
         # If we cancel tasks first, traces in the buffer are lost.
@@ -1076,6 +1307,8 @@ class BM(BaseModel):
         except Exception as e:
             logger.warning(f"Error flushing trace writer: {e}")
 
+=======
+>>>>>>> origin/stable
         # Collect all pending tasks
         all_tasks = []
 
@@ -1090,7 +1323,13 @@ class BM(BaseModel):
 
             # Wait for tasks with timeout
             try:
+<<<<<<< HEAD
                 await asyncio.wait_for(asyncio.gather(*all_tasks, return_exceptions=True), timeout=timeout)
+=======
+                await asyncio.wait_for(
+                    asyncio.gather(*all_tasks, return_exceptions=True), timeout=timeout
+                )
+>>>>>>> origin/stable
                 logger.info("All background tasks completed successfully")
             except asyncio.TimeoutError:
                 logger.warning(f"Timeout waiting for tasks after {timeout}s")
@@ -1105,6 +1344,7 @@ class BM(BaseModel):
         logger.info("Waiting for traces and logs to upload...")
         await asyncio.sleep(2.0)
 
+<<<<<<< HEAD
         # CRITICAL: Flush logging handlers (especially CloudLoggingHandler)
         try:
             from buttermilk._core.log import flush_logging
@@ -1113,6 +1353,8 @@ class BM(BaseModel):
         except Exception as e:
             logger.warning(f"Error during final logging flush: {e}")
 
+=======
+>>>>>>> origin/stable
         logger.info("Graceful shutdown complete")
 
 

@@ -17,9 +17,13 @@ def test_client_type_enum():
         "gemini_vertex",
         "vertex_openai",
         "llama_vertex",
+<<<<<<< HEAD
         "deepseek_vertex",
         "huggingface",
         "xai",
+=======
+        "huggingface",
+>>>>>>> origin/stable
         "zentropi",
     ]
     actual_types = [ct.value for ct in ClientType]
@@ -76,7 +80,13 @@ def test_no_api_type_field():
     )
 
     # Verify LLMConfig doesn't have api_type field
+<<<<<<< HEAD
     config = LLMConfig(client_type="openai", api_key="test-key", model_info=model_info, configs={})
+=======
+    config = LLMConfig(
+        client_type="openai", api_key="test-key", model_info=model_info, configs={}
+    )
+>>>>>>> origin/stable
 
     assert not hasattr(config, "api_type")
     assert not hasattr(config, "obj")

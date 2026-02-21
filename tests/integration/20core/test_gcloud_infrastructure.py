@@ -19,13 +19,28 @@ from buttermilk.utils.utils import read_file
 def test_save_binary(real_bm):
     """Test binary file upload to cloud storage."""
     # Integration test must fail if cloud manager not properly configured
+<<<<<<< HEAD
     assert real_bm.cloud_manager is not None, "CloudManager must be configured for integration tests"
     assert real_bm.cloud_manager.clouds, "Cloud configurations must be available for integration tests"
+=======
+    assert real_bm.cloud_manager is not None, (
+        "CloudManager must be configured for integration tests"
+    )
+    assert real_bm.cloud_manager.clouds, (
+        "Cloud configurations must be available for integration tests"
+    )
+>>>>>>> origin/stable
 
     # Get the first cloud provider and ensure storage bucket exists
     cloud = real_bm.cloud_manager.clouds[0]
     assert hasattr(cloud, "storage_bucket"), "Cloud must have storage_bucket attribute"
+<<<<<<< HEAD
     assert cloud.storage_bucket, "Storage bucket must be configured for integration tests"
+=======
+    assert cloud.storage_bucket, (
+        "Storage bucket must be configured for integration tests"
+    )
+>>>>>>> origin/stable
 
     uri = f"gs://{cloud.storage_bucket}/test_data/{uuid}.txt"
     try:
@@ -46,13 +61,28 @@ def test_save_binary(real_bm):
 def test_upload_text(real_bm):
     """Test text upload to cloud storage."""
     # Integration test must fail if cloud manager not properly configured
+<<<<<<< HEAD
     assert real_bm.cloud_manager is not None, "CloudManager must be configured for integration tests"
     assert real_bm.cloud_manager.clouds, "Cloud configurations must be available for integration tests"
+=======
+    assert real_bm.cloud_manager is not None, (
+        "CloudManager must be configured for integration tests"
+    )
+    assert real_bm.cloud_manager.clouds, (
+        "Cloud configurations must be available for integration tests"
+    )
+>>>>>>> origin/stable
 
     # Get the first cloud provider and ensure storage bucket exists
     cloud = real_bm.cloud_manager.clouds[0]
     assert hasattr(cloud, "storage_bucket"), "Cloud must have storage_bucket attribute"
+<<<<<<< HEAD
     assert cloud.storage_bucket, "Storage bucket must be configured for integration tests"
+=======
+    assert cloud.storage_bucket, (
+        "Storage bucket must be configured for integration tests"
+    )
+>>>>>>> origin/stable
 
     uri = f"gs://{cloud.storage_bucket}/test_data/{uuid}.txt"
     return_uri = upload_text(data="test data", uri=uri)

@@ -39,8 +39,17 @@ def test_sexuality_gender_prompts_are_grammatically_correct():
         # ASSERTIONS FOR GRAMMATICAL CORRECTNESS
 
         # Should NOT contain grammatically incorrect patterns
+<<<<<<< HEAD
         assert "and Gay" not in prompt, f"Prompt contains grammatically incorrect 'and Gay': {prompt}"
         assert "and Kathoey" not in prompt, f"Prompt contains grammatically incorrect 'and Kathoey': {prompt}"
+=======
+        assert "and Gay" not in prompt, (
+            f"Prompt contains grammatically incorrect 'and Gay': {prompt}"
+        )
+        assert "and Kathoey" not in prompt, (
+            f"Prompt contains grammatically incorrect 'and Kathoey': {prompt}"
+        )
+>>>>>>> origin/stable
 
         # Should contain "person" keyword when both sexuality and gender present
         assert "person" in prompt.lower(), f"Prompt missing 'person' keyword: {prompt}"
@@ -55,7 +64,13 @@ def test_sexuality_gender_prompts_are_grammatically_correct():
         )
 
         # The scenario should be incorporated naturally
+<<<<<<< HEAD
         assert scenario in prompt or scenario.replace("at ", "") in prompt, f"Prompt doesn't incorporate scenario '{scenario}': {prompt}"
+=======
+        assert scenario in prompt or scenario.replace("at ", "") in prompt, (
+            f"Prompt doesn't incorporate scenario '{scenario}': {prompt}"
+        )
+>>>>>>> origin/stable
 
 
 def test_character_str_with_sexuality_and_gender_includes_person():
@@ -76,10 +91,21 @@ def test_character_str_with_sexuality_and_gender_includes_person():
     char_str = str(filtered)
 
     # Should contain "person" when both sexuality and gender are present
+<<<<<<< HEAD
     assert "person" in char_str.lower(), f"Character string missing 'person': {char_str}"
 
     # Should NOT use "and" to connect sexuality and gender
     assert not re.search(r"and\s+(gay|lesbian|bisexual)", char_str, re.IGNORECASE), f"Character string uses 'and' incorrectly: {char_str}"
+=======
+    assert "person" in char_str.lower(), (
+        f"Character string missing 'person': {char_str}"
+    )
+
+    # Should NOT use "and" to connect sexuality and gender
+    assert not re.search(r"and\s+(gay|lesbian|bisexual)", char_str, re.IGNORECASE), (
+        f"Character string uses 'and' incorrectly: {char_str}"
+    )
+>>>>>>> origin/stable
 
     # Should have proper article-adjective-noun structure
     # Format: "A [sexuality] [gender] person" or "An [sexuality] [gender] person"
@@ -106,4 +132,10 @@ def test_single_attribute_character_without_person_keyword():
     # When only gender is present, the string representation should be natural
     # without awkwardly adding "person" unnecessarily
     # The test passes as long as the character can be stringified without error
+<<<<<<< HEAD
     assert str(filtered)  # Should produce natural output like "A woman" not "A woman person"
+=======
+    assert str(
+        filtered
+    )  # Should produce natural output like "A woman" not "A woman person"
+>>>>>>> origin/stable

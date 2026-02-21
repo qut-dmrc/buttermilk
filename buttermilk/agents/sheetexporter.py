@@ -127,7 +127,13 @@ class GSheetExporter(Agent):
                 agent_id=self.agent_id,
                 type=type(message.inputs),
             )
+<<<<<<< HEAD
             raise ProcessingError(f"message.inputs type {type(message.inputs)} not supported.")
+=======
+            raise ProcessingError(
+                f"message.inputs type {type(message.inputs)} not supported."
+            )
+>>>>>>> origin/stable
 
         try:
             dataset_df = pd.DataFrame.from_records(input_data_list)
@@ -166,7 +172,13 @@ class GSheetExporter(Agent):
             # Depending on GSheet.save_gsheet behavior, this might fail or use defaults.
 
         try:
+<<<<<<< HEAD
             sheet_info = self._gsheet.save_gsheet(df=formatted_contents_df, **save_config_params)
+=======
+            sheet_info = self._gsheet.save_gsheet(
+                df=formatted_contents_df, **save_config_params
+            )
+>>>>>>> origin/stable
             # Assuming sheet_info has 'id' and 'url' attributes as per original code
             output_payload = {
                 "sheet_url": sheet_info.url,

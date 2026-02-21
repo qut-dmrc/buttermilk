@@ -27,7 +27,13 @@ class TestPDFExtractionBaseline:
         when given a properly formatted PDF.
         """
         # Use a simple public domain test PDF
+<<<<<<< HEAD
         test_url = "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
+=======
+        test_url = (
+            "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
+        )
+>>>>>>> origin/stable
 
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
             tmp_path = tmp.name
@@ -77,7 +83,13 @@ class TestProductionPDFFailures:
 
         # Verify error contains useful debugging info
         assert "L5BK5MEM.pdf" in error_msg, "Error should include filename"
+<<<<<<< HEAD
         assert "PDFObjRef" in error_msg or "iterable" in error_msg, "Error should mention PDFObjRef issue"
+=======
+        assert "PDFObjRef" in error_msg or "iterable" in error_msg, (
+            "Error should mention PDFObjRef issue"
+        )
+>>>>>>> origin/stable
         assert "e.args=" in error_msg, "Error should include args for debugging"
 
     def test_survey_zotero_cache_extraction_rate(self):
@@ -128,7 +140,13 @@ class TestProductionPDFFailures:
         print("PDF Extraction Survey Results")
         print(f"{'=' * 60}")
         print(f"Total PDFs tested: {total}")
+<<<<<<< HEAD
         print(f"Successful (>50 chars): {success_count} ({success_count / total * 100:.1f}%)")
+=======
+        print(
+            f"Successful (>50 chars): {success_count} ({success_count / total * 100:.1f}%)"
+        )
+>>>>>>> origin/stable
         print(f"Empty/minimal text: {empty_count} ({empty_count / total * 100:.1f}%)")
         print(f"Extraction errors: {fail_count} ({fail_count / total * 100:.1f}%)")
 

@@ -50,7 +50,13 @@ def test_agenttrace_serializes_runinfo_correctly(real_bm, agent_config, agent_in
         agent_info=agent_config.model_dump(),  # Convert AgentConfig to dict
         inputs=agent_input,
         outputs={"result": "test output"},
+<<<<<<< HEAD
         timestamp=datetime.now(timezone.utc),  # Use datetime.now(timezone.utc) instead of utcnow()
+=======
+        timestamp=datetime.now(
+            timezone.utc
+        ),  # Use datetime.now(timezone.utc) instead of utcnow()
+>>>>>>> origin/stable
     )
 
     # Test serialization
@@ -85,7 +91,13 @@ def test_agenttrace_runinfo_is_json_serializable(real_bm, agent_config, agent_in
         agent_info=agent_config.model_dump(),  # Convert AgentConfig to dict
         inputs=agent_input,
         outputs={"status": "success"},
+<<<<<<< HEAD
         timestamp=datetime.now(timezone.utc),  # Use datetime.now(timezone.utc) instead of utcnow()
+=======
+        timestamp=datetime.now(
+            timezone.utc
+        ),  # Use datetime.now(timezone.utc) instead of utcnow()
+>>>>>>> origin/stable
     )
 
     serialized = trace.model_dump(mode="json")
@@ -108,7 +120,13 @@ def test_agenttrace_handles_missing_bm_gracefully(agent_config, agent_input):
         agent_info=agent_config.model_dump(),  # Convert AgentConfig to dict
         inputs=agent_input,
         outputs={"error": "no bm"},
+<<<<<<< HEAD
         timestamp=datetime.now(timezone.utc),  # Use datetime.now(timezone.utc) instead of utcnow()
+=======
+        timestamp=datetime.now(
+            timezone.utc
+        ),  # Use datetime.now(timezone.utc) instead of utcnow()
+>>>>>>> origin/stable
         session_info=None,  # Explicitly set to None to test nullable behavior
     )
 

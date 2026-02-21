@@ -52,7 +52,13 @@ class BMAccessor:
         from ._core.dmrc import get_bm
 
         if get_bm() is None:
+<<<<<<< HEAD
             raise RuntimeError("BM singleton not initialized. Make sure CLI has been run.")
+=======
+            raise RuntimeError(
+                "BM singleton not initialized. Make sure CLI has been run."
+            )
+>>>>>>> origin/stable
         return get_bm()
 
     def __set__(self, obj, value: "BM") -> None:

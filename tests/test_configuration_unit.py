@@ -32,7 +32,13 @@ class TestStorageConfigValidation:
         """Test valid file StorageConfig creation."""
         from buttermilk._core.storage_config import StorageFactory
 
+<<<<<<< HEAD
         config = StorageFactory.create_config({"type": "file", "path": "/path/to/data.json", "glob": "*.json"})
+=======
+        config = StorageFactory.create_config(
+            {"type": "file", "path": "/path/to/data.json", "glob": "*.json"}
+        )
+>>>>>>> origin/stable
 
         assert config.type == "file"
         assert config.path == "/path/to/data.json"
@@ -156,7 +162,13 @@ class TestCloudProviderConfigValidation:
         """Test GCP CloudProviderCfg validation."""
         from buttermilk._core.config import CloudProviderCfg
 
+<<<<<<< HEAD
         config = CloudProviderCfg(type="gcp", project="test-project-123", quota_project_id="quota-project-456")
+=======
+        config = CloudProviderCfg(
+            type="gcp", project="test-project-123", quota_project_id="quota-project-456"
+        )
+>>>>>>> origin/stable
 
         assert config.type == "gcp"
         assert config.project == "test-project-123"
@@ -166,7 +178,13 @@ class TestCloudProviderConfigValidation:
         """Test Azure CloudProviderCfg validation."""
         from buttermilk._core.config import CloudProviderCfg
 
+<<<<<<< HEAD
         config = CloudProviderCfg(type="azure", vault="https://test-vault.vault.azure.net/")
+=======
+        config = CloudProviderCfg(
+            type="azure", vault="https://test-vault.vault.azure.net/"
+        )
+>>>>>>> origin/stable
 
         assert config.type == "azure"
         assert config.vault == "https://test-vault.vault.azure.net/"
@@ -175,7 +193,13 @@ class TestCloudProviderConfigValidation:
         """Test GCP CloudProviderCfg validation with location."""
         from buttermilk._core.config import CloudProviderCfg
 
+<<<<<<< HEAD
         config = CloudProviderCfg(type="gcp", project_id="test-project", location="us-central1")
+=======
+        config = CloudProviderCfg(
+            type="gcp", project_id="test-project", location="us-central1"
+        )
+>>>>>>> origin/stable
 
         assert config.type == "gcp"
         assert config.project_id == "test-project"
@@ -214,7 +238,13 @@ class TestRecordTypeValidation:
             "tags": ["test", "validation"],
         }
 
+<<<<<<< HEAD
         record = Record(content="Test content with metadata", mime="text/plain", metadata=metadata)
+=======
+        record = Record(
+            content="Test content with metadata", mime="text/plain", metadata=metadata
+        )
+>>>>>>> origin/stable
 
         assert record.metadata == metadata
         assert record.metadata["source"] == "test_source"
@@ -249,7 +279,13 @@ class TestRecordTypeValidation:
 
         record2 = Record(content="Same content", mime="text/plain", record_id="same_id")
 
+<<<<<<< HEAD
         record3 = Record(content="Different content", mime="text/plain", record_id="same_id")
+=======
+        record3 = Record(
+            content="Different content", mime="text/plain", record_id="same_id"
+        )
+>>>>>>> origin/stable
 
         assert record1 == record2
         assert record1 != record3
@@ -311,7 +347,13 @@ class TestConfigurationCaching:
         creation_time = time.time() - start_time
 
         # Should be able to create 100 configs quickly
+<<<<<<< HEAD
         assert creation_time < 0.1, f"Config creation took {creation_time:.3f}s for 100 instances"
+=======
+        assert creation_time < 0.1, (
+            f"Config creation took {creation_time:.3f}s for 100 instances"
+        )
+>>>>>>> origin/stable
         assert len(configs) == 100
 
     def test_config_validation_caching(self):

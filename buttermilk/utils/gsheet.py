@@ -99,12 +99,23 @@ class GSheet(BaseModel):
         Raises:
             google.auth.exceptions.DefaultCredentialsError: If ADC are not found or invalid.
         """
+<<<<<<< HEAD
         credentials, _ = google.auth.default(  # project_id is not strictly needed for gspread authorize
             scopes=[
                 "https://spreadsheets.google.com/feeds",  # Legacy, but often included
                 "https://www.googleapis.com/auth/spreadsheets",
                 "https://www.googleapis.com/auth/drive",  # Needed for creating new sheets or searching Drive
             ]
+=======
+        credentials, _ = (
+            google.auth.default(  # project_id is not strictly needed for gspread authorize
+                scopes=[
+                    "https://spreadsheets.google.com/feeds",  # Legacy, but often included
+                    "https://www.googleapis.com/auth/spreadsheets",
+                    "https://www.googleapis.com/auth/drive",  # Needed for creating new sheets or searching Drive
+                ]
+            )
+>>>>>>> origin/stable
         )
         return gspread.authorize(credentials)
 
@@ -116,7 +127,13 @@ class GSheet(BaseModel):
         title: Optional[str] = None,  # Title for a new spreadsheet
         sheet_id: Optional[str] = None,  # Google Spreadsheet ID (key)
         uri: Optional[str] = None,  # Full URL to the Google Spreadsheet
+<<<<<<< HEAD
         header_format: Optional[dict[str, Any]] = None,  # gspread cell format for header
+=======
+        header_format: Optional[
+            dict[str, Any]
+        ] = None,  # gspread cell format for header
+>>>>>>> origin/stable
         **kwargs: Any,  # Catch-all for future gspread options
     ) -> gspread.spreadsheet.Spreadsheet:
         """Saves a Pandas DataFrame to a specified Google Sheet.
@@ -152,7 +169,13 @@ class GSheet(BaseModel):
             ValueError: If attempting to create a new sheet but `title` is not provided.
         """
         if df.empty:
+<<<<<<< HEAD
             logger.warning("Input DataFrame is empty. No data will be saved to Google Sheet.")
+=======
+            logger.warning(
+                "Input DataFrame is empty. No data will be saved to Google Sheet."
+            )
+>>>>>>> origin/stable
             # Depending on desired behavior, could return None or raise error,
             # or create an empty sheet. For now, let's try to get/create the sheet.
 
@@ -171,12 +194,19 @@ class GSheet(BaseModel):
         elif title:
             spreadsheet = self.gspread_client.create(title)
         else:
+<<<<<<< HEAD
             raise ValueError("Must provide either 'sheet_id', 'uri', or 'title' (for new sheet) to save_gsheet.")
+=======
+            raise ValueError(
+                "Must provide either 'sheet_id', 'uri', or 'title' (for new sheet) to save_gsheet."
+            )
+>>>>>>> origin/stable
 
         worksheet: gspread.Worksheet
         if not sheet_name:  # Use the first sheet or create one if needed
             try:
                 worksheet = spreadsheet.get_worksheet(0)  # Get the first sheet
+<<<<<<< HEAD
                 logger.info(f"Using existing first worksheet '{worksheet.title}' in spreadsheet '{spreadsheet.title}'.")
                 # Clear existing content and append new headers + data
                 worksheet.clear()
@@ -187,11 +217,36 @@ class GSheet(BaseModel):
                 worksheet = spreadsheet.add_worksheet(title="Sheet1", rows=1, cols=max(1, len(df_to_save.columns)))
                 logger.info(f"Created new worksheet 'Sheet1' in spreadsheet '{spreadsheet.title}'.")
                 worksheet.append_rows(values=[df_to_save.columns.values.tolist()], table_range="A1")
+=======
+                logger.info(
+                    f"Using existing first worksheet '{worksheet.title}' in spreadsheet '{spreadsheet.title}'."
+                )
+                # Clear existing content and append new headers + data
+                worksheet.clear()
+                worksheet.append_rows(
+                    values=[df_to_save.columns.values.tolist()], table_range="A1"
+                )
+                if header_format:
+                    worksheet.format("A1:Z1", header_format)  # Format header
+            except (
+                gspread.exceptions.WorksheetNotFound
+            ):  # Should not happen for index 0 unless sheet is truly empty
+                worksheet = spreadsheet.add_worksheet(
+                    title="Sheet1", rows=1, cols=max(1, len(df_to_save.columns))
+                )
+                logger.info(
+                    f"Created new worksheet 'Sheet1' in spreadsheet '{spreadsheet.title}'."
+                )
+                worksheet.append_rows(
+                    values=[df_to_save.columns.values.tolist()], table_range="A1"
+                )
+>>>>>>> origin/stable
                 if header_format:
                     worksheet.format("A1:Z1", header_format)
         else:  # Specific sheet_name provided
             try:
                 worksheet = spreadsheet.worksheet(sheet_name)
+<<<<<<< HEAD
                 logger.info(f"Using existing worksheet '{sheet_name}' in spreadsheet '{spreadsheet.title}'. Appending data.")
                 # For existing named sheet, we append. Consider if clearing is needed based on use case.
             except gspread.exceptions.WorksheetNotFound:
@@ -199,12 +254,30 @@ class GSheet(BaseModel):
                 logger.info(f"Created new worksheet '{sheet_name}' in spreadsheet '{spreadsheet.title}'.")
                 # Add header row to the new sheet
                 worksheet.append_rows(values=[df_to_save.columns.values.tolist()], table_range="A1")
+=======
+                logger.info(
+                    f"Using existing worksheet '{sheet_name}' in spreadsheet '{spreadsheet.title}'. Appending data."
+                )
+                # For existing named sheet, we append. Consider if clearing is needed based on use case.
+            except gspread.exceptions.WorksheetNotFound:
+                worksheet = spreadsheet.add_worksheet(
+                    title=sheet_name, rows=1, cols=max(1, len(df_to_save.columns))
+                )
+                logger.info(
+                    f"Created new worksheet '{sheet_name}' in spreadsheet '{spreadsheet.title}'."
+                )
+                # Add header row to the new sheet
+                worksheet.append_rows(
+                    values=[df_to_save.columns.values.tolist()], table_range="A1"
+                )
+>>>>>>> origin/stable
                 if header_format:
                     worksheet.format("A1:Z1", header_format)  # Format header
 
                 # Original logic to delete default "Sheet1" if a new named sheet is created
                 # and the spreadsheet was just created (implying it only had "Sheet1").
                 # This is a bit heuristic.
+<<<<<<< HEAD
                 if title and len(spreadsheet.worksheets()) > 1:  # If we just created this spreadsheet via title
                     default_sheet = spreadsheet.get_worksheet(0)  # Index 0 might now be our new sheet if "Sheet1" was deleted
                     if default_sheet and default_sheet.title == "Sheet1" and default_sheet.id != worksheet.id:
@@ -213,6 +286,28 @@ class GSheet(BaseModel):
                             logger.info("Deleted default 'Sheet1' after creating new named worksheet.")
                         except Exception as e_del:
                             logger.warning(f"Unable to delete default worksheet 'Sheet1': {e_del!s}")
+=======
+                if (
+                    title and len(spreadsheet.worksheets()) > 1
+                ):  # If we just created this spreadsheet via title
+                    default_sheet = spreadsheet.get_worksheet(
+                        0
+                    )  # Index 0 might now be our new sheet if "Sheet1" was deleted
+                    if (
+                        default_sheet
+                        and default_sheet.title == "Sheet1"
+                        and default_sheet.id != worksheet.id
+                    ):
+                        try:
+                            spreadsheet.del_worksheet(default_sheet)
+                            logger.info(
+                                "Deleted default 'Sheet1' after creating new named worksheet."
+                            )
+                        except Exception as e_del:
+                            logger.warning(
+                                f"Unable to delete default worksheet 'Sheet1': {e_del!s}"
+                            )
+>>>>>>> origin/stable
 
         # Prepare data for appending: convert objects to strings, handle complex types
         # This loop attempts to convert all object columns to string, which might be too aggressive.
@@ -224,13 +319,24 @@ class GSheet(BaseModel):
                     # Attempt conversion to string, handling potential errors for mixed types
                     df_to_save[col] = df_to_save[col].astype(str)
                 except Exception as e_astype:
+<<<<<<< HEAD
                     logger.warning(f"Could not convert column '{col}' to string type directly: {e_astype!s}. Values might be mixed.")
                     # Fallback: apply str() element-wise for complex objects within the column
                     df_to_save[col] = df_to_save[col].apply(lambda x: str(x) if pd.notnull(x) else "")
+=======
+                    logger.warning(
+                        f"Could not convert column '{col}' to string type directly: {e_astype!s}. Values might be mixed."
+                    )
+                    # Fallback: apply str() element-wise for complex objects within the column
+                    df_to_save[col] = df_to_save[col].apply(
+                        lambda x: str(x) if pd.notnull(x) else ""
+                    )
+>>>>>>> origin/stable
 
         # Use make_serialisable to handle complex types (like dicts/lists in cells) for gspread
         # gspread expects a list of lists for append_rows.
         serialisable_rows = make_serialisable(rows=df_to_save.to_dict(orient="records"))
+<<<<<<< HEAD
         if isinstance(serialisable_rows, list) and all(isinstance(r, dict) for r in serialisable_rows):
             rows_to_append = [list(r.values()) for r in serialisable_rows]
             if rows_to_append:  # Only append if there's data
@@ -246,6 +352,35 @@ class GSheet(BaseModel):
 
 
 def format_strings(df: pd.DataFrame, convert_json_columns: list[str] | None = None) -> pd.DataFrame:
+=======
+        if isinstance(serialisable_rows, list) and all(
+            isinstance(r, dict) for r in serialisable_rows
+        ):
+            rows_to_append = [list(r.values()) for r in serialisable_rows]
+            if rows_to_append:  # Only append if there's data
+                worksheet.append_rows(rows_to_append, value_input_option="USER_ENTERED")
+                logger.info(
+                    f"Appended {len(rows_to_append)} rows to worksheet '{worksheet.title}'."
+                )
+            else:
+                logger.info(
+                    f"No rows to append to worksheet '{worksheet.title}' after serialization."
+                )
+        else:
+            logger.error(
+                f"Data for worksheet '{worksheet.title}' could not be serialized into list of lists. Type: {type(serialisable_rows)}"
+            )
+
+        logger.info(
+            f"Data saved to Google Sheet: {spreadsheet.url} (Worksheet: '{worksheet.title}')"
+        )
+        return spreadsheet
+
+
+def format_strings(
+    df: pd.DataFrame, convert_json_columns: list[str] | None = None
+) -> pd.DataFrame:
+>>>>>>> origin/stable
     """Formats a Pandas DataFrame for better compatibility with Google Sheets.
 
     This function performs two main operations:
@@ -273,6 +408,7 @@ def format_strings(df: pd.DataFrame, convert_json_columns: list[str] | None = No
                 try:
                     # Convert column to YAML string representation for readability in sheets
                     df_formatted[col_name] = df_formatted[col_name].apply(
+<<<<<<< HEAD
                         lambda x: (
                             yaml.dump(
                                 x,
@@ -286,14 +422,39 @@ def format_strings(df: pd.DataFrame, convert_json_columns: list[str] | None = No
                     )
                 except Exception as e_yaml:
                     logger.warning(f"Could not convert column '{col_name}' to YAML/JSON string: {e_yaml!s}. Column skipped for this conversion.")
+=======
+                        lambda x: yaml.dump(
+                            x,
+                            default_flow_style=False,
+                            sort_keys=False,
+                            allow_unicode=True,
+                        )
+                        if pd.notnull(x)
+                        else ""  # Handle NaNs gracefully
+                    )
+                except Exception as e_yaml:
+                    logger.warning(
+                        f"Could not convert column '{col_name}' to YAML/JSON string: {e_yaml!s}. Column skipped for this conversion."
+                    )
+>>>>>>> origin/stable
 
     # Truncate all object (likely string) columns to Google Sheets cell character limit
     for col_name in df_formatted.select_dtypes(include=["object"]).columns:
         try:
             # Ensure column is string type before attempting string operations
+<<<<<<< HEAD
             df_formatted[col_name] = df_formatted[col_name].astype(str).str.slice(0, 49999)  # Leave a little buffer
         except Exception as e_slice:  # Catch errors if astype(str) or slice fails
             logger.warning(f"Could not truncate string column '{col_name}': {e_slice!s}. Column may contain non-stringifiable data.")
+=======
+            df_formatted[col_name] = (
+                df_formatted[col_name].astype(str).str.slice(0, 49999)
+            )  # Leave a little buffer
+        except Exception as e_slice:  # Catch errors if astype(str) or slice fails
+            logger.warning(
+                f"Could not truncate string column '{col_name}': {e_slice!s}. Column may contain non-stringifiable data."
+            )
+>>>>>>> origin/stable
             # Optionally, try a more robust conversion for problematic cells in this column
             # For now, just logs warning and continues.
 

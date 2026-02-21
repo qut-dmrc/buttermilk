@@ -80,7 +80,13 @@ class CloudProviderCfg(BaseModel):
 
     """
 
+<<<<<<< HEAD
     type: CloudProvider = Field(description="The type of cloud provider or storage backend.")
+=======
+    type: CloudProvider = Field(
+        description="The type of cloud provider or storage backend."
+    )
+>>>>>>> origin/stable
     project_id: str | None = Field(default=None, description="Cloud project ID")
     location: str | None = Field(default=None, description="Cloud region/location")
 
@@ -173,7 +179,13 @@ class ToolConfig(BaseModel):
                 try:
                     converted[key] = StorageFactory.create_config(config)
                 except Exception as e:
+<<<<<<< HEAD
                     logger.warning(f"Failed to convert storage config '{key}': {e}. Using raw dict.")
+=======
+                    logger.warning(
+                        f"Failed to convert storage config '{key}': {e}. Using raw dict."
+                    )
+>>>>>>> origin/stable
                     converted[key] = config
             else:
                 # Already a BaseStorageConfig object or other type
@@ -194,7 +206,13 @@ class ToolConfig(BaseModel):
             NotImplementedError: If the method is not implemented by a subclass.
 
         """
+<<<<<<< HEAD
         raise NotImplementedError("Subclasses must implement get_functions to define tool structure.")
+=======
+        raise NotImplementedError(
+            "Subclasses must implement get_functions to define tool structure."
+        )
+>>>>>>> origin/stable
 
     async def _run(self, **kwargs: Any) -> list[Any] | None:
         """Executes the tool's core logic.
@@ -214,7 +232,13 @@ class ToolConfig(BaseModel):
             NotImplementedError: If the method is not implemented by a subclass.
 
         """
+<<<<<<< HEAD
         raise NotImplementedError("Subclasses must implement _run to execute tool logic.")
+=======
+        raise NotImplementedError(
+            "Subclasses must implement _run to execute tool logic."
+        )
+>>>>>>> origin/stable
 
 
 class Tracing(BaseModel):
@@ -235,6 +259,7 @@ class Tracing(BaseModel):
     """
 
     enabled: bool = Field(default=False, description="Enable or disable tracing.")
+<<<<<<< HEAD
     api_key: str | None = Field(default=None, description="API key for the tracing provider.")
     endpoint: str | None = Field(default=None, description="Optional custom endpoint for the tracing provider.")
     otlp_headers: Mapping[str, str] | None = Field(  # Made value type str for typical headers
@@ -242,6 +267,23 @@ class Tracing(BaseModel):
         description="Optional OTLP headers for providers supporting it.",
     )
     project_id: str | None = Field(default=None, description="Optional project ID for the tracing provider.")
+=======
+    api_key: str | None = Field(
+        default=None, description="API key for the tracing provider."
+    )
+    endpoint: str | None = Field(
+        default=None, description="Optional custom endpoint for the tracing provider."
+    )
+    otlp_headers: Mapping[str, str] | None = (
+        Field(  # Made value type str for typical headers
+            default_factory=dict,
+            description="Optional OTLP headers for providers supporting it.",
+        )
+    )
+    project_id: str | None = Field(
+        default=None, description="Optional project ID for the tracing provider."
+    )
+>>>>>>> origin/stable
 
 
 # --- Agent Configuration ---
@@ -312,7 +354,13 @@ class AgentConfig(BaseModel):
     )
 
     # Behavior & Connections
+<<<<<<< HEAD
     output_model: type[BaseModel] | None = Field(default=None, description="Pydantic model for structured output parsing.")
+=======
+    output_model: type[BaseModel] | None = Field(
+        default=None, description="Pydantic model for structured output parsing."
+    )
+>>>>>>> origin/stable
 
     tools: dict[str, Any] = Field(
         default_factory=dict,
@@ -340,19 +388,35 @@ class AgentConfig(BaseModel):
     record: str | None = Field(
         default=None,
         description="JMESPath expression for extracting record from flow state. "
+<<<<<<< HEAD
         "Maps directly to AgentInput.record field. "
         "Example: '[FETCH.outputs]||*.record' (tries FETCH first, falls back to other sources)",
     )
     context: str | None = Field(
         default=None,
         description="JMESPath expression for extracting conversation context from flow state. Maps directly to AgentInput.context field.",
+=======
+                    "Maps directly to AgentInput.record field. "
+                    "Example: '[FETCH.outputs]||*.record' (tries FETCH first, falls back to other sources)",
+    )
+    context: str | None = Field(
+        default=None,
+        description="JMESPath expression for extracting conversation context from flow state. "
+                    "Maps directly to AgentInput.context field.",
+>>>>>>> origin/stable
     )
     required: list[str] | None = Field(
         default=None,
         description="Whitelist of input keys to pass to the agent. "
+<<<<<<< HEAD
         "If None (default), no filtering occurs (backward compatible). "
         "If empty list [], all inputs are filtered out. "
         "If non-empty, only those keys are passed.",
+=======
+                    "If None (default), no filtering occurs (backward compatible). "
+                    "If empty list [], all inputs are filtered out. "
+                    "If non-empty, only those keys are passed.",
+>>>>>>> origin/stable
     )
 
     # NOTE: name_components is NOT a stored field. It's consumed during init
@@ -370,7 +434,13 @@ class AgentConfig(BaseModel):
 
     # Private Attributes
     _agent_name: str = PrivateAttr()
+<<<<<<< HEAD
     _unique_identifier: str = PrivateAttr(default=None)  # Used in constructing `agent_id` and `agent_name`.
+=======
+    _unique_identifier: str = PrivateAttr(
+        default=None
+    )  # Used in constructing `agent_id` and `agent_name`.
+>>>>>>> origin/stable
 
     # Field Validators
     _validate_parameters = field_validator(
@@ -381,7 +451,13 @@ class AgentConfig(BaseModel):
         mode="before",
     )(convert_omegaconf_objects)
 
+<<<<<<< HEAD
     _validate_output_model = field_validator("output_model", mode="before")(make_class_import_validator(BaseModel))
+=======
+    _validate_output_model = field_validator("output_model", mode="before")(
+        make_class_import_validator(BaseModel)
+    )
+>>>>>>> origin/stable
 
     @field_validator("data", mode="after")
     @classmethod
@@ -399,14 +475,26 @@ class AgentConfig(BaseModel):
                 try:
                     converted[key] = StorageFactory.create_config(config)
                 except Exception as e:
+<<<<<<< HEAD
                     logger.warning(f"Failed to convert storage config '{key}': {e}. Using raw dict.")
+=======
+                    logger.warning(
+                        f"Failed to convert storage config '{key}': {e}. Using raw dict."
+                    )
+>>>>>>> origin/stable
                     converted[key] = config
             else:
                 # Already a BaseStorageConfig object or other type
                 converted[key] = config
         return converted
 
+<<<<<<< HEAD
     @computed_field(repr=False)  # repr=False to avoid circularity if used in name_components
+=======
+    @computed_field(
+        repr=False
+    )  # repr=False to avoid circularity if used in name_components
+>>>>>>> origin/stable
     @property
     def agent_name(self) -> str:
         """A human-friendly name for the agent instance.
@@ -486,13 +574,28 @@ class AgentConfig(BaseModel):
                 name_parts.append(str(part).strip())
             # Fallback for literal short strings if JMESPath fails/not applicable
             # and comp_path itself is not a key that yielded a value from context_for_jmespath
+<<<<<<< HEAD
             elif part is None and comp_path and comp_path not in context_for_jmespath and len(comp_path) <= 4:
+=======
+            elif (
+                part is None
+                and comp_path
+                and comp_path not in context_for_jmespath
+                and len(comp_path) <= 4
+            ):
+>>>>>>> origin/stable
                 name_parts.append(comp_path)
 
         name = " ".join(filter(None, name_parts)).strip()  # Filter None before join
 
         # Use object.__setattr__ for private attributes to avoid triggering validators if not desired
+<<<<<<< HEAD
         object.__setattr__(self, "_agent_name", name or self.agent_id)  # Fallback to the canonical agent_id
+=======
+        object.__setattr__(
+            self, "_agent_name", name or self.agent_id
+        )  # Fallback to the canonical agent_id
+>>>>>>> origin/stable
 
         return self
 
@@ -563,7 +666,13 @@ class AgentVariants(AgentConfig):
         description="List of parameter names to source from the runtime RunRequest and merge into agent parameters.",
     )
 
+<<<<<<< HEAD
     def get_configs(self, params: RunRequest | None = None, flow_default_params: dict = {}) -> list[tuple[type[Any], AgentConfig]]:
+=======
+    def get_configs(
+        self, params: RunRequest | None = None, flow_default_params: dict = {}
+    ) -> list[tuple[type[Any], AgentConfig]]:
+>>>>>>> origin/stable
         """Generates a list of agent configurations based on defined variants.
 
         This method expands the `variants` dictionary to create all possible
@@ -619,7 +728,13 @@ class AgentVariants(AgentConfig):
         # Merge extra parameters from RunRequest if provided
         if params and self.extra_params:
             for key in self.extra_params:
+<<<<<<< HEAD
                 if not hasattr(params, key) or getattr(params, key) is None:  # Check if param exists in RunRequest
+=======
+                if (
+                    not hasattr(params, key) or getattr(params, key) is None
+                ):  # Check if param exists in RunRequest
+>>>>>>> origin/stable
                     raise ValueError(
                         f"Required extra_param '{key}' not found or is None in RunRequest for agent variant '{self.agent_id or self.role}'."
                     )
@@ -633,10 +748,23 @@ class AgentVariants(AgentConfig):
 
         try:
             agent_class = AgentRegistry.get(self.agent_obj)
+<<<<<<< HEAD
             if agent_class is None:  # AgentRegistry.get might return None if not found and not raising
                 raise TypeError(f"Agent class '{self.agent_obj}' not found in AgentRegistry.")
         except KeyError:  # Assuming AgentRegistry might raise KeyError
             raise TypeError(f"Agent class '{self.agent_obj}' not found in AgentRegistry.")
+=======
+            if (
+                agent_class is None
+            ):  # AgentRegistry.get might return None if not found and not raising
+                raise TypeError(
+                    f"Agent class '{self.agent_obj}' not found in AgentRegistry."
+                )
+        except KeyError:  # Assuming AgentRegistry might raise KeyError
+            raise TypeError(
+                f"Agent class '{self.agent_obj}' not found in AgentRegistry."
+            )
+>>>>>>> origin/stable
 
         # Filter out variant parameters that are overridden by RunRequest parameters
         filtered_variants = self.variants.copy() if self.variants else {}
@@ -645,7 +773,15 @@ class AgentVariants(AgentConfig):
             for key in params.parameters.keys():
                 filtered_variants.pop(key, None)
 
+<<<<<<< HEAD
         variant_combinations = expand_dict(clean_empty_values(filtered_variants)) if filtered_variants else [{}]
+=======
+        variant_combinations = (
+            expand_dict(clean_empty_values(filtered_variants))
+            if filtered_variants
+            else [{}]
+        )
+>>>>>>> origin/stable
 
         generated_configs: list[tuple[type[Any], AgentConfig]] = []
         for _ in range(self.num_runs):  # Loop for num_runs
@@ -665,13 +801,27 @@ class AgentVariants(AgentConfig):
                 # Ensure all necessary fields for AgentConfig are present or defaulted
                 # Role and description might come from static_config_dict or need defaults
                 current_config_dict.setdefault("role", self.role or "VARIANT_AGENT")
+<<<<<<< HEAD
                 current_config_dict.setdefault("description", self.description or "Generated variant agent")
+=======
+                current_config_dict.setdefault(
+                    "description", self.description or "Generated variant agent"
+                )
+>>>>>>> origin/stable
 
                 # Explicitly remove fields not in AgentConfig before instantiation
                 # This is safer than relying solely on AgentConfig.model_config['extra'] = 'ignore'
                 # if AgentConfig itself doesn't have 'extra':'allow' or if strictness is desired.
                 valid_agent_config_fields = AgentConfig.model_fields.keys()
+<<<<<<< HEAD
                 filtered_cfg_dict = {k: v for k, v in current_config_dict.items() if k in valid_agent_config_fields}
+=======
+                filtered_cfg_dict = {
+                    k: v
+                    for k, v in current_config_dict.items()
+                    if k in valid_agent_config_fields
+                }
+>>>>>>> origin/stable
 
                 # Ensure 'parameters' contains the final merged parameters
                 filtered_cfg_dict["parameters"] = final_params
@@ -681,7 +831,12 @@ class AgentVariants(AgentConfig):
                     generated_configs.append((agent_class, agent_config_instance))
                 except Exception as e:
                     logger.error(
+<<<<<<< HEAD
                         msg := f"Error creating AgentConfig for role '{filtered_cfg_dict.get('role', 'unknown')}' "
+=======
+                        msg
+                        := f"Error creating AgentConfig for role '{filtered_cfg_dict.get('role', 'unknown')}' "
+>>>>>>> origin/stable
                         f"with parameters {final_params}: {e}",
                     )
                     raise FatalError(msg) from e
@@ -694,7 +849,14 @@ class AgentVariants(AgentConfig):
             # Depending on desired behavior, could raise FatalError or return empty list.
             # Current behavior: returns empty list, which might be handled by caller.
             # However, the original code raised FatalError, so let's keep that.
+<<<<<<< HEAD
             logger.error(msg := f"Could not create any agent variant configs for {self.role or self.agent_name}")
+=======
+            logger.error(
+                msg
+                := f"Could not create any agent variant configs for {self.role or self.agent_name}"
+            )
+>>>>>>> origin/stable
             raise FatalError(msg)
 
         return generated_configs
@@ -712,15 +874,36 @@ class SessionDefaultsConfig(BaseModel):
     """Default configuration for session data structures."""
 
     progress: SessionProgressConfig = Field(default_factory=SessionProgressConfig)
+<<<<<<< HEAD
     scores: dict[str, Any] = Field(default_factory=dict, description="Default scores structure")
     outcomes: list[Any] = Field(default_factory=list, description="Default outcomes list")
     pending_agents: list[str] = Field(default_factory=list, description="Default pending agents list")
+=======
+    scores: dict[str, Any] = Field(
+        default_factory=dict, description="Default scores structure"
+    )
+    outcomes: list[Any] = Field(
+        default_factory=list, description="Default outcomes list"
+    )
+    pending_agents: list[str] = Field(
+        default_factory=list, description="Default pending agents list"
+    )
+>>>>>>> origin/stable
 
 
 class SessionConfig(BaseModel):
     """Configuration for session management."""
 
     timeout_minutes: int = Field(default=60, description="Session timeout in minutes")
+<<<<<<< HEAD
     cleanup_interval_minutes: int = Field(default=15, description="Cleanup interval in minutes")
     max_concurrent_sessions: int = Field(default=50, description="Maximum concurrent sessions")
+=======
+    cleanup_interval_minutes: int = Field(
+        default=15, description="Cleanup interval in minutes"
+    )
+    max_concurrent_sessions: int = Field(
+        default=50, description="Maximum concurrent sessions"
+    )
+>>>>>>> origin/stable
     defaults: SessionDefaultsConfig = Field(default_factory=SessionDefaultsConfig)

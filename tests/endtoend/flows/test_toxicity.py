@@ -206,7 +206,13 @@ class TestClients:
             "VIOLENCE_OR_THREAT",
         }
 
+<<<<<<< HEAD
         assert expected_labels <= received_labels, f"Missing labels in the response; expected all of {expected_labels}"
+=======
+        assert expected_labels <= received_labels, (
+            f"Missing labels in the response; expected all of {expected_labels}"
+        )
+>>>>>>> origin/stable
 
     #    @pytest.mark.skip(reason="Don't run local GPU tests")
     def test_REGARD(self, toxic_record: Record):
@@ -214,12 +220,27 @@ class TestClients:
         from buttermilk.toxicity.regard import REGARD  # Import the wrapper
 
         client = REGARD()
+<<<<<<< HEAD
         result = client.moderate(content=toxic_record.content, record_id=toxic_record.record_id)
 
         assert isinstance(result, EvalRecord)
         assert not result.error
         assert result.predicted is not None  # REGARD provides scores, predicted might be based on threshold
         assert any(s.measure == "NEGATIVE" for s in result.scores)  # Check for expected score measure
+=======
+        result = client.moderate(
+            content=toxic_record.content, record_id=toxic_record.record_id
+        )
+
+        assert isinstance(result, EvalRecord)
+        assert not result.error
+        assert (
+            result.predicted is not None
+        )  # REGARD provides scores, predicted might be based on threshold
+        assert any(
+            s.measure == "NEGATIVE" for s in result.scores
+        )  # Check for expected score measure
+>>>>>>> origin/stable
 
     @pytest.mark.parametrize("client_type", ["openai", "azure"])
     def test_OpenAIMod(self, client_type, toxic_record: Record):

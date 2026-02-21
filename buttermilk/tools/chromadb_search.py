@@ -21,8 +21,17 @@ class SearchResult(BaseModel):
     id: str = Field(..., description="Unique ID of the retrieved chunk")
     content: str = Field(..., description="The actual text content")
     document_id: str = Field(..., description="ID of the parent document")
+<<<<<<< HEAD
     document_title: Optional[str] = Field(None, description="Title of the parent document")
     metadata: dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+=======
+    document_title: Optional[str] = Field(
+        None, description="Title of the parent document"
+    )
+    metadata: dict[str, Any] = Field(
+        default_factory=dict, description="Additional metadata"
+    )
+>>>>>>> origin/stable
     score: Optional[float] = Field(None, description="Similarity score")
 
 
@@ -52,7 +61,13 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
             await self.ensure_cache_initialized()
             self._initialized = True
 
+<<<<<<< HEAD
             logger.info("ChromaDBSearchTool initialized", collection_name=self.collection_name)
+=======
+            logger.info(
+                "ChromaDBSearchTool initialized", collection_name=self.collection_name
+            )
+>>>>>>> origin/stable
 
         except Exception as e:
             logger.error("Failed to initialize ChromaDBSearchTool", error=e)
@@ -130,9 +145,19 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
         # Format results for display
         formatted_parts = []
         for i, result in enumerate(results):
+<<<<<<< HEAD
             formatted_parts.append(f"**Result {i + 1}** (Doc: {result.document_title or result.document_id})\n{result.content}")
 
         return "\n---\n".join(formatted_parts) if formatted_parts else "No results found."
+=======
+            formatted_parts.append(
+                f"**Result {i + 1}** (Doc: {result.document_title or result.document_id})\n{result.content}"
+            )
+
+        return (
+            "\n---\n".join(formatted_parts) if formatted_parts else "No results found."
+        )
+>>>>>>> origin/stable
 
     def get_tool(self) -> FunctionTool:
         """Get this as an autogen FunctionTool.
@@ -143,7 +168,12 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
         return FunctionTool(
             name="search_vector_database",
             description=(
+<<<<<<< HEAD
                 f"Search the {self.collection_name} vector database for relevant information. Returns text chunks that match the query semantically."
+=======
+                f"Search the {self.collection_name} vector database for relevant information. "
+                "Returns text chunks that match the query semantically."
+>>>>>>> origin/stable
             ),
             func=self.search_with_output,
             strict=True,

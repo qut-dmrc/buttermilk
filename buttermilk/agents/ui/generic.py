@@ -30,13 +30,25 @@ class UIAgent(Agent):
         super().__init__(**kwargs)
 
         # Common fields that all UI implementations should have - moved from Field declaration
+<<<<<<< HEAD
         self.callback_to_groupchat: Callable[..., Awaitable[None]] | None = kwargs.get("callback_to_groupchat")
+=======
+        self.callback_to_groupchat: Callable[..., Awaitable[None]] | None = kwargs.get(
+            "callback_to_groupchat"
+        )
+>>>>>>> origin/stable
 
         # Private attributes for internal state management - moved from PrivateAttr declaration
         self._input_task: asyncio.Task | None = None
         self._trace_this = False  # Controls whether this agent's messages are traced
 
+<<<<<<< HEAD
     async def initialize(self, callback_to_groupchat: Callable[..., Awaitable[None]], **kwargs) -> None:
+=======
+    async def initialize(
+        self, callback_to_groupchat: Callable[..., Awaitable[None]], **kwargs
+    ) -> None:
+>>>>>>> origin/stable
         """Initialize the UI agent with necessary callbacks and session info.
 
         Args:
@@ -127,7 +139,15 @@ class UIAgent(Agent):
         logger.debug("Cleaning up", agent_name=self.__class__.__name__)
 
         # Cancel any input polling task if it exists
+<<<<<<< HEAD
         if hasattr(self, "_input_task") and self._input_task and not self._input_task.done():
+=======
+        if (
+            hasattr(self, "_input_task")
+            and self._input_task
+            and not self._input_task.done()
+        ):
+>>>>>>> origin/stable
             self._input_task.cancel()
             try:
                 await self._input_task
@@ -144,4 +164,10 @@ class UIAgent(Agent):
             A callable that can be used as a callback function
 
         """
+<<<<<<< HEAD
         raise NotImplementedError(f"{self.__class__.__name__} must implement make_callback")
+=======
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement make_callback"
+        )
+>>>>>>> origin/stable

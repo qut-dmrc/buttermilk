@@ -206,7 +206,13 @@ class TestTMDBGetAvailability:
             us_observations = [r for r in results if r.region == "US"]
             assert len(us_observations) >= 2  # Netflix and Amazon Prime at minimum
 
+<<<<<<< HEAD
             netflix_us = next((r for r in us_observations if r.provider_name == "Netflix"), None)
+=======
+            netflix_us = next(
+                (r for r in us_observations if r.provider_name == "Netflix"), None
+            )
+>>>>>>> origin/stable
             assert netflix_us is not None
             assert netflix_us.available is True
             assert netflix_us.provider_type == "flatrate"
@@ -217,7 +223,13 @@ class TestTMDBGetAvailability:
             assert len(gb_observations) >= 1
 
     @pytest.mark.anyio
+<<<<<<< HEAD
     async def test_get_availability_no_providers_returns_null_observations(self, tmdb_tool):
+=======
+    async def test_get_availability_no_providers_returns_null_observations(
+        self, tmdb_tool
+    ):
+>>>>>>> origin/stable
         """Test that when TMDB returns no providers, we get a null observation."""
         title = Title(record_id="550", title="Fight Club", year=1999, metadata={})
 
@@ -253,7 +265,13 @@ class TestTMDBGetAvailability:
         with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
             # Mock API failure
             mock_movie_obj = AsyncMock()
+<<<<<<< HEAD
             mock_movie_obj.watch_providers = AsyncMock(side_effect=Exception("API connection failed"))
+=======
+            mock_movie_obj.watch_providers = AsyncMock(
+                side_effect=Exception("API connection failed")
+            )
+>>>>>>> origin/stable
             mock_tmdb.movie.return_value = mock_movie_obj
 
             results = []
@@ -472,7 +490,13 @@ class TestTMDBDiscoverMovies:
         """Test that default cache directory follows buttermilk pattern."""
 
         with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
+<<<<<<< HEAD
             mock_movies = [{"id": 1, "title": "Test Movie", "release_date": "2020-01-01"}]
+=======
+            mock_movies = [
+                {"id": 1, "title": "Test Movie", "release_date": "2020-01-01"}
+            ]
+>>>>>>> origin/stable
 
             # Mock discover().movie() method
             async def mock_movie_func(**kwargs):
@@ -487,7 +511,13 @@ class TestTMDBDiscoverMovies:
             mock_tmdb.discover.return_value = mock_discover
 
             # Call without backup_dir to test default
+<<<<<<< HEAD
             results = await tmdb_tool.get_all_movies(start_year=2020, end_year=2020, max_concurrent=1, resume=False)
+=======
+            results = await tmdb_tool.get_all_movies(
+                start_year=2020, end_year=2020, max_concurrent=1, resume=False
+            )
+>>>>>>> origin/stable
 
             # Verify we get results (which means default directory worked)
             assert len(results) >= 0  # Could be empty, just need no errors
@@ -496,7 +526,13 @@ class TestTMDBDiscoverMovies:
     async def test_get_all_movies_resume_functionality(self, tmdb_tool, tmp_path):
         """Test that get_all_movies can resume from previous progress."""
         with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
+<<<<<<< HEAD
             mock_movies = [{"id": 1, "title": "Test Movie", "release_date": "2020-01-01"}]
+=======
+            mock_movies = [
+                {"id": 1, "title": "Test Movie", "release_date": "2020-01-01"}
+            ]
+>>>>>>> origin/stable
 
             # Mock discover().movie() method
             async def mock_movie_func(**kwargs):
@@ -553,6 +589,7 @@ class TestTMDBUnitTests:
         with patch.object(tmdb_tool, "fetch_single_page") as mock_fetch:
             mock_fetch.side_effect = [
                 (
+<<<<<<< HEAD
                     [Title(record_id=f"{i}", title=f"Movie {i}", type=TitleType.MOVIE) for i in range(1, 21)],
                     True,
                 ),  # Page 1: 20 movies, more available
@@ -562,11 +599,43 @@ class TestTMDBUnitTests:
                 ),  # Page 2: 20 movies, more available
                 (
                     [Title(record_id=f"{i}", title=f"Movie {i}", type=TitleType.MOVIE) for i in range(41, 51)],
+=======
+                    [
+                        Title(
+                            record_id=f"{i}", title=f"Movie {i}", type=TitleType.MOVIE
+                        )
+                        for i in range(1, 21)
+                    ],
+                    True,
+                ),  # Page 1: 20 movies, more available
+                (
+                    [
+                        Title(
+                            record_id=f"{i}", title=f"Movie {i}", type=TitleType.MOVIE
+                        )
+                        for i in range(21, 41)
+                    ],
+                    True,
+                ),  # Page 2: 20 movies, more available
+                (
+                    [
+                        Title(
+                            record_id=f"{i}", title=f"Movie {i}", type=TitleType.MOVIE
+                        )
+                        for i in range(41, 51)
+                    ],
+>>>>>>> origin/stable
                     False,
                 ),  # Page 3: 10 movies, no more
             ]
 
+<<<<<<< HEAD
             results = await tmdb_tool._fetch_period_movies(period, True, False, tmp_path, progress)
+=======
+            results = await tmdb_tool._fetch_period_movies(
+                period, True, False, tmp_path, progress
+            )
+>>>>>>> origin/stable
 
             # Should have called fetch_single_page 3 times
             assert mock_fetch.call_count == 3
@@ -584,14 +653,26 @@ class TestTMDBUnitTests:
 
             # Verify progress was tracked (pages but not completion)
             # Note: _fetch_period_movies doesn't mark completion, that's done in _fetch_periods_parallel
+<<<<<<< HEAD
             assert not progress.is_completed(period)  # Should not be marked complete yet
+=======
+            assert not progress.is_completed(
+                period
+            )  # Should not be marked complete yet
+>>>>>>> origin/stable
 
             # Verify backup file was created
             backup_file = tmp_path / f"period_{period}.json"
             assert backup_file.exists()
 
     @pytest.mark.anyio
+<<<<<<< HEAD
     async def test_fetch_period_movies_resume_from_checkpoint(self, tmdb_tool, tmp_path):
+=======
+    async def test_fetch_period_movies_resume_from_checkpoint(
+        self, tmdb_tool, tmp_path
+    ):
+>>>>>>> origin/stable
         """Test that _fetch_period_movies correctly resumes from checkpoint."""
         import json
         from datetime import date
@@ -624,12 +705,27 @@ class TestTMDBUnitTests:
         with patch.object(tmdb_tool, "fetch_single_page") as mock_fetch:
             mock_fetch.side_effect = [
                 (
+<<<<<<< HEAD
                     [Title(record_id=f"{i}", title=f"Movie {i}", type=TitleType.MOVIE) for i in range(41, 51)],
+=======
+                    [
+                        Title(
+                            record_id=f"{i}", title=f"Movie {i}", type=TitleType.MOVIE
+                        )
+                        for i in range(41, 51)
+                    ],
+>>>>>>> origin/stable
                     False,
                 ),  # Page 3: 10 movies, no more
             ]
 
+<<<<<<< HEAD
             results = await tmdb_tool._fetch_period_movies(period, True, False, tmp_path, progress)
+=======
+            results = await tmdb_tool._fetch_period_movies(
+                period, True, False, tmp_path, progress
+            )
+>>>>>>> origin/stable
 
             # Should have called fetch_single_page only once (page 3)
             assert mock_fetch.call_count == 1
@@ -663,7 +759,13 @@ class TestTMDBUnitTests:
             await asyncio.sleep(0.1)  # Simulate API delay
             return [Title(record_id="1", title="Test Movie", type=TitleType.MOVIE)]
 
+<<<<<<< HEAD
         with patch.object(tmdb_tool, "_fetch_period_movies", side_effect=mock_fetch_period):
+=======
+        with patch.object(
+            tmdb_tool, "_fetch_period_movies", side_effect=mock_fetch_period
+        ):
+>>>>>>> origin/stable
             start_time = time.time()
             results = await tmdb_tool._fetch_periods_parallel(
                 periods,
@@ -677,10 +779,21 @@ class TestTMDBUnitTests:
 
             # Verify calls were made in parallel (all started within 0.05s of each other)
             assert len(call_times) == 3
+<<<<<<< HEAD
             assert max(call_times) - min(call_times) < 0.05, "Calls should start nearly simultaneously"
 
             # Total time should be close to single call time, not 3x (due to parallelism)
             assert total_time < 0.3, f"Parallel execution took {total_time}s, should be < 0.3s"
+=======
+            assert max(call_times) - min(call_times) < 0.05, (
+                "Calls should start nearly simultaneously"
+            )
+
+            # Total time should be close to single call time, not 3x (due to parallelism)
+            assert total_time < 0.3, (
+                f"Parallel execution took {total_time}s, should be < 0.3s"
+            )
+>>>>>>> origin/stable
 
             # Should get results from all periods
             assert len(results) == 3
@@ -769,7 +882,14 @@ class TestTMDBToolConfiguration:
         assert isinstance(function_tool, FunctionTool)
         assert function_tool.name == "tmdb_search"
         assert "movie availability" in function_tool.description.lower()
+<<<<<<< HEAD
         assert "TMDB" in function_tool.description or "Movie Database" in function_tool.description
+=======
+        assert (
+            "TMDB" in function_tool.description
+            or "Movie Database" in function_tool.description
+        )
+>>>>>>> origin/stable
 
     def test_tool_configuration(self, tmdb_tool):
         """Test tool configuration and initialization."""
@@ -851,11 +971,23 @@ class TestTMDBGetAvailabilityById:
         return mock_response
 
     @pytest.mark.anyio
+<<<<<<< HEAD
     async def test_get_availability_by_id_parses_cached_response(self, tmdb_tool, cached_availability_response):
         """Test get_availability_by_id correctly parses cached TMDB response."""
         with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
             mock_movie_obj = AsyncMock()
             mock_movie_obj.watch_providers = AsyncMock(return_value=cached_availability_response)
+=======
+    async def test_get_availability_by_id_parses_cached_response(
+        self, tmdb_tool, cached_availability_response
+    ):
+        """Test get_availability_by_id correctly parses cached TMDB response."""
+        with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
+            mock_movie_obj = AsyncMock()
+            mock_movie_obj.watch_providers = AsyncMock(
+                return_value=cached_availability_response
+            )
+>>>>>>> origin/stable
             mock_tmdb.movie.return_value = mock_movie_obj
 
             results = []
@@ -900,11 +1032,23 @@ class TestTMDBGetAvailabilityById:
             assert ae_flatrate[0].provider_id == "630"
 
     @pytest.mark.anyio
+<<<<<<< HEAD
     async def test_get_availability_by_id_provider_fields_correct(self, tmdb_tool, cached_availability_response):
         """Test that provider fields are correctly extracted from cached response."""
         with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
             mock_movie_obj = AsyncMock()
             mock_movie_obj.watch_providers = AsyncMock(return_value=cached_availability_response)
+=======
+    async def test_get_availability_by_id_provider_fields_correct(
+        self, tmdb_tool, cached_availability_response
+    ):
+        """Test that provider fields are correctly extracted from cached response."""
+        with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
+            mock_movie_obj = AsyncMock()
+            mock_movie_obj.watch_providers = AsyncMock(
+                return_value=cached_availability_response
+            )
+>>>>>>> origin/stable
             mock_tmdb.movie.return_value = mock_movie_obj
 
             results = []
@@ -916,7 +1060,13 @@ class TestTMDBGetAvailabilityById:
                 results.append(obs)
 
             # Find the Amazon Prime observation
+<<<<<<< HEAD
             prime_obs = next((r for r in results if r.provider_name == "Amazon Prime Video"), None)
+=======
+            prime_obs = next(
+                (r for r in results if r.provider_name == "Amazon Prime Video"), None
+            )
+>>>>>>> origin/stable
             assert prime_obs is not None
 
             # Verify all fields are correctly set
@@ -1057,7 +1207,13 @@ class TestTMDBGetAvailabilityById:
             assert regions == {"AE"}  # Only AE present
 
             # AE flatrate should have STARZPLAY
+<<<<<<< HEAD
             ae_flatrate = [r for r in results if r.region == "AE" and r.provider_type == "flatrate"]
+=======
+            ae_flatrate = [
+                r for r in results if r.region == "AE" and r.provider_type == "flatrate"
+            ]
+>>>>>>> origin/stable
             assert len(ae_flatrate) == 1
             assert ae_flatrate[0].provider_name == "STARZPLAY"
             assert ae_flatrate[0].available is True
@@ -1097,7 +1253,10 @@ class TestTMDBGetAvailabilityById:
         # Create a custom class that raises during iteration for AU
         class BrokenRegionData:
             """Region data that raises an error when converted to dict."""
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/stable
             link = ""
             flatrate = [{"provider_id": 1, "provider_name": "Test"}]
 
@@ -1203,7 +1362,14 @@ class TestTMDBGetAvailabilityById:
 
             # Check specific provider exists
             region, ptype, pname, pid = expected_provider
+<<<<<<< HEAD
             matching_obs = [r for r in results if r.region == region and r.provider_type == ptype and r.provider_name == pname]
+=======
+            matching_obs = [
+                r for r in results
+                if r.region == region and r.provider_type == ptype and r.provider_name == pname
+            ]
+>>>>>>> origin/stable
             assert len(matching_obs) == 1
             assert matching_obs[0].provider_id == pid
             assert matching_obs[0].available is True

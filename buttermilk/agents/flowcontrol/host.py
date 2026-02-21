@@ -65,7 +65,13 @@ class HostAgent(Agent):
         self._agent_registry: dict[str, AgentAnnouncement] = {}
         self._registry_lock: asyncio.Lock = asyncio.Lock()
         self._tool_to_agent_map: dict[str, str] = {}  # Maps tool names to agent IDs
+<<<<<<< HEAD
         self._registry_summary_cache: dict[str, Any] | None = None  # Cache for registry summaries
+=======
+        self._registry_summary_cache: dict[str, Any] | None = (
+            None  # Cache for registry summaries
+        )
+>>>>>>> origin/stable
 
         # Tool schemas for LLM-based hosts
         self._tools: list[Tool] = []
@@ -91,7 +97,13 @@ class HostAgent(Agent):
         Must be explicitly configured in parameters - no defaults allowed.
         """
         if "human_in_loop" not in self.parameters:
+<<<<<<< HEAD
             raise ValueError(f"Host agent '{self.agent_name}': 'human_in_loop' must be explicitly set in parameters")
+=======
+            raise ValueError(
+                f"Host agent '{self.agent_name}': 'human_in_loop' must be explicitly set in parameters"
+            )
+>>>>>>> origin/stable
         return self.parameters["human_in_loop"]
 
     @human_in_loop.setter
@@ -107,7 +119,13 @@ class HostAgent(Agent):
         """
         if self._max_wait_time_value is None:
             if "max_wait_time" not in self.parameters:
+<<<<<<< HEAD
                 raise ValueError(f"Host agent '{self.agent_name}': 'max_wait_time' must be explicitly set in parameters")
+=======
+                raise ValueError(
+                    f"Host agent '{self.agent_name}': 'max_wait_time' must be explicitly set in parameters"
+                )
+>>>>>>> origin/stable
             self._max_wait_time_value = self.parameters["max_wait_time"]
         return self._max_wait_time_value
 
@@ -119,8 +137,17 @@ class HostAgent(Agent):
         """
         if self._max_user_confirmation_time_value is None:
             if "max_user_confirmation_time" not in self.parameters:
+<<<<<<< HEAD
                 raise ValueError(f"Host agent '{self.agent_name}': 'max_user_confirmation_time' must be explicitly set in parameters")
             self._max_user_confirmation_time_value = self.parameters["max_user_confirmation_time"]
+=======
+                raise ValueError(
+                    f"Host agent '{self.agent_name}': 'max_user_confirmation_time' must be explicitly set in parameters"
+                )
+            self._max_user_confirmation_time_value = self.parameters[
+                "max_user_confirmation_time"
+            ]
+>>>>>>> origin/stable
         return self._max_user_confirmation_time_value
 
     @property
@@ -131,7 +158,13 @@ class HostAgent(Agent):
         """
         if self._error_threshold_value is None:
             if "error_threshold" not in self.parameters:
+<<<<<<< HEAD
                 raise ValueError(f"Host agent '{self.agent_name}': 'error_threshold' must be explicitly set in parameters")
+=======
+                raise ValueError(
+                    f"Host agent '{self.agent_name}': 'error_threshold' must be explicitly set in parameters"
+                )
+>>>>>>> origin/stable
             self._error_threshold_value = self.parameters["error_threshold"]
         return self._error_threshold_value
 
@@ -252,7 +285,13 @@ class HostAgent(Agent):
         """
         content_to_log = str(message.content)[:TRUNCATE_LEN]
         await self._model_context.add_message(
+<<<<<<< HEAD
             AssistantMessage(content=content_to_log, source=ctx.sender.key if ctx.sender else ""),
+=======
+            AssistantMessage(
+                content=content_to_log, source=ctx.sender.key if ctx.sender else ""
+            ),
+>>>>>>> origin/stable
         )
 
         # Capture record output for propagation to next steps
@@ -272,7 +311,13 @@ class HostAgent(Agent):
         ctx: MessageContext,
     ) -> None:
         """Handle UserResponseMessage for user confirmations and feedback."""
+<<<<<<< HEAD
         logger.debug("Host received user input", agent_name=self.agent_name, message=message)
+=======
+        logger.debug(
+            "Host received user input", agent_name=self.agent_name, message=message
+        )
+>>>>>>> origin/stable
         self._user_confirmation = message
         self._user_confirmation_received.set()
 
@@ -287,7 +332,14 @@ class HostAgent(Agent):
             await self._publish(end_step)
             return
 
+<<<<<<< HEAD
         if message.human_in_loop is not None and self.human_in_loop != message.human_in_loop:
+=======
+        if (
+            message.human_in_loop is not None
+            and self.human_in_loop != message.human_in_loop
+        ):
+>>>>>>> origin/stable
             logger.debug(
                 "Host received user request to set human in the loop",
                 agent_name=self.agent_name,
@@ -303,7 +355,13 @@ class HostAgent(Agent):
             self._user_feedback.append(content)
             # Add to conversation history
             await self._model_context.add_message(
+<<<<<<< HEAD
                 UserMessage(content=content_to_log, source=ctx.sender.key if ctx.sender else ""),
+=======
+                UserMessage(
+                    content=content_to_log, source=ctx.sender.key if ctx.sender else ""
+                ),
+>>>>>>> origin/stable
             )
 
     # --- Agent Registry Methods ---
@@ -348,7 +406,13 @@ class HostAgent(Agent):
                     elif hasattr(tool, "schema"):
                         tool_name = getattr(tool.schema, "name", None)
                     elif isinstance(tool, Mapping):
+<<<<<<< HEAD
                         tool_name = tool.get("name") or tool.get("schema", {}).get("name")
+=======
+                        tool_name = tool.get("name") or tool.get("schema", {}).get(
+                            "name"
+                        )
+>>>>>>> origin/stable
                     if tool_name:
                         self._tool_to_agent_map[tool_name] = agent_id
                         tool_names.append(tool_name)
@@ -385,7 +449,13 @@ class HostAgent(Agent):
                 "role": announcement.agent_config.role,
                 "description": announcement.agent_config.description,
                 "tools": announcement.available_tools,
+<<<<<<< HEAD
                 "model": announcement.agent_config.parameters.get("model") if announcement.agent_config.parameters else None,
+=======
+                "model": announcement.agent_config.parameters.get("model")
+                if announcement.agent_config.parameters
+                else None,
+>>>>>>> origin/stable
             }
             active_agents.append(agent_info)
 
@@ -468,7 +538,13 @@ class HostAgent(Agent):
             )
             try:
                 await self.request_user_confirmation(step)
+<<<<<<< HEAD
                 await asyncio.wait_for(self._user_confirmation_received.wait(), timeout=60)
+=======
+                await asyncio.wait_for(
+                    self._user_confirmation_received.wait(), timeout=60
+                )
+>>>>>>> origin/stable
             except TimeoutError:
                 logger.info(
                     "Host hit timeout waiting for manager response after 60 seconds.",
@@ -476,7 +552,13 @@ class HostAgent(Agent):
                 )
                 continue
 
+<<<<<<< HEAD
             if self._user_confirmation and getattr(self._user_confirmation, "confirm", False):
+=======
+            if self._user_confirmation and getattr(
+                self._user_confirmation, "confirm", False
+            ):
+>>>>>>> origin/stable
                 logger.info("User confirmed step", step_role=step.role)
                 return True
             logger.info("User rejected step", step_role=step.role)
@@ -514,7 +596,13 @@ class HostAgent(Agent):
         except Exception as e:
             logger.exception("Error in progress reporting task", error=e)
         finally:
+<<<<<<< HEAD
             logger.debug("Host progress reporting task terminated.", agent_name=self.agent_name)
+=======
+            logger.debug(
+                "Host progress reporting task terminated.", agent_name=self.agent_name
+            )
+>>>>>>> origin/stable
 
     async def _wait_for_all_tasks_complete(self) -> bool:
         """Wait until all tasks are completed, reporting progress periodically."""
@@ -532,7 +620,13 @@ class HostAgent(Agent):
                 # TODO: Need to add some allowance for rate limits
                 # But capped between at no more than 5 minutes per step
                 total_pending_tasks = sum(self._pending_tasks_by_agent.values())
+<<<<<<< HEAD
                 additional_time = (total_pending_tasks * 60) / 6  # Assuming 6 parallel workers
+=======
+                additional_time = (
+                    total_pending_tasks * 60
+                ) / 6  # Assuming 6 parallel workers
+>>>>>>> origin/stable
                 calculated_timeout = self._max_wait_time + additional_time
 
                 dynamic_timeout = max(120, min(calculated_timeout, 300))
@@ -548,7 +642,14 @@ class HostAgent(Agent):
                 # This means we wait until the step is no longer considered "starting" AND all tasks are done. This provides insurance where
                 # distributed tasks take a while to begin.
                 await asyncio.wait_for(
+<<<<<<< HEAD
                     self._tasks_condition.wait_for(lambda: not self._step_starting.is_set() and not self._pending_tasks_by_agent),
+=======
+                    self._tasks_condition.wait_for(
+                        lambda: not self._step_starting.is_set()
+                        and not self._pending_tasks_by_agent
+                    ),
+>>>>>>> origin/stable
                     timeout=dynamic_timeout,
                 )
                 return True
@@ -657,7 +758,13 @@ class HostAgent(Agent):
             await self._publish(msg)
 
             # Start the periodic progress reporter task
+<<<<<<< HEAD
             self._progress_reporter_task = asyncio.create_task(self._report_progress_periodically())
+=======
+            self._progress_reporter_task = asyncio.create_task(
+                self._report_progress_periodically()
+            )
+>>>>>>> origin/stable
 
             # Initialize generator now that participants are known
             self._step_generator = self._sequence()
@@ -676,7 +783,15 @@ class HostAgent(Agent):
                     step_role=next_step.role,
                 )
 
+<<<<<<< HEAD
                 if self.human_in_loop and next_step.role != MANAGER and not await self._wait_for_user(next_step):
+=======
+                if (
+                    self.human_in_loop
+                    and next_step.role != MANAGER
+                    and not await self._wait_for_user(next_step)
+                ):
+>>>>>>> origin/stable
                     # If user rejected or timed out, stop the flow
                     flow_stopped_early = True
                     early_stop_reason = "Flow stopped: user rejected or timed out"
@@ -694,7 +809,13 @@ class HostAgent(Agent):
                             agent_name=self.agent_name,
                         )
                         flow_stopped_early = True
+<<<<<<< HEAD
                         early_stop_reason = "Flow stopped: error threshold exceeded or step failed"
+=======
+                        early_stop_reason = (
+                            "Flow stopped: error threshold exceeded or step failed"
+                        )
+>>>>>>> origin/stable
                         break
 
             # --- Sequence finished ---
@@ -736,11 +857,23 @@ class HostAgent(Agent):
         except KeyboardInterrupt:
             logger.info("Flow terminated by user.")
             # Send END message to terminate orchestrator
+<<<<<<< HEAD
             await self._publish(StepRequest(role=END, content="Flow terminated by user interrupt"))
         except (FatalError, Exception) as e:
             logger.exception("Unexpected and unhandled fatal error", error=e)
             # Send END message to terminate orchestrator even when exceptions occur
             error_message = f"Flow terminated due to error: {type(e).__name__}: {str(e)[:200]}"
+=======
+            await self._publish(
+                StepRequest(role=END, content="Flow terminated by user interrupt")
+            )
+        except (FatalError, Exception) as e:
+            logger.exception("Unexpected and unhandled fatal error", error=e)
+            # Send END message to terminate orchestrator even when exceptions occur
+            error_message = (
+                f"Flow terminated due to error: {type(e).__name__}: {str(e)[:200]}"
+            )
+>>>>>>> origin/stable
             await self._publish(StepRequest(role=END, content=error_message))
         finally:
             # Cancel the progress reporter task
@@ -781,7 +914,13 @@ class HostAgent(Agent):
         if not last_step_successful:
             # Record timed-out tasks as failures
             async with self._tasks_condition:
+<<<<<<< HEAD
                 timed_out_agents = dict(self._pending_tasks_by_agent)  # Copy pending tasks
+=======
+                timed_out_agents = dict(
+                    self._pending_tasks_by_agent
+                )  # Copy pending tasks
+>>>>>>> origin/stable
                 for agent_id, pending_count in timed_out_agents.items():
                     self._failed_tasks_by_agent[agent_id] += pending_count
                     logger.warning(
@@ -796,8 +935,17 @@ class HostAgent(Agent):
         # Check if too many tasks failed (including timeouts)
         total_failed = sum(self._failed_tasks_by_agent.values())
         if self._total_tasks_in_step == 0:
+<<<<<<< HEAD
             logger.warning("Host encountered no tasks in the current step.", agent_id=self.agent_id)
             error_ratio = 0  # No tasks started, error ratio is undefined or treated as 0
+=======
+            logger.warning(
+                "Host encountered no tasks in the current step.", agent_id=self.agent_id
+            )
+            error_ratio = (
+                0  # No tasks started, error ratio is undefined or treated as 0
+            )
+>>>>>>> origin/stable
         else:
             error_ratio = total_failed / self._total_tasks_in_step
 
@@ -837,7 +985,13 @@ class HostAgent(Agent):
             logger.debug("Host waiting for 10 seconds as requested by WAIT step.")
             await asyncio.sleep(10)
         elif step.role == END:
+<<<<<<< HEAD
             logger.debug("Flow completed and all tasks finished. Sending END signal", step=step)
+=======
+            logger.debug(
+                "Flow completed and all tasks finished. Sending END signal", step=step
+            )
+>>>>>>> origin/stable
             await self._publish(step)
         else:
             if step.role in self._participants:
@@ -863,7 +1017,13 @@ class HostAgent(Agent):
                 await self._publish(ui_message)
                 return  # Don't send the StepRequest itself
             else:
+<<<<<<< HEAD
                 logger.warning("Host executing step for unknown participant role", role=step.role)
+=======
+                logger.warning(
+                    "Host executing step for unknown participant role", role=step.role
+                )
+>>>>>>> origin/stable
 
             # Route StepRequest to role-specific topic
             role_topic = DefaultTopicId(type=step.role)

@@ -4,6 +4,10 @@ Part of RFC #311 Option A: Parameters in record.metadata are merged into
 RunRequest.inputs for agent access.
 """
 
+<<<<<<< HEAD
+=======
+import pytest
+>>>>>>> origin/stable
 from buttermilk.processors.unified_processors import GroupchatProcessor
 
 

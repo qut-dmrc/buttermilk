@@ -15,7 +15,10 @@ from .utils import (
     remove_punctuation,
     scrub_serializable,
 )
+<<<<<<< HEAD
 from .viz import init_viz
+=======
+>>>>>>> origin/stable
 
 __all__ = [
     "col_mapping_hydra_to_local",
@@ -34,7 +37,10 @@ __all__ = [
     "read_yaml",
     "remove_punctuation",
     "scrub_serializable",
+<<<<<<< HEAD
     "init_viz",
+=======
+>>>>>>> origin/stable
 ]
 
 
@@ -42,6 +48,9 @@ def __getattr__(name: str):
     """Lazy import for heavy BigQuery utilities."""
     if name == "construct_dict_from_schema":
         from .bq import construct_dict_from_schema
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/stable
         return construct_dict_from_schema
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

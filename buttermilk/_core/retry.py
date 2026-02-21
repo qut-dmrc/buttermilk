@@ -145,7 +145,14 @@ class RetryWrapper(BaseModel):
             or name in self.__annotations__
             or name in self.__class__.__dict__
             or (name.startswith("_") and hasattr(type(self), name))
+<<<<<<< HEAD
             or (hasattr(type(self), "__private_attributes__") and name in type(self).__private_attributes__)
+=======
+            or (
+                hasattr(type(self), "__private_attributes__")
+                and name in type(self).__private_attributes__
+            )
+>>>>>>> origin/stable
         ):
             # Let the normal attribute lookup process handle this (which will raise
             # AttributeError if appropriate)

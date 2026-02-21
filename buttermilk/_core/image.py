@@ -32,6 +32,7 @@ class ImageRecord(BaseModel):
         "arbitrary_types_allowed": True,
     }
 
+<<<<<<< HEAD
     @staticmethod
     def _is_refusal_error(error: str | dict | None) -> bool:
         """Determine if an error is a content policy refusal.
@@ -73,16 +74,23 @@ class ImageRecord(BaseModel):
 
         return any(keyword in error_lower for keyword in refusal_keywords)
 
+=======
+>>>>>>> origin/stable
     @model_validator(mode="after")
     @classmethod
     def check_fields(cls, obj):
         if obj.image is None:
             if obj.error is not None:
+<<<<<<< HEAD
                 # Only add sad robot for content policy refusals, not general API errors
                 if cls._is_refusal_error(obj.error):
                     obj.image = Image.open("tests/data/sadrobot.jpg")
                 else:
                     raise ValueError(f"Image generation failed due to a technical error. Error details: {obj.error}")
+=======
+                # add a sad robot
+                obj.image = Image.open("tests/data/sadrobot.jpg")
+>>>>>>> origin/stable
             else:
                 raise ValueError(
                     "Image is required, unless an error has occured and the 'error' field is set.",

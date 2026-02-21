@@ -35,7 +35,13 @@ class TestVectorDictChunks:
 
         # This is what the code at line 923 tries to do:
         # chunk.metadata.update(...)
+<<<<<<< HEAD
         with pytest.raises(AttributeError, match="'dict' object has no attribute 'metadata'"):
+=======
+        with pytest.raises(
+            AttributeError, match="'dict' object has no attribute 'metadata'"
+        ):
+>>>>>>> origin/stable
             chunk = dict_chunk
             chunk.metadata.update({"new_key": "value"})  # Fails!
 
@@ -44,7 +50,13 @@ class TestVectorDictChunks:
 
         # This is what line 1404 tries to do:
         # text=chunk.chunk_text
+<<<<<<< HEAD
         with pytest.raises(AttributeError, match="'dict' object has no attribute 'chunk_text'"):
+=======
+        with pytest.raises(
+            AttributeError, match="'dict' object has no attribute 'chunk_text'"
+        ):
+>>>>>>> origin/stable
             pass
 
     def test_proper_dict_access_works(self):

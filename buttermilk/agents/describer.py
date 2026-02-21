@@ -57,7 +57,16 @@ class MediaDescription(BaseModel):
             short_call_id = call_id[-8:] if len(call_id) > 8 else call_id
             header = f"**{agent_id} #{short_call_id}**\n"
 
+<<<<<<< HEAD
         return f"{header}{self.description}\nType: {self.media_type}\nConfidence: {self.confidence:.2f}"
+=======
+        return (
+            f"{header}"
+            f"{self.description}\n"
+            f"Type: {self.media_type}\n"
+            f"Confidence: {self.confidence:.2f}"
+        )
+>>>>>>> origin/stable
 
     def __str__(self) -> str:
         """Returns a Markdown formatted string representation.
@@ -110,7 +119,13 @@ class Describer(LLMAgent):
         kwargs.pop("output_model", None)  # Remove None values to avoid duplicate kwarg
         super().__init__(output_model=MediaDescription, **kwargs)
 
+<<<<<<< HEAD
     async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentOutput | None:
+=======
+    async def _process(
+        self, *, message: AgentInput, **kwargs: Any
+    ) -> AgentOutput | None:
+>>>>>>> origin/stable
         """Process the input to generate a media description.
 
         This method checks if the record already has alt text or if it's purely
@@ -136,8 +151,19 @@ class Describer(LLMAgent):
         record = message.record
 
         # Check if alt_text already exists in metadata
+<<<<<<< HEAD
         if hasattr(record, "metadata") and isinstance(record.metadata, dict) and record.metadata.get("alt_text"):
             logger.debug("Record already has alt_text", alt_text=record.metadata["alt_text"][:50])
+=======
+        if (
+            hasattr(record, "metadata")
+            and isinstance(record.metadata, dict)
+            and record.metadata.get("alt_text")
+        ):
+            logger.debug(
+                "Record already has alt_text", alt_text=record.metadata["alt_text"][:50]
+            )
+>>>>>>> origin/stable
             # Return structured output even for existing alt text
             existing_description = MediaDescription(
                 description=record.metadata["alt_text"],
@@ -157,7 +183,13 @@ class Describer(LLMAgent):
                 # Empty media list, fall back to text
                 if record.text:
                     return self._create_text_response(record)
+<<<<<<< HEAD
                 raise ProcessingError("Record has no media or text content to describe.")
+=======
+                raise ProcessingError(
+                    "Record has no media or text content to describe."
+                )
+>>>>>>> origin/stable
             # Process media content
             return await self._process_media(message, record, **kwargs)
         if record.text:
@@ -171,7 +203,13 @@ class Describer(LLMAgent):
         logger.debug("Creating text-only response", record_id=record.id)
         raise NotImplementedError("Text-only response handling not implemented yet.")
 
+<<<<<<< HEAD
     async def _process_media(self, message: AgentInput, record: Any, **kwargs: Any) -> AgentOutput | None:
+=======
+    async def _process_media(
+        self, message: AgentInput, record: Any, **kwargs: Any
+    ) -> AgentOutput | None:
+>>>>>>> origin/stable
         """Process media content and generate description."""
         # Check if we need to download from URI
         uri = record.metadata.get("uri") if hasattr(record, "metadata") else None

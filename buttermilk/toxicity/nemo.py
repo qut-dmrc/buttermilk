@@ -7,7 +7,11 @@ from buttermilk._core.llms import LLMs
 from buttermilk.utils.json_parser import ChatParser
 from buttermilk.utils.utils import read_yaml
 
+<<<<<<< HEAD
 from .toxicity import EvalRecord, Score, ToxicityClassifierCore
+=======
+from .toxicity import EvalRecord, Score, ToxicityClassifierCore, ToxicityModel
+>>>>>>> origin/stable
 
 
 class Nemo(ToxicityClassifierCore):

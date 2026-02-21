@@ -122,7 +122,13 @@ class GCSImageStorageProcessor(BaseModel):
         """
         # Fail-fast: Check for required metadata
         if "image_uri" not in record.metadata:
+<<<<<<< HEAD
             raise ValueError(f"Record {record.record_id} missing 'image_uri' in metadata")
+=======
+            raise ValueError(
+                f"Record {record.record_id} missing 'image_uri' in metadata"
+            )
+>>>>>>> origin/stable
 
         image_uri = record.metadata["image_uri"]
 

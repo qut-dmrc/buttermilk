@@ -7,6 +7,12 @@ from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.types import BaseRecord
 from buttermilk.agents.classifier import ClassifierCore
 
+<<<<<<< HEAD
+=======
+
+import pytest
+
+>>>>>>> origin/stable
 pytestmark = pytest.mark.slow
 
 

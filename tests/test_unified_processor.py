@@ -18,6 +18,10 @@ from buttermilk._core.executor import PipelineExecutor
 from buttermilk._core.pipeline_config import PipelineConfig
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.processor_core import ProcessorCore
+<<<<<<< HEAD
+=======
+from buttermilk._core.protocols import BatchProcessor
+>>>>>>> origin/stable
 from buttermilk._core.types import BaseRecord
 from buttermilk.processors.unified_processors import (
     ExpanderProcessor,
@@ -1001,7 +1005,10 @@ class TestBatchProcessor:
         # Create a simple batch processor implementing the protocol
         class SimpleBatchProcessor(ObservabilityMixin):
             """Simple batch processor implementing BatchProcessor protocol."""
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/stable
             processed_batches: list = Field(default_factory=list)
 
             async def process_batch(self, records: list[BaseRecord]) -> list[BaseRecord]:
@@ -1013,7 +1020,14 @@ class TestBatchProcessor:
         processor = SimpleBatchProcessor()
 
         # Create records
+<<<<<<< HEAD
         records = [BaseRecord(record_id=f"batch-{i}", content=f"content-{i}") for i in range(3)]
+=======
+        records = [
+            BaseRecord(record_id=f"batch-{i}", content=f"content-{i}")
+            for i in range(3)
+        ]
+>>>>>>> origin/stable
 
         # Process batch
         outputs = await processor.process_batch(records)
@@ -1040,7 +1054,14 @@ class TestBatchProcessor:
             async def process_batch(self, records: list[BaseRecord]) -> list[BaseRecord]:
                 self.batch_sizes.append(len(records))
                 # Add metadata to track batch size
+<<<<<<< HEAD
                 return [record.model_copy(update={"metadata": {"batch_size": len(records)}}) for record in records]
+=======
+                return [
+                    record.model_copy(update={"metadata": {"batch_size": len(records)}})
+                    for record in records
+                ]
+>>>>>>> origin/stable
 
         batch_processor = SimpleBatchProcessor()
 

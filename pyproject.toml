@@ -231,7 +231,11 @@ buttermilk = { workspace = true }
 line-length = 150
 
 [project.scripts]
+<<<<<<< HEAD
 bm = "buttermilk.cli.main:main"
+=======
+bm = "buttermilk.runner.cli:main"
+>>>>>>> origin/stable
 bm-debug = "buttermilk.debug.cli:debug"
 
 [project.entry-points."hydra_plugins"]
@@ -328,9 +332,12 @@ max-complexity = 15 # Buttermilk is more complex than bot
   "PLR2004", # Magic values OK in tests
 ]
 
+<<<<<<< HEAD
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
     "pytest-xdist>=3.8.0",
 ]
 
+=======
+>>>>>>> origin/stable

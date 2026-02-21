@@ -54,7 +54,13 @@ class TestHostAgentErrorHandling:
         """Test that task start events properly increment counters."""
         # Simulate 3 tasks starting
         for i in range(3):
+<<<<<<< HEAD
             start_msg = TaskProcessingStarted(agent_id=f"agent_{i}", role="WORKER", task_index=0)
+=======
+            start_msg = TaskProcessingStarted(
+                agent_id=f"agent_{i}", role="WORKER", task_index=0
+            )
+>>>>>>> origin/stable
             await host_agent.handle_task_started(start_msg, mock_message_context)
 
         # Check that counters are properly updated
@@ -62,20 +68,44 @@ class TestHostAgentErrorHandling:
         assert sum(host_agent._pending_tasks_by_agent.values()) == 3
 
     @pytest.mark.anyio
+<<<<<<< HEAD
     async def test_task_completion_error_tracking(self, host_agent, mock_message_context):
         """Test that task completion properly tracks errors."""
         # Start 3 tasks
         for i in range(3):
             start_msg = TaskProcessingStarted(agent_id=f"agent_{i}", role="WORKER", task_index=0)
+=======
+    async def test_task_completion_error_tracking(
+        self, host_agent, mock_message_context
+    ):
+        """Test that task completion properly tracks errors."""
+        # Start 3 tasks
+        for i in range(3):
+            start_msg = TaskProcessingStarted(
+                agent_id=f"agent_{i}", role="WORKER", task_index=0
+            )
+>>>>>>> origin/stable
             await host_agent.handle_task_started(start_msg, mock_message_context)
 
         # Complete 2 tasks with errors
         for i in range(2):
+<<<<<<< HEAD
             complete_msg = TaskProcessingComplete(agent_id=f"agent_{i}", role="WORKER", task_index=0, is_error=True)
             await host_agent.handle_task_complete(complete_msg, mock_message_context)
 
         # Complete 1 task successfully
         complete_msg = TaskProcessingComplete(agent_id="agent_2", role="WORKER", task_index=0, is_error=False)
+=======
+            complete_msg = TaskProcessingComplete(
+                agent_id=f"agent_{i}", role="WORKER", task_index=0, is_error=True
+            )
+            await host_agent.handle_task_complete(complete_msg, mock_message_context)
+
+        # Complete 1 task successfully
+        complete_msg = TaskProcessingComplete(
+            agent_id="agent_2", role="WORKER", task_index=0, is_error=False
+        )
+>>>>>>> origin/stable
         await host_agent.handle_task_complete(complete_msg, mock_message_context)
 
         # Check error tracking
@@ -83,35 +113,65 @@ class TestHostAgentErrorHandling:
         assert host_agent._total_tasks_in_step == 3
 
     @pytest.mark.anyio
+<<<<<<< HEAD
     async def test_wait_check_completions_stops_on_high_errors(self, host_agent, mock_message_context):
+=======
+    async def test_wait_check_completions_stops_on_high_errors(
+        self, host_agent, mock_message_context
+    ):
+>>>>>>> origin/stable
         """Test that flow stops when error threshold is exceeded."""
         # Mock the _wait_for_all_tasks_complete method to return True (tasks completed)
         host_agent._wait_for_all_tasks_complete = AsyncMock(return_value=True)
 
         # Simulate scenario: 3 out of 5 tasks failed (60% > 50% threshold)
         host_agent._total_tasks_in_step = 5
+<<<<<<< HEAD
         host_agent._failed_tasks_by_agent = defaultdict(int, {"agent_1": 2, "agent_2": 1})
+=======
+        host_agent._failed_tasks_by_agent = defaultdict(
+            int, {"agent_1": 2, "agent_2": 1}
+        )
+>>>>>>> origin/stable
 
         # Should return False (stop flow)
         result = await host_agent.wait_check_current_step_completions()
         assert result is False
 
     @pytest.mark.anyio
+<<<<<<< HEAD
     async def test_wait_check_completions_continues_on_low_errors(self, host_agent, mock_message_context):
+=======
+    async def test_wait_check_completions_continues_on_low_errors(
+        self, host_agent, mock_message_context
+    ):
+>>>>>>> origin/stable
         """Test that flow continues when error threshold is not exceeded."""
         # Mock the _wait_for_all_tasks_complete method to return True (tasks completed)
         host_agent._wait_for_all_tasks_complete = AsyncMock(return_value=True)
 
         # Simulate scenario: 2 out of 5 tasks failed (40% < 50% threshold)
         host_agent._total_tasks_in_step = 5
+<<<<<<< HEAD
         host_agent._failed_tasks_by_agent = defaultdict(int, {"agent_1": 1, "agent_2": 1})
+=======
+        host_agent._failed_tasks_by_agent = defaultdict(
+            int, {"agent_1": 1, "agent_2": 1}
+        )
+>>>>>>> origin/stable
 
         # Should return True (continue flow)
         result = await host_agent.wait_check_current_step_completions()
         assert result is True
 
     @pytest.mark.anyio
+<<<<<<< HEAD
     async def test_wait_check_completions_clears_tracking(self, host_agent, mock_message_context):
+=======
+    async def test_wait_check_completions_clears_tracking(
+        self, host_agent, mock_message_context
+    ):
+>>>>>>> origin/stable
         """Test that error tracking is cleared after successful step completion."""
         # Mock the _wait_for_all_tasks_complete method to return True
         host_agent._wait_for_all_tasks_complete = AsyncMock(return_value=True)
@@ -146,7 +206,13 @@ class TestHostAgentErrorHandling:
 
         # Simulate scenario: 2 out of 10 tasks failed (20% < 25% threshold)
         strict_host._total_tasks_in_step = 10
+<<<<<<< HEAD
         strict_host._failed_tasks_by_agent = defaultdict(int, {"agent_1": 1, "agent_2": 1})
+=======
+        strict_host._failed_tasks_by_agent = defaultdict(
+            int, {"agent_1": 1, "agent_2": 1}
+        )
+>>>>>>> origin/stable
 
         # Should continue (below threshold)
         result = await strict_host.wait_check_current_step_completions()
@@ -154,7 +220,13 @@ class TestHostAgentErrorHandling:
 
         # Now test with 3 out of 10 tasks failed (30% > 25% threshold)
         strict_host._total_tasks_in_step = 10
+<<<<<<< HEAD
         strict_host._failed_tasks_by_agent = defaultdict(int, {"agent_1": 2, "agent_2": 1})
+=======
+        strict_host._failed_tasks_by_agent = defaultdict(
+            int, {"agent_1": 2, "agent_2": 1}
+        )
+>>>>>>> origin/stable
 
         # Should stop (above threshold)
         result = await strict_host.wait_check_current_step_completions()
@@ -182,7 +254,13 @@ class TestHostAgentErrorHandling:
 
         # All tasks failed scenario
         host_agent._total_tasks_in_step = 3
+<<<<<<< HEAD
         host_agent._failed_tasks_by_agent = defaultdict(int, {"agent_1": 2, "agent_2": 1})
+=======
+        host_agent._failed_tasks_by_agent = defaultdict(
+            int, {"agent_1": 2, "agent_2": 1}
+        )
+>>>>>>> origin/stable
 
         # Should stop (100% > 50% threshold)
         result = await host_agent.wait_check_current_step_completions()
@@ -237,7 +315,15 @@ class TestHostAgentErrorHandling:
             await host_agent._run_flow(conductor_request)
 
         # Verify that an END message was published
+<<<<<<< HEAD
         end_messages = [msg for msg, _ in published_messages if isinstance(msg, StepRequest) and msg.role == END]
+=======
+        end_messages = [
+            msg
+            for msg, _ in published_messages
+            if isinstance(msg, StepRequest) and msg.role == END
+        ]
+>>>>>>> origin/stable
         assert len(end_messages) > 0, "No END message was sent after exception"
 
         # Verify the END message contains error info
@@ -293,12 +379,27 @@ class TestHostAgentErrorHandling:
             await host_agent._run_flow(conductor_request)
 
         # Verify that an END message was published
+<<<<<<< HEAD
         end_messages = [msg for msg, _ in published_messages if isinstance(msg, StepRequest) and msg.role == END]
+=======
+        end_messages = [
+            msg
+            for msg, _ in published_messages
+            if isinstance(msg, StepRequest) and msg.role == END
+        ]
+>>>>>>> origin/stable
         assert len(end_messages) > 0, "No END message was sent after KeyboardInterrupt"
 
         # Verify the END message contains error info (KeyboardInterrupt gets caught as general exception)
         end_msg = end_messages[-1]
+<<<<<<< HEAD
         assert "error" in end_msg.content.lower() or "terminated" in end_msg.content.lower()
+=======
+        assert (
+            "error" in end_msg.content.lower()
+            or "terminated" in end_msg.content.lower()
+        )
+>>>>>>> origin/stable
 
     @pytest.mark.anyio
     async def test_end_message_sent_on_missing_parameter_error(self):
@@ -341,7 +442,15 @@ class TestHostAgentErrorHandling:
         await host_agent._run_flow(conductor_request)
 
         # Verify that an END message was published despite the parameter errors
+<<<<<<< HEAD
         end_messages = [msg for msg, _ in published_messages if isinstance(msg, StepRequest) and msg.role == END]
+=======
+        end_messages = [
+            msg
+            for msg, _ in published_messages
+            if isinstance(msg, StepRequest) and msg.role == END
+        ]
+>>>>>>> origin/stable
         assert len(end_messages) > 0, "No END message was sent after parameter error"
 
         # Verify the END message mentions the error

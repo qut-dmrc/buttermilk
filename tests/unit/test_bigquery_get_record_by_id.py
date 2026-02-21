@@ -113,11 +113,23 @@ def test_get_record_by_id_skips_missing_filters(monkeypatch):
 
 
 def test_get_record_by_id_respects_column_mapping(monkeypatch):
+<<<<<<< HEAD
     cfg = make_config(columns={"record_id": "id", "dataset_name": "dataset", "split_type": "fold"})
     storage = make_storage(cfg)
 
     # Available columns reflect the mapped names
     monkeypatch.setattr(storage, "_available_columns", lambda: {"id", "dataset", "fold"})
+=======
+    cfg = make_config(
+        columns={"record_id": "id", "dataset_name": "dataset", "split_type": "fold"}
+    )
+    storage = make_storage(cfg)
+
+    # Available columns reflect the mapped names
+    monkeypatch.setattr(
+        storage, "_available_columns", lambda: {"id", "dataset", "fold"}
+    )
+>>>>>>> origin/stable
 
     fc = FakeClient()
     storage._client = fc

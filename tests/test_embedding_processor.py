@@ -15,7 +15,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+<<<<<<< HEAD
 from buttermilk._core.processor_core import ProcessorCore
+=======
+from buttermilk._core.processing_context import ProcessingContext
+from buttermilk._core.processor_core import ProcessorCore
+from buttermilk._core.protocols import BatchProcessor
+>>>>>>> origin/stable
 from buttermilk._core.types import BaseRecord
 from buttermilk.processors.unified_processors import EmbeddingProcessor
 

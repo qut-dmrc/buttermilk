@@ -119,7 +119,13 @@ class TestZoteroSourceCitationKeys:
         - At least one item with Citation Key in extra field
         """
         # Get library_id from pipelines config (NO hardcoded values)
+<<<<<<< HEAD
         library_id = real_bm.cfg.pipelines["zotero_vectorization"]["source"]["library_id"]
+=======
+        library_id = real_bm.cfg.pipelines["zotero_vectorization"]["source"][
+            "library_id"
+        ]
+>>>>>>> origin/stable
 
         # Create real ZoteroSource (NO mocking)
         # Use force_full_sync=True to bypass incremental sync in tests
@@ -139,7 +145,13 @@ class TestZoteroSourceCitationKeys:
         # Check that citation_key field exists in metadata
         # (Will be None if item doesn't have citation key, but field should exist)
         for record in records:
+<<<<<<< HEAD
             assert "citation_key" in record.metadata, f"citation_key not in metadata for {record.record_id}"
+=======
+            assert "citation_key" in record.metadata, (
+                f"citation_key not in metadata for {record.record_id}"
+            )
+>>>>>>> origin/stable
 
         # Check if at least one record has citation_key extracted
         has_citation_key = False
@@ -151,13 +163,26 @@ class TestZoteroSourceCitationKeys:
                 assert isinstance(citation_key, str)
                 assert len(citation_key) > 0
                 # Log for debugging
+<<<<<<< HEAD
                 print(f"\n✅ Found citation key: {citation_key} for item {record.record_id}")
+=======
+                print(
+                    f"\n✅ Found citation key: {citation_key} for item {record.record_id}"
+                )
+>>>>>>> origin/stable
                 break
 
         # If no citation keys found, log warning but don't fail
         # (Items may not have BetterBibTeX keys pinned yet)
         if not has_citation_key:
+<<<<<<< HEAD
             print("\n⚠️  No citation keys found in sample. To test: Select items in Zotero → Right-click → Generate BibTeX key")
+=======
+            print(
+                "\n⚠️  No citation keys found in sample. "
+                "To test: Select items in Zotero → Right-click → Generate BibTeX key"
+            )
+>>>>>>> origin/stable
 
 
 class TestZoteroDownloadProcessorCitationKeys:
@@ -202,7 +227,14 @@ class TestZoteroDownloadProcessorCitationKeys:
                     break
 
         if test_record is None:
+<<<<<<< HEAD
             pytest.skip("No items found with both citation_key and PDF attachment. Add BetterBibTeX citation keys to items in your Zotero library.")
+=======
+            pytest.skip(
+                "No items found with both citation_key and PDF attachment. "
+                "Add BetterBibTeX citation keys to items in your Zotero library."
+            )
+>>>>>>> origin/stable
 
         # Process the record through ZoteroDownloadProcessor
         processed_records = []
@@ -222,7 +254,14 @@ class TestZoteroDownloadProcessorCitationKeys:
         if result_key is None:
             result_key = result.metadata.get("zotero_data", {}).get("citation_key")
 
+<<<<<<< HEAD
         assert result_key == original_key, f"Citation key not propagated correctly: expected {original_key}, got {result_key}"
+=======
+        assert result_key == original_key, (
+            f"Citation key not propagated correctly: "
+            f"expected {original_key}, got {result_key}"
+        )
+>>>>>>> origin/stable
 
 
 class TestZoteroAPIDataFormat:
@@ -273,7 +312,13 @@ class TestZoteroAPIDataFormat:
         max_start = max(0, total_items - 100)
         random_start = random.randint(0, max_start) if max_start > 0 else 0
 
+<<<<<<< HEAD
         print(f"\n📊 Fetching page of items from Zotero API (start={random_start}, total={total_items})")
+=======
+        print(
+            f"\n📊 Fetching page of items from Zotero API (start={random_start}, total={total_items})"
+        )
+>>>>>>> origin/stable
 
         # Fetch one page with random offset for variety
         items = zot.items(
@@ -282,7 +327,13 @@ class TestZoteroAPIDataFormat:
             itemType="-attachment",  # Exclude attachments like we do in ZoteroSource
         )
 
+<<<<<<< HEAD
         assert len(items) > 0, f"No items returned from Zotero API (start={random_start})"
+=======
+        assert len(items) > 0, (
+            f"No items returned from Zotero API (start={random_start})"
+        )
+>>>>>>> origin/stable
 
         print(f"✓ Retrieved {len(items)} items for validation")
 
@@ -300,6 +351,7 @@ class TestZoteroAPIDataFormat:
 
             # CRITICAL: Validate top-level structure
             assert "key" in item, f"Item missing 'key' field: {item}"
+<<<<<<< HEAD
             assert isinstance(item["key"], str), f"Item 'key' should be string, got {type(item['key'])}"
             assert len(item["key"]) > 0, "Item 'key' should not be empty"
 
@@ -311,6 +363,27 @@ class TestZoteroAPIDataFormat:
 
             assert "links" in item, f"Item {item.get('key')} missing 'links' field"
             assert isinstance(item["links"], dict), f"Item 'links' should be dict, got {type(item['links'])}"
+=======
+            assert isinstance(item["key"], str), (
+                f"Item 'key' should be string, got {type(item['key'])}"
+            )
+            assert len(item["key"]) > 0, "Item 'key' should not be empty"
+
+            assert "version" in item, f"Item {item.get('key')} missing 'version' field"
+            assert isinstance(item["version"], int), (
+                f"Item 'version' should be int, got {type(item['version'])}"
+            )
+
+            assert "data" in item, f"Item {item.get('key')} missing 'data' field"
+            assert isinstance(item["data"], dict), (
+                f"Item 'data' should be dict, got {type(item['data'])}"
+            )
+
+            assert "links" in item, f"Item {item.get('key')} missing 'links' field"
+            assert isinstance(item["links"], dict), (
+                f"Item 'links' should be dict, got {type(item['links'])}"
+            )
+>>>>>>> origin/stable
 
             # Validate 'data' dict structure (this is what we store in zotero_item)
             data = item["data"]
@@ -321,7 +394,13 @@ class TestZoteroAPIDataFormat:
 
             # title is used extensively in logging and metadata
             if "title" in data:
+<<<<<<< HEAD
                 assert isinstance(data["title"], str), "title should be string when present"
+=======
+                assert isinstance(data["title"], str), (
+                    "title should be string when present"
+                )
+>>>>>>> origin/stable
 
             # extra field is CRITICAL for citation key extraction
             if "extra" in data:
@@ -330,7 +409,12 @@ class TestZoteroAPIDataFormat:
 
                 # CRITICAL: Must be string for our parsing logic
                 assert isinstance(extra_field, str), (
+<<<<<<< HEAD
                     f"Item {item['key']}: 'extra' field must be string, got {type(extra_field).__name__}. Value: {extra_field}"
+=======
+                    f"Item {item['key']}: 'extra' field must be string, got {type(extra_field).__name__}. "
+                    f"Value: {extra_field}"
+>>>>>>> origin/stable
                 )
 
                 # If contains citation key, verify we can extract it
@@ -339,7 +423,13 @@ class TestZoteroAPIDataFormat:
                     from buttermilk.libs.zotero import extract_citation_key
 
                     citation_key = extract_citation_key(extra_field)
+<<<<<<< HEAD
                     assert citation_key is not None, f"Item {item['key']}: Failed to extract citation key from: {extra_field}"
+=======
+                    assert citation_key is not None, (
+                        f"Item {item['key']}: Failed to extract citation key from: {extra_field}"
+                    )
+>>>>>>> origin/stable
                     assert isinstance(citation_key, str), "Citation key must be string"
                     assert len(citation_key) > 0, "Citation key must not be empty"
 
@@ -359,6 +449,7 @@ class TestZoteroAPIDataFormat:
                 items_with_attachments += 1
                 attachment = links["attachment"]
 
+<<<<<<< HEAD
                 assert isinstance(attachment, dict), f"Item {item['key']}: attachment should be dict, got {type(attachment)}"
 
                 # If attachment exists, should have href and attachmentType
@@ -367,6 +458,22 @@ class TestZoteroAPIDataFormat:
 
                 if "attachmentType" in attachment:
                     assert isinstance(attachment["attachmentType"], str), "attachmentType should be string"
+=======
+                assert isinstance(attachment, dict), (
+                    f"Item {item['key']}: attachment should be dict, got {type(attachment)}"
+                )
+
+                # If attachment exists, should have href and attachmentType
+                if "href" in attachment:
+                    assert isinstance(attachment["href"], str), (
+                        "attachment href should be string"
+                    )
+
+                if "attachmentType" in attachment:
+                    assert isinstance(attachment["attachmentType"], str), (
+                        "attachmentType should be string"
+                    )
+>>>>>>> origin/stable
 
         # Log statistics
         print("\n📈 Validation Statistics:")
@@ -378,7 +485,13 @@ class TestZoteroAPIDataFormat:
         print(f"  Items with URL: {items_with_url}")
 
         # Ensure we actually tested a meaningful sample
+<<<<<<< HEAD
         assert items_checked >= 10, f"Should check at least 10 items, only checked {items_checked}"
+=======
+        assert items_checked >= 10, (
+            f"Should check at least 10 items, only checked {items_checked}"
+        )
+>>>>>>> origin/stable
 
         print(f"\n✅ All {items_checked} items passed structure validation")
 
@@ -417,10 +530,20 @@ class TestZoteroAPIDataFormat:
 
                 # CRITICAL: Must always be string
                 assert isinstance(extra_field, str), (
+<<<<<<< HEAD
                     f"Item {item.get('key')}: 'extra' field must be string, got {type(extra_field).__name__}. Value: {extra_field}"
                 )
 
         print(f"\n✓ Checked {len(items)} items, found {extra_field_count} with 'extra' field")
+=======
+                    f"Item {item.get('key')}: 'extra' field must be string, "
+                    f"got {type(extra_field).__name__}. Value: {extra_field}"
+                )
+
+        print(
+            f"\n✓ Checked {len(items)} items, found {extra_field_count} with 'extra' field"
+        )
+>>>>>>> origin/stable
         print("✓ All 'extra' fields are strings (required for citation key parsing)")
 
 
@@ -574,7 +697,13 @@ class TestMetadataUpdateBehavior:
         original_version = original_cache.get("data", {}).get("version", 0)
 
         # Verify item version is stored in cache
+<<<<<<< HEAD
         assert "version" in original_cache.get("data", {}), "Item version should be stored in cache data"
+=======
+        assert "version" in original_cache.get("data", {}), (
+            "Item version should be stored in cache data"
+        )
+>>>>>>> origin/stable
 
         # Verify attachment version is stored if attachment exists
         if original_cache.get("links", {}).get("attachment"):
@@ -607,7 +736,13 @@ class TestMetadataUpdateBehavior:
         # Verify cache was updated with new metadata
         with json_file.open("r") as f:
             updated_cache = json.load(f)
+<<<<<<< HEAD
         assert updated_cache.get("data", {}) != original_cache.get("data", {}), "Cache should be updated with new metadata"
+=======
+        assert updated_cache.get("data", {}) != original_cache.get("data", {}), (
+            "Cache should be updated with new metadata"
+        )
+>>>>>>> origin/stable
 
     @pytest.mark.integration
     @pytest.mark.anyio
@@ -654,13 +789,25 @@ class TestMetadataUpdateBehavior:
 
         # Verify boundary items are at the highest version from first sync
         if len(second_sync_items) > 0:
+<<<<<<< HEAD
             first_sync_versions = [r.metadata.get("zotero_version", 0) for r in first_sync_items]
+=======
+            first_sync_versions = [
+                r.metadata.get("zotero_version", 0) for r in first_sync_items
+            ]
+>>>>>>> origin/stable
             highest_first_sync = max(first_sync_versions)
 
             for record in second_sync_items:
                 item_version = record.metadata.get("zotero_version", 0)
                 # Should be at or near the highest version from first sync
+<<<<<<< HEAD
                 print(f"   Boundary item version: {item_version} (highest first sync: {highest_first_sync})")
+=======
+                print(
+                    f"   Boundary item version: {item_version} (highest first sync: {highest_first_sync})"
+                )
+>>>>>>> origin/stable
 
         # This behavior is correct and intentional for safety
         print("✅ Second-highest version safety working as expected")
@@ -737,28 +884,56 @@ class TestMetadataUpdateBehavior:
             synced_items.append(record)
 
         # Verify we got items (library has been updated since version 1)
+<<<<<<< HEAD
         assert len(synced_items) > 0, f"Incremental sync should return items modified after version {earlier_version}"
+=======
+        assert len(synced_items) > 0, (
+            f"Incremental sync should return items modified after version {earlier_version}"
+        )
+>>>>>>> origin/stable
 
         print(f"\n✅ Incremental sync returned {len(synced_items)} items")
 
         # Verify all returned items have versions greater than our sync point
         for record in synced_items:
             item_version = record.metadata.get("zotero_version", 0)
+<<<<<<< HEAD
             assert item_version > earlier_version, f"Item {record.record_id} version {item_version} should be > {earlier_version}"
+=======
+            assert item_version > earlier_version, (
+                f"Item {record.record_id} version {item_version} should be > {earlier_version}"
+            )
+>>>>>>> origin/stable
 
             # Verify item has modification date
             zotero_item = record.metadata.get("zotero_item", {})
             date_modified = zotero_item.get("dateModified")
+<<<<<<< HEAD
             assert date_modified is not None, f"Item {record.record_id} should have dateModified field"
 
             print(f"  • Item {record.record_id}: version={item_version}, modified={date_modified}")
+=======
+            assert date_modified is not None, (
+                f"Item {record.record_id} should have dateModified field"
+            )
+
+            print(
+                f"  • Item {record.record_id}: version={item_version}, modified={date_modified}"
+            )
+>>>>>>> origin/stable
 
         # Verify sync state was updated to latest version
         with state_file.open("r") as f:
             final_state = json.load(f)
         final_version = final_state.get("last_version")
 
+<<<<<<< HEAD
         assert final_version >= saved_version, f"Final version {final_version} should be >= original version {saved_version}"
+=======
+        assert final_version >= saved_version, (
+            f"Final version {final_version} should be >= original version {saved_version}"
+        )
+>>>>>>> origin/stable
 
         print(f"\n✅ Sync state updated to version {final_version}")
 
@@ -821,7 +996,13 @@ class TestMetadataUpdateBehavior:
         original_version = original_cache.get("data", {}).get("version", 0)
 
         # Verify item version is stored in cache
+<<<<<<< HEAD
         assert "version" in original_cache.get("data", {}), "Item version should be stored in cache data"
+=======
+        assert "version" in original_cache.get("data", {}), (
+            "Item version should be stored in cache data"
+        )
+>>>>>>> origin/stable
 
         # Verify attachment version is stored if attachment exists
         if original_cache.get("links", {}).get("attachment"):
@@ -851,17 +1032,34 @@ class TestMetadataUpdateBehavior:
 
         # CRITICAL: Verify PDF was NOT re-downloaded
         pdf_mtime_after = os.path.getmtime(pdf_file)
+<<<<<<< HEAD
         assert pdf_mtime_after == pdf_mtime_before, "PDF file should NOT be re-downloaded when only metadata changes"
+=======
+        assert pdf_mtime_after == pdf_mtime_before, (
+            "PDF file should NOT be re-downloaded when only metadata changes"
+        )
+>>>>>>> origin/stable
 
         # Verify cache was updated with new metadata (but same content)
         with json_file.open("r") as f:
             updated_cache = json.load(f)
 
         # Metadata should be different
+<<<<<<< HEAD
         assert updated_cache.get("data", {}) != original_cache.get("data", {}), "Cache metadata should be updated"
 
         # But content should be the same (reused from cache)
         assert updated_cache.get("content") == original_cache.get("content"), "Content should be reused from existing PDF cache"
+=======
+        assert updated_cache.get("data", {}) != original_cache.get("data", {}), (
+            "Cache metadata should be updated"
+        )
+
+        # But content should be the same (reused from cache)
+        assert updated_cache.get("content") == original_cache.get("content"), (
+            "Content should be reused from existing PDF cache"
+        )
+>>>>>>> origin/stable
 
     @pytest.mark.integration
     @pytest.mark.anyio
@@ -966,7 +1164,13 @@ class TestMetadataUpdateBehavior:
 
         updated_metadata["zotero_links"] = updated_links
 
+<<<<<<< HEAD
         updated_record = BaseRecord(record_id=test_record.record_id, metadata=updated_metadata)
+=======
+        updated_record = BaseRecord(
+            record_id=test_record.record_id, metadata=updated_metadata
+        )
+>>>>>>> origin/stable
 
         # Second: Process with updated parent metadata but same attachment version
         results2 = []
@@ -995,17 +1199,34 @@ class TestMetadataUpdateBehavior:
             updated_cache = json.load(f)
 
         updated_item_version = updated_cache.get("data", {}).get("version", 0)
+<<<<<<< HEAD
         assert updated_item_version == original_item_version + 1, "Parent item version should be updated in cache"
+=======
+        assert updated_item_version == original_item_version + 1, (
+            "Parent item version should be updated in cache"
+        )
+>>>>>>> origin/stable
 
         # Verify attachment version stayed the same
         updated_attachment = updated_cache.get("links", {}).get("attachment", {})
         updated_attachment_href = updated_attachment.get("href", "")
 
         # Attachment href/version should be identical (unchanged)
+<<<<<<< HEAD
         assert updated_attachment_href == original_attachment_href, "Attachment href should be unchanged when PDF unchanged"
 
         # Content should be reused (same PDF)
         assert updated_cache.get("content") == original_cache.get("content"), "Content should be reused when attachment version unchanged"
+=======
+        assert updated_attachment_href == original_attachment_href, (
+            "Attachment href should be unchanged when PDF unchanged"
+        )
+
+        # Content should be reused (same PDF)
+        assert updated_cache.get("content") == original_cache.get("content"), (
+            "Content should be reused when attachment version unchanged"
+        )
+>>>>>>> origin/stable
 
         print("✅ Cache updated with new parent metadata but same attachment/content")
 
@@ -1070,6 +1291,7 @@ class TestMetadataUpdateBehavior:
         if len(unique_versions) >= 2:
             expected_version = unique_versions[-2]  # Second highest
             assert saved_version == expected_version, (
+<<<<<<< HEAD
                 f"Saved version {saved_version} should be second-highest {expected_version}. Unique versions: {unique_versions}"
             )
             print(f"✅ Safe version saved: {saved_version} (second-highest, highest was {highest_item_version})")
@@ -1080,4 +1302,22 @@ class TestMetadataUpdateBehavior:
         # Verify that saved version is strictly less than highest
         assert saved_version < highest_item_version, (
             f"Saved version {saved_version} must be < highest {highest_item_version} to ensure boundary items are re-fetched on interrupted sync"
+=======
+                f"Saved version {saved_version} should be second-highest {expected_version}. "
+                f"Unique versions: {unique_versions}"
+            )
+            print(
+                f"✅ Safe version saved: {saved_version} (second-highest, highest was {highest_item_version})"
+            )
+        else:
+            # Only one unique version - should save that one with warning
+            print(
+                f"⚠️ Only one unique version ({saved_version}), cannot use second-highest"
+            )
+
+        # Verify that saved version is strictly less than highest
+        assert saved_version < highest_item_version, (
+            f"Saved version {saved_version} must be < highest {highest_item_version} "
+            f"to ensure boundary items are re-fetched on interrupted sync"
+>>>>>>> origin/stable
         )

@@ -2,7 +2,12 @@ from typing import Any
 from urllib.error import HTTPError
 
 import openai
+<<<<<<< HEAD
 from google.genai.errors import APIError as GenaiAPIError, ClientError as GenaiClientError
+=======
+from google.genai.errors import APIError as GenaiAPIError
+from google.genai.errors import ClientError as GenaiClientError
+>>>>>>> origin/stable
 from vertexai.generative_models._generative_models import (
     ResponseBlockedError,
     ResponseValidationError,
@@ -34,7 +39,13 @@ def extract_error_info(e, process_info: dict = {}) -> dict[str, Any]:
                 error_dict.update(
                     {
                         "error": "blocked",
+<<<<<<< HEAD
                         "metadata": e.body.get("innererror", {}).get("content_filter_result", {}),
+=======
+                        "metadata": e.body.get("innererror", {}).get(
+                            "content_filter_result", {}
+                        ),
+>>>>>>> origin/stable
                         "code": e.body.get("innererror", {}).get("code"),
                     }
                 )
@@ -45,12 +56,24 @@ def extract_error_info(e, process_info: dict = {}) -> dict[str, Any]:
             # Gemini sometimes doesn't return a result?
             pass
 
+<<<<<<< HEAD
         elif isinstance(e, ResponseBlockedError) or isinstance(e, ResponseValidationError):
+=======
+        elif isinstance(e, ResponseBlockedError) or isinstance(
+            e, ResponseValidationError
+        ):
+>>>>>>> origin/stable
             additional = try_extract_vertex_error(e)
             if "rate limit" in str(e).lower() or "quota" in str(e).lower():
                 raise RateLimit(str(e))
 
+<<<<<<< HEAD
             error_dict.update({"error": "Prompt blocked by LLM", "error_info": additional})
+=======
+            error_dict.update(
+                {"error": "Prompt blocked by LLM", "error_info": additional}
+            )
+>>>>>>> origin/stable
 
         elif isinstance(e, (GenaiClientError, GenaiAPIError)):
             # google.genai SDK errors - check for blocked content
@@ -70,7 +93,13 @@ def extract_error_info(e, process_info: dict = {}) -> dict[str, Any]:
             raise RateLimit(*e.args)
 
         # Handle Google Vertex AI quota/rate limit errors
+<<<<<<< HEAD
         elif hasattr(e, "reason") and ("quota" in str(e).lower() or "rate limit" in str(e).lower()):
+=======
+        elif hasattr(e, "reason") and (
+            "quota" in str(e).lower() or "rate limit" in str(e).lower()
+        ):
+>>>>>>> origin/stable
             raise RateLimit(str(e))
 
     except Exception as secondary_error:

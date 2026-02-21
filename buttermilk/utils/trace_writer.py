@@ -69,12 +69,18 @@ class TraceWriter:
         # Look for traces storage configuration
         if cfg is None or not hasattr(cfg, "storage"):
             raise StorageConfigError(
+<<<<<<< HEAD
                 "No storage configuration available in bm.cfg. Ensure Hydra configuration is loaded with storage.traces defined."
+=======
+                "No storage configuration available in bm.cfg. "
+                "Ensure Hydra configuration is loaded with storage.traces defined."
+>>>>>>> origin/stable
             )
 
         storage_configs = cfg.storage
         logger.debug(
             "Storage configuration debug",
+<<<<<<< HEAD
             storage_config_keys=list(storage_configs.keys()) if isinstance(storage_configs, dict) else None,
             has_traces_config="traces" in storage_configs if isinstance(storage_configs, dict) else hasattr(storage_configs, "traces"),
         )
@@ -83,6 +89,28 @@ class TraceWriter:
         traces_config = storage_configs.get("traces") if isinstance(storage_configs, dict) else getattr(storage_configs, "traces", None)
         if not traces_config:
             storage_keys = list(storage_configs.keys()) if isinstance(storage_configs, dict) else dir(storage_configs)
+=======
+            storage_config_keys=list(storage_configs.keys())
+            if isinstance(storage_configs, dict)
+            else None,
+            has_traces_config="traces" in storage_configs
+            if isinstance(storage_configs, dict)
+            else hasattr(storage_configs, "traces"),
+        )
+
+        # Check for traces storage config
+        traces_config = (
+            storage_configs.get("traces")
+            if isinstance(storage_configs, dict)
+            else getattr(storage_configs, "traces", None)
+        )
+        if not traces_config:
+            storage_keys = (
+                list(storage_configs.keys())
+                if isinstance(storage_configs, dict)
+                else dir(storage_configs)
+            )
+>>>>>>> origin/stable
             raise StorageConfigError(
                 f"No 'traces' storage configuration found in bm.cfg.storage. "
                 f"Configure storage.traces in conf/config.yaml or conf/storage/traces.yaml. "

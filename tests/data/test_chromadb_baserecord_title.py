@@ -25,7 +25,13 @@ class TestChromaDBBaseRecordTitle:
         )
 
         # BaseRecord should NOT have title attribute
+<<<<<<< HEAD
         assert not hasattr(record, "title"), "BaseRecord should not have title attribute"
+=======
+        assert not hasattr(record, "title"), (
+            "BaseRecord should not have title attribute"
+        )
+>>>>>>> origin/stable
 
         # But metadata should have title
         assert record.metadata.get("title") == "Test Title"
@@ -51,14 +57,25 @@ class TestChromaDBBaseRecordTitle:
         This works with Record (has title property) but fails with BaseRecord (no title attribute).
         """
         # Record works fine
+<<<<<<< HEAD
         record_with_title = Record(record_id="TEST1", dataset="test", metadata={"title": "My Title"})
         assert record_with_title.title == "My Title"
         title_display = record_with_title.title[:50] if record_with_title.title else "Unknown"
+=======
+        record_with_title = Record(
+            record_id="TEST1", dataset="test", metadata={"title": "My Title"}
+        )
+        assert record_with_title.title == "My Title"
+        title_display = (
+            record_with_title.title[:50] if record_with_title.title else "Unknown"
+        )
+>>>>>>> origin/stable
         assert title_display == "My Title"
 
         # Record without title in metadata also works (returns None)
         record_without_title = Record(record_id="TEST2", dataset="test", metadata={})
         assert record_without_title.title is None
+<<<<<<< HEAD
         title_display = record_without_title.title[:50] if record_without_title.title else "Unknown"
         assert title_display == "Unknown"
 
@@ -71,6 +88,30 @@ class TestChromaDBBaseRecordTitle:
 
         # The correct way to access title from BaseRecord:
         title = base_record.metadata.get("title", "Untitled") if base_record.metadata else "Untitled"
+=======
+        title_display = (
+            record_without_title.title[:50] if record_without_title.title else "Unknown"
+        )
+        assert title_display == "Unknown"
+
+        # BaseRecord with title in metadata FAILS - no title attribute
+        base_record = BaseRecord(
+            record_id="7N2V8GFN", dataset="zotero", metadata={"title": "Zotero Title"}
+        )
+
+        # This demonstrates the bug: AttributeError
+        with pytest.raises(
+            AttributeError, match="'BaseRecord' object has no attribute 'title'"
+        ):
+            _ = base_record.title  # Line 823 tries to access this
+
+        # The correct way to access title from BaseRecord:
+        title = (
+            base_record.metadata.get("title", "Untitled")
+            if base_record.metadata
+            else "Untitled"
+        )
+>>>>>>> origin/stable
         assert title == "Zotero Title"
 
     @pytest.mark.anyio
@@ -100,6 +141,12 @@ class TestChromaDBBaseRecordTitle:
         processor = ZoteroDownloadProcessor(library_id="12345")
 
         # Should raise ValueError with clear message
+<<<<<<< HEAD
         with pytest.raises(ValueError, match="has no title.*incomplete/invalid Zotero data"):
+=======
+        with pytest.raises(
+            ValueError, match="has no title.*incomplete/invalid Zotero data"
+        ):
+>>>>>>> origin/stable
             async for _ in processor.process(record, processor_stage="download"):
                 pass

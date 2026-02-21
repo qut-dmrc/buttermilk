@@ -41,7 +41,13 @@ class QueryRunner(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
+<<<<<<< HEAD
     bq_client: bigquery.Client = Field(..., description="Authenticated BigQuery client instance.")
+=======
+    bq_client: bigquery.Client = Field(
+        ..., description="Authenticated BigQuery client instance."
+    )
+>>>>>>> origin/stable
 
     def run_query(  # noqa: PLR0913, PLR0911
         self,
@@ -103,7 +109,13 @@ class QueryRunner(BaseModel):
 
             # Ensure save_dir ends with a slash for proper GCS path construction
             gcs_path_prefix = save_dir if save_dir.endswith("/") else save_dir + "/"
+<<<<<<< HEAD
             gcs_results_uri = f"{gcs_path_prefix}query_results_{shortuuid.uuid()}/results-*.json"
+=======
+            gcs_results_uri = (
+                f"{gcs_path_prefix}query_results_{shortuuid.uuid()}/results-*.json"
+            )
+>>>>>>> origin/stable
             job_config.destination_uris = [gcs_results_uri]
             # For GCS, typically WRITE_TRUNCATE is used to ensure clean output directory
             job_config.write_disposition = bigquery.WriteDisposition.WRITE_TRUNCATE
@@ -112,9 +124,19 @@ class QueryRunner(BaseModel):
         elif destination:
             job_config.destination = destination
             job_config.write_disposition = (
+<<<<<<< HEAD
                 bigquery.WriteDisposition.WRITE_TRUNCATE if overwrite else bigquery.WriteDisposition.WRITE_APPEND  # Or WRITE_EMPTY if preferred
             )
             logger.debug(f"Query results will be saved to BigQuery table: {destination} (Overwrite: {overwrite})")
+=======
+                bigquery.WriteDisposition.WRITE_TRUNCATE
+                if overwrite
+                else bigquery.WriteDisposition.WRITE_APPEND  # Or WRITE_EMPTY if preferred
+            )
+            logger.debug(
+                f"Query results will be saved to BigQuery table: {destination} (Overwrite: {overwrite})"
+            )
+>>>>>>> origin/stable
 
         try:
             query_job = self.bq_client.query(sql, job_config=job_config)
@@ -141,14 +163,28 @@ class QueryRunner(BaseModel):
             f"Bytes billed: {bytes_billed_str}, Approx. cost: {approx_cost_str}.",
         )
 
+<<<<<<< HEAD
         if do_not_return_results or save_to_gcs:  # If results saved to GCS, also don't return them directly
+=======
+        if (
+            do_not_return_results or save_to_gcs
+        ):  # If results saved to GCS, also don't return them directly
+>>>>>>> origin/stable
             return True  # Indicate successful execution without returning data
 
         try:
             if return_df:
                 # Get the result iterator first, which has total_rows attribute
                 result_iterator = query_job.result()
+<<<<<<< HEAD
                 if hasattr(result_iterator, "total_rows") and result_iterator.total_rows and result_iterator.total_rows > 0:
+=======
+                if (
+                    hasattr(result_iterator, "total_rows")
+                    and result_iterator.total_rows
+                    and result_iterator.total_rows > 0
+                ):
+>>>>>>> origin/stable
                     df = query_job.to_dataframe()
 
                     # Convert numpy arrays from ARRAY/REPEATED fields to Python lists
@@ -161,7 +197,13 @@ class QueryRunner(BaseModel):
                 return pd.DataFrame()  # Return empty DataFrame for no rows
             return query_job  # Return the job object which contains RowIterator
         except Exception as e:
+<<<<<<< HEAD
             logger.error(f"Failed to retrieve BigQuery query results for job '{query_job.job_id}': {e!s}")
+=======
+            logger.error(
+                f"Failed to retrieve BigQuery query results for job '{query_job.job_id}': {e!s}"
+            )
+>>>>>>> origin/stable
             return None  # Indicate failure
 
     def estimate_query_cost(self, sql: str) -> tuple[int | None, float | None]:
@@ -190,11 +232,27 @@ class QueryRunner(BaseModel):
             job_config = bigquery.QueryJobConfig(dry_run=True, use_query_cache=False)
             # use_query_cache=False ensures it estimates actual processing cost
 
+<<<<<<< HEAD
             query_job = self.bq_client.query(sql, job_config=job_config)  # Perform dry run
 
             bytes_processed = query_job.total_bytes_processed  # This is the key metric from dry run
             if bytes_processed is None:  # Should not happen for successful dry run, but defensive
                 logger.warning("Dry run for query cost estimation did not return total_bytes_processed.")
+=======
+            query_job = self.bq_client.query(
+                sql, job_config=job_config
+            )  # Perform dry run
+
+            bytes_processed = (
+                query_job.total_bytes_processed
+            )  # This is the key metric from dry run
+            if (
+                bytes_processed is None
+            ):  # Should not happen for successful dry run, but defensive
+                logger.warning(
+                    "Dry run for query cost estimation did not return total_bytes_processed."
+                )
+>>>>>>> origin/stable
                 return None, None
 
             estimated_cost_usd = bytes_processed * GOOGLE_BQ_PRICE_PER_BYTE
@@ -208,7 +266,13 @@ class QueryRunner(BaseModel):
             )
             return bytes_processed, estimated_cost_usd
         except Exception as e:
+<<<<<<< HEAD
             logger.error(f"Failed to estimate query cost for SQL: '{sql[:100]}...': {e!s}")
+=======
+            logger.error(
+                f"Failed to estimate query cost for SQL: '{sql[:100]}...': {e!s}"
+            )
+>>>>>>> origin/stable
             # Original code raised RuntimeError, preserving that behavior.
             # Alternatively, could return (None, None) to indicate failure.
             raise RuntimeError(f"Failed to estimate query cost: {e!s}") from e

@@ -14,7 +14,11 @@ from omegaconf import DictConfig, ListConfig, OmegaConf
 
 # Lazy import cloudpathlib (pulls in google.cloud.storage)
 if TYPE_CHECKING:
+<<<<<<< HEAD
     pass
+=======
+    from cloudpathlib import CloudPath
+>>>>>>> origin/stable
 
 T = TypeVar("T")
 
@@ -109,7 +113,13 @@ def make_path_validator() -> Callable[[Any], str]:
 
 def sanitize_html(value: str) -> str:
     """Sanitizes HTML input."""
+<<<<<<< HEAD
     cleaned = clean(value, tags=[], attributes={}, strip=True)  # Allow no tags/attributes
+=======
+    cleaned = clean(
+        value, tags=[], attributes={}, strip=True
+    )  # Allow no tags/attributes
+>>>>>>> origin/stable
     return cleaned
 
 
@@ -120,7 +130,13 @@ def sanitize_markdown(value: str) -> str:
     return html_output
 
 
+<<<<<<< HEAD
 def import_class_from_path(class_path: str, expected_base_class: type | None = None) -> type:
+=======
+def import_class_from_path(
+    class_path: str, expected_base_class: type | None = None
+) -> type:
+>>>>>>> origin/stable
     """Import a class from a fully qualified module path.
 
     Args:
@@ -147,28 +163,58 @@ def import_class_from_path(class_path: str, expected_base_class: type | None = N
     try:
         module_path, class_name = class_path.rsplit(".", 1)
     except ValueError as e:
+<<<<<<< HEAD
         raise ValueError(f"Invalid class path format '{class_path}'. Expected 'module.path.ClassName'") from e
+=======
+        raise ValueError(
+            f"Invalid class path format '{class_path}'. Expected 'module.path.ClassName'"
+        ) from e
+>>>>>>> origin/stable
 
     # Import the module
     try:
         module = importlib.import_module(module_path)
     except ImportError as e:
+<<<<<<< HEAD
         raise ImportError(f"Failed to import module '{module_path}' from class path '{class_path}'") from e
+=======
+        raise ImportError(
+            f"Failed to import module '{module_path}' from class path '{class_path}'"
+        ) from e
+>>>>>>> origin/stable
 
     # Get the class
     try:
         cls = getattr(module, class_name)
     except AttributeError as e:
+<<<<<<< HEAD
         raise AttributeError(f"Module '{module_path}' has no attribute '{class_name}'") from e
 
     # Verify it's a class
     if not isinstance(cls, type):
         raise ValueError(f"'{class_path}' does not resolve to a class (got {type(cls).__name__})")
+=======
+        raise AttributeError(
+            f"Module '{module_path}' has no attribute '{class_name}'"
+        ) from e
+
+    # Verify it's a class
+    if not isinstance(cls, type):
+        raise ValueError(
+            f"'{class_path}' does not resolve to a class (got {type(cls).__name__})"
+        )
+>>>>>>> origin/stable
 
     # Verify inheritance if expected_base_class is provided
     if expected_base_class is not None:
         if not issubclass(cls, expected_base_class):
+<<<<<<< HEAD
             raise ValueError(f"Class '{class_path}' is not a subclass of {expected_base_class.__name__}")
+=======
+            raise ValueError(
+                f"Class '{class_path}' is not a subclass of {expected_base_class.__name__}"
+            )
+>>>>>>> origin/stable
 
     return cls
 
@@ -203,14 +249,29 @@ def make_class_import_validator(
 
         # If already a class, verify and return
         if isinstance(v, type):
+<<<<<<< HEAD
             if expected_base_class is not None and not issubclass(v, expected_base_class):
                 raise ValueError(f"Class {v.__name__} is not a subclass of {expected_base_class.__name__}")
+=======
+            if expected_base_class is not None and not issubclass(
+                v, expected_base_class
+            ):
+                raise ValueError(
+                    f"Class {v.__name__} is not a subclass of {expected_base_class.__name__}"
+                )
+>>>>>>> origin/stable
             return v
 
         # If string, import the class
         if isinstance(v, str):
             return import_class_from_path(v, expected_base_class)
 
+<<<<<<< HEAD
         raise ValueError(f"output_model must be a class or string class path, got {type(v).__name__}")
+=======
+        raise ValueError(
+            f"output_model must be a class or string class path, got {type(v).__name__}"
+        )
+>>>>>>> origin/stable
 
     return validator

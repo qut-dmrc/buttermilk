@@ -27,7 +27,11 @@ from buttermilk import logger
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.processor_core import ProcessorCore
 from buttermilk._core.types import BaseRecord
+<<<<<<< HEAD
 from buttermilk.utils.templating import render_template
+=======
+from buttermilk.utils.templating import load_template
+>>>>>>> origin/stable
 from buttermilk.utils.validators import import_class_from_path
 
 
@@ -242,6 +246,7 @@ class ClassifierCore(ProcessorCore):
         inputs.update(kwargs)
 
         try:
+<<<<<<< HEAD
             # Render template: parameters (config) override inputs (record data)
             result = render_template(
                 template=self.template,
@@ -251,6 +256,15 @@ class ClassifierCore(ProcessorCore):
             )
             rendered_text = result.rendered
             logger.debug(f"Classifier rendered template '{self.template}', unfilled vars: {result.unfilled_vars}, hash: {result.template_hash}")
+=======
+            # Merge inputs with parameters (parameters take precedence)
+            merged_vars = {**inputs, **self.parameters}
+            rendered_text, unfilled_vars, template_hash = load_template(
+                template=self.template,
+                template_vars=merged_vars,
+            )
+            logger.debug(f"Classifier rendered template '{self.template}', unfilled vars: {unfilled_vars}, hash: {template_hash}")
+>>>>>>> origin/stable
         except Exception as e:
             raise ProcessingError(f"Template rendering failed: {e}") from e
 
@@ -493,6 +507,7 @@ class HuggingFaceClassifier(ClassifierCore):
         inputs.update(kwargs)
 
         try:
+<<<<<<< HEAD
             # Render template: parameters (config) override inputs (record data)
             result = render_template(
                 template=self.template,
@@ -504,6 +519,15 @@ class HuggingFaceClassifier(ClassifierCore):
             logger.debug(
                 f"HuggingFaceClassifier rendered template '{self.template}', unfilled vars: {result.unfilled_vars}, hash: {result.template_hash}"
             )
+=======
+            # Merge inputs with parameters (parameters take precedence)
+            merged_vars = {**inputs, **self.parameters}
+            rendered_text, unfilled_vars, template_hash = load_template(
+                template=self.template,
+                template_vars=merged_vars,
+            )
+            logger.debug(f"HuggingFaceClassifier rendered template '{self.template}', unfilled vars: {unfilled_vars}, hash: {template_hash}")
+>>>>>>> origin/stable
         except Exception as e:
             raise ProcessingError(f"Template rendering failed: {e}") from e
 
@@ -717,7 +741,11 @@ class ZentropiClassifier(ClassifierCore):
             ValueError: If record.content is None or empty
         """
         from buttermilk._core.exceptions import ProcessingError
+<<<<<<< HEAD
         from buttermilk.utils.templating import render_template
+=======
+        from buttermilk.utils.templating import load_template
+>>>>>>> origin/stable
 
         # Extract content from record
         if not record.content:
@@ -732,6 +760,7 @@ class ZentropiClassifier(ClassifierCore):
         inputs["content"] = ""  # Don't include content in template render
 
         try:
+<<<<<<< HEAD
             # Render template: parameters (config) override inputs (record data)
             result = render_template(
                 template=self.template,
@@ -743,6 +772,15 @@ class ZentropiClassifier(ClassifierCore):
             logger.debug(
                 f"ZentropiClassifier rendered template '{self.template}', unfilled vars: {result.unfilled_vars}, hash: {result.template_hash}"
             )
+=======
+            # Merge inputs with parameters (parameters take precedence)
+            merged_vars = {**inputs, **self.parameters}
+            rendered_text, unfilled_vars, template_hash = load_template(
+                template=self.template,
+                template_vars=merged_vars,
+            )
+            logger.debug(f"ZentropiClassifier rendered template '{self.template}', unfilled vars: {unfilled_vars}, hash: {template_hash}")
+>>>>>>> origin/stable
         except Exception as e:
             raise ProcessingError(f"Template rendering failed: {e}") from e
 

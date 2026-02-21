@@ -79,8 +79,17 @@ TEMPLATE_TEST_CASES = [
 ]
 
 
+<<<<<<< HEAD
 @pytest.mark.parametrize("template_name,required_vars,minimal_inputs", TEMPLATE_TEST_CASES)
 def test_template_detects_missing_required_variable(template_name, required_vars, minimal_inputs):
+=======
+@pytest.mark.parametrize(
+    "template_name,required_vars,minimal_inputs", TEMPLATE_TEST_CASES
+)
+def test_template_detects_missing_required_variable(
+    template_name, required_vars, minimal_inputs
+):
+>>>>>>> origin/stable
     """Test that template detects when a required variable is missing.
 
     This is a CRITICAL fail-fast test. If unfilled_vars doesn't contain
@@ -95,7 +104,13 @@ def test_template_detects_missing_required_variable(template_name, required_vars
     for required_var in required_vars:
         # Render template WITHOUT the required variable
         # (minimal_inputs contains everything EXCEPT the var we're testing)
+<<<<<<< HEAD
         rendered, unfilled_vars, _ = load_template(template=template_name, template_vars=minimal_inputs)
+=======
+        rendered, unfilled_vars, _ = load_template(
+            template=template_name, template_vars=minimal_inputs
+        )
+>>>>>>> origin/stable
 
         # CRITICAL ASSERTION: Missing variable MUST be detected
         assert required_var in unfilled_vars, (
@@ -211,7 +226,13 @@ TYPE_MISMATCH_TEST_CASES = [
     "template_name,var_name,correct_value,wrong_value,other_inputs",
     TYPE_MISMATCH_TEST_CASES,
 )
+<<<<<<< HEAD
 def test_template_with_wrong_type_fails_or_warns(template_name, var_name, correct_value, wrong_value, other_inputs):
+=======
+def test_template_with_wrong_type_fails_or_warns(
+    template_name, var_name, correct_value, wrong_value, other_inputs
+):
+>>>>>>> origin/stable
     """Test that templates handle type mismatches (dict as string, string as dict).
 
     COMMON BUG: Data pipelines often serialize/deserialize incorrectly:
@@ -226,16 +247,33 @@ def test_template_with_wrong_type_fails_or_warns(template_name, var_name, correc
     """
     # First, verify the CORRECT type works
     correct_inputs = {**other_inputs, var_name: correct_value}
+<<<<<<< HEAD
     rendered_correct, unfilled_correct, _ = load_template(template=template_name, template_vars=correct_inputs)
 
     # Baseline: correct type should work without issues
     assert var_name not in unfilled_correct, (
         f"Template '{template_name}' reported '{var_name}' as unfilled even with correct type!\nThis is a test setup error."
+=======
+    rendered_correct, unfilled_correct, _ = load_template(
+        template=template_name, template_vars=correct_inputs
+    )
+
+    # Baseline: correct type should work without issues
+    assert var_name not in unfilled_correct, (
+        f"Template '{template_name}' reported '{var_name}' as unfilled even with correct type!\n"
+        f"This is a test setup error."
+>>>>>>> origin/stable
     )
 
     # Now test with WRONG type (dict as string or string as dict)
     wrong_inputs = {**other_inputs, var_name: wrong_value}
+<<<<<<< HEAD
     rendered_wrong, unfilled_wrong, _ = load_template(template=template_name, template_vars=wrong_inputs)
+=======
+    rendered_wrong, unfilled_wrong, _ = load_template(
+        template=template_name, template_vars=wrong_inputs
+    )
+>>>>>>> origin/stable
 
     # Check how template handles wrong type
     # Acceptable outcomes:
@@ -273,7 +311,13 @@ def test_score_template_expected_as_json_string_fails():
 
     This test is kept for historical reference but disabled.
     """
+<<<<<<< HEAD
     pytest.skip("Template now correctly accepts both dict and string formats for 'expected'")
+=======
+    pytest.skip(
+        "Template now correctly accepts both dict and string formats for 'expected'"
+    )
+>>>>>>> origin/stable
 
 
 # ============================================================================
@@ -401,8 +445,17 @@ TEMPLATE_PASSING_TEST_CASES = [
 ]
 
 
+<<<<<<< HEAD
 @pytest.mark.parametrize("template_name,complete_inputs,expected_content", TEMPLATE_PASSING_TEST_CASES)
 def test_template_renders_successfully_with_all_parameters(template_name, complete_inputs, expected_content):
+=======
+@pytest.mark.parametrize(
+    "template_name,complete_inputs,expected_content", TEMPLATE_PASSING_TEST_CASES
+)
+def test_template_renders_successfully_with_all_parameters(
+    template_name, complete_inputs, expected_content
+):
+>>>>>>> origin/stable
     """Test that templates render successfully when ALL required parameters are provided.
 
     This is the PASSING condition test - validates that templates actually WORK
@@ -415,7 +468,13 @@ def test_template_renders_successfully_with_all_parameters(template_name, comple
     4. Output should contain expected content
     """
     # Render template with complete inputs
+<<<<<<< HEAD
     rendered, unfilled_vars, _ = load_template(template=template_name, template_vars=complete_inputs)
+=======
+    rendered, unfilled_vars, _ = load_template(
+        template=template_name, template_vars=complete_inputs
+    )
+>>>>>>> origin/stable
 
     # Assertion 1: No unfilled variables (all were provided)
     # Note: 'record' and 'context' are placeholder variables handled by make_messages(),
@@ -433,7 +492,13 @@ def test_template_renders_successfully_with_all_parameters(template_name, comple
 
     # Assertion 2: Template rendered (non-empty output)
     assert len(rendered) > 0, (
+<<<<<<< HEAD
         f"Template '{template_name}' rendered empty output!\nInputs: {complete_inputs}\nThis suggests template rendering failed silently."
+=======
+        f"Template '{template_name}' rendered empty output!\n"
+        f"Inputs: {complete_inputs}\n"
+        f"This suggests template rendering failed silently."
+>>>>>>> origin/stable
     )
 
     # Assertion 3: Output contains expected content
@@ -550,8 +615,17 @@ EMPTY_VALUE_TEST_CASES = [
 ]
 
 
+<<<<<<< HEAD
 @pytest.mark.parametrize("template_name,var_name,empty_value,other_inputs", EMPTY_VALUE_TEST_CASES)
 def test_template_detects_empty_values_as_unfilled(template_name, var_name, empty_value, other_inputs):
+=======
+@pytest.mark.parametrize(
+    "template_name,var_name,empty_value,other_inputs", EMPTY_VALUE_TEST_CASES
+)
+def test_template_detects_empty_values_as_unfilled(
+    template_name, var_name, empty_value, other_inputs
+):
+>>>>>>> origin/stable
     """Test that templates detect EMPTY values as unfilled (fail-fast for empty data).
 
     CRITICAL FAIL-FAST REQUIREMENT: Providing empty values (empty string, empty list,
@@ -578,7 +652,13 @@ def test_template_detects_empty_values_as_unfilled(template_name, var_name, empt
     all_inputs = {**other_inputs, var_name: empty_value}
 
     # Render template with empty value
+<<<<<<< HEAD
     rendered, unfilled_vars, _ = load_template(template=template_name, template_vars=all_inputs)
+=======
+    rendered, unfilled_vars, _ = load_template(
+        template=template_name, template_vars=all_inputs
+    )
+>>>>>>> origin/stable
 
     # CRITICAL ASSERTION: Empty value should be detected as unfilled
     # OR template should have raised an error (which would prevent us reaching here)
@@ -602,7 +682,11 @@ async def test_llmcore_raises_error_on_empty_expected():
 
     This is the real-world usage pattern - not just load_template in isolation.
     """
+<<<<<<< HEAD
     from buttermilk._core.exceptions import FatalError
+=======
+    from buttermilk._core.exceptions import FatalError, ProcessingError
+>>>>>>> origin/stable
     from buttermilk._core.llm_core import LLMCore
 
     # Create LLMCore with score template
@@ -703,29 +787,73 @@ def test_score_template_comprehensive_passing():
     }
 
     # Render template
+<<<<<<< HEAD
     rendered, unfilled_vars, _ = load_template(template="score", template_vars=complete_inputs)
 
     # Validate rendering success
     assert "answers" not in unfilled_vars, f"'answers' should not be unfilled: {unfilled_vars}"
     assert "criteria" not in unfilled_vars, f"'criteria' should not be unfilled: {unfilled_vars}"
     assert "expected" not in unfilled_vars, f"'expected' should not be unfilled: {unfilled_vars}"
+=======
+    rendered, unfilled_vars, _ = load_template(
+        template="score", template_vars=complete_inputs
+    )
+
+    # Validate rendering success
+    assert "answers" not in unfilled_vars, (
+        f"'answers' should not be unfilled: {unfilled_vars}"
+    )
+    assert "criteria" not in unfilled_vars, (
+        f"'criteria' should not be unfilled: {unfilled_vars}"
+    )
+    assert "expected" not in unfilled_vars, (
+        f"'expected' should not be unfilled: {unfilled_vars}"
+    )
+>>>>>>> origin/stable
 
     # Validate output contains all key elements
     assert "judge_gemini25pro" in rendered, "Should contain first judge's agent_id"
     assert "judge_claude-sonnet" in rendered, "Should contain second judge's agent_id"
+<<<<<<< HEAD
     assert "hate speech" in rendered.lower(), "Should reference hate speech from reasoning"
+=======
+    assert "hate speech" in rendered.lower(), (
+        "Should reference hate speech from reasoning"
+    )
+>>>>>>> origin/stable
     assert "Contains hate speech" in rendered, "Should include expected reasons"
     # Note: score template doesn't render criteria in output - it's used for context but not displayed
 
     # Validate no error markers (except special placeholders {{context}} and {{record}})
+<<<<<<< HEAD
     assert "Undefined" not in rendered, f"Should not have undefined markers: {rendered[:200]}"
+=======
+    assert "Undefined" not in rendered, (
+        f"Should not have undefined markers: {rendered[:200]}"
+    )
+>>>>>>> origin/stable
 
     # Check for unfilled placeholders (excluding special ones)
     if "{{" in rendered:
         # Special placeholders that are optionally filled by callers
         special_placeholders = ["{{context}}", "{{record}}"]
+<<<<<<< HEAD
         has_non_special = any("{{" in line and not any(sp in line for sp in special_placeholders) for line in rendered.split("\n"))
         assert not has_non_special, f"Should not have unfilled placeholders (except context/record): {rendered[:200]}"
 
     # Validate output is substantial (not just a few characters)
     assert len(rendered) > 100, f"Rendered output seems too short ({len(rendered)} chars), suggesting incomplete rendering:\n{rendered}"
+=======
+        has_non_special = any(
+            "{{" in line and not any(sp in line for sp in special_placeholders)
+            for line in rendered.split("\n")
+        )
+        assert not has_non_special, (
+            f"Should not have unfilled placeholders (except context/record): {rendered[:200]}"
+        )
+
+    # Validate output is substantial (not just a few characters)
+    assert len(rendered) > 100, (
+        f"Rendered output seems too short ({len(rendered)} chars), suggesting incomplete rendering:\n{rendered}"
+    )
+>>>>>>> origin/stable

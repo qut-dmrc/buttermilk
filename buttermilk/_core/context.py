@@ -68,7 +68,13 @@ def clear_logging_context() -> None:
 # API concurrency control - shared semaphore for limiting concurrent API calls
 # This allows nested processors (VariantProcessor, ParallelProcessor) to share
 # a global limit on API calls, preventing overwhelming external APIs.
+<<<<<<< HEAD
 api_semaphore_var: ContextVar[asyncio.Semaphore | None] = ContextVar("api_semaphore_var", default=None)
+=======
+api_semaphore_var: ContextVar[asyncio.Semaphore | None] = ContextVar(
+    "api_semaphore_var", default=None
+)
+>>>>>>> origin/stable
 
 
 def set_api_semaphore(semaphore: asyncio.Semaphore) -> None:

@@ -3,13 +3,25 @@ import pytest
 from buttermilk.utils.templating import make_messages
 
 # SKIP: ChatPromptTemplate class removed, tests need refactoring
+<<<<<<< HEAD
 pytest.skip("ChatPromptTemplate class removed - tests need refactoring", allow_module_level=True)
+=======
+pytest.skip(
+    "ChatPromptTemplate class removed - tests need refactoring", allow_module_level=True
+)
+>>>>>>> origin/stable
 
 
 def test_make_messages_with_valid_input():
     # Test with valid input
     template = "extraneous prompty data\n\n--\n# system:\n{{key1}} \nUser: {{key2}}"
+<<<<<<< HEAD
     expected_output = "Expected template output"  # Replace with the actual expected output
+=======
+    expected_output = (
+        "Expected template output"  # Replace with the actual expected output
+    )
+>>>>>>> origin/stable
     input_data = {"key1": expected_output}
     messages = make_messages(template)
     assert len(messages) == 2

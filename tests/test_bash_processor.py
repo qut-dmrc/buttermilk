@@ -152,7 +152,13 @@ class TestPDFToTextProcessor:
         from buttermilk.processors.bash import PDFToTextProcessor
 
         # Download a test PDF
+<<<<<<< HEAD
         test_url = "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
+=======
+        test_url = (
+            "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
+        )
+>>>>>>> origin/stable
         pdf_file = tmp_path / "test.pdf"
         urllib.request.urlretrieve(test_url, pdf_file)
 
@@ -173,7 +179,13 @@ class TestPDFToTextProcessor:
         assert "Dummy PDF file" in result.content or "dummy" in result.content.lower()
 
     @pytest.mark.anyio
+<<<<<<< HEAD
     async def test_pdftotext_processor_raises_on_missing_pdftotext(self, tmp_path, monkeypatch):
+=======
+    async def test_pdftotext_processor_raises_on_missing_pdftotext(
+        self, tmp_path, monkeypatch
+    ):
+>>>>>>> origin/stable
         """PDFToTextProcessor should raise helpful error if pdftotext not installed."""
         import asyncio
 
@@ -204,7 +216,15 @@ class TestPDFToTextProcessor:
 
         error_msg = str(exc_info.value).lower()
         assert "pdftotext" in error_msg
+<<<<<<< HEAD
         assert "not found" in error_msg or "not installed" in error_msg or "install poppler" in error_msg
+=======
+        assert (
+            "not found" in error_msg
+            or "not installed" in error_msg
+            or "install poppler" in error_msg
+        )
+>>>>>>> origin/stable
 
 
 class TestBashProcessorCaching:

@@ -60,11 +60,23 @@ class Slurp(SingleAgent):
         outputs_list = []  # Use a local list to collect outputs
         async with httpx.AsyncClient() as client:
             while url:
+<<<<<<< HEAD
                 response = await client.get(url, parameters=message.parameters)  # Access parameters from message
                 response.raise_for_status()  # Raise an exception for bad status codes
 
                 data = response.json()
                 outputs_list.append(data.get("data"))  # Append data to the list, handle missing key
+=======
+                response = await client.get(
+                    url, parameters=message.parameters
+                )  # Access parameters from message
+                response.raise_for_status()  # Raise an exception for bad status codes
+
+                data = response.json()
+                outputs_list.append(
+                    data.get("data")
+                )  # Append data to the list, handle missing key
+>>>>>>> origin/stable
 
                 # Check for pagination information
                 paging = data.get("paging")

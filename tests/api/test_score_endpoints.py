@@ -44,7 +44,13 @@ class TestDataService:
 
             real_bm.get_storage = Mock(return_value=mock_storage)
 
+<<<<<<< HEAD
             result = await DataService.get_record_by_id("test_record_1", "test_flow", real_flow_runner)
+=======
+            result = await DataService.get_record_by_id(
+                "test_record_1", "test_flow", real_flow_runner
+            )
+>>>>>>> origin/stable
 
             assert result is not None
             assert result.record_id == "test_record_1"
@@ -59,7 +65,13 @@ class TestDataService:
 
             real_bm.get_storage = Mock(return_value=mock_storage)
 
+<<<<<<< HEAD
             result = await DataService.get_record_by_id("nonexistent", "test_flow", real_flow_runner)
+=======
+            result = await DataService.get_record_by_id(
+                "nonexistent", "test_flow", real_flow_runner
+            )
+>>>>>>> origin/stable
 
             assert result is None
 
@@ -126,7 +138,13 @@ class TestDataService:
         with pytest.MonkeyPatch().context() as m:
             # Mock empty result from query
             mock_query_runner = Mock()
+<<<<<<< HEAD
             mock_query_runner.run_query = Mock(return_value=[])  # Empty list, not DataFrame
+=======
+            mock_query_runner.run_query = Mock(
+                return_value=[]
+            )  # Empty list, not DataFrame
+>>>>>>> origin/stable
 
             m.setattr(
                 "buttermilk.api.services.data_service.QueryRunner",
@@ -142,7 +160,13 @@ class TestDataService:
                 }
             }
 
+<<<<<<< HEAD
             result = await DataService.get_scores_for_record("test_record", "test_flow", real_flow_runner)
+=======
+            result = await DataService.get_scores_for_record(
+                "test_record", "test_flow", real_flow_runner
+            )
+>>>>>>> origin/stable
 
             # Result should be an empty list
             assert isinstance(result, list)
@@ -197,11 +221,23 @@ class TestDataService:
                 }
             }
 
+<<<<<<< HEAD
             result = await DataService.get_scores_for_record("test_record", "test_flow", real_flow_runner)
 
             # Result should be a list of ExecutionTrace objects
             assert isinstance(result, list)
             assert len(result) >= 0  # May be 0 if reconstruction fails, which is ok for this test
+=======
+            result = await DataService.get_scores_for_record(
+                "test_record", "test_flow", real_flow_runner
+            )
+
+            # Result should be a list of ExecutionTrace objects
+            assert isinstance(result, list)
+            assert (
+                len(result) >= 0
+            )  # May be 0 if reconstruction fails, which is ok for this test
+>>>>>>> origin/stable
 
     @pytest.mark.anyio
     async def test_get_responses_for_record(self, real_flow_runner):
@@ -256,11 +292,23 @@ class TestDataService:
                 }
             }
 
+<<<<<<< HEAD
             result = await DataService.get_responses_for_record("test_record", "test_flow", real_flow_runner)
 
             # Result should be a list of ExecutionTrace objects
             assert isinstance(result, list)
             assert len(result) >= 0  # May be 0 if reconstruction fails, which is ok for this test
+=======
+            result = await DataService.get_responses_for_record(
+                "test_record", "test_flow", real_flow_runner
+            )
+
+            # Result should be a list of ExecutionTrace objects
+            assert isinstance(result, list)
+            assert (
+                len(result) >= 0
+            )  # May be 0 if reconstruction fails, which is ok for this test
+>>>>>>> origin/stable
 
 
 class TestScoreEndpointsIntegration:
@@ -297,7 +345,13 @@ class TestScoreEndpointsIntegration:
         broken_flow_runner = Mock()
         broken_flow_runner.flows = {}  # Empty flows dict
 
+<<<<<<< HEAD
         result = await DataService.get_scores_for_record("test", "flow", broken_flow_runner)
+=======
+        result = await DataService.get_scores_for_record(
+            "test", "flow", broken_flow_runner
+        )
+>>>>>>> origin/stable
         # Should return empty list instead of crashing
         assert isinstance(result, list)
         assert len(result) == 0
@@ -317,6 +371,17 @@ class TestScoreAPIEndpoints:
         assert "/api/flows/{flow}/records/{record_id}" in routes
         assert "/api/flows/{flow}/datasets/{dataset}/records/{record_id}" in routes
         assert "/api/flows/{flow}/records/{record_id}/scores" in routes
+<<<<<<< HEAD
         assert "/api/flows/{flow}/datasets/{dataset}/records/{record_id}/scores" in routes
         assert "/api/flows/{flow}/records/{record_id}/responses" in routes
         assert "/api/flows/{flow}/datasets/{dataset}/records/{record_id}/responses" in routes
+=======
+        assert (
+            "/api/flows/{flow}/datasets/{dataset}/records/{record_id}/scores" in routes
+        )
+        assert "/api/flows/{flow}/records/{record_id}/responses" in routes
+        assert (
+            "/api/flows/{flow}/datasets/{dataset}/records/{record_id}/responses"
+            in routes
+        )
+>>>>>>> origin/stable

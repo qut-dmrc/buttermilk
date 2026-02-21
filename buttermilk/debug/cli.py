@@ -12,6 +12,7 @@ from .error_capture import analyze_type_checking_errors
 from .gcp_logs import GCPLogAnalyzer
 from .models import StartupTestResult
 from .trace_analysis import (
+<<<<<<< HEAD
     get_errors,
     get_inputs_outputs,
     get_llm_conversation,
@@ -20,6 +21,16 @@ from .trace_analysis import (
     get_traces_by_agent,
     load_trace_file,
     summarize,
+=======
+    load_trace_file,
+    get_errors,
+    get_timeline,
+    get_traces_by_agent,
+    get_trace,
+    summarize,
+    get_llm_conversation,
+    get_inputs_outputs,
+>>>>>>> origin/stable
 )
 
 
@@ -29,7 +40,13 @@ def debug():
 
 
 @debug.command()
+<<<<<<< HEAD
 @click.option("--flow", multiple=True, help="Flows to test (e.g., osb, trans, tox_allinone)")
+=======
+@click.option(
+    "--flow", multiple=True, help="Flows to test (e.g., osb, trans, tox_allinone)"
+)
+>>>>>>> origin/stable
 @click.option("--timeout", default=60, help="Test timeout in seconds")
 @click.option("--output", help="Output file for results (JSON)")
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
@@ -83,7 +100,13 @@ def test_startup(flow, timeout, output, verbose):
                 click.echo(f"📝 {line.strip()}")
 
             # Check for validation errors
+<<<<<<< HEAD
             if ("ValidationError" in line and "validation errors" in line) or "ValidationError" in line:
+=======
+            if (
+                "ValidationError" in line and "validation errors" in line
+            ) or "ValidationError" in line:
+>>>>>>> origin/stable
                 validation_errors.append(line.strip())
 
             # Check for startup success
@@ -337,9 +360,19 @@ def test_startup(flow, timeout, output, verbose):
 
 
 @debug.command()
+<<<<<<< HEAD
 @click.option("--minutes-back", default=30, help="How many minutes back to analyze logs")
 @click.option("--project-id", help="GCP project ID (auto-detected if not provided)")
 @click.option("--include-warnings", is_flag=True, help="Include warning-level logs in analysis")
+=======
+@click.option(
+    "--minutes-back", default=30, help="How many minutes back to analyze logs"
+)
+@click.option("--project-id", help="GCP project ID (auto-detected if not provided)")
+@click.option(
+    "--include-warnings", is_flag=True, help="Include warning-level logs in analysis"
+)
+>>>>>>> origin/stable
 def analyze_logs(minutes_back, project_id, include_warnings):
     """Analyze GCP logs for Enhanced RAG agent and startup issues."""
     click.echo("🔍 ANALYZING GCP LOGS FOR BUTTERMILK ISSUES")
@@ -524,7 +557,13 @@ def diagnose_issue(flow, query, logs_minutes, comprehensive):
     type_analysis = analyze_type_checking_errors()
 
     if type_analysis["total_type_errors"] > 0:
+<<<<<<< HEAD
         click.echo(f"   🚨 Found {type_analysis['total_type_errors']} type checking errors")
+=======
+        click.echo(
+            f"   🚨 Found {type_analysis['total_type_errors']} type checking errors"
+        )
+>>>>>>> origin/stable
         for rec in type_analysis["recommendations"]:
             click.echo(f"   💡 {rec['issue']}: {rec['fix']}")
     else:
@@ -564,7 +603,13 @@ def diagnose_issue(flow, query, logs_minutes, comprehensive):
 
     if type_analysis["total_type_errors"] > 0:
         click.echo("🔧 Next steps for type checking:")
+<<<<<<< HEAD
         click.echo("   1. Replace isinstance(obj, List[str]) with isinstance(obj, list)")
+=======
+        click.echo(
+            "   1. Replace isinstance(obj, List[str]) with isinstance(obj, list)"
+        )
+>>>>>>> origin/stable
         click.echo("   2. Use TYPE_CHECKING guard for typing-only imports")
         click.echo("   3. Test fixes with isolated unit tests")
 
@@ -636,7 +681,13 @@ def validate_config(config_path, output, verbose):
     if report.is_valid:
         click.echo("\n🎉 CONFIGURATION VALID - No errors found!")
     else:
+<<<<<<< HEAD
         click.echo(f"\n💥 CONFIGURATION INVALID - {len(report.errors)} errors need fixing")
+=======
+        click.echo(
+            f"\n💥 CONFIGURATION INVALID - {len(report.errors)} errors need fixing"
+        )
+>>>>>>> origin/stable
         click.echo("   Use --verbose for detailed suggestions")
 
     # Set exit code

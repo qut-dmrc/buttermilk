@@ -4,6 +4,10 @@ This module tests that deprecated/moved config properties still work
 for backward compatibility with existing code.
 """
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> origin/stable
 import pytest
 
 

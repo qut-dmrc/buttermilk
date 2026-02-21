@@ -10,9 +10,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from buttermilk.batch.manifests import OpenAIBatchManifest
-from buttermilk.batch.managers.openai import OpenAIBatchJobManager
-from buttermilk.batch.types import BatchRequest
+from buttermilk._core.vertex_batch import (
+    BatchRequest,
+    OpenAIBatchJobManager,
+    OpenAIBatchManifest,
+)
 
 # =============================================================================
 # Fixtures

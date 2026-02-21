@@ -79,20 +79,38 @@ class TestVectorE2EIntegration:
             # We patch the TextEmbeddingModel at the system boundary
             mock_embedding = [0.1] * 768  # Realistic embedding dimension
 
+<<<<<<< HEAD
             with patch("vertexai.language_models.TextEmbeddingModel.get_embeddings") as mock_get_embeddings:
+=======
+            with patch(
+                "vertexai.language_models.TextEmbeddingModel.get_embeddings"
+            ) as mock_get_embeddings:
+>>>>>>> origin/stable
                 # Mock the embedding API response
                 mock_result = AsyncMock()
                 mock_result.values = mock_embedding
                 mock_get_embeddings.return_value = [mock_result]
 
+<<<<<<< HEAD
                 with patch("vertexai.language_models.TextEmbeddingModel.get_embeddings_async") as mock_get_embeddings_async:
+=======
+                with patch(
+                    "vertexai.language_models.TextEmbeddingModel.get_embeddings_async"
+                ) as mock_get_embeddings_async:
+>>>>>>> origin/stable
                     mock_get_embeddings_async.return_value = [mock_result]
 
                     # ACT: Run the complete pipeline
 
                     # Step 1: Chunk the document (produces dict chunks when using metadata)
                     chunked_records = []
+<<<<<<< HEAD
                     async for chunked_record in splitter.process(test_record, processor_stage="chunk"):
+=======
+                    async for chunked_record in splitter.process(
+                        test_record, processor_stage="chunk"
+                    ):
+>>>>>>> origin/stable
                         chunked_records.append(chunked_record)
 
                     assert len(chunked_records) == 1
@@ -115,12 +133,26 @@ class TestVectorE2EIntegration:
                             "chunk_index": chunk.chunk_index,
                             "chunk_text": chunk.chunk_text,
                             "document_id": chunk.document_id,
+<<<<<<< HEAD
                             "metadata": (chunk.metadata.copy() if hasattr(chunk, "metadata") else {}),
+=======
+                            "metadata": (
+                                chunk.metadata.copy()
+                                if hasattr(chunk, "metadata")
+                                else {}
+                            ),
+>>>>>>> origin/stable
                         }
                         dict_chunks.append(dict_chunk)
 
                     # Create new record with dict chunks
+<<<<<<< HEAD
                     chunked_record = chunked_record.model_copy(update={"chunks": dict_chunks})
+=======
+                    chunked_record = chunked_record.model_copy(
+                        update={"chunks": dict_chunks}
+                    )
+>>>>>>> origin/stable
 
                     # Step 2: Generate embeddings (using real EmbeddingGenerator)
                     embedding_gen = EmbeddingGenerator(
@@ -133,7 +165,13 @@ class TestVectorE2EIntegration:
                     await embeddings.ensure_cache_initialized()
 
                     embedded_records = []
+<<<<<<< HEAD
                     async for embedded_record in embedding_gen.process(chunked_record, processor_stage="embed"):
+=======
+                    async for embedded_record in embedding_gen.process(
+                        chunked_record, processor_stage="embed"
+                    ):
+>>>>>>> origin/stable
                         embedded_records.append(embedded_record)
 
                     assert len(embedded_records) == 1
@@ -157,7 +195,13 @@ class TestVectorE2EIntegration:
                     # ASSERT: Verify complete pipeline succeeded
 
                     # Verify processing succeeded (not failed!)
+<<<<<<< HEAD
                     assert result.status == "processed", f"Processing failed: {result.reason}"
+=======
+                    assert result.status == "processed", (
+                        f"Processing failed: {result.reason}"
+                    )
+>>>>>>> origin/stable
                     assert result.chunks_created == len(embedded_record.chunks)
                     assert result.chunks_created > 0
 
@@ -168,7 +212,13 @@ class TestVectorE2EIntegration:
 
                         # Verify metadata enhancements from ChromaDBEmbeddings.process_record
                         metadata = chunk["metadata"]
+<<<<<<< HEAD
                         assert "embedding_model" in metadata, "Should have embedding_model"
+=======
+                        assert "embedding_model" in metadata, (
+                            "Should have embedding_model"
+                        )
+>>>>>>> origin/stable
                         assert metadata["embedding_model"] == "text-embedding-004"
                         assert "content_hash" in metadata, "Should have content_hash"
                         assert "created_timestamp" in metadata, "Should have timestamp"
@@ -176,11 +226,25 @@ class TestVectorE2EIntegration:
                     # Verify chunks were actually stored in ChromaDB
                     collection = embeddings.collection
                     stored_count = collection.count()
+<<<<<<< HEAD
                     assert stored_count == result.chunks_created, f"Expected {result.chunks_created} chunks in DB, got {stored_count}"
 
                     # Verify we can query the stored chunks
                     query_results = collection.query(query_embeddings=[mock_embedding], n_results=1)
                     assert len(query_results["ids"][0]) > 0, "Should be able to query chunks"
+=======
+                    assert stored_count == result.chunks_created, (
+                        f"Expected {result.chunks_created} chunks in DB, got {stored_count}"
+                    )
+
+                    # Verify we can query the stored chunks
+                    query_results = collection.query(
+                        query_embeddings=[mock_embedding], n_results=1
+                    )
+                    assert len(query_results["ids"][0]) > 0, (
+                        "Should be able to query chunks"
+                    )
+>>>>>>> origin/stable
 
     @pytest.mark.anyio
     async def test_metadata_enhancement_preserves_existing_fields(self, real_bm):

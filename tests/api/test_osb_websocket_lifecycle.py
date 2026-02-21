@@ -55,16 +55,33 @@ class WebSocketTestClient:
         """Send message to WebSocket."""
         if self.websocket:
             await self.websocket.send(json.dumps(message))
+<<<<<<< HEAD
             self.connection_events.append(("message_sent", time.time(), message["type"]))
+=======
+            self.connection_events.append(
+                ("message_sent", time.time(), message["type"])
+            )
+>>>>>>> origin/stable
 
     async def receive_message(self, timeout: float = 5.0):
         """Receive message from WebSocket with timeout."""
         if self.websocket:
             try:
+<<<<<<< HEAD
                 message_str = await asyncio.wait_for(self.websocket.recv(), timeout=timeout)
                 message = json.loads(message_str)
                 self.messages_received.append(message)
                 self.connection_events.append(("message_received", time.time(), message["type"]))
+=======
+                message_str = await asyncio.wait_for(
+                    self.websocket.recv(), timeout=timeout
+                )
+                message = json.loads(message_str)
+                self.messages_received.append(message)
+                self.connection_events.append(
+                    ("message_received", time.time(), message["type"])
+                )
+>>>>>>> origin/stable
                 return message
             except asyncio.TimeoutError:
                 self.connection_events.append(("receive_timeout", time.time()))
@@ -252,7 +269,13 @@ class TestOSBWebSocketSessionIsolation:
             session.monitor_ui.return_value = mock_monitor()
             return session
 
+<<<<<<< HEAD
         real_flow_runner.get_websocket_session_async.side_effect = track_session_creation
+=======
+        real_flow_runner.get_websocket_session_async.side_effect = (
+            track_session_creation
+        )
+>>>>>>> origin/stable
 
         with TestClient(test_app) as client:
             # Create first session
@@ -260,9 +283,19 @@ class TestOSBWebSocketSessionIsolation:
                 # Create second session
                 with client.websocket_connect(f"/ws/{session_2_id}") as ws2:
                     # Send messages to both sessions
+<<<<<<< HEAD
                     ws1.send_json({"type": "run_flow", "flow": "osb", "query": "Session 1 query"})
 
                     ws2.send_json({"type": "run_flow", "flow": "osb", "query": "Session 2 query"})
+=======
+                    ws1.send_json(
+                        {"type": "run_flow", "flow": "osb", "query": "Session 1 query"}
+                    )
+
+                    ws2.send_json(
+                        {"type": "run_flow", "flow": "osb", "query": "Session 2 query"}
+                    )
+>>>>>>> origin/stable
 
                     # Verify both sessions were created separately
                     assert session_1_id in session_calls
@@ -276,7 +309,13 @@ class TestOSBWebSocketSessionIsolation:
         with TestClient(test_app) as client:
             # Create connection and then close it
             with client.websocket_connect(f"/ws/{session_id}") as websocket:
+<<<<<<< HEAD
                 websocket.send_json({"type": "run_flow", "flow": "osb", "query": "Test cleanup query"})
+=======
+                websocket.send_json(
+                    {"type": "run_flow", "flow": "osb", "query": "Test cleanup query"}
+                )
+>>>>>>> origin/stable
 
             # Connection closed automatically by context manager
             # Verify session was created (cleanup verification would require
@@ -353,7 +392,13 @@ class TestOSBWebSocketErrorHandling:
                 assert True
 
     @pytest.mark.anyio
+<<<<<<< HEAD
     async def test_websocket_session_not_found_handling(self, test_app, real_flow_runner):
+=======
+    async def test_websocket_session_not_found_handling(
+        self, test_app, real_flow_runner
+    ):
+>>>>>>> origin/stable
         """Test WebSocket handling when session is not found."""
         # Mock session not found scenario
         real_flow_runner.get_websocket_session_async.return_value = None
@@ -399,7 +444,13 @@ class TestOSBWebSocketPerformance:
         # Basic performance validation
         avg_connection_time = sum(connection_times) / len(connection_times)
         assert avg_connection_time < 1.0  # Should connect in under 1 second
+<<<<<<< HEAD
         assert all(t < 2.0 for t in connection_times)  # No single connection > 2 seconds
+=======
+        assert all(
+            t < 2.0 for t in connection_times
+        )  # No single connection > 2 seconds
+>>>>>>> origin/stable
 
     @pytest.mark.anyio
     async def test_websocket_message_throughput(self, test_app):

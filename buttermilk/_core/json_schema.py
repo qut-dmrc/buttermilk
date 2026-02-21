@@ -1,7 +1,10 @@
 """JSON schema transformation utilities."""
 
+<<<<<<< HEAD
 from __future__ import annotations
 
+=======
+>>>>>>> origin/stable
 import copy
 from typing import Any
 
@@ -131,6 +134,7 @@ def _make_properties_required_recursive(node: Any) -> None:
         elif isinstance(value, list):
             for item in value:
                 _make_properties_required_recursive(item)
+<<<<<<< HEAD
 
 
 def convert_enum_values_to_strings(obj: Any) -> Any:
@@ -173,3 +177,5 @@ def prepare_schema_for_vertex(schema: type, is_gemini: bool = False) -> dict[str
     if is_gemini:
         schema_dict = convert_enum_values_to_strings(schema_dict)
     return schema_dict
+=======
+>>>>>>> origin/stable

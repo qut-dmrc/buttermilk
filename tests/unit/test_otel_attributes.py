@@ -10,13 +10,22 @@ from buttermilk.utils.otel import span_with_session
 class TestProjectNameCapture:
     """Test project name is captured in all spans."""
 
+<<<<<<< HEAD
     def test_project_name_in_span_attributes(self, real_bm, tracer_provider, get_recorded_spans):
+=======
+    def test_project_name_in_span_attributes(
+        self, real_bm, tracer_provider, get_recorded_spans
+    ):
+>>>>>>> origin/stable
         """Verify project name appears as span attribute."""
         # Arrange: Set up BM with specific project name
         # Note: span_with_session uses the global bm singleton, so we need to
         # set the project name on the actual global bm instance
         from buttermilk import bm
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/stable
         original_project_name = bm.session_info.project_name
         bm.session_info.project_name = "test_project_name"
 
@@ -39,13 +48,25 @@ class TestProjectNameCapture:
             assert span is not None
 
             # Verify attributes
+<<<<<<< HEAD
             assert "buttermilk.project.name" in span.attributes, "Project name attribute missing"
+=======
+            assert "buttermilk.project.name" in span.attributes, (
+                "Project name attribute missing"
+            )
+>>>>>>> origin/stable
             assert span.attributes["buttermilk.project.name"] == "test_project_name"
         finally:
             # Restore original project name
             bm.session_info.project_name = original_project_name
 
+<<<<<<< HEAD
     def test_project_name_propagates_to_child_spans(self, real_bm, tracer_provider, get_recorded_spans):
+=======
+    def test_project_name_propagates_to_child_spans(
+        self, real_bm, tracer_provider, get_recorded_spans
+    ):
+>>>>>>> origin/stable
         """Verify project name propagates to all child spans."""
         real_bm.session_info.project_name = "child_test_project"
 
@@ -70,7 +91,13 @@ class TestProjectNameCapture:
             assert "buttermilk.project.name" in span.attributes
             assert span.attributes["buttermilk.project.name"] == "child_test_project"
 
+<<<<<<< HEAD
     def test_project_name_fallback_when_bm_unavailable(self, tracer_provider, get_recorded_spans):
+=======
+    def test_project_name_fallback_when_bm_unavailable(
+        self, tracer_provider, get_recorded_spans
+    ):
+>>>>>>> origin/stable
         """Verify graceful handling when BM not available.
 
         When span_with_session is called with a session_id but BM is not available,
@@ -90,7 +117,13 @@ class TestProjectNameCapture:
         # When session_id is provided, project_name is always set
         # Falls back to "unknown" when BM is not available
         project_name = spans[0].attributes.get("buttermilk.project.name")
+<<<<<<< HEAD
         assert project_name == "unknown", f"Expected project name to be 'unknown' when BM not available, got: {project_name}"
+=======
+        assert project_name == "unknown", (
+            f"Expected project name to be 'unknown' when BM not available, got: {project_name}"
+        )
+>>>>>>> origin/stable
 
 
 class TestAgentTypeFormatting:

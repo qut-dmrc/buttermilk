@@ -66,7 +66,13 @@ DAVENPORT, IA—In the wake of growing controversy surrounding transgender bathr
             "record_id": "onion_trans_prom",
         }
     ],
+<<<<<<< HEAD
     "expected": [{"reasons": ["The article does not violate the guidelines"], "violating": False}],
+=======
+    "expected": [
+        {"reasons": ["The article does not violate the guidelines"], "violating": False}
+    ],
+>>>>>>> origin/stable
     "answers": [
         {
             "agent_id": "SYNTHESISER-HBMW9V",

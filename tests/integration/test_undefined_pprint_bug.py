@@ -32,6 +32,7 @@ def test_score_template_with_missing_expected_shows_placeholder():
     )
 
     # CRITICAL ASSERTION: unfilled_vars should detect missing 'expected'
+<<<<<<< HEAD
     assert "expected" in unfilled_vars, f"Template should detect 'expected' as unfilled, but unfilled_vars = {unfilled_vars}"
 
     # CRITICAL ASSERTION: Should render as {{expected}} placeholder
@@ -39,3 +40,20 @@ def test_score_template_with_missing_expected_shows_placeholder():
 
     # CRITICAL ASSERTION: Should NOT render as "Undefined"
     assert "Undefined" not in rendered, f"Should not render as 'Undefined' string, but found it in:\n{rendered}"
+=======
+    assert "expected" in unfilled_vars, (
+        f"Template should detect 'expected' as unfilled, "
+        f"but unfilled_vars = {unfilled_vars}"
+    )
+
+    # CRITICAL ASSERTION: Should render as {{expected}} placeholder
+    assert "{{expected}}" in rendered, (
+        f"Undefined 'expected' with pprint filter should render as {{{{expected}}}}, "
+        f"but rendered as:\n{rendered}"
+    )
+
+    # CRITICAL ASSERTION: Should NOT render as "Undefined"
+    assert "Undefined" not in rendered, (
+        f"Should not render as 'Undefined' string, but found it in:\n{rendered}"
+    )
+>>>>>>> origin/stable

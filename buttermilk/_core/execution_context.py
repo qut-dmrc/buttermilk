@@ -65,7 +65,13 @@ def _make_execution_context_id() -> str:
     # Format timestamp for use in filenames (simplified ISO 8601)
     context_time = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%MZ")
 
+<<<<<<< HEAD
     execution_context_id = f"exec-{context_time}-{shortuuid.uuid()[:8]}-{node_name}-{username}"
+=======
+    execution_context_id = (
+        f"exec-{context_time}-{shortuuid.uuid()[:8]}-{node_name}-{username}"
+    )
+>>>>>>> origin/stable
     _global_execution_context_id = execution_context_id
     return execution_context_id
 
@@ -98,10 +104,25 @@ class ExecutionContext(BaseModel):
     )
 
     # Infrastructure configuration
+<<<<<<< HEAD
     clouds: list[CloudProvider] = Field(default_factory=list, description="List of cloud provider configurations.")
     logging: LoggerConfig | None = Field(default=None, description="Configuration for cloud-based logging.")
     tracing: dict[str, Tracing] | None = Field(default_factory=dict, description="Configuration for tracing systems.")
     datasets: dict[str, BaseStorageConfig] = Field(default_factory=dict, description="Shared dataset configurations.")
+=======
+    clouds: list[CloudProvider] = Field(
+        default_factory=list, description="List of cloud provider configurations."
+    )
+    logging: LoggerConfig | None = Field(
+        default=None, description="Configuration for cloud-based logging."
+    )
+    tracing: dict[str, Tracing] | None = Field(
+        default_factory=dict, description="Configuration for tracing systems."
+    )
+    datasets: dict[str, BaseStorageConfig] = Field(
+        default_factory=dict, description="Shared dataset configurations."
+    )
+>>>>>>> origin/stable
     default_llm_wrapper: str = Field(
         default="litellm",
         description="Default LLM wrapper type (autogen or litellm). Passed to LLMs instance.",
@@ -176,7 +197,13 @@ class ExecutionContext(BaseModel):
     def _setup_logging(self) -> None:
         """Set up modern logging for the execution context."""
         verbose = getattr(self.logging, "verbose", False) if self.logging else False
+<<<<<<< HEAD
         enable_console = getattr(self.logging, "console", True) if self.logging else True
+=======
+        enable_console = (
+            getattr(self.logging, "console", True) if self.logging else True
+        )
+>>>>>>> origin/stable
         setup_console_logging(verbose=verbose, enable_console=enable_console)
 
         # Set up structured JSON file logging with project name
@@ -214,7 +241,14 @@ class ExecutionContext(BaseModel):
             if quota_project_id:
                 os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = quota_project_id
 
+<<<<<<< HEAD
             logger.debug(f"Set GCP environment: GOOGLE_CLOUD_PROJECT={project_id}, GOOGLE_CLOUD_QUOTA_PROJECT={quota_project_id}")
+=======
+            logger.debug(
+                f"Set GCP environment: GOOGLE_CLOUD_PROJECT={project_id}, "
+                f"GOOGLE_CLOUD_QUOTA_PROJECT={quota_project_id}"
+            )
+>>>>>>> origin/stable
 
     async def _async_background_init(self) -> None:
         """Async initialization of infrastructure components."""
@@ -243,7 +277,13 @@ class ExecutionContext(BaseModel):
         """Ensure that ExecutionContext initialization is complete."""
         await self._initialization_complete.wait()
         if self._initialization_error:
+<<<<<<< HEAD
             raise RuntimeError(f"ExecutionContext initialization failed: {self._initialization_error}") from self._initialization_error
+=======
+            raise RuntimeError(
+                f"ExecutionContext initialization failed: {self._initialization_error}"
+            ) from self._initialization_error
+>>>>>>> origin/stable
 
         # Set up async components like tracing
         await self._setup_tracing()
@@ -289,7 +329,10 @@ class ExecutionContext(BaseModel):
         """Provides access to the CloudManager instance."""
         if self._cloud_manager is None:
             from buttermilk._core.cloud import CloudManager
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/stable
             self._cloud_manager = CloudManager(clouds=self.clouds)
             self._ensure_cloud_authentication()
         return self._cloud_manager
@@ -333,7 +376,13 @@ class ExecutionContext(BaseModel):
             # Get secrets configuration from cloud provider
             secrets_config = secrets_cloud.get_client_config("secretmanager")
             self._secret_manager = SecretsManager(**secrets_config)
+<<<<<<< HEAD
             logger.debug(f"SecretsManager initialized with {secrets_cloud.type} provider")
+=======
+            logger.debug(
+                f"SecretsManager initialized with {secrets_cloud.type} provider"
+            )
+>>>>>>> origin/stable
         return self._secret_manager
 
     @property
@@ -341,7 +390,10 @@ class ExecutionContext(BaseModel):
         """Provides access to the LLMs manager instance."""
         if self._llms_instance is None:
             from buttermilk._core.llms import LLMs
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/stable
             connections_data: dict[str, Any] | None = None
             # Use centralized cache directory
             cache_dir = get_base_cache_dir() / cache.MODELS
@@ -350,9 +402,19 @@ class ExecutionContext(BaseModel):
             # Try to load from local cache first
             if cache_path.exists() and cache_path.is_file():
                 try:
+<<<<<<< HEAD
                     connections_data = load_json_flexi(cache_path.read_text(encoding="utf-8"))
                     if not isinstance(connections_data, dict):
                         logger.warning(f"LLM connections cache at {cache_path} is not a dict. Will try secrets.")
+=======
+                    connections_data = load_json_flexi(
+                        cache_path.read_text(encoding="utf-8")
+                    )
+                    if not isinstance(connections_data, dict):
+                        logger.warning(
+                            f"LLM connections cache at {cache_path} is not a dict. Will try secrets."
+                        )
+>>>>>>> origin/stable
                         connections_data = None
                     else:
                         logger.debug(
@@ -379,9 +441,19 @@ class ExecutionContext(BaseModel):
                     connections_data = {}
                 else:
                     try:
+<<<<<<< HEAD
                         connections_data = self.secret_manager.get_secret(cfg_key=MODELS_CFG_KEY)
                         if not isinstance(connections_data, dict):
                             raise TypeError(f"LLM connections from secrets is not a dict, got {type(connections_data)}.")
+=======
+                        connections_data = self.secret_manager.get_secret(
+                            cfg_key=MODELS_CFG_KEY
+                        )
+                        if not isinstance(connections_data, dict):
+                            raise TypeError(
+                                f"LLM connections from secrets is not a dict, got {type(connections_data)}."
+                            )
+>>>>>>> origin/stable
                         logger.debug(
                             "Loaded LLM connections from secret manager",
                             key=MODELS_CFG_KEY,
@@ -395,7 +467,13 @@ class ExecutionContext(BaseModel):
                             error=str(e),
                             secret_key=MODELS_CFG_KEY,
                         )
+<<<<<<< HEAD
                         logger.warning("Proceeding with empty LLM connections. LLM functionality will not be available.")
+=======
+                        logger.warning(
+                            "Proceeding with empty LLM connections. LLM functionality will not be available."
+                        )
+>>>>>>> origin/stable
                         connections_data = {}
 
             self._llms_instance = LLMs(
@@ -405,7 +483,13 @@ class ExecutionContext(BaseModel):
             )
         return self._llms_instance
 
+<<<<<<< HEAD
     def _write_cache_sync(self, connections_data: dict[str, Any], cache_path: Path) -> None:
+=======
+    def _write_cache_sync(
+        self, connections_data: dict[str, Any], cache_path: Path
+    ) -> None:
+>>>>>>> origin/stable
         """Synchronous cache writing helper."""
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         import json
@@ -418,7 +502,10 @@ class ExecutionContext(BaseModel):
         """Provides access to the QueryRunner instance."""
         if self._query_runner is None:
             from buttermilk._core.query import QueryRunner
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/stable
             self._query_runner = QueryRunner(bq_client=self.bq)
         return self._query_runner
 
@@ -457,7 +544,13 @@ class ExecutionContext(BaseModel):
             # Check if secret manager is available
             secrets_cloud = self._find_cloud_with_service("secrets")
             if not secrets_cloud:
+<<<<<<< HEAD
                 logger.debug("No secret manager configured, returning empty credentials dict")
+=======
+                logger.debug(
+                    "No secret manager configured, returning empty credentials dict"
+                )
+>>>>>>> origin/stable
                 self._credentials_cached = {}
                 return self._credentials_cached
 
@@ -465,10 +558,21 @@ class ExecutionContext(BaseModel):
             try:
                 creds = self.secret_manager.get_secret(cfg_key=SHARED_CREDENTIALS_KEY)
                 if not isinstance(creds, dict):
+<<<<<<< HEAD
                     raise TypeError(f"Expected shared credentials to be a dict, got {type(creds)}")
                 self._credentials_cached = creds
             except Exception as e:
                 logger.warning(f"Failed to fetch credentials from secret manager: {e}. Using empty credentials dict.")
+=======
+                    raise TypeError(
+                        f"Expected shared credentials to be a dict, got {type(creds)}"
+                    )
+                self._credentials_cached = creds
+            except Exception as e:
+                logger.warning(
+                    f"Failed to fetch credentials from secret manager: {e}. Using empty credentials dict."
+                )
+>>>>>>> origin/stable
                 self._credentials_cached = {}
         return self._credentials_cached
 
@@ -506,7 +610,13 @@ class ExecutionContext(BaseModel):
         Returns:
             None: Weave is no longer used
         """
+<<<<<<< HEAD
         logger.debug("get_weave_client called but weave has been removed, returning None")
+=======
+        logger.debug(
+            "get_weave_client called but weave has been removed, returning None"
+        )
+>>>>>>> origin/stable
 
     async def _ensure_tracing_initialized(self) -> None:
         """Ensure all tracing providers are initialized on-demand."""
@@ -542,7 +652,13 @@ class ExecutionContext(BaseModel):
         This method previously initialized Weave tracing. After weave removal,
         it does nothing and logs a debug message.
         """
+<<<<<<< HEAD
         logger.debug("_initialize_weave called but weave has been removed, doing nothing")
+=======
+        logger.debug(
+            "_initialize_weave called but weave has been removed, doing nothing"
+        )
+>>>>>>> origin/stable
 
     async def _initialize_traceloop(self) -> None:
         """Initialize Traceloop tracing."""
@@ -550,7 +666,13 @@ class ExecutionContext(BaseModel):
         api_key = getattr(traceloop_config, "api_key", None)
 
         if not api_key:
+<<<<<<< HEAD
             raise RuntimeError("Traceloop tracing enabled but api_key not configured. Add api_key to infrastructure.tracing.traceloop in config.")
+=======
+            raise RuntimeError(
+                "Traceloop tracing enabled but api_key not configured. Add api_key to infrastructure.tracing.traceloop in config."
+            )
+>>>>>>> origin/stable
 
         try:
             from traceloop.sdk import Traceloop
@@ -588,7 +710,13 @@ def get_execution_context() -> ExecutionContext:
     """Get the global ExecutionContext instance."""
     global _global_execution_context
     if _global_execution_context is None:
+<<<<<<< HEAD
         raise RuntimeError("ExecutionContext not initialized. Call set_execution_context() first.")
+=======
+        raise RuntimeError(
+            "ExecutionContext not initialized. Call set_execution_context() first."
+        )
+>>>>>>> origin/stable
     return _global_execution_context
 
 
@@ -793,10 +921,23 @@ async def create_session_from_context_async(
         platform=session.platform,
         template_paths=session.template_paths,
         save_dir_base=getattr(session, "save_dir_base", None),
+<<<<<<< HEAD
         cloud_manager=execution_context.cloud_manager if execution_context.clouds else None,
         secret_manager=execution_context.secret_manager if execution_context._find_cloud_with_service("secrets") else None,
         llms_instance=execution_context.llms,
         query_runner=execution_context.query_runner if execution_context.clouds else None,
+=======
+        cloud_manager=execution_context.cloud_manager
+        if execution_context.clouds
+        else None,
+        secret_manager=execution_context.secret_manager
+        if execution_context._find_cloud_with_service("secrets")
+        else None,
+        llms_instance=execution_context.llms,
+        query_runner=execution_context.query_runner
+        if execution_context.clouds
+        else None,
+>>>>>>> origin/stable
         logger_cfg=execution_context.logging,
         config=full_config,  # Store full typed config
     )

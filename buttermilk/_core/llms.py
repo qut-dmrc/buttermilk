@@ -134,7 +134,10 @@ class ClientType(Enum):
         GEMINI_VERTEX: Gemini client on vertex platform.
         VERTEX_OPENAI: Google Vertex AI platform with OpenAI-compatible endpoint (legacy).
         LLAMA_VERTEX: Llama models on Vertex AI via native LiteLLM support.
+<<<<<<< HEAD
         DEEPSEEK_VERTEX: DeepSeek models on Vertex AI via native LiteLLM support.
+=======
+>>>>>>> origin/stable
         ANTHROPIC: Anthropic platform (e.g., Claude models).
         ANTHROPIC_VERTEX: Anthropic models hosted on Google Vertex AI.
         llama: Llama models (often self-hosted or via specific providers).
@@ -150,9 +153,13 @@ class ClientType(Enum):
     GEMINI_VERTEX = "gemini_vertex"
     VERTEX_OPENAI = "vertex_openai"  # OpenAI-compatible endpoint on Vertex (legacy)
     LLAMA_VERTEX = "llama_vertex"  # Llama models on Vertex AI via native LiteLLM
+<<<<<<< HEAD
     DEEPSEEK_VERTEX = "deepseek_vertex"  # DeepSeek models on Vertex AI via native LiteLLM
     HUGGINGFACE = "huggingface"  # HuggingFace Inference API (serverless or dedicated)
     XAI = "xai"  # xAI (Grok) via OpenAI-compatible API
+=======
+    HUGGINGFACE = "huggingface"  # HuggingFace Inference API (serverless or dedicated)
+>>>>>>> origin/stable
     ZENTROPI = "zentropi"  # Zentropi toxicity/content moderation API
 
 
@@ -1379,10 +1386,15 @@ class LLMs(BaseModel):
             "huggingface": "huggingface",
             "vertex_openai": "vertex_ai",  # For litellm pricing, Vertex models need vertex_ai prefix
             "llama_vertex": "vertex_ai",  # Llama on Vertex via native LiteLLM support
+<<<<<<< HEAD
             "deepseek_vertex": "vertex_ai",  # DeepSeek on Vertex via native LiteLLM support
             "anthropic_vertex": "vertex_ai",  # Anthropic-on-Vertex
             "anthropic": "anthropic",
             "xai": "xai",  # xAI (Grok) via OpenAI-compatible API
+=======
+            "anthropic_vertex": "vertex_ai",  # Anthropic-on-Vertex
+            "anthropic": "anthropic",
+>>>>>>> origin/stable
             "zentropi": "zentropi",  # Zentropi custom API
         }
         return prefix_map.get(client_type, client_type)  # fallback / extension
@@ -1398,7 +1410,10 @@ class LLMs(BaseModel):
             "huggingface",
             "vertex_ai",
             "anthropic",
+<<<<<<< HEAD
             "xai",
+=======
+>>>>>>> origin/stable
         }
 
         if "/" not in model_name:
@@ -1475,6 +1490,7 @@ class LLMs(BaseModel):
             # Keep meta/ prefix - litellm needs it for proper routing
             return model_name
 
+<<<<<<< HEAD
         # For deepseek_vertex, preserve the deepseek-ai/ prefix for native LiteLLM support
         # LiteLLM expects model names like "deepseek-ai/deepseek-r1-0528-maas"
         # and will construct the full model name as "vertex_ai/deepseek-ai/deepseek-r1-..."
@@ -1482,6 +1498,8 @@ class LLMs(BaseModel):
             # Keep deepseek-ai/ prefix - litellm needs it for proper routing
             return model_name
 
+=======
+>>>>>>> origin/stable
         # For anthropic_vertex clients with provider-specific models, preserve format
         if client_type == "anthropic_vertex" and "/" in model_name:
             return model_name
@@ -1574,22 +1592,35 @@ class LLMs(BaseModel):
             vertex_project = config.configs.get("project_id")
             vertex_location = config.configs.get("region")
 
+<<<<<<< HEAD
         elif config.client_type in (ClientType.LLAMA_VERTEX, ClientType.DEEPSEEK_VERTEX):
             # Vertex AI MaaS models via native LiteLLM support (Llama, DeepSeek, etc.)
+=======
+        elif config.client_type == ClientType.LLAMA_VERTEX:
+            # Llama on Vertex via native LiteLLM support
+>>>>>>> origin/stable
             # LiteLLM handles auth and endpoint construction - no base_url needed
             if not bm.gcp_credentials:
                 raise ValueError("GCP credentials not available for Vertex AI.")
             vertex_project = config.configs.get("project_id")
             vertex_location = config.configs.get("region")
             if not vertex_project or not vertex_location:
+<<<<<<< HEAD
                 provider = config.client_type.value
                 raise ValueError(f"project_id and region are required for {provider}.")
+=======
+                raise ValueError("project_id and region are required for Llama Vertex AI.")
+>>>>>>> origin/stable
             # Don't pass base_url - let LiteLLM construct the correct endpoint
             effective_base_url = None
 
         # Determine if token_provider is needed for this provider
         token_provider = None
+<<<<<<< HEAD
         if config.client_type in (ClientType.VERTEX_OPENAI, ClientType.GEMINI_VERTEX, ClientType.LLAMA_VERTEX, ClientType.DEEPSEEK_VERTEX):
+=======
+        if config.client_type in (ClientType.VERTEX_OPENAI, ClientType.GEMINI_VERTEX, ClientType.LLAMA_VERTEX):
+>>>>>>> origin/stable
             # Vertex models need GCP token refresh
             def get_vertex_token() -> str:
                 return bm.get_gcp_access_token()

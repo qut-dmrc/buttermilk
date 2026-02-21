@@ -185,7 +185,13 @@ class TestTraceWriter:
     @pytest.mark.anyio
     async def test_trace_writer_add(self, real_bm):
         """Test adding traces to TraceWriter."""
+<<<<<<< HEAD
         with patch("buttermilk.utils.trace_writer.AsyncDataUploader") as mock_uploader_class:
+=======
+        with patch(
+            "buttermilk.utils.trace_writer.AsyncDataUploader"
+        ) as mock_uploader_class:
+>>>>>>> origin/stable
             mock_uploader = AsyncMock()
             mock_uploader_class.return_value = mock_uploader
 
@@ -482,7 +488,12 @@ class TestExecutionTraceHashability:
         # (this changed in Pydantic v2)
         # Let's verify the actual behavior
         assert trace1 != trace2, (
+<<<<<<< HEAD
             "ExecutionTrace instances with identical fields should be unequal due to different call_id and timestamp (auto-generated fields)"
+=======
+            "ExecutionTrace instances with identical fields should be unequal "
+            "due to different call_id and timestamp (auto-generated fields)"
+>>>>>>> origin/stable
         )
 
         # The reason they're unequal is because of auto-generated fields
@@ -761,7 +772,13 @@ class TestExecutionTraceRecordSchema:
 
         # inputs should NOT contain 'record' key
         if "inputs" in dumped and dumped["inputs"]:
+<<<<<<< HEAD
             assert "record" not in dumped["inputs"], "Record should NOT be in inputs['record'] - use trace.record instead"
+=======
+            assert "record" not in dumped["inputs"], (
+                "Record should NOT be in inputs['record'] - use trace.record instead"
+            )
+>>>>>>> origin/stable
 
     def test_record_not_in_inputs_template_vars_record(self, real_bm):
         """Test that record is NOT in inputs['template_vars']['record'].
@@ -793,7 +810,14 @@ class TestExecutionTraceRecordSchema:
         if "inputs" in dumped and dumped["inputs"]:
             template_vars = dumped["inputs"].get("template_vars", {})
             if template_vars:
+<<<<<<< HEAD
                 assert "record" not in template_vars, "Record should NOT be in inputs['template_vars']['record'] - use trace.record instead"
+=======
+                assert "record" not in template_vars, (
+                    "Record should NOT be in inputs['template_vars']['record'] - "
+                    "use trace.record instead"
+                )
+>>>>>>> origin/stable
 
     def test_trace_record_field_serialization_for_bq(self, real_bm):
         """Test that record field serializes correctly for BigQuery schema.
@@ -907,7 +931,13 @@ class TestExecutionTraceWithHashes:
 
         except TimeoutError:
             signal.alarm(0)
+<<<<<<< HEAD
             pytest.fail("model_dump() infinite looped when serializing ExecutionTrace with BaseRecord")
+=======
+            pytest.fail(
+                "model_dump() infinite looped when serializing ExecutionTrace with BaseRecord"
+            )
+>>>>>>> origin/stable
 
     def test_execution_trace_with_record_and_ground_truth_hash(self, real_bm):
         """Test ExecutionTrace with Record containing ground_truth serializes correctly.
@@ -973,7 +1003,14 @@ class TestExecutionTraceWithHashes:
 
         except TimeoutError:
             signal.alarm(0)
+<<<<<<< HEAD
             pytest.fail("model_dump() infinite looped when serializing ExecutionTrace with Record containing ground_truth_hash")
+=======
+            pytest.fail(
+                "model_dump() infinite looped when serializing ExecutionTrace "
+                "with Record containing ground_truth_hash"
+            )
+>>>>>>> origin/stable
 
     def test_record_hash_is_idempotent(self, real_bm):
         """Test that record_hash computation is idempotent (same value on multiple calls).
@@ -1062,7 +1099,13 @@ class TestExecutionTraceWithHashes:
 
         except TimeoutError:
             signal.alarm(0)
+<<<<<<< HEAD
             pytest.fail("model_dump_json() infinite looped when serializing ExecutionTrace with Record")
+=======
+            pytest.fail(
+                "model_dump_json() infinite looped when serializing ExecutionTrace with Record"
+            )
+>>>>>>> origin/stable
 
     def test_execution_trace_resolved_inputs_with_record(self, real_bm):
         """Test trace where inputs contains a record (as would happen from LLMCore).
@@ -1118,7 +1161,14 @@ class TestExecutionTraceWithHashes:
 
         except TimeoutError:
             signal.alarm(0)
+<<<<<<< HEAD
             pytest.fail("model_dump() infinite looped when ExecutionTrace has record in both record field and inputs dict")
+=======
+            pytest.fail(
+                "model_dump() infinite looped when ExecutionTrace has record "
+                "in both record field and inputs dict"
+            )
+>>>>>>> origin/stable
 
 
 class TestExecutionTraceSchemaContracts:

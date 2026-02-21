@@ -195,7 +195,13 @@ class SessionStorageService:
             )
 
         except Exception as e:
+<<<<<<< HEAD
             logger.error("Failed to save message to session", session_id=session_id, error=e)
+=======
+            logger.error(
+                "Failed to save message to session", session_id=session_id, error=e
+            )
+>>>>>>> origin/stable
             raise
 
     def save_parameters(self, session_id: str, parameters: dict) -> None:
@@ -224,7 +230,13 @@ class SessionStorageService:
             )
 
         except Exception as e:
+<<<<<<< HEAD
             logger.error("Failed to save parameters for session", session_id=session_id, error=e)
+=======
+            logger.error(
+                "Failed to save parameters for session", session_id=session_id, error=e
+            )
+>>>>>>> origin/stable
             raise
 
     def update_flow_status(self, session_id: str, status: str) -> None:
@@ -277,7 +289,13 @@ class SessionStorageService:
             return session_data.get("flow_status", "idle")
 
         except Exception as e:
+<<<<<<< HEAD
             logger.error("Failed to read flow status for session", session_id=session_id, error=e)
+=======
+            logger.error(
+                "Failed to read flow status for session", session_id=session_id, error=e
+            )
+>>>>>>> origin/stable
             return "idle"
 
     def get_session_parameters(self, session_id: str) -> dict:
@@ -301,7 +319,13 @@ class SessionStorageService:
             return session_data.get("parameters", {})
 
         except Exception as e:
+<<<<<<< HEAD
             logger.error("Failed to read parameters for session", session_id=session_id, error=e)
+=======
+            logger.error(
+                "Failed to read parameters for session", session_id=session_id, error=e
+            )
+>>>>>>> origin/stable
             return {}
 
     def is_session_stale(self, session_id: str, stale_minutes: int = 30) -> bool:
@@ -333,7 +357,13 @@ class SessionStorageService:
             return last_activity < stale_threshold
 
         except Exception as e:
+<<<<<<< HEAD
             logger.error("Failed to check staleness for session", session_id=session_id, error=e)
+=======
+            logger.error(
+                "Failed to check staleness for session", session_id=session_id, error=e
+            )
+>>>>>>> origin/stable
             return True
 
     def get_session_messages(self, session_id: str) -> List[ChatMessage]:
@@ -501,7 +531,13 @@ class SessionStorageService:
                 "message_count": len(session_data.get("messages", [])),
             }
         except Exception as e:
+<<<<<<< HEAD
             logger.error("Failed to read session metadata", session_id=session_id, error=e)
+=======
+            logger.error(
+                "Failed to read session metadata", session_id=session_id, error=e
+            )
+>>>>>>> origin/stable
             return None
 
     def list_sessions(self) -> List[dict]:
@@ -535,7 +571,13 @@ class SessionStorageService:
         try:
             # Check if session exists
             if not self.session_exists(session_id):
+<<<<<<< HEAD
                 logger.warning("Cannot archive non-existent session", session_id=session_id)
+=======
+                logger.warning(
+                    "Cannot archive non-existent session", session_id=session_id
+                )
+>>>>>>> origin/stable
                 return False
 
             # Try to get BM instance to access save_dir
@@ -556,7 +598,13 @@ class SessionStorageService:
                     return False
 
             except Exception as e:
+<<<<<<< HEAD
                 logger.warning("Could not access BM instance for session archival", error=e)
+=======
+                logger.warning(
+                    "Could not access BM instance for session archival", error=e
+                )
+>>>>>>> origin/stable
                 return False
 
             # Get session data
@@ -585,7 +633,13 @@ class SessionStorageService:
                 return False
 
         except Exception as e:
+<<<<<<< HEAD
             logger.error("Error archiving session to GCS", session_id=session_id, error=e)
+=======
+            logger.error(
+                "Error archiving session to GCS", session_id=session_id, error=e
+            )
+>>>>>>> origin/stable
             return False
 
     def finalize_session(self, session_id: str, final_status: str) -> None:
@@ -628,7 +682,13 @@ class SessionStorageService:
             # Always attempt archival for terminal states
             archive_success = self.archive_to_gcs(session_id)
             if archive_success:
+<<<<<<< HEAD
                 logger.info("Session archived to GCS after finalization", session_id=session_id)
+=======
+                logger.info(
+                    "Session archived to GCS after finalization", session_id=session_id
+                )
+>>>>>>> origin/stable
             else:
                 logger.debug(
                     "Session not archived (GCS not configured or archival failed)",

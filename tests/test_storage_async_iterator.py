@@ -44,7 +44,13 @@ async def test_storage_async_iterator_protocol():
 
     try:
         # Create storage with randomize=False to preserve order for testing
+<<<<<<< HEAD
         config = FileStorageConfig(type="file", path=temp_path, dataset_name="test", split_type="train", randomize=False)
+=======
+        config = FileStorageConfig(
+            type="file", path=temp_path, dataset_name="test", split_type="train", randomize=False
+        )
+>>>>>>> origin/stable
         storage = FileStorage(config)
 
         # Test 1: Has required async iterator methods
@@ -53,7 +59,13 @@ async def test_storage_async_iterator_protocol():
 
         # Test 2: Pipeline pattern compatibility (from pipeline.py:179)
         source_iter = storage if hasattr(storage, "__anext__") else storage.__aiter__()
+<<<<<<< HEAD
         assert source_iter is storage  # Should use storage directly since it has __anext__
+=======
+        assert (
+            source_iter is storage
+        )  # Should use storage directly since it has __anext__
+>>>>>>> origin/stable
 
         # Test 3: Actual async iteration
         records = []

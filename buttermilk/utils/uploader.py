@@ -12,7 +12,10 @@ from pydantic import BaseModel
 from tenacity import RetryError
 
 from buttermilk import bm
+<<<<<<< HEAD
 from buttermilk._core.constants import cache, get_base_cache_dir
+=======
+>>>>>>> origin/stable
 from buttermilk._core.log import logger
 from buttermilk._core.retry import RetryWrapper
 from buttermilk._core.types import BaseRecord
@@ -33,7 +36,13 @@ class AsyncDataUploader:
         use_timestamp_suffix: bool | None = None,
         output_col: str = "uri",
     ):
+<<<<<<< HEAD
         self.storage: Storage = bm.get_storage(storage) if not isinstance(storage, Storage) else storage
+=======
+        self.storage: Storage = (
+            bm.get_storage(storage) if not isinstance(storage, Storage) else storage
+        )
+>>>>>>> origin/stable
 
         self.buffer_size = buffer_size
         self.flush_interval = flush_interval
@@ -47,7 +56,13 @@ class AsyncDataUploader:
             self.use_timestamp_suffix = use_timestamp_suffix
         else:
             # No explicit value - auto-detect based on file existence
+<<<<<<< HEAD
             self.use_timestamp_suffix = hasattr(self.storage, "exists") and self.storage.exists()
+=======
+            self.use_timestamp_suffix = (
+                hasattr(self.storage, "exists") and self.storage.exists()
+            )
+>>>>>>> origin/stable
 
         self.original_storage = self.storage  # Keep reference to original
 
@@ -56,10 +71,14 @@ class AsyncDataUploader:
         self.last_flush = time.time()
         self._shutdown: asyncio.Event = asyncio.Event()
 
+<<<<<<< HEAD
         # Use a persistent backup directory under ~/.cache/buttermilk/backup/ instead of
         # an ephemeral temp directory. This ensures backups survive process restarts
         # and can be recovered if uploads fail during shutdown.
         self.backup_dir = self._get_persistent_backup_dir()
+=======
+        self.backup_dir = Path(mkdtemp())
+>>>>>>> origin/stable
         self.worker_task = None
 
         # Register shutdown handlers
@@ -67,6 +86,7 @@ class AsyncDataUploader:
         signal.signal(signal.SIGTERM, self.shutdown)
         signal.signal(signal.SIGINT, self.shutdown)
 
+<<<<<<< HEAD
     def _get_persistent_backup_dir(self) -> Path:
         """Get a persistent backup directory for trace recovery.
 
@@ -95,6 +115,8 @@ class AsyncDataUploader:
             logger.warning(f"Could not create persistent backup dir, using temp: {e}")
             return Path(mkdtemp())
 
+=======
+>>>>>>> origin/stable
     async def add(self, item: Any):
         """Add item (preferably a BaseRecord) to upload queue."""
         # Lazily start worker task
@@ -125,7 +147,11 @@ class AsyncDataUploader:
             The same record (pass-through behavior)
         """
         # Extract record from ProcessingContext if needed
+<<<<<<< HEAD
         record = context.record if hasattr(context, "record") else context
+=======
+        record = context.record if hasattr(context, 'record') else context
+>>>>>>> origin/stable
         await self.add(record)
         yield record  # Pass through unchanged
 
@@ -141,7 +167,14 @@ class AsyncDataUploader:
                     pass
 
                 # Check if we should flush
+<<<<<<< HEAD
                 should_flush = len(self.buffer) >= self.buffer_size or time.time() - self.last_flush >= self.flush_interval
+=======
+                should_flush = (
+                    len(self.buffer) >= self.buffer_size
+                    or time.time() - self.last_flush >= self.flush_interval
+                )
+>>>>>>> origin/stable
 
                 if should_flush and self.buffer:
                     await self._flush()
@@ -299,7 +332,13 @@ class AsyncDataUploader:
                 target_storage.save(self.buffer)
                 self.buffer = []  # Clear buffer to prevent double-flush by worker
             except Exception as e:
+<<<<<<< HEAD
                 logger.error(f"Error during final sync flush: {e}. Falling back to emergency save.")
+=======
+                logger.error(
+                    f"Error during final sync flush: {e}. Falling back to emergency save."
+                )
+>>>>>>> origin/stable
                 bm.save(self.buffer, extension=".json")
 
                 # Clean backup files synchronously

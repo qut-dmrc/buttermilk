@@ -61,11 +61,23 @@ async def test_no_pdf_download_when_fulltext_exists():
                 # Import after patching to use mocked BM
                 from buttermilk.libs.zotero import ZoteroDownloadProcessor
 
+<<<<<<< HEAD
                 downloader = ZoteroDownloadProcessor(library_id="test_library", save_dir=tmpdir)
 
                 # Process the record
                 results = []
                 async for result in downloader.process(test_record, processor_stage="download"):
+=======
+                downloader = ZoteroDownloadProcessor(
+                    library_id="test_library", save_dir=tmpdir
+                )
+
+                # Process the record
+                results = []
+                async for result in downloader.process(
+                    test_record, processor_stage="download"
+                ):
+>>>>>>> origin/stable
                     results.append(result)
 
                 assert len(results) == 1
@@ -73,13 +85,26 @@ async def test_no_pdf_download_when_fulltext_exists():
 
                 # CRITICAL ASSERTIONS:
                 # 1. Zotero fulltext was used
+<<<<<<< HEAD
                 assert result.content == "This is the complete text extracted by Zotero API"
+=======
+                assert (
+                    result.content
+                    == "This is the complete text extracted by Zotero API"
+                )
+>>>>>>> origin/stable
 
                 # 2. PDF was NOT downloaded (dump not called)
                 mock_zot.dump.assert_not_called()
 
                 # 3. file_path should be None
+<<<<<<< HEAD
                 assert result.file_path is None, f"file_path should be None, got: {result.file_path}"
+=======
+                assert result.file_path is None, (
+                    f"file_path should be None, got: {result.file_path}"
+                )
+>>>>>>> origin/stable
 
                 # 4. No PDF metadata in content
                 assert "[PDF Document:" not in result.content
@@ -130,17 +155,37 @@ async def test_pdf_downloads_when_no_fulltext():
                 mock_zot.fulltext_item.side_effect = Exception("No fulltext available")
 
                 # Mock dump to create a PDF file
+<<<<<<< HEAD
                 mock_zot.dump = MagicMock(side_effect=lambda key, path: Path(path).write_bytes(b"%PDF-1.4\n" + b"x" * 100000))
+=======
+                mock_zot.dump = MagicMock(
+                    side_effect=lambda key, path: Path(path).write_bytes(
+                        b"%PDF-1.4\n" + b"x" * 100000
+                    )
+                )
+>>>>>>> origin/stable
 
                 MockZotero.return_value = mock_zot
 
                 from buttermilk.libs.zotero import ZoteroDownloadProcessor
 
+<<<<<<< HEAD
                 downloader = ZoteroDownloadProcessor(library_id="test_library", save_dir=tmpdir)
 
                 # Process the record
                 results = []
                 async for result in downloader.process(test_record, processor_stage="download"):
+=======
+                downloader = ZoteroDownloadProcessor(
+                    library_id="test_library", save_dir=tmpdir
+                )
+
+                # Process the record
+                results = []
+                async for result in downloader.process(
+                    test_record, processor_stage="download"
+                ):
+>>>>>>> origin/stable
                     results.append(result)
 
                 assert len(results) == 1

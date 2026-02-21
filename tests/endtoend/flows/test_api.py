@@ -8,10 +8,17 @@ from buttermilk.api.flow import create_app
 
 
 @pytest.fixture(scope="session")
+<<<<<<< HEAD
 def client(real_flow_runner, real_bm: BM) -> TestClient:
     # Initialize with minimal configuration for testing
 
     app = create_app(flows=real_flow_runner, bm=real_bm)
+=======
+def client(real_flow_runner, bm: BM) -> TestClient:
+    # Initialize with minimal configuration for testing
+
+    app = create_app(flows=real_flow_runner, bm=bm)
+>>>>>>> origin/stable
     return TestClient(app)
 
 
@@ -59,7 +66,13 @@ def test_run_flow_html(client, flow_request_data: dict[str, Any]):
     response = client.post("/html/flow/test_flow", json=flow_request_data)
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
+<<<<<<< HEAD
     assert "Sample text" in response.text  # Check if the response contains the expected text
+=======
+    assert (
+        "Sample text" in response.text
+    )  # Check if the response contains the expected text
+>>>>>>> origin/stable
 
 
 def test_get_runs(client):

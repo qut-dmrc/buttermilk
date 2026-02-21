@@ -52,7 +52,13 @@ class CharacterPromptSource(BaseModel):
         gen = CharacterGenerator()
 
         # Get scenarios (either provided or generated)
+<<<<<<< HEAD
         scenarios = self.scenarios if self.scenarios is not None else gen.generate_scenarios()
+=======
+        scenarios = (
+            self.scenarios if self.scenarios is not None else gen.generate_scenarios()
+        )
+>>>>>>> origin/stable
 
         # Get session_id (with fallback for testing)
         try:
@@ -84,7 +90,13 @@ class CharacterPromptSource(BaseModel):
         # MODE 2: Random character generation with filtering
         else:
             if self.mask_attributes is None:
+<<<<<<< HEAD
                 raise ValueError("Either 'identity' or 'mask_attributes' must be provided")
+=======
+                raise ValueError(
+                    "Either 'identity' or 'mask_attributes' must be provided"
+                )
+>>>>>>> origin/stable
 
             char = gen.generate_identity()
             filtered = gen.reverse_mask(char, keep=self.mask_attributes)

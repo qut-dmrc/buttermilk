@@ -1,12 +1,20 @@
 import asyncio
 import importlib
 import json
+<<<<<<< HEAD
+=======
+import random
+>>>>>>> origin/stable
 import time
 from collections.abc import AsyncGenerator, Callable
 from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
+<<<<<<< HEAD
+=======
+import shortuuid
+>>>>>>> origin/stable
 from pydantic import BaseModel, ConfigDict, Field
 
 from buttermilk import ExecutionTrace, logger
@@ -20,8 +28,11 @@ except ImportError:
         """Placeholder for starlette.websockets.WebSocketDisconnect when starlette is not installed."""
 
         pass
+<<<<<<< HEAD
 
 
+=======
+>>>>>>> origin/stable
 from buttermilk._core.context import set_logging_context
 from buttermilk._core.contract import (
     ErrorEvent,
@@ -29,8 +40,14 @@ from buttermilk._core.contract import (
     FlowMessage,
     SystemPromptMessage,
 )
+<<<<<<< HEAD
 from buttermilk._core.orchestrator import Orchestrator, OrchestratorProtocol
 from buttermilk._core.types import Record, RunRequest
+=======
+from buttermilk._core.exceptions import FatalError
+from buttermilk._core.orchestrator import Orchestrator, OrchestratorProtocol
+from buttermilk._core.types import ProcessingSummary, Record, RunRequest
+>>>>>>> origin/stable
 from buttermilk.api.services.message_service import MessageService
 from buttermilk.api.services.session_storage import SessionStorageService
 from buttermilk.utils import scrub_serializable
@@ -170,9 +187,19 @@ class FlowRunContext(BaseModel):
     # Session management fields
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     last_activity: datetime = Field(default_factory=lambda: datetime.now(UTC))
+<<<<<<< HEAD
     background_tasks: set[asyncio.Task] = Field(default_factory=set)  # DEPRECATED: Use resources.tasks
     session_timeout: int = 3600  # 1 hour default timeout in seconds
     resources: SessionResources = Field(default_factory=SessionResources)  # Resource tracking
+=======
+    background_tasks: set[asyncio.Task] = Field(
+        default_factory=set
+    )  # DEPRECATED: Use resources.tasks
+    session_timeout: int = 3600  # 1 hour default timeout in seconds
+    resources: SessionResources = Field(
+        default_factory=SessionResources
+    )  # Resource tracking
+>>>>>>> origin/stable
 
     websocket: Any = None
     monitor_ui_task: asyncio.Task | None = None  # Track active monitor_ui task
@@ -186,7 +213,13 @@ class FlowRunContext(BaseModel):
 
     def is_expired(self) -> bool:
         """Check if the session has expired based on timeout."""
+<<<<<<< HEAD
         return (datetime.now(UTC) - self.last_activity).total_seconds() > self.session_timeout
+=======
+        return (
+            datetime.now(UTC) - self.last_activity
+        ).total_seconds() > self.session_timeout
+>>>>>>> origin/stable
 
     def get_isolated_topic(self, base_topic: str) -> str:
         """Generate session-isolated topic names for message routing."""
@@ -216,7 +249,13 @@ class FlowRunContext(BaseModel):
     def cancel_monitor_ui_task(self) -> None:
         """Cancel the active monitor_ui task if it exists."""
         if self.monitor_ui_task and not self.monitor_ui_task.done():
+<<<<<<< HEAD
             logger.debug("Cancelling monitor_ui task for session", session_id=self.session_id)
+=======
+            logger.debug(
+                "Cancelling monitor_ui task for session", session_id=self.session_id
+            )
+>>>>>>> origin/stable
             self.monitor_ui_task.cancel()
             self.monitor_ui_task = None
 
@@ -249,7 +288,13 @@ class FlowRunContext(BaseModel):
                 self.resources.add_custom_resource("orchestrator", self.orchestrator)
 
             # Perform comprehensive resource cleanup
+<<<<<<< HEAD
             logger.debug("Cleaning up resources for session", session_id=self.session_id)
+=======
+            logger.debug(
+                "Cleaning up resources for session", session_id=self.session_id
+            )
+>>>>>>> origin/stable
             cleanup_report = await self.resources.cleanup()
 
             # Detach OTEL baggage if attached
@@ -281,13 +326,25 @@ class FlowRunContext(BaseModel):
                 self.status = SessionStatus.TERMINATED
 
         except Exception as e:
+<<<<<<< HEAD
             logger.error("Error during session cleanup", session_id=self.session_id, error=str(e))
+=======
+            logger.error(
+                "Error during session cleanup", session_id=self.session_id, error=str(e)
+            )
+>>>>>>> origin/stable
             # Ensure status is set even if cleanup fails
             self.status = SessionStatus.ERROR
 
     async def monitor_ui(self) -> AsyncGenerator[RunRequest, None]:
         """Monitor the UI for incoming messages."""
+<<<<<<< HEAD
         logger.debug("[MONITOR_UI] Starting monitor_ui for session", session_id=self.session_id)
+=======
+        logger.debug(
+            "[MONITOR_UI] Starting monitor_ui for session", session_id=self.session_id
+        )
+>>>>>>> origin/stable
         while True:
             await asyncio.sleep(0.1)
 
@@ -332,7 +389,13 @@ class FlowRunContext(BaseModel):
                 else:
                     await self.callback_to_groupchat(message)
             except WebSocketDisconnect:
+<<<<<<< HEAD
                 logger.debug("WebSocket disconnected for session", session_id=self.session_id)
+=======
+                logger.debug(
+                    "WebSocket disconnected for session", session_id=self.session_id
+                )
+>>>>>>> origin/stable
                 self.websocket = None
                 break
             except Exception as e:
@@ -347,7 +410,15 @@ class FlowRunContext(BaseModel):
 
     async def send_message_to_ui(
         self,
+<<<<<<< HEAD
         message: ExecutionTrace | SystemPromptMessage | Record | FlowEvent | FlowMessage,
+=======
+        message: ExecutionTrace
+        | SystemPromptMessage
+        | Record
+        | FlowEvent
+        | FlowMessage,
+>>>>>>> origin/stable
     ) -> None:
         """Send a message to a WebSocket connection.
 
@@ -382,7 +453,13 @@ class FlowRunContext(BaseModel):
 
         try:
             message_type = formatted_message.type
+<<<<<<< HEAD
             message_data_to_send = scrub_serializable(formatted_message.model_dump(exclude_unset=True, exclude_none=True))
+=======
+            message_data_to_send = scrub_serializable(
+                formatted_message.model_dump(exclude_unset=True, exclude_none=True)
+            )
+>>>>>>> origin/stable
 
             # Consolidate debug info into a single log entry
             logger.debug(
@@ -396,7 +473,13 @@ class FlowRunContext(BaseModel):
             async def _send_with_retry_internal():
                 if not self.websocket:
                     # Raise an error to be caught by tenacity or the outer try/except
+<<<<<<< HEAD
                     raise RuntimeError(f"WebSocket is None for session {self.session_id} during send attempt.")
+=======
+                    raise RuntimeError(
+                        f"WebSocket is None for session {self.session_id} during send attempt."
+                    )
+>>>>>>> origin/stable
 
                 await self.websocket.send_json(message_data_to_send)
 
@@ -404,7 +487,13 @@ class FlowRunContext(BaseModel):
 
         except Exception as e:
             # Attempt to send an error message back to the client if the websocket is still viable
+<<<<<<< HEAD
             websocket_state = self.websocket.client_state if self.websocket else "websocket is None"
+=======
+            websocket_state = (
+                self.websocket.client_state if self.websocket else "websocket is None"
+            )
+>>>>>>> origin/stable
             if self.websocket:
                 try:
                     error_event = ErrorEvent(
@@ -439,7 +528,13 @@ class OrchestratorFactory:
     """Factory for creating and managing orchestrator instances with proper lifecycle."""
 
     @staticmethod
+<<<<<<< HEAD
     def create_orchestrator(flow_config: OrchestratorProtocol, flow_name: str) -> Orchestrator:
+=======
+    def create_orchestrator(
+        flow_config: OrchestratorProtocol, flow_name: str
+    ) -> Orchestrator:
+>>>>>>> origin/stable
         """Create a completely fresh orchestrator instance.
 
         Args:
@@ -480,7 +575,13 @@ class OrchestratorFactory:
             return orchestrator
 
         except Exception as e:
+<<<<<<< HEAD
             raise ValueError(f"Failed to create orchestrator for flow '{flow_name}': {e}") from e
+=======
+            raise ValueError(
+                f"Failed to create orchestrator for flow '{flow_name}': {e}"
+            ) from e
+>>>>>>> origin/stable
 
     @staticmethod
     async def cleanup_orchestrator(orchestrator: Orchestrator) -> None:
@@ -516,7 +617,13 @@ class SessionManager:
         # Atomic operation support
         self.session_locks: dict[str, asyncio.Lock] = {}  # Prevent race conditions
         self.session_resources: dict[str, SessionResources] = {}  # Track all resources
+<<<<<<< HEAD
         self.active_connections: dict[str, set[Any]] = {}  # Multiple connections per session
+=======
+        self.active_connections: dict[
+            str, set[Any]
+        ] = {}  # Multiple connections per session
+>>>>>>> origin/stable
         self.shutdown_handlers: dict[str, Callable] = {}  # Custom cleanup per session
         self._global_lock = asyncio.Lock()  # Protect session creation/deletion
 
@@ -543,7 +650,13 @@ class SessionManager:
 
         logger.info("Session manager stopped and all sessions cleaned up")
 
+<<<<<<< HEAD
     async def get_or_create_session(self, session_id: str, websocket: Any = None) -> FlowRunContext:
+=======
+    async def get_or_create_session(
+        self, session_id: str, websocket: Any = None
+    ) -> FlowRunContext:
+>>>>>>> origin/stable
         """Get existing session or create a new one with atomic operations.
 
         Args:
@@ -568,10 +681,21 @@ class SessionManager:
                     # Ensure OTEL baggage is attached for this session context
                     try:
                         if getattr(session, "_otel_baggage_token", None) is None:
+<<<<<<< HEAD
                             session._otel_baggage_token = attach_session_baggage(session_id)
                     except Exception:
                         pass
                     logger.debug("Added WebSocket to existing session", session_id=session_id)
+=======
+                            session._otel_baggage_token = attach_session_baggage(
+                                session_id
+                            )
+                    except Exception:
+                        pass
+                    logger.debug(
+                        "Added WebSocket to existing session", session_id=session_id
+                    )
+>>>>>>> origin/stable
                 return session
 
             # Create new session with INITIALIZING status
@@ -602,14 +726,26 @@ class SessionManager:
             # Each flow run creates its own independent root trace
             session._otel_session_root = None
 
+<<<<<<< HEAD
             logger.info("Created new session with INITIALIZING status", session_id=session_id)
+=======
+            logger.info(
+                "Created new session with INITIALIZING status", session_id=session_id
+            )
+>>>>>>> origin/stable
 
             # Transition to ACTIVE after initialization
             await self._transition_session_status(session_id, SessionStatus.ACTIVE)
 
             return session
 
+<<<<<<< HEAD
     async def _transition_session_status(self, session_id: str, new_status: SessionStatus) -> bool:
+=======
+    async def _transition_session_status(
+        self, session_id: str, new_status: SessionStatus
+    ) -> bool:
+>>>>>>> origin/stable
         """Safely transition a session to a new status.
 
         Args:
@@ -664,7 +800,14 @@ class SessionManager:
             ],  # Legacy support
         }
 
+<<<<<<< HEAD
         if old_status in valid_transitions and new_status not in valid_transitions[old_status]:
+=======
+        if (
+            old_status in valid_transitions
+            and new_status not in valid_transitions[old_status]
+        ):
+>>>>>>> origin/stable
             logger.warning(
                 "Invalid status transition for session",
                 session_id=session_id,
@@ -707,7 +850,13 @@ class SessionManager:
                 storage_service.update_flow_status(session_id, "running")
 
         except Exception as e:
+<<<<<<< HEAD
             logger.warning("Failed to update session storage", session_id=session_id, error=str(e))
+=======
+            logger.warning(
+                "Failed to update session storage", session_id=session_id, error=str(e)
+            )
+>>>>>>> origin/stable
 
         return True
 
@@ -750,10 +899,21 @@ class SessionManager:
 
             # Remove session and transition to TERMINATED
             del self.sessions[session_id]
+<<<<<<< HEAD
             logger.info("Session removed and cleaned up (TERMINATED)", session_id=session_id)
             return True
 
     async def register_shutdown_handler(self, session_id: str, handler: Callable) -> None:
+=======
+            logger.info(
+                "Session removed and cleaned up (TERMINATED)", session_id=session_id
+            )
+            return True
+
+    async def register_shutdown_handler(
+        self, session_id: str, handler: Callable
+    ) -> None:
+>>>>>>> origin/stable
         """Register a custom shutdown handler for a session.
 
         Args:
@@ -857,7 +1017,13 @@ class SessionManager:
             return False
 
         # Transition to RECONNECTING status
+<<<<<<< HEAD
         success = await self._transition_session_status(session_id, SessionStatus.RECONNECTING)
+=======
+        success = await self._transition_session_status(
+            session_id, SessionStatus.RECONNECTING
+        )
+>>>>>>> origin/stable
         if success:
             # Clear the websocket but keep the session alive
             session.websocket = None
@@ -875,7 +1041,13 @@ class SessionManager:
         await self.cleanup_session(session_id)
         return False
 
+<<<<<<< HEAD
     async def reconnect_session(self, session_id: str, websocket: Any) -> FlowRunContext | None:
+=======
+    async def reconnect_session(
+        self, session_id: str, websocket: Any
+    ) -> FlowRunContext | None:
+>>>>>>> origin/stable
         """Reconnect a client to an existing session in RECONNECTING status.
 
         Args:
@@ -887,7 +1059,13 @@ class SessionManager:
 
         """
         if session_id not in self.sessions:
+<<<<<<< HEAD
             logger.warning("Attempted to reconnect to non-existent session", session_id=session_id)
+=======
+            logger.warning(
+                "Attempted to reconnect to non-existent session", session_id=session_id
+            )
+>>>>>>> origin/stable
             return None
 
         session = self.sessions[session_id]
@@ -921,7 +1099,13 @@ class SessionManager:
         self.active_connections[session_id].add(websocket)
 
         # Transition back to ACTIVE status
+<<<<<<< HEAD
         success = await self._transition_session_status(session_id, SessionStatus.ACTIVE)
+=======
+        success = await self._transition_session_status(
+            session_id, SessionStatus.ACTIVE
+        )
+>>>>>>> origin/stable
         if success:
             logger.debug("Successfully reconnected session", session_id=session_id)
             return session
@@ -950,22 +1134,44 @@ class SessionManager:
                         cleanup_candidates.append((session_id, "error_state"))
                     elif session.status == SessionStatus.COMPLETED:
                         # Clean up completed sessions after a grace period
+<<<<<<< HEAD
                         time_since_completion = (datetime.now(UTC) - session.last_activity).total_seconds()
                         if time_since_completion > 300:  # 5 minutes grace period
                             cleanup_candidates.append((session_id, "completed_gracetime"))
+=======
+                        time_since_completion = (
+                            datetime.now(UTC) - session.last_activity
+                        ).total_seconds()
+                        if time_since_completion > 300:  # 5 minutes grace period
+                            cleanup_candidates.append(
+                                (session_id, "completed_gracetime")
+                            )
+>>>>>>> origin/stable
                     elif session.status == SessionStatus.RECONNECTING:
                         # Clean up RECONNECTING sessions that have exceeded timeout
                         if session.is_expired():
                             cleanup_candidates.append((session_id, "reconnect_timeout"))
                     elif len(self.active_connections.get(session_id, set())) == 0:
                         # No active connections for extended period
+<<<<<<< HEAD
                         time_since_activity = (datetime.now(UTC) - session.last_activity).total_seconds()
+=======
+                        time_since_activity = (
+                            datetime.now(UTC) - session.last_activity
+                        ).total_seconds()
+>>>>>>> origin/stable
                         if time_since_activity > 1800:  # 30 minutes without connections
                             cleanup_candidates.append((session_id, "no_connections"))
 
                 # Perform cleanup
                 for session_id, reason in cleanup_candidates:
+<<<<<<< HEAD
                     logger.info("Cleaning up session", session_id=session_id, reason=reason)
+=======
+                    logger.info(
+                        "Cleaning up session", session_id=session_id, reason=reason
+                    )
+>>>>>>> origin/stable
                     await self.cleanup_session(session_id)
 
             except asyncio.CancelledError:
@@ -998,7 +1204,13 @@ class FlowRunner(BaseModel):
     mode: str = Field(default="api")
     ui: str = Field(default="console")
     human_in_loop: bool = False
+<<<<<<< HEAD
     sessions: dict[str, FlowRunContext] = Field(default_factory=dict)  # Dictionary of active sessions (DEPRECATED)
+=======
+    sessions: dict[str, FlowRunContext] = Field(
+        default_factory=dict
+    )  # Dictionary of active sessions (DEPRECATED)
+>>>>>>> origin/stable
 
     # New session management
     session_manager: SessionManager = Field(default_factory=lambda: SessionManager())
@@ -1061,7 +1273,13 @@ class FlowRunner(BaseModel):
 
             return get_bm()
 
+<<<<<<< HEAD
     async def get_websocket_session_async(self, session_id: str, websocket: Any | None = None) -> FlowRunContext | None:
+=======
+    async def get_websocket_session_async(
+        self, session_id: str, websocket: Any | None = None
+    ) -> FlowRunContext | None:
+>>>>>>> origin/stable
         """Get or create a session for the given session ID, handling reconnection scenarios.
 
         Args:
@@ -1080,8 +1298,17 @@ class FlowRunner(BaseModel):
 
             # If session is in RECONNECTING status, attempt to reconnect
             if existing_session.status == SessionStatus.RECONNECTING and websocket:
+<<<<<<< HEAD
                 logger.debug("Attempting to reconnect to session", session_id=session_id)
                 reconnected_session = await self.session_manager.reconnect_session(session_id, websocket)
+=======
+                logger.debug(
+                    "Attempting to reconnect to session", session_id=session_id
+                )
+                reconnected_session = await self.session_manager.reconnect_session(
+                    session_id, websocket
+                )
+>>>>>>> origin/stable
                 if reconnected_session:
                     return reconnected_session
                 # Reconnection failed, fall through to create new session
@@ -1106,7 +1333,14 @@ class FlowRunner(BaseModel):
                     existing_session.cancel_monitor_ui_task()
 
                     # Close existing websocket if any
+<<<<<<< HEAD
                     if existing_session.websocket and existing_session.websocket != websocket:
+=======
+                    if (
+                        existing_session.websocket
+                        and existing_session.websocket != websocket
+                    ):
+>>>>>>> origin/stable
                         try:
                             logger.debug(
                                 "Closing previous WebSocket connection for session",
@@ -1133,7 +1367,13 @@ class FlowRunner(BaseModel):
         if not websocket:
             return None
 
+<<<<<<< HEAD
         session = await self.session_manager.get_or_create_session(session_id, websocket)
+=======
+        session = await self.session_manager.get_or_create_session(
+            session_id, websocket
+        )
+>>>>>>> origin/stable
         return session
 
     async def cleanup(self) -> None:
@@ -1209,7 +1449,13 @@ class FlowRunner(BaseModel):
                 # Extract flows from the reloaded configuration
                 if hasattr(conf, "run") and hasattr(conf.run, "flows"):
                     new_flows = conf.run.flows
+<<<<<<< HEAD
                     logger.info("Found flows in reloaded config", flow_count=len(new_flows))
+=======
+                    logger.info(
+                        "Found flows in reloaded config", flow_count=len(new_flows)
+                    )
+>>>>>>> origin/stable
 
                     # Update flows dictionary
                     old_flows = self.flows.copy()
@@ -1219,16 +1465,36 @@ class FlowRunner(BaseModel):
                     new_flow_names = set(new_flows.keys())
 
                     result["flows_loaded"] = list(new_flow_names)
+<<<<<<< HEAD
                     result["flows_updated"] = list(current_flows.intersection(new_flow_names))
+=======
+                    result["flows_updated"] = list(
+                        current_flows.intersection(new_flow_names)
+                    )
+>>>>>>> origin/stable
                     result["flows_removed"] = list(current_flows - new_flow_names)
 
                     # Log the changes
                     if result["flows_updated"]:
+<<<<<<< HEAD
                         logger.info("Updated flows", flows_updated=result["flows_updated"])
                     if new_flow_names - current_flows:
                         logger.info("New flows", new_flows=list(new_flow_names - current_flows))
                     if result["flows_removed"]:
                         logger.info("Removed flows", flows_removed=result["flows_removed"])
+=======
+                        logger.info(
+                            "Updated flows", flows_updated=result["flows_updated"]
+                        )
+                    if new_flow_names - current_flows:
+                        logger.info(
+                            "New flows", new_flows=list(new_flow_names - current_flows)
+                        )
+                    if result["flows_removed"]:
+                        logger.info(
+                            "Removed flows", flows_removed=result["flows_removed"]
+                        )
+>>>>>>> origin/stable
 
                     result["success"] = True
                     logger.info("Configuration reload completed successfully")
@@ -1252,7 +1518,13 @@ class FlowRunner(BaseModel):
             try:
                 hydra.core.global_hydra.GlobalHydra.instance().clear()
             except Exception as cleanup_error:
+<<<<<<< HEAD
                 logger.warning("Error cleaning up Hydra state", error=str(cleanup_error))
+=======
+                logger.warning(
+                    "Error cleaning up Hydra state", error=str(cleanup_error)
+                )
+>>>>>>> origin/stable
 
         return result
 
@@ -1280,7 +1552,15 @@ class FlowRunner(BaseModel):
                     config_dict = OmegaConf.to_container(flow_config, resolve=True)
                 else:
                     # Regular dict or other object
+<<<<<<< HEAD
                     config_dict = dict(flow_config) if hasattr(flow_config, "__dict__") else str(flow_config)
+=======
+                    config_dict = (
+                        dict(flow_config)
+                        if hasattr(flow_config, "__dict__")
+                        else str(flow_config)
+                    )
+>>>>>>> origin/stable
 
                 config_data = {
                     "flow_name": run_request.flow,
@@ -1329,7 +1609,13 @@ class FlowRunner(BaseModel):
 
         """
         if flow_name not in self.flows:
+<<<<<<< HEAD
             raise ValueError(f"Flow '{flow_name}' not found. Available flows: {list(self.flows.keys())}")
+=======
+            raise ValueError(
+                f"Flow '{flow_name}' not found. Available flows: {list(self.flows.keys())}"
+            )
+>>>>>>> origin/stable
 
         flow_config = self.flows[flow_name]
         orchestrator = OrchestratorFactory.create_orchestrator(flow_config, flow_name)
@@ -1362,7 +1648,13 @@ class FlowRunner(BaseModel):
         # Use the enhanced cleanup from FlowRunContext
         await context.cleanup()
 
+<<<<<<< HEAD
     async def run_flow(self, run_request: RunRequest, wait_for_completion: bool = False, **kwargs) -> None:  # noqa: PLR0912
+=======
+    async def run_flow(
+        self, run_request: RunRequest, wait_for_completion: bool = False, **kwargs
+    ) -> None:  # noqa: PLR0912
+>>>>>>> origin/stable
         """Run a flow based on its configuration and a request.
 
         Args:
@@ -1416,7 +1708,13 @@ class FlowRunner(BaseModel):
                 "buttermilk.session.id": getattr(run_request, "session_id", None),
                 "buttermilk.flow.name": getattr(run_request, "flow", None),
                 "buttermilk.job.id": getattr(run_request, "job_id", None),
+<<<<<<< HEAD
                 "buttermilk.source": ", ".join(run_request.source) if getattr(run_request, "source", None) else "direct",
+=======
+                "buttermilk.source": ", ".join(run_request.source)
+                if getattr(run_request, "source", None)
+                else "direct",
+>>>>>>> origin/stable
                 "buttermilk.mode": self.mode,
             },
             kind="internal",
@@ -1434,7 +1732,13 @@ class FlowRunner(BaseModel):
             asyncio.get_event_loop().slow_callback_duration = 120
 
             # Get or create session using the session manager
+<<<<<<< HEAD
             _session = await self.session_manager.get_or_create_session(run_request.session_id)
+=======
+            _session = await self.session_manager.get_or_create_session(
+                run_request.session_id
+            )
+>>>>>>> origin/stable
 
             set_logging_context(run_request.session_id)
             _session.flow_name = run_request.flow
@@ -1454,7 +1758,13 @@ class FlowRunner(BaseModel):
         )
 
         # Create the task and register it with the session
+<<<<<<< HEAD
         _session.flow_task = asyncio.create_task(fresh_orchestrator.run(request=run_request))  # type: ignore
+=======
+        _session.flow_task = asyncio.create_task(
+            fresh_orchestrator.run(request=run_request)
+        )  # type: ignore
+>>>>>>> origin/stable
         _session.add_task(_session.flow_task)
 
         # ======== MAJOR EVENT: FLOW STARTING ========
@@ -1509,11 +1819,23 @@ class FlowRunner(BaseModel):
             if wait_for_completion:
                 # Wait for the task
                 await _session.flow_task
+<<<<<<< HEAD
                 await self.session_manager._transition_session_status(run_request.session_id, SessionStatus.COMPLETED)
                 success = True
                 return
         except Exception as e:
             await self.session_manager._transition_session_status(run_request.session_id, SessionStatus.ERROR)
+=======
+                await self.session_manager._transition_session_status(
+                    run_request.session_id, SessionStatus.COMPLETED
+                )
+                success = True
+                return
+        except Exception as e:
+            await self.session_manager._transition_session_status(
+                run_request.session_id, SessionStatus.ERROR
+            )
+>>>>>>> origin/stable
             logger.error("Error running flow", flow=run_request.flow, error=str(e))
             raise
         finally:
@@ -1527,7 +1849,13 @@ class FlowRunner(BaseModel):
                         success=success,
                     )
                 except Exception as e:
+<<<<<<< HEAD
                     logger.debug("Failed to record flow execution metrics", error=str(e))
+=======
+                    logger.debug(
+                        "Failed to record flow execution metrics", error=str(e)
+                    )
+>>>>>>> origin/stable
 
             if wait_for_completion:
                 # Clean up after completion if we were waiting

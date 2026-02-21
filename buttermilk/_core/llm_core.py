@@ -32,8 +32,13 @@ from buttermilk._core.processor_core import ObservabilityMixin
 if TYPE_CHECKING:
     from buttermilk._core.llms import CreateResult, ModelOutput
 from buttermilk._core.types import BaseRecord
+<<<<<<< HEAD
 from buttermilk.utils.templating import make_messages, render_template
 from buttermilk.utils.utils import scrub_serializable
+=======
+from buttermilk.utils.templating import load_template, make_messages
+from buttermilk.utils.utils import clean_empty_values, scrub_serializable
+>>>>>>> origin/stable
 from buttermilk.utils.validators import import_class_from_path
 
 
@@ -137,6 +142,7 @@ class LLMCore(ObservabilityMixin):
         """Backward compatibility property for template_metadata."""
         return self._template_metadata
 
+<<<<<<< HEAD
     def _resolve_field(self, field_name: str, record: Optional[BaseRecord] = None, template_vars: Optional[dict[str, Any]] = None) -> Any:
         """Resolve a configuration field, checking for overrides in record metadata or template_vars.
 
@@ -169,6 +175,8 @@ class LLMCore(ObservabilityMixin):
         # 3. Fallback to configured default
         return getattr(self, field_name, None)
 
+=======
+>>>>>>> origin/stable
     async def process(
         self,
         record: Any = BaseRecord,
@@ -197,6 +205,7 @@ class LLMCore(ObservabilityMixin):
         start_time = time.time()
         tracer = trace.get_tracer("buttermilk.llm_core")
 
+<<<<<<< HEAD
         # Resolve model dynamically for tracing
         # We check record and kwargs for potential overrides
         resolved_model = self._resolve_field("model", record=record, template_vars=kwargs)
@@ -206,6 +215,12 @@ class LLMCore(ObservabilityMixin):
         span_attributes = {
             "llm.model": resolved_model,
             "llm.template": resolved_template,
+=======
+        # Build span attributes
+        span_attributes = {
+            "llm.model": self.model,
+            "llm.template": self.template,
+>>>>>>> origin/stable
             "component.name": component_name,
             "processor.stage": processor_stage,
         }
@@ -242,17 +257,27 @@ class LLMCore(ObservabilityMixin):
                 # Get model configuration for complete traceability
                 # model_configs contains temperature, api_version, safety_settings, etc. from models.json
                 model_configs = {}
+<<<<<<< HEAD
                 actual_model = result.metadata.get("model", resolved_model)
                 if actual_model in bm.llms.connections:
                     llm_config = bm.llms.connections[actual_model]
+=======
+                if self.model in bm.llms.connections:
+                    llm_config = bm.llms.connections[self.model]
+>>>>>>> origin/stable
                     model_configs = llm_config.configs.copy() if llm_config.configs else {}
 
                 # Add model config to extra_metadata for traceability
                 # (model, template, temperature etc. are static config, not template vars)
                 config_metadata = {
                     "llm_config": {
+<<<<<<< HEAD
                         "model": actual_model,
                         "template": resolved_template,
+=======
+                        "model": self.model,
+                        "template": self.template,
+>>>>>>> origin/stable
                         **model_configs,
                     }
                 }
@@ -277,6 +302,11 @@ class LLMCore(ObservabilityMixin):
 
                 span.set_status(trace.Status(trace.StatusCode.OK))
 
+<<<<<<< HEAD
+=======
+                span.set_status(trace.Status(trace.StatusCode.OK))
+
+>>>>>>> origin/stable
                 # Yield the content directly
                 yield result.content
 
@@ -347,19 +377,27 @@ class LLMCore(ObservabilityMixin):
         # Lazy import to avoid loading litellm at module load time
         from buttermilk._core.llms import ModelOutput
 
+<<<<<<< HEAD
         # Resolve configuration fields dynamically
         resolved_model = self._resolve_field("model", record=record, template_vars=template_vars)
         resolved_template = self._resolve_field("template", record=record, template_vars=template_vars)
         resolved_temperature = self._resolve_field("temperature", record=record, template_vars=template_vars)
         resolved_max_tokens = self._resolve_field("max_tokens", record=record, template_vars=template_vars)
 
+=======
+>>>>>>> origin/stable
         tracer = trace.get_tracer("buttermilk.llm_core")
         result = LLMResult(content=None, error=None)
 
         # Build span attributes
         span_attributes = {
+<<<<<<< HEAD
             "llm.model": resolved_model,
             "llm.template": resolved_template,
+=======
+            "llm.model": self.model,
+            "llm.template": self.template,
+>>>>>>> origin/stable
         }
         if parent_trace_id:
             span_attributes["parent_trace_id"] = parent_trace_id
@@ -414,7 +452,11 @@ class LLMCore(ObservabilityMixin):
                 result.metadata["_template_vars_from_record"] = _template_vars_derived_from_record
 
                 # Fill template
+<<<<<<< HEAD
                 llm_messages = await self._fill_template(template_vars, record=record, context=context, resolved_template=resolved_template)
+=======
+                llm_messages = await self._fill_template(template_vars, record=record, context=context)
+>>>>>>> origin/stable
 
                 # Store template metadata (without hash - hash goes to hashes dict)
                 result.metadata["template"] = {
@@ -438,9 +480,12 @@ class LLMCore(ObservabilityMixin):
                     messages=llm_messages,
                     cancellation_token=cancellation_token,
                     parent_trace_id=parent_trace_id,
+<<<<<<< HEAD
                     resolved_model=resolved_model,
                     resolved_temperature=resolved_temperature,
                     resolved_max_tokens=resolved_max_tokens,
+=======
+>>>>>>> origin/stable
                 )
 
                 # Check for errors in LLM result
@@ -467,6 +512,7 @@ class LLMCore(ObservabilityMixin):
                     else:
                         content_str = str(result.content)
 
+<<<<<<< HEAD
                     result.messages.append(AssistantMessage(content=content_str, source=resolved_model))
 
                 # Collect metadata (preserve existing template metadata)
@@ -475,6 +521,16 @@ class LLMCore(ObservabilityMixin):
                 if isinstance(llm_result, ModelOutput) and hasattr(llm_result, "metadata"):
                     # Use model from wrapper (already contains actual API model or fallback)
                     model_name = llm_result.metadata.get("model", resolved_model)
+=======
+                    result.messages.append(AssistantMessage(content=content_str, source=self.model))
+
+                # Collect metadata (preserve existing template metadata)
+                # Model name comes from LLM wrapper (actual from API or config as fallback)
+                model_name = self.model  # Default to config name
+                if isinstance(llm_result, ModelOutput) and hasattr(llm_result, "metadata"):
+                    # Use model from wrapper (already contains actual API model or fallback)
+                    model_name = llm_result.metadata.get("model", self.model)
+>>>>>>> origin/stable
 
                 result.metadata = {
                     **result.metadata,  # Keep template metadata added earlier
@@ -515,7 +571,10 @@ class LLMCore(ObservabilityMixin):
         *,
         record: BaseRecord = None,
         context: list[LLMMessage] | None = None,
+<<<<<<< HEAD
         resolved_template: str | None = None,
+=======
+>>>>>>> origin/stable
     ) -> list[LLMMessage]:
         """Render the template with provided data.
 
@@ -523,12 +582,16 @@ class LLMCore(ObservabilityMixin):
             template_vars: Runtime variables to fill template placeholders.
             record: Optional record for render_or_include placeholders.
             context: Optional conversation history for context injection.
+<<<<<<< HEAD
             resolved_template: Dynamically resolved template name.
+=======
+>>>>>>> origin/stable
 
         Template variable precedence (later overrides earlier):
         1. self.template_vars (from LLMCore config, set at init)
         2. template_vars argument (runtime variables from caller)
         """
+<<<<<<< HEAD
         template_to_use = resolved_template or self.template
         if not template_to_use:
             raise ProcessingError("'template' is required but not specified")
@@ -552,16 +615,54 @@ class LLMCore(ObservabilityMixin):
         # Update unfilled vars (remove any processed placeholders)
         unfilled_vars = set(result.unfilled_vars) - processed_placeholders
         if unfilled_vars:
+=======
+        template_name = self.template
+        if not template_name:
+            raise ProcessingError("'template' is required but not specified")
+
+        logger.debug(f"LLMCore: Using template '{template_name}'")
+
+        # Merge template variables: config defaults, then runtime overrides
+        merged_vars = {**self.template_vars, **(template_vars or {})}
+        filtered_vars = clean_empty_values(merged_vars) if merged_vars else {}
+
+        # Load and render template
+        rendered_template_str, unfilled_vars, template_hash = load_template(
+            template=template_name,
+            template_vars=filtered_vars,
+        )
+
+        try:
+            llm_messages, processed_placeholders = make_messages(local_template=rendered_template_str, record=record, context=context)
+        except Exception as e:
+            raise ProcessingError(f"Failed to create messages from template '{template_name}'") from e
+
+        unfilled_vars -= processed_placeholders
+
+        # Check for missing variables
+        if unfilled_vars and self.fail_on_unfilled_parameters:
+            raise ProcessingError(f"Template '{template_name}' has unfilled parameters: {', '.join(sorted(unfilled_vars))}")
+        elif unfilled_vars:
+>>>>>>> origin/stable
             logger.warning(f"Template has unfilled parameters: {unfilled_vars}")
 
         # Store template metadata
         self._template_metadata = {
+<<<<<<< HEAD
             "template_name": result.template_name,
             "template_hash": result.template_hash,
             "unfilled_vars": list(unfilled_vars) if unfilled_vars else [],
         }
 
         logger.debug(f"Template '{result.template_name}' rendered into {len(llm_messages)} messages")
+=======
+            "template_name": template_name,
+            "template_hash": template_hash,
+            "unfilled_vars": list(unfilled_vars) if unfilled_vars else [],
+        }
+
+        logger.debug(f"Template '{template_name}' rendered into {len(llm_messages)} messages")
+>>>>>>> origin/stable
         return llm_messages
 
     async def _call_llm_with_trace(
@@ -569,21 +670,32 @@ class LLMCore(ObservabilityMixin):
         messages: list[LLMMessage],
         cancellation_token: Optional[CancellationToken],
         parent_trace_id: Optional[str],
+<<<<<<< HEAD
         resolved_model: str | None = None,
         resolved_temperature: float | None = None,
         resolved_max_tokens: int | None = None,
+=======
+>>>>>>> origin/stable
     ) -> CreateResult | ModelOutput:
         """Call the LLM with lightweight tracing.
 
         This provides the core LLM calling logic with observability
         but without agent-specific concepts.
         """
+<<<<<<< HEAD
         model_to_use = resolved_model or self.model
+=======
+
+>>>>>>> origin/stable
         tracer = trace.get_tracer("buttermilk.llm_core")
 
         # Build span attributes
         span_attributes = {
+<<<<<<< HEAD
             "llm.model": model_to_use,
+=======
+            "llm.model": self.model,
+>>>>>>> origin/stable
             "llm.message_count": len(messages),
             "llm.has_tools": len(self.tools) > 0,
             "llm.has_schema": self._resolved_output_model is not None,
@@ -594,11 +706,19 @@ class LLMCore(ObservabilityMixin):
         with tracer.start_as_current_span("llm_core.call_llm", attributes=span_attributes) as span:
             try:
                 # Get LLM client from global BM instance
+<<<<<<< HEAD
                 model_client = bm.llms.get_autogen_chat_client(model_to_use)
 
                 logger.debug(
                     f"LLMCore: Calling {model_to_use} with {len(messages)} messages, {len(self.tools)} tools, schema={self._resolved_output_model}",
                     model=model_to_use,
+=======
+                model_client = bm.llms.get_autogen_chat_client(self.model)
+
+                logger.debug(
+                    f"LLMCore: Calling {self.model} with {len(messages)} messages, {len(self.tools)} tools, schema={self._resolved_output_model}",
+                    model=self.model,
+>>>>>>> origin/stable
                     message_count=len(messages),
                     tool_count=len(self.tools),
                     schema=self._resolved_output_model if self._resolved_output_model else None,
@@ -608,6 +728,7 @@ class LLMCore(ObservabilityMixin):
                 from buttermilk._core.context import ApiSemaphoreContext
 
                 async with ApiSemaphoreContext():
+<<<<<<< HEAD
                     # Check if model client supports explicit overrides
                     # (Most buttermilk model clients handle this via their internal config)
                     # We pass parameters that might have been resolved dynamically
@@ -617,12 +738,17 @@ class LLMCore(ObservabilityMixin):
                     if resolved_max_tokens is not None:
                         call_kwargs["max_tokens"] = resolved_max_tokens
 
+=======
+>>>>>>> origin/stable
                     result = await model_client.call_chat(
                         messages=messages,
                         tools_list=self.tools,
                         cancellation_token=cancellation_token,
                         schema=self._resolved_output_model,
+<<<<<<< HEAD
                         **call_kwargs,
+=======
+>>>>>>> origin/stable
                     )
 
                 # Record token usage in span if available
@@ -647,4 +773,8 @@ class LLMCore(ObservabilityMixin):
                 # Don't log here - let the final handler log once
                 span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                 span.record_exception(e)
+<<<<<<< HEAD
                 raise ProcessingError(f"LLM call to '{model_to_use}' failed: {e}") from e
+=======
+                raise ProcessingError(f"LLM call to '{self.model}' failed: {e}") from e
+>>>>>>> origin/stable

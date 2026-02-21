@@ -6,7 +6,11 @@ import pytest
 from autogen_core.models import RequestUsage, SystemMessage, UserMessage
 from pydantic import BaseModel
 
+<<<<<<< HEAD
 from buttermilk._core.exceptions import ProcessingError
+=======
+from buttermilk._core.exceptions import FatalError, ProcessingError
+>>>>>>> origin/stable
 from buttermilk._core.llm_core import LLMCore, LLMResult
 from buttermilk._core.llms import CreateResult, ModelOutput
 from buttermilk._core.types import BaseRecord
@@ -74,7 +78,13 @@ class TestLLMCore:
         """Test template filling with basic template_vars using real template file."""
         core = LLMCore(model="gpt-4", template="test/simple")
 
+<<<<<<< HEAD
         messages = await core._fill_template(template_vars={"var": "test value", "context": [], "records": []})
+=======
+        messages = await core._fill_template(
+            template_vars={"var": "test value", "context": [], "records": []}
+        )
+>>>>>>> origin/stable
 
         # Should have system and user messages
         assert len(messages) == 2
@@ -98,8 +108,15 @@ class TestLLMCore:
         )
 
         # Only provide required_var, leave missing_var undefined
+<<<<<<< HEAD
         with pytest.raises(ProcessingError, match="unfilled parameters"):
             await core._fill_template(template_vars={"required_var": "value", "context": [], "records": []})
+=======
+        with pytest.raises(FatalError, match="unfilled parameters"):
+            await core._fill_template(
+                template_vars={"required_var": "value", "context": [], "records": []}
+            )
+>>>>>>> origin/stable
 
     @pytest.mark.anyio
     async def test_fill_template_with_unfilled_vars_lenient(self):
@@ -111,7 +128,13 @@ class TestLLMCore:
         )
 
         # Only provide required_var, leave missing_var undefined
+<<<<<<< HEAD
         messages = await core._fill_template(template_vars={"required_var": "value", "context": [], "records": []})
+=======
+        messages = await core._fill_template(
+            template_vars={"required_var": "value", "context": [], "records": []}
+        )
+>>>>>>> origin/stable
 
         # Should return messages even with unfilled vars
         assert len(messages) >= 1
@@ -272,7 +295,13 @@ class TestLLMCore:
 
         with patch("buttermilk._core.llm_core.bm", mock_bm):
             # Pass records as template variables since there's no separate records param
+<<<<<<< HEAD
             result = await core.process_with_llm(template_vars={"records": [record1, record2]})
+=======
+            result = await core.process_with_llm(
+                template_vars={"records": [record1, record2]}
+            )
+>>>>>>> origin/stable
 
             # Verify records were processed
             assert result.content == "Processed records"
@@ -320,12 +349,24 @@ class TestLLMCore:
 
             # The bug: template metadata should be in result.metadata
             # If the bug exists, template metadata would be overwritten
+<<<<<<< HEAD
             assert "template" in result.metadata, "Template metadata should be present in result"
+=======
+            assert "template" in result.metadata, (
+                "Template metadata should be present in result"
+            )
+>>>>>>> origin/stable
             assert result.metadata["template"]["template_name"] == "test/simple"
             assert result.metadata["template"]["unfilled_vars"] == []
 
             # Template hash is consolidated in metadata.hashes
+<<<<<<< HEAD
             assert "hashes" in result.metadata, "Hashes should be present in result metadata"
+=======
+            assert "hashes" in result.metadata, (
+                "Hashes should be present in result metadata"
+            )
+>>>>>>> origin/stable
             assert "template_hash" in result.metadata["hashes"]
             assert result.metadata["hashes"]["template_hash"] != ""  # Should have a hash
 
@@ -363,6 +404,7 @@ class TestLLMCore:
         mock_bm.llms.get_autogen_chat_client.return_value = mock_client
 
         with patch("buttermilk._core.llm_core.bm", mock_bm):
+<<<<<<< HEAD
             result = await core.process_with_llm(template_vars={"var": "test input"}, record=record)
 
             # Verify record metadata is present in result.metadata
@@ -371,6 +413,22 @@ class TestLLMCore:
 
             # Verify hashes are consolidated in metadata.hashes
             assert "hashes" in result.metadata, "Hashes should be present in result metadata"
+=======
+            result = await core.process_with_llm(
+                template_vars={"var": "test input"}, record=record
+            )
+
+            # Verify record metadata is present in result.metadata
+            assert "record_id" in result.metadata, (
+                "Record ID should be present in result metadata"
+            )
+            assert result.metadata["record_id"] == "test_record_123"
+
+            # Verify hashes are consolidated in metadata.hashes
+            assert "hashes" in result.metadata, (
+                "Hashes should be present in result metadata"
+            )
+>>>>>>> origin/stable
             assert "record_hash" in result.metadata["hashes"]
             assert result.metadata["hashes"]["record_hash"] != ""  # Should have a hash
             assert len(result.metadata["hashes"]["record_hash"]) == 64  # SHA256 length
@@ -407,7 +465,11 @@ class TestLLMCore:
         )
 
         # Test 1: Truly undefined variable MUST fail
+<<<<<<< HEAD
         with pytest.raises(ProcessingError, match="unfilled parameters"):
+=======
+        with pytest.raises(FatalError, match="unfilled parameters"):
+>>>>>>> origin/stable
             await core._fill_template(
                 template_vars={"required_var": "value", "context": [], "records": []}
                 # missing_var is NOT provided - truly undefined
@@ -427,7 +489,13 @@ class TestLLMCore:
         # The template was filled, but with nonsensical "undefined" string
         assert len(messages) >= 1
         # Check that the literal "undefined" made it into the message
+<<<<<<< HEAD
         message_text = " ".join(msg.content for msg in messages if hasattr(msg, "content"))
+=======
+        message_text = " ".join(
+            msg.content for msg in messages if hasattr(msg, "content")
+        )
+>>>>>>> origin/stable
         assert "undefined" in message_text.lower()
 
         # TODO: Consider if we should detect and fail on special values like:
@@ -452,7 +520,11 @@ class TestLLMCore:
         )
 
         # Should fail because default is strict mode
+<<<<<<< HEAD
         with pytest.raises(ProcessingError, match="unfilled parameters"):
+=======
+        with pytest.raises(FatalError, match="unfilled parameters"):
+>>>>>>> origin/stable
             await core._fill_template(
                 template_vars={"required_var": "value", "context": [], "records": []}
                 # missing_var is NOT provided
@@ -461,7 +533,10 @@ class TestLLMCore:
         # Verify the flag is set to True
         assert core.fail_on_unfilled_parameters is True
 
+<<<<<<< HEAD
     @pytest.mark.skip(reason="LLMCore.parameters property not implemented - see issue #280")
+=======
+>>>>>>> origin/stable
     def test_parameters_includes_model_and_template(self):
         """Test that self.parameters captures model and template for trace writing.
 
@@ -481,7 +556,13 @@ class TestLLMCore:
 
         # CRITICAL: parameters must include model and template for trace writing
         assert "model" in core.parameters, "model must be in self.parameters for traces"
+<<<<<<< HEAD
         assert "template" in core.parameters, "template must be in self.parameters for traces"
+=======
+        assert "template" in core.parameters, (
+            "template must be in self.parameters for traces"
+        )
+>>>>>>> origin/stable
 
         # Verify the values are correct
         assert core.parameters["model"] == "gpt-4"

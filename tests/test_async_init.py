@@ -12,7 +12,13 @@ from buttermilk import create_session_bm_async
 async def test_create_session_bm_async():
     """Test async BM session creation."""
     # Create a BM instance asynchronously
+<<<<<<< HEAD
     bm = await create_session_bm_async(project_name="test_project", job="test_job", platform="test")
+=======
+    bm = await create_session_bm_async(
+        project_name="test_project", job="test_job", platform="test"
+    )
+>>>>>>> origin/stable
 
     assert bm is not None
     assert bm.session_info.project_name == "test_project"

@@ -56,7 +56,13 @@ def test_actual_agent_trace_full_dump_includes_nested_outputs(real_bm):
 
     # --- Assertions ---
     assert "outputs" in full_dump, "'outputs' key missing in actual model_dump result"
+<<<<<<< HEAD
     assert full_dump["outputs"] != {}, "'outputs' field is an empty dict in actual model_dump result"
+=======
+    assert full_dump["outputs"] != {}, (
+        "'outputs' field is an empty dict in actual model_dump result"
+    )
+>>>>>>> origin/stable
 
     # Verify core fields from SAMPLE_REASONS_DATA are preserved
     outputs = full_dump["outputs"]
@@ -83,6 +89,7 @@ def test_actual_agent_trace_full_dump_with_default_outputs(real_bm):
 
     # When outputs is default/None, it may be excluded from model_dump due to exclude_none/exclude_unset config
     # Check that we can access the outputs field directly even if it's not in the dump
+<<<<<<< HEAD
     assert hasattr(output_obj, "outputs"), "ExecutionTrace should have outputs attribute"
 
     # If outputs is excluded from dump, it should be because it's None or default
@@ -91,3 +98,19 @@ def test_actual_agent_trace_full_dump_with_default_outputs(real_bm):
     else:
         # Verify that the outputs field exists but is None/default so it gets excluded
         assert output_obj.outputs is None or output_obj.outputs == {}, "Excluded outputs should be None or empty"
+=======
+    assert hasattr(output_obj, "outputs"), (
+        "ExecutionTrace should have outputs attribute"
+    )
+
+    # If outputs is excluded from dump, it should be because it's None or default
+    if "outputs" in full_dump:
+        assert full_dump["outputs"] in [None, {}], (
+            "Default outputs should be None or empty dict"
+        )
+    else:
+        # Verify that the outputs field exists but is None/default so it gets excluded
+        assert output_obj.outputs is None or output_obj.outputs == {}, (
+            "Excluded outputs should be None or empty"
+        )
+>>>>>>> origin/stable

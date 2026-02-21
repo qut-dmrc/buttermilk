@@ -38,7 +38,13 @@ class DuckDBStorage(Storage):
 
         # Validate configuration
         if not self.table_name and not self.custom_query:
+<<<<<<< HEAD
             raise StorageError("DuckDB storage requires either table_name or custom_query")
+=======
+            raise StorageError(
+                "DuckDB storage requires either table_name or custom_query"
+            )
+>>>>>>> origin/stable
 
         self._conn = None
 
@@ -53,7 +59,13 @@ class DuckDBStorage(Storage):
                 self._conn.execute("INSTALL json; LOAD json;")
                 logger.debug(f"Connected to DuckDB database: {self.database}")
             except Exception as e:
+<<<<<<< HEAD
                 raise StorageError(f"Failed to connect to DuckDB database {self.database}: {e}") from e
+=======
+                raise StorageError(
+                    f"Failed to connect to DuckDB database {self.database}: {e}"
+                ) from e
+>>>>>>> origin/stable
         return self._conn
 
     def _build_query(self) -> str:
@@ -62,7 +74,15 @@ class DuckDBStorage(Storage):
             return self.custom_query
 
         # Build query from table name
+<<<<<<< HEAD
         full_table = f"{self.schema_name}.{self.table_name}" if self.schema_name else self.table_name
+=======
+        full_table = (
+            f"{self.schema_name}.{self.table_name}"
+            if self.schema_name
+            else self.table_name
+        )
+>>>>>>> origin/stable
         query = f"SELECT * FROM {full_table}"
 
         # Add dataset/split filters if specified
@@ -91,7 +111,13 @@ class DuckDBStorage(Storage):
             result = conn.execute(query)
 
             # Get column names
+<<<<<<< HEAD
             columns = [desc[0] for desc in result.description] if result.description else []
+=======
+            columns = (
+                [desc[0] for desc in result.description] if result.description else []
+            )
+>>>>>>> origin/stable
 
             # Iterate over rows
             for row in result.fetchall():
@@ -102,7 +128,13 @@ class DuckDBStorage(Storage):
                     record = self._create_record(**row_dict)
                     yield record
                 except Exception as e:
+<<<<<<< HEAD
                     logger.warning(f"Failed to create record from row: {e}. Row data: {row_dict}")
+=======
+                    logger.warning(
+                        f"Failed to create record from row: {e}. Row data: {row_dict}"
+                    )
+>>>>>>> origin/stable
                     continue
 
         except Exception as e:
@@ -119,7 +151,13 @@ class DuckDBStorage(Storage):
             StorageError: If save operation fails
         """
         if not self.table_name:
+<<<<<<< HEAD
             raise StorageError("Cannot save to DuckDB without table_name (custom_query not supported for writes)")
+=======
+            raise StorageError(
+                "Cannot save to DuckDB without table_name (custom_query not supported for writes)"
+            )
+>>>>>>> origin/stable
 
         # Normalize to list
         if not isinstance(records, list):
@@ -145,12 +183,26 @@ class DuckDBStorage(Storage):
                 return
 
             # Build INSERT statement
+<<<<<<< HEAD
             full_table = f"{self.schema_name}.{self.table_name}" if self.schema_name else self.table_name
+=======
+            full_table = (
+                f"{self.schema_name}.{self.table_name}"
+                if self.schema_name
+                else self.table_name
+            )
+>>>>>>> origin/stable
             columns = list(rows[0].keys())
             placeholders = ", ".join(["?" for _ in columns])
             column_names = ", ".join(columns)
 
+<<<<<<< HEAD
             insert_sql = f"INSERT INTO {full_table} ({column_names}) VALUES ({placeholders})"
+=======
+            insert_sql = (
+                f"INSERT INTO {full_table} ({column_names}) VALUES ({placeholders})"
+            )
+>>>>>>> origin/stable
 
             # Insert all rows
             for row in rows:
@@ -176,7 +228,15 @@ class DuckDBStorage(Storage):
                 # Wrap custom query in COUNT
                 count_query = f"SELECT COUNT(*) FROM ({self.custom_query}) AS subquery"
             else:
+<<<<<<< HEAD
                 full_table = f"{self.schema_name}.{self.table_name}" if self.schema_name else self.table_name
+=======
+                full_table = (
+                    f"{self.schema_name}.{self.table_name}"
+                    if self.schema_name
+                    else self.table_name
+                )
+>>>>>>> origin/stable
                 count_query = f"SELECT COUNT(*) FROM {full_table}"
 
                 # Add filters

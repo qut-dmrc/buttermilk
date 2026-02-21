@@ -70,7 +70,13 @@ class SimpleHealthMonitor:
         """Get the fatal error message if any."""
         return self.fatal_error_message
 
+<<<<<<< HEAD
     def check_flow_responsiveness(self, flow_name: str, timeout_seconds: int = 300) -> bool:
+=======
+    def check_flow_responsiveness(
+        self, flow_name: str, timeout_seconds: int = 300
+    ) -> bool:
+>>>>>>> origin/stable
         """
         Check if a flow is responsive within timeout.
 
@@ -86,7 +92,13 @@ class SimpleHealthMonitor:
         )
         return True
 
+<<<<<<< HEAD
     def check_interactive_flow_ui_timeout(self, session_id: str, timeout_seconds: int = 1800) -> bool:
+=======
+    def check_interactive_flow_ui_timeout(
+        self, session_id: str, timeout_seconds: int = 1800
+    ) -> bool:
+>>>>>>> origin/stable
         """
         Check if interactive flow has been without UI for too long.
 
@@ -173,7 +185,13 @@ class SimpleHealthMonitor:
 
             return {
                 "total_flows": len(flow_metrics),
+<<<<<<< HEAD
                 "system_uptime_seconds": (datetime.now() - system_metrics["start_time"]).total_seconds(),
+=======
+                "system_uptime_seconds": (
+                    datetime.now() - system_metrics["start_time"]
+                ).total_seconds(),
+>>>>>>> origin/stable
                 "memory_mb": system_metrics.get("total_memory_mb", 0),
                 "active_sessions": system_metrics.get("active_sessions", 0),
                 "timestamp": datetime.now().isoformat(),

@@ -45,7 +45,13 @@ def strip_and_wrap(lines: list[str]) -> list[str]:
 
     for line in lines:
         text = re.sub(r"\n{2,+}", "\n", line)
+<<<<<<< HEAD
         text = str(text) + " "  # add trailing space here, and we'll remove it in the next step if it's duplicated
+=======
+        text = (
+            str(text) + " "
+        )  # add trailing space here, and we'll remove it in the next step if it's duplicated
+>>>>>>> origin/stable
         text = re.sub(r"\s{2,+}", " ", text)
         stripped += text
 
@@ -183,7 +189,13 @@ def format_slack_message(result: ExecutionTrace) -> dict:
         # Add labels as chips if present
 
         if labels := result_copy.outputs.pop("labels", None):
+<<<<<<< HEAD
             label_text = "*Labels:* " + " ".join([f"`{label}`" for label in labels if label])
+=======
+            label_text = "*Labels:* " + " ".join(
+                [f"`{label}`" for label in labels if label]
+            )
+>>>>>>> origin/stable
             if label_text:
                 blocks.append(
                     {
@@ -196,7 +208,15 @@ def format_slack_message(result: ExecutionTrace) -> dict:
                 )
 
         # Extract reasons for special handling
+<<<<<<< HEAD
         reasons = result_copy.outputs.pop("reasons", []) if isinstance(result_copy.outputs, dict) else []
+=======
+        reasons = (
+            result_copy.outputs.pop("reasons", [])
+            if isinstance(result_copy.outputs, dict)
+            else []
+        )
+>>>>>>> origin/stable
 
         # Handle any remaining fields in outputs
         blocks.extend(dict_to_blocks(result_copy.outputs))
@@ -212,7 +232,14 @@ def format_slack_message(result: ExecutionTrace) -> dict:
             # Add each reason as its own contextual block for better readability
 
             # Convert reasons to mrkdwn elements
+<<<<<<< HEAD
             reason_elements = [{"type": "mrkdwn", "text": f"{i + 1}. {reason}"} for i, reason in enumerate(reasons)]
+=======
+            reason_elements = [
+                {"type": "mrkdwn", "text": f"{i + 1}. {reason}"}
+                for i, reason in enumerate(reasons)
+            ]
+>>>>>>> origin/stable
             # Add chunked context blocks
             blocks.extend(create_context_blocks(reason_elements))
 

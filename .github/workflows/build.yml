@@ -1,6 +1,15 @@
 name: Build and Push Docker Image
 on:
+<<<<<<< HEAD
   workflow_dispatch: # Disabled automatic triggers; run manually if needed
+=======
+  push:
+    branches:
+      - stable
+  pull_request:
+    branches: [stable]
+  workflow_dispatch: # Allows manual triggering of the workflow
+>>>>>>> origin/stable
 permissions:
   id-token: write
   contents: read

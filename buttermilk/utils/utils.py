@@ -15,9 +15,13 @@ import uuid
 from collections.abc import Mapping, Sequence
 from io import IOBase
 from pathlib import Path
+<<<<<<< HEAD
 
 # Lazy import cloudpathlib (it pulls in google.cloud.storage at import time)
 from typing import TYPE_CHECKING, Any, TypeVar
+=======
+from typing import Any, TypeVar
+>>>>>>> origin/stable
 from urllib.parse import urlparse
 
 import fsspec
@@ -31,8 +35,15 @@ import validators
 import yaml
 from fake_useragent import UserAgent
 
+<<<<<<< HEAD
 if TYPE_CHECKING:
     pass
+=======
+# Lazy import cloudpathlib (it pulls in google.cloud.storage at import time)
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from cloudpathlib import exceptions
+>>>>>>> origin/stable
 
 from cloudpathlib import AnyPath, CloudPath
 from omegaconf import DictConfig, ListConfig, OmegaConf
@@ -172,7 +183,14 @@ async def download_limited_async(
 
         r = await client.get(url, headers=headers, follow_redirects=True)
 
+<<<<<<< HEAD
         if not allow_arbitrarily_large_downloads and int(r.headers.get("Content-Length", 0)) > max_size:
+=======
+        if (
+            not allow_arbitrarily_large_downloads
+            and int(r.headers.get("Content-Length", 0)) > max_size
+        ):
+>>>>>>> origin/stable
             raise OSError("File too large, download aborted")
 
         data = []
@@ -206,7 +224,14 @@ def download_limited(
         r = requests.get(url, headers=headers, stream=True, timeout=timeout)
     else:
         r = requests.get(url, stream=True, timeout=timeout)
+<<<<<<< HEAD
     if not allow_arbitrarily_large_downloads and int(r.headers.get("Content-Length", 0)) > max_size:
+=======
+    if (
+        not allow_arbitrarily_large_downloads
+        and int(r.headers.get("Content-Length", 0)) > max_size
+    ):
+>>>>>>> origin/stable
         raise OSError("File too large, download aborted")
 
     data = []
@@ -273,7 +298,16 @@ def scrub_keys(data: Sequence | Mapping) -> T:
         return [scrub_keys(v) for v in data]
     if isinstance(data, Mapping):
         return {
+<<<<<<< HEAD
             k: scrub_keys(v) for k, v in data.items() if not any(x in str(k).lower() for x in ["key", "token", "password", "secret", "credential"])
+=======
+            k: scrub_keys(v)
+            for k, v in data.items()
+            if not any(
+                x in str(k).lower()
+                for x in ["key", "token", "password", "secret", "credential"]
+            )
+>>>>>>> origin/stable
         }
     return data
 
@@ -322,7 +356,13 @@ def scrub_serializable(d) -> T:
     if hasattr(d, "__dict__") and not isinstance(d, (str, int, float, bool)):
         try:
             # Convert object to dict using its __dict__ attribute
+<<<<<<< HEAD
             new_val = {key: scrub_serializable(value) for key, value in d.__dict__.items()}
+=======
+            new_val = {
+                key: scrub_serializable(value) for key, value in d.__dict__.items()
+            }
+>>>>>>> origin/stable
             # remove empty values
             new_val = {k: v for k, v in new_val.items() if v is not None}
             return new_val
@@ -339,7 +379,15 @@ def scrub_serializable(d) -> T:
     if isinstance(d, np.generic):
         # This should catch all other numpy objects
         return d.item()
+<<<<<<< HEAD
     if isinstance(d, datetime.date) or isinstance(d, datetime.datetime) or isinstance(d, pd.Timestamp):
+=======
+    if (
+        isinstance(d, datetime.date)
+        or isinstance(d, datetime.datetime)
+        or isinstance(d, pd.Timestamp)
+    ):
+>>>>>>> origin/stable
         # ensure dates and datetimes are stored as strings in ISO format for uploading
         d = d.isoformat()
     elif isinstance(d, uuid.UUID):
@@ -371,7 +419,13 @@ def dedup_columns(df):
         cols = pd.Series(df.columns)
         dup_count = cols.value_counts()
         for dup in cols[cols.duplicated()].unique():
+<<<<<<< HEAD
             cols[cols[cols == dup].index.values.tolist()] = [dup] + [dup + str(i) for i in range(2, dup_count[dup] + 1)]
+=======
+            cols[cols[cols == dup].index.values.tolist()] = [dup] + [
+                dup + str(i) for i in range(2, dup_count[dup] + 1)
+            ]
+>>>>>>> origin/stable
 
         df.columns = cols
 
@@ -545,6 +599,7 @@ def expand_dict(d: dict[str, Any] | None) -> list[dict[str, Any]]:
     if not d:
         return [{}]
 
+<<<<<<< HEAD
     # Separate keys with list/dict values and keys with single values
     list_keys = {}
     single_keys = {}
@@ -557,11 +612,23 @@ def expand_dict(d: dict[str, Any] | None) -> list[dict[str, Any]]:
             list_keys[k] = v
         else:
             single_keys[k] = v
+=======
+    # Separate keys with list values and keys with single values
+    list_keys = {
+        k: v
+        for k, v in d.items()
+        if v and isinstance(v, Sequence) and not isinstance(v, str)
+    }
+    single_keys = {
+        k: v for k, v in d.items() if not isinstance(v, Sequence) or isinstance(v, str)
+    }
+>>>>>>> origin/stable
 
     # Generate all combinations of list values
     combinations = list(itertools.product(*list_keys.values()))
 
     # Create a list of dictionaries with all combinations
+<<<<<<< HEAD
     expanded_dicts = []
     for combo in combinations:
         new_dict = dict(single_keys)
@@ -583,6 +650,12 @@ def expand_dict(d: dict[str, Any] | None) -> list[dict[str, Any]]:
                 new_dict[k] = val
 
         expanded_dicts.append(new_dict)
+=======
+    expanded_dicts = [
+        {**single_keys, **dict(zip(list_keys.keys(), combo, strict=False))}
+        for combo in combinations
+    ]
+>>>>>>> origin/stable
 
     # Guarantee at least a list with an empty dict
     if len(expanded_dicts) == 0:
@@ -631,8 +704,21 @@ def _clean_pdfminer_text(raw: str) -> str:
             continue
         header_candidates.append(lines[0].strip())
         footer_candidates.append(lines[-1].strip())
+<<<<<<< HEAD
     header_common = {t for t, c in Counter(header_candidates).items() if c >= max(2, int(0.5 * len(pages)))}
     footer_common = {t for t, c in Counter(footer_candidates).items() if c >= max(2, int(0.5 * len(pages)))}
+=======
+    header_common = {
+        t
+        for t, c in Counter(header_candidates).items()
+        if c >= max(2, int(0.5 * len(pages)))
+    }
+    footer_common = {
+        t
+        for t, c in Counter(footer_candidates).items()
+        if c >= max(2, int(0.5 * len(pages)))
+    }
+>>>>>>> origin/stable
 
     cleaned_pages = []
     for p in pages:
@@ -689,7 +775,13 @@ def _clean_pdfminer_text(raw: str) -> str:
     return text.strip()
 
 
+<<<<<<< HEAD
 def get_pdf_text(file: str | IOBase, clean: bool = True, laparams: LAParams | None = None) -> str | None:
+=======
+def get_pdf_text(
+    file: str | IOBase, clean: bool = True, laparams: LAParams | None = None
+) -> str | None:
+>>>>>>> origin/stable
     if not PDFMINER_AVAILABLE:
         logger.error("PDFMiner not available. Cannot extract text from PDF.")
         return None
@@ -731,7 +823,13 @@ def unwrap_parquet_lists(obj):
     if isinstance(obj, dict):
         if "list" in obj and isinstance(obj["list"], list):
             # This is a Parquet list representation
+<<<<<<< HEAD
             return [unwrap_parquet_lists(item.get("element", item)) for item in obj["list"]]
+=======
+            return [
+                unwrap_parquet_lists(item.get("element", item)) for item in obj["list"]
+            ]
+>>>>>>> origin/stable
         # Regular dict, recurse into it
         return {k: unwrap_parquet_lists(v) for k, v in obj.items()}
     if isinstance(obj, list):
@@ -747,16 +845,36 @@ def unwrap_numpy_arrow_types(obj):
     if isinstance(obj, dict):
         # Check for list types
         if "list" in obj and isinstance(obj["list"], list):
+<<<<<<< HEAD
             return [unwrap_numpy_arrow_types(item.get("element", item)) for item in obj["list"]]
 
         # Check for large_list types
         if "large_list" in obj and isinstance(obj["large_list"], list):
             return [unwrap_numpy_arrow_types(item.get("element", item)) for item in obj["large_list"]]
+=======
+            return [
+                unwrap_numpy_arrow_types(item.get("element", item))
+                for item in obj["list"]
+            ]
+
+        # Check for large_list types
+        if "large_list" in obj and isinstance(obj["large_list"], list):
+            return [
+                unwrap_numpy_arrow_types(item.get("element", item))
+                for item in obj["large_list"]
+            ]
+>>>>>>> origin/stable
 
         # Check for map types
         if "key_value" in obj and isinstance(obj["key_value"], list):
             return {
+<<<<<<< HEAD
                 unwrap_numpy_arrow_types(item["key"]): unwrap_numpy_arrow_types(item["value"])
+=======
+                unwrap_numpy_arrow_types(item["key"]): unwrap_numpy_arrow_types(
+                    item["value"]
+                )
+>>>>>>> origin/stable
                 for item in obj["key_value"]
                 if "key" in item and "value" in item
             }
@@ -764,7 +882,13 @@ def unwrap_numpy_arrow_types(obj):
         # Check for entries (another map representation)
         if "entries" in obj and isinstance(obj["entries"], list):
             return {
+<<<<<<< HEAD
                 unwrap_numpy_arrow_types(item["key"]): unwrap_numpy_arrow_types(item["value"])
+=======
+                unwrap_numpy_arrow_types(item["key"]): unwrap_numpy_arrow_types(
+                    item["value"]
+                )
+>>>>>>> origin/stable
                 for item in obj["entries"]
                 if "key" in item and "value" in item
             }
@@ -861,7 +985,13 @@ async def ensure_chromadb_cache(persist_directory: str) -> pathlib.Path:
     try:
         local_path = pathlib.Path(persist_directory)
         if local_path.exists() and (local_path / "chroma.sqlite3").exists():
+<<<<<<< HEAD
             logger.debug("Using existing local ChromaDB", persist_directory=persist_directory)
+=======
+            logger.debug(
+                "Using existing local ChromaDB", persist_directory=persist_directory
+            )
+>>>>>>> origin/stable
             return local_path
     except (OSError, ValueError):
         pass  # Not a valid local path, treat as remote
@@ -885,10 +1015,21 @@ async def ensure_chromadb_cache(persist_directory: str) -> pathlib.Path:
         with download_lock:
             # Double-check after acquiring lock - another thread might have completed the download
             if chroma_db_path.exists():
+<<<<<<< HEAD
                 logger.debug(f"ChromaDB cache created by another thread at {local_cache_path}")
                 return
 
             logger.info(f"Downloading ChromaDB from {persist_directory} to {local_cache_path}")
+=======
+                logger.debug(
+                    f"ChromaDB cache created by another thread at {local_cache_path}"
+                )
+                return
+
+            logger.info(
+                f"Downloading ChromaDB from {persist_directory} to {local_cache_path}"
+            )
+>>>>>>> origin/stable
 
             try:
                 # Create temporary directory for atomic download
@@ -902,8 +1043,17 @@ async def ensure_chromadb_cache(persist_directory: str) -> pathlib.Path:
                     if not remote_path.exists():
                         # For new vector stores, the remote directory won't exist yet
                         # Create empty local directory that ChromaDB can initialize
+<<<<<<< HEAD
                         logger.info(f"Remote ChromaDB directory does not exist: {persist_directory}")
                         logger.info("Creating new empty ChromaDB directory for initialization")
+=======
+                        logger.info(
+                            f"Remote ChromaDB directory does not exist: {persist_directory}"
+                        )
+                        logger.info(
+                            "Creating new empty ChromaDB directory for initialization"
+                        )
+>>>>>>> origin/stable
                         # temp_path already exists, so we just leave it empty for ChromaDB to initialize
                     else:
                         # Download all files recursively
@@ -914,7 +1064,13 @@ async def ensure_chromadb_cache(persist_directory: str) -> pathlib.Path:
                         # Only verify for existing remote stores
                         temp_chroma_db = temp_path / "chroma.sqlite3"
                         if not temp_chroma_db.exists():
+<<<<<<< HEAD
                             raise OSError(f"Required file chroma.sqlite3 not found in downloaded ChromaDB from {persist_directory}")
+=======
+                            raise OSError(
+                                f"Required file chroma.sqlite3 not found in downloaded ChromaDB from {persist_directory}"
+                            )
+>>>>>>> origin/stable
 
                     # Atomic move to final location
                     local_cache_path.parent.mkdir(parents=True, exist_ok=True)
@@ -925,7 +1081,13 @@ async def ensure_chromadb_cache(persist_directory: str) -> pathlib.Path:
                     logger.info(f"Successfully cached ChromaDB at {local_cache_path}")
 
             except Exception as e:
+<<<<<<< HEAD
                 logger.error(f"Failed to download ChromaDB from {persist_directory}: {e}")
+=======
+                logger.error(
+                    f"Failed to download ChromaDB from {persist_directory}: {e}"
+                )
+>>>>>>> origin/stable
                 # Clean up any partial download
                 if local_cache_path.exists():
                     shutil.rmtree(local_cache_path, ignore_errors=True)
@@ -937,7 +1099,13 @@ async def ensure_chromadb_cache(persist_directory: str) -> pathlib.Path:
     return local_cache_path
 
 
+<<<<<<< HEAD
 def _download_chromadb_recursive(remote_path: CloudPath, local_path: pathlib.Path) -> None:
+=======
+def _download_chromadb_recursive(
+    remote_path: CloudPath, local_path: pathlib.Path
+) -> None:
+>>>>>>> origin/stable
     """Recursively download ChromaDB directory structure.
 
     Args:
@@ -1063,18 +1231,36 @@ async def upload_chromadb_cache(local_cache_path: str, persist_directory: str) -
     local_path = pathlib.Path(local_cache_path)
 
     if not local_path.exists() or not local_path.is_dir():
+<<<<<<< HEAD
         raise ValueError(f"Local cache path does not exist or is not a directory: {local_cache_path}")
 
     # Check if it's actually a ChromaDB directory
     if not (local_path / "chroma.sqlite3").exists():
         raise ValueError(f"Local path does not appear to be a ChromaDB directory (missing chroma.sqlite3): {local_cache_path}")
+=======
+        raise ValueError(
+            f"Local cache path does not exist or is not a directory: {local_cache_path}"
+        )
+
+    # Check if it's actually a ChromaDB directory
+    if not (local_path / "chroma.sqlite3").exists():
+        raise ValueError(
+            f"Local path does not appear to be a ChromaDB directory (missing chroma.sqlite3): {local_cache_path}"
+        )
+>>>>>>> origin/stable
 
     try:
         remote_path = CloudPath(persist_directory)
 
         def _upload_chromadb_sync():
             """Synchronous upload function to be run in thread."""
+<<<<<<< HEAD
             logger.info(f"Uploading ChromaDB from {local_cache_path} to {persist_directory}")
+=======
+            logger.info(
+                f"Uploading ChromaDB from {local_cache_path} to {persist_directory}"
+            )
+>>>>>>> origin/stable
 
             # Ensure remote directory exists
             if not remote_path.exists():
@@ -1093,7 +1279,13 @@ async def upload_chromadb_cache(local_cache_path: str, persist_directory: str) -
         raise OSError(f"ChromaDB upload failed: {e}") from e
 
 
+<<<<<<< HEAD
 def _upload_chromadb_recursive(local_path: pathlib.Path, remote_path: CloudPath) -> None:
+=======
+def _upload_chromadb_recursive(
+    local_path: pathlib.Path, remote_path: CloudPath
+) -> None:
+>>>>>>> origin/stable
     """Recursively upload ChromaDB directory structure.
 
     Args:
@@ -1125,7 +1317,13 @@ def _upload_chromadb_recursive(local_path: pathlib.Path, remote_path: CloudPath)
 
 
 # Image utility functions (replaces MediaObj functionality)
+<<<<<<< HEAD
 def image_to_base64(image, format: str = "PNG", longest_edge: int = -1, shortest_edge: int = -1) -> str:
+=======
+def image_to_base64(
+    image, format: str = "PNG", longest_edge: int = -1, shortest_edge: int = -1
+) -> str:
+>>>>>>> origin/stable
     """Convert PIL Image to base64 string with optional resizing.
 
     Args:
@@ -1167,7 +1365,13 @@ def image_to_base64(image, format: str = "PNG", longest_edge: int = -1, shortest
     return image_b64
 
 
+<<<<<<< HEAD
 def image_to_content_part(image, model_type: str = "openai", mime_type: str = "image/png") -> dict[str, Any]:
+=======
+def image_to_content_part(
+    image, model_type: str = "openai", mime_type: str = "image/png"
+) -> dict[str, Any]:
+>>>>>>> origin/stable
     """Convert PIL Image to LLM-specific content part format.
 
     Args:

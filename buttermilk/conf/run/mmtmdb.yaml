@@ -26,6 +26,7 @@ run:
       # Defaults from /storage@run.pipeline.source: tmdbtitles will fill in project_id, dataset_id, etc.
       limit: ${run.pipeline.sample_size}  # Passes sample_size to storage for {n} substitution
       custom_query: |
+<<<<<<< HEAD
         WITH
         -- Get ALL missing titles that we have not collected so far
         -- Exclude titles processed in the last 14 days
@@ -47,6 +48,22 @@ run:
         SELECT *
         FROM candidates
         ORDER BY RAND()
+=======
+        WITH decade_samples AS (
+          SELECT *,
+              FLOOR(year / 10) * 10 AS decade,
+              ROW_NUMBER() OVER (PARTITION BY DIV(year, 10) * 10 ORDER BY RAND()) AS rn
+          FROM {table}
+          WHERE year IS NOT NULL
+              AND year >= 1900
+              AND year < 2030
+        )
+        SELECT * EXCEPT(decade, rn)
+        FROM decade_samples
+        WHERE rn <= CEIL({n} / 14.0)
+        ORDER BY RAND()
+        LIMIT {n}
+>>>>>>> origin/stable
     # Processors: TMDB enrichment + upload
     processors:
       # Step 1: TMDB processor to fetch streaming availability

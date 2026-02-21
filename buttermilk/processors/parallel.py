@@ -9,7 +9,11 @@ LLM-based and API-based classifiers.
 import asyncio
 from typing import Any, AsyncGenerator
 
+<<<<<<< HEAD
 from pydantic import BaseModel, Field
+=======
+from pydantic import BaseModel, Field, PrivateAttr
+>>>>>>> origin/stable
 
 from buttermilk._core.log import logger
 from buttermilk._core.types import BaseRecord
@@ -77,7 +81,13 @@ class ParallelProcessor(BaseModel):
             Exception: If fail_on_error=False but ALL processors fail.
         """
 
+<<<<<<< HEAD
         async def stream_processor_outputs(processor: Any, proc_idx: int, output_queue: asyncio.Queue) -> None:
+=======
+        async def stream_processor_outputs(
+            processor: Any, proc_idx: int, output_queue: asyncio.Queue
+        ) -> None:
+>>>>>>> origin/stable
             """Stream outputs from one processor to the queue as they're produced."""
             proc_stage = f"{processor_stage}_p{proc_idx}"
             try:
@@ -104,7 +114,14 @@ class ParallelProcessor(BaseModel):
         output_queue: asyncio.Queue = asyncio.Queue()
 
         # Create tasks for all processors
+<<<<<<< HEAD
         tasks = [asyncio.create_task(stream_processor_outputs(proc, idx, output_queue)) for idx, proc in enumerate(self.processors)]
+=======
+        tasks = [
+            asyncio.create_task(stream_processor_outputs(proc, idx, output_queue))
+            for idx, proc in enumerate(self.processors)
+        ]
+>>>>>>> origin/stable
 
         logger.debug(
             f"ParallelProcessor running {len(tasks)} processors in parallel",

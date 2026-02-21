@@ -50,7 +50,13 @@ def mock_host_agent(monkeypatch):
 
     # Set up tool routing attributes for _route_tool_calls_to_agents
     agent._tool_to_agent_map = {"researcher_call": "researcher-agent-id"}
+<<<<<<< HEAD
     agent._agent_registry = {"researcher-agent-id": MagicMock(agent_config=MagicMock(role="researcher"))}
+=======
+    agent._agent_registry = {
+        "researcher-agent-id": MagicMock(agent_config=MagicMock(role="researcher"))
+    }
+>>>>>>> origin/stable
     agent.human_in_loop = False
 
     return agent
@@ -175,7 +181,13 @@ class TestHostTopicRouting:
         await mock_host_agent._publish(test_message, topic_id=test_topic)
 
         # Verify message was published to custom topic
+<<<<<<< HEAD
         mock_host_agent.publish_message.assert_called_once_with(test_message, topic_id=test_topic, cancellation_token=None)
+=======
+        mock_host_agent.publish_message.assert_called_once_with(
+            test_message, topic_id=test_topic, cancellation_token=None
+        )
+>>>>>>> origin/stable
 
     @pytest.mark.anyio
     async def test_base_agent_publish_defaults_to_agent_topic(self, mock_host_agent):
@@ -186,4 +198,10 @@ class TestHostTopicRouting:
         await mock_host_agent._publish(test_message)
 
         # Verify message was published to agent's default topic
+<<<<<<< HEAD
         mock_host_agent.publish_message.assert_called_once_with(test_message, topic_id=mock_host_agent._topic_id, cancellation_token=None)
+=======
+        mock_host_agent.publish_message.assert_called_once_with(
+            test_message, topic_id=mock_host_agent._topic_id, cancellation_token=None
+        )
+>>>>>>> origin/stable

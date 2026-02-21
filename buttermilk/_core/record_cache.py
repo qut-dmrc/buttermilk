@@ -70,7 +70,13 @@ class RecordCache:
             if self._base_dir_config:
                 # Expand paths if provided as string
                 if isinstance(self._base_dir_config, str):
+<<<<<<< HEAD
                     expanded = os.path.expandvars(os.path.expanduser(self._base_dir_config))
+=======
+                    expanded = os.path.expandvars(
+                        os.path.expanduser(self._base_dir_config)
+                    )
+>>>>>>> origin/stable
                     self._base_dir = Path(expanded)
                 else:
                     self._base_dir = Path(self._base_dir_config)
@@ -81,7 +87,13 @@ class RecordCache:
 
                     # Include project_name for project isolation
                     project_name = bm.session_info.project_name
+<<<<<<< HEAD
                     self._base_dir = Path(bm.session_info.cache_dir) / project_name / "records"
+=======
+                    self._base_dir = (
+                        Path(bm.session_info.cache_dir) / project_name / "records"
+                    )
+>>>>>>> origin/stable
                     logger.debug(
                         "📁 RecordCache using cache_dir with project isolation",
                         base_dir=str(self._base_dir),
@@ -109,9 +121,19 @@ class RecordCache:
             if self.enabled:
                 try:
                     self._base_dir.mkdir(parents=True, exist_ok=True)
+<<<<<<< HEAD
                     logger.debug("📁 Created cache base directory", base_dir=str(self._base_dir))
                 except Exception as e:  # pragma: no cover
                     logger.debug(f"Could not create record cache base dir {self._base_dir}: {e}")
+=======
+                    logger.debug(
+                        "📁 Created cache base directory", base_dir=str(self._base_dir)
+                    )
+                except Exception as e:  # pragma: no cover
+                    logger.debug(
+                        f"Could not create record cache base dir {self._base_dir}: {e}"
+                    )
+>>>>>>> origin/stable
                     self.enabled = False
 
         return self._base_dir
@@ -160,7 +182,13 @@ class RecordCache:
             return None
 
         # Extract record data (remove metadata fields)
+<<<<<<< HEAD
         data = {k: v for k, v in payload.items() if k not in ["_schema_version", "stage"]}
+=======
+        data = {
+            k: v for k, v in payload.items() if k not in ["_schema_version", "stage"]
+        }
+>>>>>>> origin/stable
         if not isinstance(data, dict) or not data.get("record_id"):
             logger.debug(
                 "🚫 Invalid record data in cache",
@@ -174,7 +202,13 @@ class RecordCache:
             # Create BaseRecord directly from serialized data
             record = BaseRecord(**data)
         except Exception as e:  # pragma: no cover
+<<<<<<< HEAD
             logger.debug("💥 Failed to rehydrate Record", record_id=record_id, error=str(e))
+=======
+            logger.debug(
+                "💥 Failed to rehydrate Record", record_id=record_id, error=str(e)
+            )
+>>>>>>> origin/stable
             return None
 
         logger.debug(
@@ -185,7 +219,13 @@ class RecordCache:
         )
         return record
 
+<<<<<<< HEAD
     def save(self, record: BaseRecord, stage: str, include_chunks: bool = True, cache_key: str | None = None) -> bool:
+=======
+    def save(
+        self, record: BaseRecord, stage: str, include_chunks: bool = True, cache_key: str | None = None
+    ) -> bool:
+>>>>>>> origin/stable
         """Save a record to cache.
 
         Args:
@@ -211,7 +251,13 @@ class RecordCache:
         try:
             stage_dir.mkdir(parents=True, exist_ok=True)
         except Exception as e:  # pragma: no cover
+<<<<<<< HEAD
             logger.debug("💥 Could not create stage dir", stage_dir=str(stage_dir), error=str(e))
+=======
+            logger.debug(
+                "💥 Could not create stage dir", stage_dir=str(stage_dir), error=str(e)
+            )
+>>>>>>> origin/stable
             return False
 
         # Use explicit cache_key if provided, otherwise use record_id
@@ -222,7 +268,15 @@ class RecordCache:
 
         try:
             # Store complete record data with chunks included
+<<<<<<< HEAD
             record_data = scrub_serializable(record.model_dump()) if hasattr(record, "model_dump") else record
+=======
+            record_data = (
+                scrub_serializable(record.model_dump())
+                if hasattr(record, "model_dump")
+                else record
+            )
+>>>>>>> origin/stable
             payload: dict[str, Any] = {
                 "_schema_version": CACHE_VERSION,
                 "stage": stage,

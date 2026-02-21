@@ -30,7 +30,13 @@ async def test_parse_list_reasons(output_obj, text, should_succeed):
     """Test parsing structured output using the standalone parse function."""
     result = await _parse_structured_output(text, schema=output_obj)
     assert should_succeed, f"Parsing was expected to fail but succeeded: {result}"
+<<<<<<< HEAD
     assert isinstance(result, output_obj), f"Parsed result is not of type {output_obj}: {result}"
+=======
+    assert isinstance(result, output_obj), (
+        f"Parsed result is not of type {output_obj}: {result}"
+    )
+>>>>>>> origin/stable
     assert result is not None, "Parsed result is None"
     assert hasattr(result, "reasons"), "Parsed result does not have 'reasons' attribute"
     assert isinstance(result.reasons, list), "'reasons' attribute is not a list"

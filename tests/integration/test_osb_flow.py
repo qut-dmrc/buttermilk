@@ -101,7 +101,15 @@ class FlowTestServer:
                 self.process.wait()
 
             # Print last few lines of log on failure
+<<<<<<< HEAD
             if self.process.returncode != 0 and self.log_file and self.log_file.exists():
+=======
+            if (
+                self.process.returncode != 0
+                and self.log_file
+                and self.log_file.exists()
+            ):
+>>>>>>> origin/stable
                 with open(self.log_file, "r") as f:
                     logs = f.read()
                 logger.error("Server logs", logs=logs[-500:])
@@ -187,6 +195,7 @@ async def test_osb_flow_with_followup(test_server):
         # The host might ask if we want more details or have follow-up questions
         # This tests multi-turn conversation
         try:
+<<<<<<< HEAD
             followup_prompt = await client.wait_for_ui_message(pattern="follow-up|more|another|continue", timeout=30)
 
             if followup_prompt:
@@ -195,6 +204,22 @@ async def test_osb_flow_with_followup(test_server):
 
                 # Wait for additional agent work
                 await client.wait_for_agent_results(expected_agents=["researcher", "policy_analyst"], timeout=120)
+=======
+            followup_prompt = await client.wait_for_ui_message(
+                pattern="follow-up|more|another|continue", timeout=30
+            )
+
+            if followup_prompt:
+                # Send a follow-up question
+                await client.send_manager_response(
+                    "Yes, can you explain how AI is used in content moderation?"
+                )
+
+                # Wait for additional agent work
+                await client.wait_for_agent_results(
+                    expected_agents=["researcher", "policy_analyst"], timeout=120
+                )
+>>>>>>> origin/stable
         except TimeoutError:
             # Not all flows support follow-up questions
             logger.info("No follow-up prompt received, continuing...")
@@ -203,7 +228,13 @@ async def test_osb_flow_with_followup(test_server):
         await client.wait_for_completion(timeout=300)
 
         # Verify the conversation included moderation topics
+<<<<<<< HEAD
         moderation_mentioned = any("moderation" in msg.content.lower() for msg in client.collector.all_messages)
+=======
+        moderation_mentioned = any(
+            "moderation" in msg.content.lower() for msg in client.collector.all_messages
+        )
+>>>>>>> origin/stable
         assert moderation_mentioned, "Content moderation not discussed"
 
 

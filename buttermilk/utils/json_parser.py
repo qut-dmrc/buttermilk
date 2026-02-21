@@ -82,13 +82,20 @@ class ChatParser(BaseModel):
         parsed_output: Any = None  # Initialize with a type that can hold dict or list
 
         if not isinstance(text, str):
+<<<<<<< HEAD
             logger.warning(f"ChatParser.parse expected a string, got {type(text)}. Attempting to stringify.")
+=======
+            logger.warning(
+                f"ChatParser.parse expected a string, got {type(text)}. Attempting to stringify."
+            )
+>>>>>>> origin/stable
             text = str(text)
 
         try:
             # Attempt to find a JSON object structure (content between first { and last })
             # This regex tries to capture content within the outermost curly braces.
             # re.DOTALL allows '.' to match newlines.
+<<<<<<< HEAD
             json_block_match = re.search(r"\{(?:[^{}]|(?R))*\}", text, re.DOTALL)  # More robust for nested {}
             if not json_block_match:  # Fallback for array-first JSON or simpler cases
                 json_block_match = re.search(r"\[(?:[^\[\]]|(?R))*\]", text, re.DOTALL)
@@ -98,6 +105,23 @@ class ChatParser(BaseModel):
                 # but serves as a broader catch if the recursive ones fail or aren't matched.
                 # The primary attempt is the recursive one above.
                 simple_json_match = re.search(r"[\{\[]\s*(.*)\s*[\}\]]", text, re.DOTALL)
+=======
+            json_block_match = re.search(
+                r"\{(?:[^{}]|(?R))*\}", text, re.DOTALL
+            )  # More robust for nested {}
+            if not json_block_match:  # Fallback for array-first JSON or simpler cases
+                json_block_match = re.search(r"\[(?:[^\[\]]|(?R))*\]", text, re.DOTALL)
+
+            if (
+                not json_block_match
+            ):  # Fallback for simple {} or [] if regex above fails
+                # This simpler regex might be problematic with nested structures if not careful
+                # but serves as a broader catch if the recursive ones fail or aren't matched.
+                # The primary attempt is the recursive one above.
+                simple_json_match = re.search(
+                    r"[\{\[]\s*(.*)\s*[\}\]]", text, re.DOTALL
+                )
+>>>>>>> origin/stable
                 if not simple_json_match:
                     raise JSONDecodeError(
                         "Unable to find JSON-like brackets '{...}' or '[...]' in response",
@@ -106,19 +130,41 @@ class ChatParser(BaseModel):
                     )
                 json_candidate_str = simple_json_match.group(0)  # The whole match
             else:
+<<<<<<< HEAD
                 json_candidate_str = json_block_match.group(0)  # The whole match from recursive regex
 
             logger.debug(f"ChatParser: Extracted JSON candidate: {json_candidate_str[:500]}...")
+=======
+                json_candidate_str = json_block_match.group(
+                    0
+                )  # The whole match from recursive regex
+
+            logger.debug(
+                f"ChatParser: Extracted JSON candidate: {json_candidate_str[:500]}..."
+            )
+>>>>>>> origin/stable
 
             try:
                 # First attempt with a flexible JSON loader
                 parsed_output = load_json_flexi(json_candidate_str)
             except (JSONDecodeError, ValueError) as e1:
+<<<<<<< HEAD
                 logger.debug(f"ChatParser: load_json_flexi failed ({e1!s}). Trying json_repair.")
                 # Fallback to json_repair for more significant errors
                 parsed_output = json_repair.loads(json_candidate_str)
 
             logger.debug(f"ChatParser: Successfully parsed. Type: {type(parsed_output)}")
+=======
+                logger.debug(
+                    f"ChatParser: load_json_flexi failed ({e1!s}). Trying json_repair."
+                )
+                # Fallback to json_repair for more significant errors
+                parsed_output = json_repair.loads(json_candidate_str)
+
+            logger.debug(
+                f"ChatParser: Successfully parsed. Type: {type(parsed_output)}"
+            )
+>>>>>>> origin/stable
 
         except JSONDecodeError as e:
             if self.on_error == "raise":
@@ -136,7 +182,13 @@ class ChatParser(BaseModel):
                     pos=0,
                 )
             elif self.on_error == "warn":
+<<<<<<< HEAD
                 logger.warning(f"Parsed output is not a dict, got {type(parsed_output)}")
+=======
+                logger.warning(
+                    f"Parsed output is not a dict, got {type(parsed_output)}"
+                )
+>>>>>>> origin/stable
             # For both "warn" and "ignore", return error dict
             return {"error": "Unable to decode JSON in result", "response": text}
 

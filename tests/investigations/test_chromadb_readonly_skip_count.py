@@ -74,9 +74,20 @@ async def test_readonly_skips_count_operation() -> None:
             count_calls = [
                 call
                 for call in to_thread_calls
+<<<<<<< HEAD
                 if len(call) > 0 and callable(call[0]) and hasattr(call[0], "__name__") and call[0].__name__ == "count"
             ]
             assert len(count_calls) == 0, f"Expected no count() calls in read-only mode, but found {len(count_calls)}"
+=======
+                if len(call) > 0
+                and callable(call[0])
+                and hasattr(call[0], "__name__")
+                and call[0].__name__ == "count"
+            ]
+            assert len(count_calls) == 0, (
+                f"Expected no count() calls in read-only mode, but found {len(count_calls)}"
+            )
+>>>>>>> origin/stable
 
             # Test 2: Write mode SHOULD call count
             to_thread_calls.clear()
@@ -93,9 +104,20 @@ async def test_readonly_skips_count_operation() -> None:
             count_calls = [
                 call
                 for call in to_thread_calls
+<<<<<<< HEAD
                 if len(call) > 0 and callable(call[0]) and hasattr(call[0], "__name__") and call[0].__name__ == "count"
             ]
             assert len(count_calls) > 0, "Expected count() to be called in write mode, but it wasn't"
+=======
+                if len(call) > 0
+                and callable(call[0])
+                and hasattr(call[0], "__name__")
+                and call[0].__name__ == "count"
+            ]
+            assert len(count_calls) > 0, (
+                "Expected count() to be called in write mode, but it wasn't"
+            )
+>>>>>>> origin/stable
 
     finally:
         # Cleanup
@@ -143,7 +165,13 @@ class TestChromaDBReadOnlySkipCount:
     """Test suite for ChromaDB read-only mode optimizations."""
 
     @pytest.mark.anyio
+<<<<<<< HEAD
     async def test_readonly_mode_skips_count_during_finalize(self, tmp_path: Path) -> None:
+=======
+    async def test_readonly_mode_skips_count_during_finalize(
+        self, tmp_path: Path
+    ) -> None:
+>>>>>>> origin/stable
         """Test that read-only mode skips collection.count() during finalize_processing().
 
         This test verifies that when ChromaDB is in read-only mode, the
@@ -207,7 +235,14 @@ class TestChromaDBReadOnlySkipCount:
             count_calls = [
                 call
                 for call in to_thread_calls
+<<<<<<< HEAD
                 if len(call) > 0 and callable(call[0]) and hasattr(call[0], "__name__") and call[0].__name__ == "count"
+=======
+                if len(call) > 0
+                and callable(call[0])
+                and hasattr(call[0], "__name__")
+                and call[0].__name__ == "count"
+>>>>>>> origin/stable
             ]
 
             assert len(count_calls) == 0, (

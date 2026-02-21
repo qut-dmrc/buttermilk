@@ -38,7 +38,13 @@ async def test_error_handling():
     # Simulate 5 tasks starting
     print("Simulating 5 tasks starting...")
     for i in range(5):
+<<<<<<< HEAD
         start_msg = TaskProcessingStarted(agent_id=f"agent_{i}", role="WORKER", task_index=0)
+=======
+        start_msg = TaskProcessingStarted(
+            agent_id=f"agent_{i}", role="WORKER", task_index=0
+        )
+>>>>>>> origin/stable
         await host.handle_task_started(start_msg, mock_ctx)
 
     # Simulate 3 tasks completing with errors (60% failure rate)
@@ -72,7 +78,13 @@ async def test_error_handling():
     result = await host.wait_check_current_step_completions()
 
     if not result:
+<<<<<<< HEAD
         print("✅ SUCCESS: Host correctly stopped flow due to high error rate (60% > 40% threshold)")
+=======
+        print(
+            "✅ SUCCESS: Host correctly stopped flow due to high error rate (60% > 40% threshold)"
+        )
+>>>>>>> origin/stable
     else:
         print("❌ FAILURE: Host should have stopped flow but didn't")
 
@@ -102,7 +114,13 @@ async def test_error_handling_below_threshold():
     # Simulate 5 tasks starting
     print("Simulating 5 tasks starting...")
     for i in range(5):
+<<<<<<< HEAD
         start_msg = TaskProcessingStarted(agent_id=f"agent_{i}", role="WORKER", task_index=0)
+=======
+        start_msg = TaskProcessingStarted(
+            agent_id=f"agent_{i}", role="WORKER", task_index=0
+        )
+>>>>>>> origin/stable
         await host.handle_task_started(start_msg, mock_ctx)
 
     # Simulate 2 tasks completing with errors (40% failure rate)

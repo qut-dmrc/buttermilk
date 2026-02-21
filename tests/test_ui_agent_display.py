@@ -40,7 +40,13 @@ class TestUIAgentDisplay:
     async def test_announcement_formatting(self, console_agent, sample_announcement):
         """Test that agent announcements are properly formatted for display."""
         # Format the announcement
+<<<<<<< HEAD
         formatted = console_agent._fmt_msg(sample_announcement, source="WORKER-worker123")
+=======
+        formatted = console_agent._fmt_msg(
+            sample_announcement, source="WORKER-worker123"
+        )
+>>>>>>> origin/stable
 
         # Verify formatting
         assert formatted is not None
@@ -201,7 +207,13 @@ class TestUIAgentDisplay:
             },
         }
 
+<<<<<<< HEAD
         ui_msg = SystemPromptMessage(content="Agent Status Report", agent_registry_summary=registry_summary)
+=======
+        ui_msg = SystemPromptMessage(
+            content="Agent Status Report", agent_registry_summary=registry_summary
+        )
+>>>>>>> origin/stable
 
         formatted = console_agent._fmt_msg(ui_msg, source="system")
         assert formatted is not None

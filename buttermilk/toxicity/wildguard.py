@@ -8,7 +8,11 @@ from pydantic import Field
 
 from buttermilk.utils import read_text
 
+<<<<<<< HEAD
 from .toxicity import TEMPLATE_DIR, EvalRecord, Score, ToxicityClassifierCore, _get_torch_device
+=======
+from .toxicity import TEMPLATE_DIR, EvalRecord, Score, ToxicityClassifierCore, ToxicityModel, _get_torch_device
+>>>>>>> origin/stable
 
 
 class Wildguard(ToxicityClassifierCore):

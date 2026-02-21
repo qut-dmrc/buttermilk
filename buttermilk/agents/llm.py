@@ -66,7 +66,13 @@ class LLMAgent(Agent):
 
     """
 
+<<<<<<< HEAD
     def __init__(self, *, output_model: type[pydantic.BaseModel] = None, **kwargs: Any) -> None:
+=======
+    def __init__(
+        self, *, output_model: type[pydantic.BaseModel] = None, **kwargs: Any
+    ) -> None:
+>>>>>>> origin/stable
         """Initialize an LLMAgent with the provided configuration.
 
         Extracts the model name from parameters and stores it in `_model`.
@@ -84,9 +90,19 @@ class LLMAgent(Agent):
             kwargs["name_components"] = ["role", "model", "unique_identifier"]
         super().__init__(**kwargs)
         if "model" not in self.parameters:
+<<<<<<< HEAD
             raise ValueError(f"Agent {self.agent_name}: 'model' is required in agent parameters.")
         if "template" not in self.parameters:
             raise ValueError(f"Agent {self.agent_name}: 'template' is required in agent parameters.")
+=======
+            raise ValueError(
+                f"Agent {self.agent_name}: 'model' is required in agent parameters."
+            )
+        if "template" not in self.parameters:
+            raise ValueError(
+                f"Agent {self.agent_name}: 'template' is required in agent parameters."
+            )
+>>>>>>> origin/stable
 
         # Initialize private attributes
         self.output_model: type[pydantic.BaseModel] = output_model or None
@@ -98,7 +114,13 @@ class LLMAgent(Agent):
             template=self.parameters["template"],
             output_model=output_model,
             tools=self._tools or [],
+<<<<<<< HEAD
             fail_on_unfilled_parameters=self.parameters.get("fail_on_unfilled_parameters", True),
+=======
+            fail_on_unfilled_parameters=self.parameters.get(
+                "fail_on_unfilled_parameters", True
+            ),
+>>>>>>> origin/stable
             # LLM inference parameters (optional)
             temperature=self.parameters.get("temperature"),
             max_tokens=self.parameters.get("max_tokens"),
@@ -115,6 +137,7 @@ class LLMAgent(Agent):
     def _extract_template_vars(self) -> dict[str, Any]:
         """Extract template variables from parameters (everything not LLM config)."""
         llm_config_keys = {
+<<<<<<< HEAD
             "model",
             "template",
             "output_model",
@@ -130,6 +153,11 @@ class LLMAgent(Agent):
             "presence_penalty",
             "stop_sequences",
             "seed",
+=======
+            "model", "template", "output_model", "tools", "fail_on_unfilled_parameters",
+            "output_col", "human_in_loop", "temperature", "max_tokens", "top_p",
+            "top_k", "frequency_penalty", "presence_penalty", "stop_sequences", "seed",
+>>>>>>> origin/stable
         }
         return {k: v for k, v in self.parameters.items() if k not in llm_config_keys}
 
@@ -155,7 +183,13 @@ class LLMAgent(Agent):
         Raises:
             ProcessingError: If LLM processing fails.
         """
+<<<<<<< HEAD
         logger.debug(f"Agent '{self.agent_name}' starting _process for message_id: {getattr(message, 'message_id', 'N/A')}.")
+=======
+        logger.debug(
+            f"Agent '{self.agent_name}' starting _process for message_id: {getattr(message, 'message_id', 'N/A')}."
+        )
+>>>>>>> origin/stable
 
         # Use existing LLM core or create new one with runtime parameter overrides
         if message.parameters:
@@ -166,7 +200,13 @@ class LLMAgent(Agent):
                 template=self.parameters["template"],  # Template is fixed at init
                 output_model=self.output_model,
                 tools=self._tools or [],
+<<<<<<< HEAD
                 fail_on_unfilled_parameters=merged_params.get("fail_on_unfilled_parameters", True),
+=======
+                fail_on_unfilled_parameters=merged_params.get(
+                    "fail_on_unfilled_parameters", True
+                ),
+>>>>>>> origin/stable
                 temperature=merged_params.get("temperature"),
                 max_tokens=merged_params.get("max_tokens"),
                 top_p=merged_params.get("top_p"),
@@ -198,7 +238,13 @@ class LLMAgent(Agent):
                 **llm_result.metadata,
             }
 
+<<<<<<< HEAD
             logger.debug(f"Agent '{self.agent_name}' completed _process. Output type: {type(llm_result.content).__name__}")
+=======
+            logger.debug(
+                f"Agent '{self.agent_name}' completed _process. Output type: {type(llm_result.content).__name__}"
+            )
+>>>>>>> origin/stable
             return AgentOutput(
                 agent_id=self.agent_id,
                 outputs=llm_result.content,

@@ -65,7 +65,13 @@ class TestToolTypeHandling:
         )
 
     @pytest.fixture
+<<<<<<< HEAD
     def mixed_tools_list(self, sample_tool_schema: ToolSchema, sample_tool_object: AgentToolDefinition):
+=======
+    def mixed_tools_list(
+        self, sample_tool_schema: ToolSchema, sample_tool_object: AgentToolDefinition
+    ):
+>>>>>>> origin/stable
         """Create a list containing both Tool objects and ToolSchema objects."""
         # Create another ToolSchema
         another_schema: ToolSchema = {
@@ -94,7 +100,13 @@ class TestToolTypeHandling:
         wrapper = Mock(spec=LiteLLMWrapper)
 
         # Mock the create method with the correct signature
+<<<<<<< HEAD
         async def mock_create(messages, tools=[], schema=None, cancellation_token=None, **kwargs):
+=======
+        async def mock_create(
+            messages, tools=[], schema=None, cancellation_token=None, **kwargs
+        ):
+>>>>>>> origin/stable
             # This should accept both Tool and ToolSchema objects
             from autogen_core.models import RequestUsage
 
@@ -112,7 +124,13 @@ class TestToolTypeHandling:
 
         # This should not raise any type errors
         async def test_call():
+<<<<<<< HEAD
             result = await wrapper.create(messages=[], tools=tools_list, cancellation_token=None)
+=======
+            result = await wrapper.create(
+                messages=[], tools=tools_list, cancellation_token=None
+            )
+>>>>>>> origin/stable
             assert result is not None
 
         # Run the async test
@@ -151,17 +169,37 @@ class TestToolTypeHandling:
         }
 
         tools_with_duplicate = mixed_tools_list + [duplicate_schema]
+<<<<<<< HEAD
         deduped_with_duplicate = list({get_tool_name(tool): tool for tool in tools_with_duplicate}.values())
+=======
+        deduped_with_duplicate = list(
+            {get_tool_name(tool): tool for tool in tools_with_duplicate}.values()
+        )
+>>>>>>> origin/stable
 
         # Should have only 2 unique tools (duplicates removed)
         assert len(deduped_with_duplicate) == 2
 
         # Verify the last one wins (dictionary behavior)
+<<<<<<< HEAD
         test_search_tool = next(tool for tool in deduped_with_duplicate if get_tool_name(tool) == "test_search")
         assert get_tool_name(test_search_tool) == "test_search"
 
     @pytest.mark.anyio
     async def test_structured_llmhost_deduplication_integration(self, mixed_tools_list, real_bm):
+=======
+        test_search_tool = next(
+            tool
+            for tool in deduped_with_duplicate
+            if get_tool_name(tool) == "test_search"
+        )
+        assert get_tool_name(test_search_tool) == "test_search"
+
+    @pytest.mark.anyio
+    async def test_structured_llmhost_deduplication_integration(
+        self, mixed_tools_list, real_bm
+    ):
+>>>>>>> origin/stable
         """Test the deduplication works in StructuredLLMHostAgent._call_llm method."""
         host = StructuredLLMHostAgent(
             agent_name="test_host",
@@ -217,7 +255,13 @@ class TestToolTypeHandling:
     # real StructuredLLMHostAgent with real tool registration and routing.
 
     @pytest.mark.anyio
+<<<<<<< HEAD
     async def test_tool_object_schema_property_usage(self, sample_tool_object: AgentToolDefinition):
+=======
+    async def test_tool_object_schema_property_usage(
+        self, sample_tool_object: AgentToolDefinition
+    ):
+>>>>>>> origin/stable
         """Test that Tool objects use their .schema property correctly."""
         # Verify the Tool object has the schema property
         assert hasattr(sample_tool_object, "schema")
@@ -268,7 +312,13 @@ class TestToolTypeHandling:
         origin = get_origin(annotation)
         assert origin is not None, "Expected a generic type with origin"
         # Check it's Sequence (either from typing or collections.abc)
+<<<<<<< HEAD
         assert "Sequence" in str(origin) or origin is ABCSequence, f"Expected Sequence origin, got {origin}"
+=======
+        assert "Sequence" in str(origin) or origin is ABCSequence, (
+            f"Expected Sequence origin, got {origin}"
+        )
+>>>>>>> origin/stable
 
         # Get the inner type (Tool | ToolSchema)
         args = get_args(annotation)
@@ -278,7 +328,14 @@ class TestToolTypeHandling:
         # Verify it's a Union that includes both types
         if hasattr(inner_type, "__args__"):  # Union type
             type_args = get_args(inner_type)
+<<<<<<< HEAD
             type_names = [arg.__name__ if hasattr(arg, "__name__") else str(arg) for arg in type_args]
+=======
+            type_names = [
+                arg.__name__ if hasattr(arg, "__name__") else str(arg)
+                for arg in type_args
+            ]
+>>>>>>> origin/stable
 
             # Should include both Tool and ToolSchema
             assert any("Tool" in name for name in type_names)

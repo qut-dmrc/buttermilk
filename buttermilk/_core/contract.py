@@ -91,7 +91,13 @@ class FlowEvent(BaseModel):
         default="server",
         description="Identifier of the message source (e.g., agent ID, system component).",
     )
+<<<<<<< HEAD
     content: str = Field(..., description="The main content or payload of the event message.")
+=======
+    content: str = Field(
+        ..., description="The main content or payload of the event message."
+    )
+>>>>>>> origin/stable
 
     def __str__(self) -> str:
         """Returns the content of the event as its string representation."""
@@ -162,7 +168,13 @@ class FlowMessage(BaseModel):
         description="Arbitrary metadata associated with the message (e.g., timestamps, tags).",
     )
 
+<<<<<<< HEAD
     _ensure_error_list: classmethod = field_validator("error", mode="before")(make_list_validator())  # type: ignore
+=======
+    _ensure_error_list: classmethod = field_validator("error", mode="before")(
+        make_list_validator()
+    )  # type: ignore
+>>>>>>> origin/stable
 
     @computed_field
     @property
@@ -233,7 +245,13 @@ class TracingDetails(BaseModel):
         if not value:  # Only attempt to auto-populate if no value was given
             try:
                 # Weave has been removed - no longer auto-populating trace ID
+<<<<<<< HEAD
                 logger.debug("Weave has been removed, trace ID auto-population disabled")
+=======
+                logger.debug(
+                    "Weave has been removed, trace ID auto-population disabled"
+                )
+>>>>>>> origin/stable
             except Exception as e:
                 logger.warning(f"Unable to get Weave call ID for TracingDetails: {e!s}")
             return ""  # Return empty string if auto-population fails
@@ -257,7 +275,13 @@ def _get_session_info() -> Any:
 
         return bm.session_info
     except ImportError:
+<<<<<<< HEAD
         logger.warning("Buttermilk global instance (bm) not available to get session_info.")
+=======
+        logger.warning(
+            "Buttermilk global instance (bm) not available to get session_info."
+        )
+>>>>>>> origin/stable
         return None
     except AttributeError:
         logger.warning("bm.session_info not available to get session_info.")
@@ -282,7 +306,15 @@ def _get_session_id() -> str:
     try:
         from buttermilk import bm
 
+<<<<<<< HEAD
         if hasattr(bm, "session_info") and bm.session_info and hasattr(bm.session_info, "session_id"):
+=======
+        if (
+            hasattr(bm, "session_info")
+            and bm.session_info
+            and hasattr(bm.session_info, "session_id")
+        ):
+>>>>>>> origin/stable
             return bm.session_info.session_id
     except (ImportError, AttributeError):
         pass
@@ -356,12 +388,19 @@ class AgentInput(FlowMessage):
         description="Single `Record` object relevant to the current task for the agent to process.",
     )
 
+<<<<<<< HEAD
     _ensure_input_list: classmethod = field_validator("context", mode="before")(make_list_validator())  # type: ignore
+=======
+    _ensure_input_list: classmethod = field_validator("context", mode="before")(
+        make_list_validator()
+    )  # type: ignore
+>>>>>>> origin/stable
 
     def __str__(self) -> str:
         """Provides a concise string representation of the AgentInput instance."""
         parts = []
         if prompt := self.inputs.get("prompt"):  # Check specifically for a 'prompt' key
+<<<<<<< HEAD
             prompt_summary = str(prompt)[:50] + "..." if len(str(prompt)) > 50 else str(prompt)
             parts.append(f"Prompt: '{prompt_summary}'")
         if self.inputs:
@@ -370,6 +409,24 @@ class AgentInput(FlowMessage):
             parts.append(f"{len(self.parameters)} parameters")
         if self.record:
             record_id = self.record.record_id if hasattr(self.record, "record_id") else "unknown"
+=======
+            prompt_summary = (
+                str(prompt)[:50] + "..." if len(str(prompt)) > 50 else str(prompt)
+            )
+            parts.append(f"Prompt: '{prompt_summary}'")
+        if self.inputs:
+            parts.append(
+                f"{len(self.inputs)} inputs keys: [{', '.join(self.inputs.keys())}]"
+            )
+        if self.parameters:
+            parts.append(f"{len(self.parameters)} parameters")
+        if self.record:
+            record_id = (
+                self.record.record_id
+                if hasattr(self.record, "record_id")
+                else "unknown"
+            )
+>>>>>>> origin/stable
             parts.append(f"Record: {record_id}")
 
         if not parts:
@@ -466,7 +523,13 @@ class AgentOutput(BaseModel):
         default_factory=list,
         description="List of error messages accumulated during processing related to this message.",
     )
+<<<<<<< HEAD
     _ensure_error_list: classmethod = field_validator("error", mode="before")(make_list_validator())  # type: ignore
+=======
+    _ensure_error_list: classmethod = field_validator("error", mode="before")(
+        make_list_validator()
+    )  # type: ignore
+>>>>>>> origin/stable
 
     model_config = ConfigDict(
         extra="forbid",
@@ -476,7 +539,13 @@ class AgentOutput(BaseModel):
         json_encoders={
             np.bool_: bool,  # Handle numpy bools
             datetime.datetime: lambda v: v.isoformat(),  # Standard ISO format for datetimes
+<<<<<<< HEAD
             ListConfig: lambda v: OmegaConf.to_container(v, resolve=True),  # OmegaConf compatibility
+=======
+            ListConfig: lambda v: OmegaConf.to_container(
+                v, resolve=True
+            ),  # OmegaConf compatibility
+>>>>>>> origin/stable
             DictConfig: lambda v: OmegaConf.to_container(v, resolve=True),
         },
         validate_assignment=True,
@@ -605,8 +674,17 @@ class ExecutionTrace(BaseModel):
         description="Tracing information including span_id, weave_id, external trace links, etc.",
     )
 
+<<<<<<< HEAD
     _ensure_messages_list: classmethod = field_validator("messages", mode="before")(make_list_validator())  # type: ignore
     _validate_input_params: classmethod = field_validator("inputs", mode="before")(convert_omegaconf_objects)  # type: ignore
+=======
+    _ensure_messages_list: classmethod = field_validator("messages", mode="before")(
+        make_list_validator()
+    )  # type: ignore
+    _validate_input_params: classmethod = field_validator("inputs", mode="before")(
+        convert_omegaconf_objects
+    )  # type: ignore
+>>>>>>> origin/stable
 
     model_config = ConfigDict(
         extra="forbid",
@@ -716,7 +794,13 @@ class ExecutionTrace(BaseModel):
         if output.error:
             error_dict = {
                 "event": str(output.error[0]) if output.error else None,
+<<<<<<< HEAD
                 "details": {"errors": [str(e) for e in output.error]} if output.error else {},
+=======
+                "details": {"errors": [str(e) for e in output.error]}
+                if output.error
+                else {},
+>>>>>>> origin/stable
             }
 
         # Merge metadata
@@ -801,7 +885,13 @@ class SystemPromptMessage(FlowMessage):
 
     """
 
+<<<<<<< HEAD
     content: str = Field(..., description="The question or information to present to the user.")
+=======
+    content: str = Field(
+        ..., description="The question or information to present to the user."
+    )
+>>>>>>> origin/stable
     options: bool | list[str] | None = Field(
         default=None,
         description="Options for user response: list of strings for choices, bool for Yes/No, None for free text.",
@@ -903,10 +993,25 @@ class FlowProgressUpdate(FlowMessage):
 
     """
 
+<<<<<<< HEAD
     source: str = Field(..., description="ID of the agent or component sending the progress update.")
     step_name: str = Field(..., description="Name or identifier of the current step being processed.")
     status: str = Field(..., description="Current status (e.g., 'STARTED', 'COMPLETED', 'ERROR').")
     message: str = Field(default="", description="Human-readable message describing current progress.")
+=======
+    source: str = Field(
+        ..., description="ID of the agent or component sending the progress update."
+    )
+    step_name: str = Field(
+        ..., description="Name or identifier of the current step being processed."
+    )
+    status: str = Field(
+        ..., description="Current status (e.g., 'STARTED', 'COMPLETED', 'ERROR')."
+    )
+    message: str = Field(
+        default="", description="Human-readable message describing current progress."
+    )
+>>>>>>> origin/stable
     timestamp: datetime.datetime = Field(
         default_factory=lambda: datetime.datetime.now(datetime.UTC),
         description="Timestamp of when the progress update was generated (UTC).",
@@ -920,7 +1025,13 @@ class FlowProgressUpdate(FlowMessage):
         """Returns a formatted string representation of the task progress."""
         status_msg = f"[{self.status.upper()}] {self.message}"
         if self.waiting_on:
+<<<<<<< HEAD
             waiting_on_str = ", ".join([f"{k}: {v}" for k, v in self.waiting_on.items()])
+=======
+            waiting_on_str = ", ".join(
+                [f"{k}: {v}" for k, v in self.waiting_on.items()]
+            )
+>>>>>>> origin/stable
             status_msg += f" - Waiting on: {waiting_on_str}"
         return status_msg
 
@@ -968,9 +1079,17 @@ class ToolOutput(FunctionExecutionResult):
         default_factory=dict,
         description="Arguments passed to the tool when it was called.",
     )
+<<<<<<< HEAD
     content: str = Field(  # Overriding to ensure it's always present in schema if needed
         ...,
         description="String representation of the tool's execution result.",
+=======
+    content: str = (
+        Field(  # Overriding to ensure it's always present in schema if needed
+            ...,
+            description="String representation of the tool's execution result.",
+        )
+>>>>>>> origin/stable
     )
     call_id: str = Field(  # Overriding to ensure consistent description and default
         default="unknown",
@@ -1014,7 +1133,13 @@ class TaskProcessingComplete(TaskProcessingStarted):
         default=False,
         description="True if the task completed with an error.",
     )
+<<<<<<< HEAD
     error: str = Field(default="", description="Error message if the task ended with an error.")
+=======
+    error: str = Field(
+        default="", description="Error message if the task ended with an error."
+    )
+>>>>>>> origin/stable
 
 
 class HeartBeat(BaseModel):

@@ -28,7 +28,13 @@ def writer(real_bm):
 
 @pytest.mark.anyio
 @pytest.mark.integration
+<<<<<<< HEAD
 @pytest.mark.skip(reason="Requires valid GCP project ID - use real_bm fixture with actual BQ config for live tests")
+=======
+@pytest.mark.skip(
+    reason="Requires valid GCP project ID - use real_bm fixture with actual BQ config for live tests"
+)
+>>>>>>> origin/stable
 async def test_append_rows_integration(writer):
     """Test appending rows to a BigQuery table.
 

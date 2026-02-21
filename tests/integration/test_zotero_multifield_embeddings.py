@@ -185,11 +185,23 @@ class TestZoteroMultiFieldEmbeddings:
             assert chunk_types.get("citation", 0) == 1
 
             # Verify chunk content
+<<<<<<< HEAD
             abstract_chunks = [c for c in chunks if c.metadata.get("chunk_type") == "abstract"]
             assert len(abstract_chunks) == 1
             assert "novel approaches" in abstract_chunks[0].chunk_text
 
             annotation_chunks = [c for c in chunks if c.metadata.get("chunk_type") == "annotation"]
+=======
+            abstract_chunks = [
+                c for c in chunks if c.metadata.get("chunk_type") == "abstract"
+            ]
+            assert len(abstract_chunks) == 1
+            assert "novel approaches" in abstract_chunks[0].chunk_text
+
+            annotation_chunks = [
+                c for c in chunks if c.metadata.get("chunk_type") == "annotation"
+            ]
+>>>>>>> origin/stable
             assert len(annotation_chunks) >= 1
             # Check that annotations are properly formatted
             ann_text = " ".join(c.chunk_text for c in annotation_chunks)
@@ -253,7 +265,13 @@ class TestZoteroMultiFieldEmbeddings:
 
             # Check that different chunk types have appropriate metadata
             content_types_in_metadata = set()
+<<<<<<< HEAD
             content_types_in_metadata.update(metadata.get("chunk_type") for metadata in metadatas)
+=======
+            content_types_in_metadata.update(
+                metadata.get("chunk_type") for metadata in metadatas
+            )
+>>>>>>> origin/stable
 
             assert "content" in content_types_in_metadata
             assert "abstract" in content_types_in_metadata
@@ -327,7 +345,13 @@ class TestZoteroMultiFieldEmbeddings:
             chunks = vector_store.create_multi_field_chunks_for_record(record)
 
             # Find annotation chunks
+<<<<<<< HEAD
             annotation_chunks = [c for c in chunks if c.metadata.get("chunk_type") == "annotation"]
+=======
+            annotation_chunks = [
+                c for c in chunks if c.metadata.get("chunk_type") == "annotation"
+            ]
+>>>>>>> origin/stable
             assert len(annotation_chunks) >= 1
 
             # Verify annotation content is properly formatted
@@ -423,13 +447,25 @@ class TestZoteroMultiFieldEmbeddings:
             chunks = vector_store.create_multi_field_chunks_for_record(record)
 
             # Check contributions formatting (list to text)
+<<<<<<< HEAD
             contrib_chunks = [c for c in chunks if c.metadata.get("chunk_type") == "contributions"]
+=======
+            contrib_chunks = [
+                c for c in chunks if c.metadata.get("chunk_type") == "contributions"
+            ]
+>>>>>>> origin/stable
             assert len(contrib_chunks) == 1
             assert "Novel algorithm" in contrib_chunks[0].chunk_text
             assert "Open-source implementation" in contrib_chunks[0].chunk_text
 
             # Check related works formatting (dict to text)
+<<<<<<< HEAD
             biblio_chunks = [c for c in chunks if c.metadata.get("chunk_type") == "bibliography"]
+=======
+            biblio_chunks = [
+                c for c in chunks if c.metadata.get("chunk_type") == "bibliography"
+            ]
+>>>>>>> origin/stable
             assert len(biblio_chunks) == 1
             assert "builds_on:" in biblio_chunks[0].chunk_text
             assert "Smith et al. 2022" in biblio_chunks[0].chunk_text

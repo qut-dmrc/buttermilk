@@ -23,7 +23,13 @@ def test_record_with_metadata():
 
 def test_record_serialization():
     """Test that Record can be serialized and deserialized."""
+<<<<<<< HEAD
     record = Record(content="Serialization test", mime="text/plain", metadata={"test": True})
+=======
+    record = Record(
+        content="Serialization test", mime="text/plain", metadata={"test": True}
+    )
+>>>>>>> origin/stable
 
     # Test model_dump
     dumped = record.model_dump()
@@ -118,7 +124,13 @@ def test_record_hash_idempotent():
     h3 = record.record_hash
 
     # All three should be identical - THIS WILL FAIL with current code
+<<<<<<< HEAD
     assert h1 == h2 == h3, f"record_hash must be idempotent. Got h1={h1[:16]}..., h2={h2[:16]}..., h3={h3[:16]}..."
+=======
+    assert (
+        h1 == h2 == h3
+    ), f"record_hash must be idempotent. Got h1={h1[:16]}..., h2={h2[:16]}..., h3={h3[:16]}..."
+>>>>>>> origin/stable
 
 
 def test_ground_truth_hash_none():

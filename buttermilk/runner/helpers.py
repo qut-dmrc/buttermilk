@@ -89,7 +89,15 @@ def parse_flow_vars(
             value = []
             for x in path:
                 sub_value = descend(map=map, path=x)
+<<<<<<< HEAD
                 if sub_value and isinstance(sub_value, Sequence) and not isinstance(sub_value, str):
+=======
+                if (
+                    sub_value
+                    and isinstance(sub_value, Sequence)
+                    and not isinstance(sub_value, str)
+                ):
+>>>>>>> origin/stable
                     value.extend(sub_value)
                 elif sub_value:
                     value.append(sub_value)

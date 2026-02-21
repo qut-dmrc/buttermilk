@@ -1,8 +1,12 @@
 from buttermilk import logger
 from buttermilk._core.processor_core import BatchProcessorCore
 from buttermilk._core.types import BaseRecord
-from buttermilk.batch.executors.base import BatchExecutor
+<<<<<<< HEAD
 from buttermilk.batch.managers.vertex import BatchJobManager
+=======
+from buttermilk._core.vertex_batch import BatchJobManager
+>>>>>>> origin/stable
+from buttermilk.batch.executors.base import BatchExecutor
 from buttermilk.batch.result import BatchExecutionResult, BatchJobStatus
 
 
@@ -10,8 +14,12 @@ class VertexBatchExecutor(BatchExecutor):
     """Executes batch processing asynchronously on Vertex AI.
 
     Submits a batch job and returns immediately with PENDING status.
+<<<<<<< HEAD
     Requires a processor that supports `prepare_batch_requests`
     (e.g. BatchLLMProcessor or VertexBatchProcessor).
+=======
+    Requires a processor that supports `prepare_batch_requests` (e.g. VertexBatchProcessor).
+>>>>>>> origin/stable
     """
 
     def __init__(self, poll_interval: int = 30) -> None:
@@ -52,10 +60,22 @@ class VertexBatchExecutor(BatchExecutor):
             if not model:
                 return BatchExecutionResult(status=BatchJobStatus.FAILED, error=f"Processor {processor.name} missing 'model' attribute.")
 
+<<<<<<< HEAD
+=======
+            # Get criteria contents (optional, for Claude caching)
+            criteria_contents = None
+            if hasattr(processor, "get_criteria_contents"):
+                criteria_contents = processor.get_criteria_contents()  # type: ignore
+
+>>>>>>> origin/stable
             # 3. Submit Job
             job = await self.manager.submit_batch(
                 model=model,
                 requests=requests,
+<<<<<<< HEAD
+=======
+                criteria_contents=criteria_contents,
+>>>>>>> origin/stable
             )
 
             logger.info(f"Vertex batch job submitted: {job.name}")

@@ -65,7 +65,15 @@ async def register_handlers(
     async def _flow_start_matcher(body):
         logger.debug(f"Received request: {json.dumps(body)}")
         # don't trigger on self-messages or within a thread
+<<<<<<< HEAD
         if body and body["event"].get("subtype") != "bot_message" and (body["event"].get("event_ts") != body["event"].get("thread_ts")):
+=======
+        if (
+            body
+            and body["event"].get("subtype") != "bot_message"
+            and (body["event"].get("event_ts") != body["event"].get("thread_ts"))
+        ):
+>>>>>>> origin/stable
             match = BOTPATTERNS.search(body["event"]["text"])
             if match:
                 return True
@@ -213,7 +221,13 @@ async def read_thread_history(
     history = []
     if replies and "messages" in replies:
         for message in replies["messages"]:
+<<<<<<< HEAD
             if message.get("text", "").startswith("<@") or message.get("text", "").startswith("!"):
+=======
+            if message.get("text", "").startswith("<@") or message.get(
+                "text", ""
+            ).startswith("!"):
+>>>>>>> origin/stable
                 # ignore directed messages
                 continue
             message.get("user", "Unknown")

@@ -6,11 +6,18 @@ import pytest
 from autogen_core import CancellationToken, FunctionCall
 from autogen_core.models import SystemMessage, UserMessage
 from autogen_core.tools import FunctionTool
+<<<<<<< HEAD
 from pydantic import BaseModel, ConfigDict, Field
 
 from buttermilk._core.llms import ModelOutput
 
 
+=======
+from pydantic import BaseModel, Field, ConfigDict
+
+from buttermilk._core.llms import ModelOutput
+
+>>>>>>> origin/stable
 class StructuredTestAgentOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -22,7 +29,13 @@ class StructuredTestAgentOutput(BaseModel):
         ...,
         description="List of reasoning steps. Each step should comprise one to five sentences of text presenting a clear logical analysis.",
     )
+<<<<<<< HEAD
     confidence: Literal["high", "medium", "low"] = Field(description="Your confidence in the overall conclusion.")
+=======
+    confidence: Literal["high", "medium", "low"] = Field(
+        description="Your confidence in the overall conclusion."
+    )
+>>>>>>> origin/stable
     thoughts: str
 
 
@@ -47,10 +60,25 @@ async def get_weather(location: str) -> WeatherResponse:
     """
     # Mock weather data based on location
     weather_data = {
+<<<<<<< HEAD
         "london": WeatherResponse(location="London", temperature=15.5, condition="cloudy", humidity=75),
         "new york": WeatherResponse(location="New York", temperature=22.0, condition="sunny", humidity=60),
         "tokyo": WeatherResponse(location="Tokyo", temperature=18.5, condition="rainy", humidity=85),
         "paris": WeatherResponse(location="Paris", temperature=17.0, condition="partly cloudy", humidity=70),
+=======
+        "london": WeatherResponse(
+            location="London", temperature=15.5, condition="cloudy", humidity=75
+        ),
+        "new york": WeatherResponse(
+            location="New York", temperature=22.0, condition="sunny", humidity=60
+        ),
+        "tokyo": WeatherResponse(
+            location="Tokyo", temperature=18.5, condition="rainy", humidity=85
+        ),
+        "paris": WeatherResponse(
+            location="Paris", temperature=17.0, condition="partly cloudy", humidity=70
+        ),
+>>>>>>> origin/stable
     }
 
     # Normalize location for lookup
@@ -59,7 +87,13 @@ async def get_weather(location: str) -> WeatherResponse:
     # Return mock data or default
     return weather_data.get(
         location_key,
+<<<<<<< HEAD
         WeatherResponse(location=location, temperature=20.0, condition="clear", humidity=65),
+=======
+        WeatherResponse(
+            location=location, temperature=20.0, condition="clear", humidity=65
+        ),
+>>>>>>> origin/stable
     )
 
 
@@ -152,7 +186,13 @@ async def test_single_tool_call(real_llm_expensive, llm_wrapper_type):
 
     # Should mention weather details (at least one of these)
     weather_terms = ["cloudy", "15.5", "75", "humidity", "temperature", "celsius", "°c"]
+<<<<<<< HEAD
     assert any(term in content_lower for term in weather_terms), f"Response should contain weather information, got: {response.content}"
+=======
+    assert any(term in content_lower for term in weather_terms), (
+        f"Response should contain weather information, got: {response.content}"
+    )
+>>>>>>> origin/stable
 
 
 @pytest.mark.anyio
@@ -194,7 +234,13 @@ async def test_multiple_tool_calls(real_llm, llm_wrapper_type):
         assert isinstance(response.content, str)
 
         # Check for both digit "8" and word "eight"
+<<<<<<< HEAD
         assert any(term in response.content.lower() for term in ["8", "eight"]), f"Response should contain the sum 8, got: {response.content}"
+=======
+        assert any(term in response.content.lower() for term in ["8", "eight"]), (
+            f"Response should contain the sum 8, got: {response.content}"
+        )
+>>>>>>> origin/stable
     except Exception as e:
         if "does not support function calling" in str(e):
             pytest.skip(f"Model doesn't support tool calling: {e}")
@@ -239,7 +285,13 @@ async def test_no_tool_needed(real_llm, llm_wrapper_type):
         assert response.content
         assert isinstance(response.content, str)
 
+<<<<<<< HEAD
         assert "paris" in response.content.lower(), f"Response should mention Paris, got: {response.content}"
+=======
+        assert "paris" in response.content.lower(), (
+            f"Response should mention Paris, got: {response.content}"
+        )
+>>>>>>> origin/stable
     except Exception as e:
         if "does not support function calling" in str(e):
             pytest.skip(f"Model doesn't support tool calling: {e}")
@@ -280,9 +332,21 @@ async def test_call_chat_intercept_tools_returns_function_calls(real_llm, llm_wr
         raise
 
     assert result.content, "Expected tool call(s) in result content"
+<<<<<<< HEAD
     assert isinstance(result.content, list), f"Expected a list of FunctionCall, got: {type(result.content)}"
     assert all(isinstance(c, FunctionCall) for c in result.content), "Expected FunctionCall objects"
     assert any(c.name == "calculate_sum" for c in result.content), "Expected a calculate_sum tool call"
+=======
+    assert isinstance(result.content, list), (
+        f"Expected a list of FunctionCall, got: {type(result.content)}"
+    )
+    assert all(isinstance(c, FunctionCall) for c in result.content), (
+        "Expected FunctionCall objects"
+    )
+    assert any(c.name == "calculate_sum" for c in result.content), (
+        "Expected a calculate_sum tool call"
+    )
+>>>>>>> origin/stable
 
 
 @pytest.mark.anyio
@@ -357,7 +421,13 @@ async def test_call_chat_tool_exec_then_synthesis_with_schema(real_llm_expensive
             source="system",
         ),
         UserMessage(
+<<<<<<< HEAD
             content=("Compute (5 + 3) and (10 + 4) using separate calls to the calculate_sum tool."),
+=======
+            content=(
+                "Compute (5 + 3) and (10 + 4) using separate calls to the calculate_sum tool."
+            ),
+>>>>>>> origin/stable
             source="user",
         ),
     ]
@@ -378,12 +448,21 @@ async def test_call_chat_tool_exec_then_synthesis_with_schema(real_llm_expensive
             pytest.skip(f"Vertex AI/Gemini requires thought signature which is currently not handled: {e}")
         if "invalid response object" in error_msg and "keyerror: 'content'" in error_msg:
             pytest.skip(f"Provider returned invalid response format (litellm issue): {e}")
+<<<<<<< HEAD
 
         # Fallback for complex nested exceptions where the string might be truncated or formatted differently
         # Specific skip for Gemini 400 errors which are typically the thought signature issue in this context
         if "gemini" in model_name and "400" in error_msg:
             pytest.skip(f"Skipping Gemini 400 error (likely thought signature): {e}")
 
+=======
+
+        # Fallback for complex nested exceptions where the string might be truncated or formatted differently
+        # Specific skip for Gemini 400 errors which are typically the thought signature issue in this context
+        if "gemini" in model_name and "400" in error_msg:
+             pytest.skip(f"Skipping Gemini 400 error (likely thought signature): {e}")
+
+>>>>>>> origin/stable
         raise
 
     # Validate the synthesized result
@@ -395,6 +474,16 @@ async def test_call_chat_tool_exec_then_synthesis_with_schema(real_llm_expensive
     if "nano" in model_name or "mini" in model_name:
         # Smaller models might only do one calculation
         assert len(response.parsed_object.result) > 0, "Expected at least one result"
+<<<<<<< HEAD
         assert all(r in [8, 14] for r in response.parsed_object.result), f"Unexpected result values: {response.parsed_object.result}"
     else:
         assert set(response.parsed_object.result) == {8, 14}, f"Expected [8, 14] in result, got: {response.parsed_object.result}"
+=======
+        assert all(r in [8, 14] for r in response.parsed_object.result), (
+            f"Unexpected result values: {response.parsed_object.result}"
+        )
+    else:
+        assert set(response.parsed_object.result) == {8, 14}, (
+            f"Expected [8, 14] in result, got: {response.parsed_object.result}"
+        )
+>>>>>>> origin/stable

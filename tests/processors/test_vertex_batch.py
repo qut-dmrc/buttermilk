@@ -1,7 +1,11 @@
 """Tests for Vertex AI batch processor and caching components.
 
 These tests focus on unit-testable components that don't require
+<<<<<<< HEAD
 actual GCP connections. Separate integration tests use live Vertex AI.
+=======
+actual GCP connections. Integration tests would require live Vertex AI.
+>>>>>>> origin/stable
 """
 
 import json
@@ -9,8 +13,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from buttermilk.batch.managers.vertex import BatchJobManager
-from buttermilk.batch.types import BatchRequest, BatchResult
+from buttermilk._core.vertex_batch import (
+    BatchJobManager,
+    BatchRequest,
+    BatchResult,
+)
 from buttermilk._core.vertex_caching import CriteriaCacheManager
 
 
@@ -20,6 +27,7 @@ class TestBatchRequest:
     def test_create_batch_request(self):
         """Test creating a batch request."""
         request = BatchRequest(
+<<<<<<< HEAD
             custom_id="record_001",
             record_id="record_001",
             messages=[{"role": "user", "content": "Test content"}],
@@ -43,6 +51,31 @@ class TestBatchRequest:
         assert len(request.messages) == 2
         assert request.messages[0]["role"] == "system"
         assert request.messages[1]["role"] == "user"
+=======
+            custom_id="record_001_criteria_A",
+            record_id="record_001",
+            criteria_key="criteria_A",
+            content="Test content",
+            cache_name="projects/123/cachedContents/abc",
+        )
+
+        assert request.custom_id == "record_001_criteria_A"
+        assert request.record_id == "record_001"
+        assert request.criteria_key == "criteria_A"
+        assert request.content == "Test content"
+        assert request.cache_name == "projects/123/cachedContents/abc"
+
+    def test_batch_request_optional_cache(self):
+        """Test batch request without cache name."""
+        request = BatchRequest(
+            custom_id="test",
+            record_id="rec1",
+            criteria_key="crit1",
+            content="content",
+        )
+
+        assert request.cache_name is None
+>>>>>>> origin/stable
 
 
 class TestBatchResult:
@@ -51,8 +84,14 @@ class TestBatchResult:
     def test_create_success_result(self):
         """Test creating a successful batch result."""
         result = BatchResult(
+<<<<<<< HEAD
             custom_id="record_001",
             record_id="record_001",
+=======
+            custom_id="record_001_criteria_A",
+            record_id="record_001",
+            criteria_key="criteria_A",
+>>>>>>> origin/stable
             response="This is the LLM response",
             usage={"input_tokens": 100, "output_tokens": 50},
         )
@@ -64,8 +103,14 @@ class TestBatchResult:
     def test_create_error_result(self):
         """Test creating an error batch result."""
         result = BatchResult(
+<<<<<<< HEAD
             custom_id="record_001",
             record_id="record_001",
+=======
+            custom_id="record_001_criteria_A",
+            record_id="record_001",
+            criteria_key="criteria_A",
+>>>>>>> origin/stable
             error="Rate limit exceeded",
         )
 
@@ -91,13 +136,20 @@ class TestBatchJobManager:
         request = BatchRequest(
             custom_id="test_001",
             record_id="rec_001",
+<<<<<<< HEAD
             messages=[{"role": "user", "content": "Evaluate this content"}],
+=======
+            criteria_key="criteria_A",
+            content="Evaluate this content",
+            cache_name="projects/123/cachedContents/abc",
+>>>>>>> origin/stable
         )
 
         entry = manager._build_gemini_request(request)
 
         assert entry["custom_id"] == "test_001"
         assert "request" in entry
+<<<<<<< HEAD
         assert entry["request"]["contents"][0]["role"] == "user"
         assert entry["request"]["contents"][0]["parts"][0]["text"] == "Evaluate this content"
 
@@ -110,23 +162,52 @@ class TestBatchJobManager:
                 {"role": "system", "content": "You are a helpful assistant"},
                 {"role": "user", "content": "Hello"},
             ],
+=======
+        assert entry["request"]["cached_content"] == "projects/123/cachedContents/abc"
+        assert entry["request"]["contents"][0]["role"] == "user"
+        assert entry["request"]["contents"][0]["parts"][0]["text"] == "Evaluate this content"
+
+    def test_build_gemini_request_no_cache(self, manager):
+        """Test Gemini request without cache."""
+        request = BatchRequest(
+            custom_id="test_001",
+            record_id="rec_001",
+            criteria_key="criteria_A",
+            content="Content",
+>>>>>>> origin/stable
         )
 
         entry = manager._build_gemini_request(request)
 
+<<<<<<< HEAD
         assert "system_instruction" in entry["request"]
         assert entry["request"]["system_instruction"]["parts"][0]["text"] == "You are a helpful assistant"
         assert entry["request"]["contents"][0]["role"] == "user"
+=======
+        assert "cached_content" not in entry["request"]
+>>>>>>> origin/stable
 
     def test_build_claude_request(self, manager):
         """Test building a Claude batch request entry."""
         request = BatchRequest(
             custom_id="test_001",
             record_id="rec_001",
+<<<<<<< HEAD
             messages=[{"role": "user", "content": "Record content here"}],
         )
 
         entry = manager._build_claude_request(request, max_tokens=2048)
+=======
+            criteria_key="criteria_A",
+            content="Record content here",
+        )
+
+        entry = manager._build_claude_request(
+            request,
+            criteria_content="Evaluate for hate speech...",
+            max_tokens=2048,
+        )
+>>>>>>> origin/stable
 
         assert entry["custom_id"] == "test_001"
         assert entry["request"]["anthropic_version"] == "vertex-2023-10-16"
@@ -136,6 +217,7 @@ class TestBatchJobManager:
         messages = entry["request"]["messages"]
         assert len(messages) == 1
         assert messages[0]["role"] == "user"
+<<<<<<< HEAD
         assert messages[0]["content"] == "Record content here"
 
     def test_build_claude_request_with_system(self, manager):
@@ -154,11 +236,22 @@ class TestBatchJobManager:
         assert entry["request"]["system"] == "You are a helpful assistant"
         assert entry["request"]["messages"][0]["role"] == "user"
         assert entry["request"]["messages"][0]["content"] == "Hello"
+=======
+
+        content = messages[0]["content"]
+        assert len(content) == 2
+        # First block: criteria with cache_control
+        assert content[0]["text"] == "Evaluate for hate speech..."
+        assert content[0]["cache_control"]["type"] == "ephemeral"
+        # Second block: record content
+        assert content[1]["text"] == "Record content here"
+>>>>>>> origin/stable
 
     def test_build_jsonl_gemini(self, manager):
         """Test building complete JSONL for Gemini."""
         requests = [
             BatchRequest(
+<<<<<<< HEAD
                 custom_id="rec1",
                 record_id="rec1",
                 messages=[{"role": "user", "content": "Content 1"}],
@@ -167,6 +260,20 @@ class TestBatchJobManager:
                 custom_id="rec2",
                 record_id="rec2",
                 messages=[{"role": "user", "content": "Content 2"}],
+=======
+                custom_id="rec1_critA",
+                record_id="rec1",
+                criteria_key="critA",
+                content="Content 1",
+                cache_name="cache/123",
+            ),
+            BatchRequest(
+                custom_id="rec2_critA",
+                record_id="rec2",
+                criteria_key="critA",
+                content="Content 2",
+                cache_name="cache/123",
+>>>>>>> origin/stable
             ),
         ]
 
@@ -176,6 +283,7 @@ class TestBatchJobManager:
         assert len(lines) == 2
 
         entry1 = json.loads(lines[0])
+<<<<<<< HEAD
         assert entry1["custom_id"] == "rec1"
 
         entry2 = json.loads(lines[1])
@@ -192,6 +300,31 @@ class TestBatchJobManager:
         ]
 
         jsonl = manager.build_jsonl(requests, model="claude-sonnet-4")
+=======
+        assert entry1["custom_id"] == "rec1_critA"
+
+        entry2 = json.loads(lines[1])
+        assert entry2["custom_id"] == "rec2_critA"
+
+    def test_build_jsonl_claude(self, manager):
+        """Test building complete JSONL for Claude with inline caching."""
+        requests = [
+            BatchRequest(
+                custom_id="rec1_critA",
+                record_id="rec1",
+                criteria_key="critA",
+                content="Content 1",
+            ),
+        ]
+
+        criteria_contents = {"critA": "Criteria text here"}
+
+        jsonl = manager.build_jsonl(
+            requests,
+            model="claude-sonnet-4",
+            criteria_contents=criteria_contents,
+        )
+>>>>>>> origin/stable
 
         lines = jsonl.strip().split("\n")
         assert len(lines) == 1
@@ -211,14 +344,38 @@ class TestBatchJobManager:
 
     def test_extract_response_gemini_format(self, manager):
         """Test extracting response from Gemini batch result."""
+<<<<<<< HEAD
         entry = {"response": {"candidates": [{"content": {"parts": [{"text": "The response text"}]}}]}}
+=======
+        entry = {
+            "response": {
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [{"text": "The response text"}]
+                        }
+                    }
+                ]
+            }
+        }
+>>>>>>> origin/stable
 
         response = manager._extract_response(entry)
         assert response == "The response text"
 
     def test_extract_response_claude_format(self, manager):
         """Test extracting response from Claude batch result."""
+<<<<<<< HEAD
         entry = {"response": {"content": [{"type": "text", "text": "Claude response here"}]}}
+=======
+        entry = {
+            "response": {
+                "content": [
+                    {"type": "text", "text": "Claude response here"}
+                ]
+            }
+        }
+>>>>>>> origin/stable
 
         response = manager._extract_response(entry)
         assert response == "Claude response here"
@@ -234,19 +391,20 @@ class TestBatchJobManager:
         assert len(job_id1) == 18  # "batch_" + 12 hex chars
 
 
+<<<<<<< HEAD
 class TestLlamaBatchSupport:
     """Tests for Llama/Meta model batch prediction support."""
 
     def test_is_llama_model_with_llama_prefix(self):
         """_is_llama_model should detect llama model names."""
-        from buttermilk.batch.converters import _is_llama_model
+        from buttermilk._core.vertex_batch import _is_llama_model
 
         assert _is_llama_model("llama-4-maverick-17b-128e-instruct-maas")
         assert _is_llama_model("meta/llama-4-maverick-17b-128e-instruct-maas")
 
     def test_is_llama_model_negative(self):
         """_is_llama_model should not match non-llama models."""
-        from buttermilk.batch.converters import _is_llama_model
+        from buttermilk._core.vertex_batch import _is_llama_model
 
         assert not _is_llama_model("gemini-2.5-flash")
         assert not _is_llama_model("claude-sonnet-4")
@@ -254,14 +412,14 @@ class TestLlamaBatchSupport:
 
     def test_get_message_converter_routes_llama_to_openai(self):
         """Llama models should use OpenAIMessageConverter."""
-        from buttermilk.batch.converters import OpenAIMessageConverter, get_message_converter
+        from buttermilk._core.vertex_batch import OpenAIMessageConverter, get_message_converter
 
         converter = get_message_converter("meta/llama-4-maverick-17b-128e-instruct-maas")
         assert isinstance(converter, OpenAIMessageConverter)
 
     def test_get_message_converter_routes_llama_short_name(self):
         """Llama models without meta/ prefix should also route to OpenAI converter."""
-        from buttermilk.batch.converters import OpenAIMessageConverter, get_message_converter
+        from buttermilk._core.vertex_batch import OpenAIMessageConverter, get_message_converter
 
         converter = get_message_converter("llama-4-maverick-17b-128e-instruct-maas")
         assert isinstance(converter, OpenAIMessageConverter)
@@ -328,6 +486,8 @@ class TestLlamaBatchSupport:
         assert entry["body"]["response_format"]["type"] == "json_schema"
 
 
+=======
+>>>>>>> origin/stable
 class TestCriteriaCacheManager:
     """Tests for CriteriaCacheManager."""
 
@@ -434,6 +594,7 @@ class TestCriteriaCacheManager:
         assert len(caches) == 1
         assert caches[0]["name"] == "cache1"
         assert caches[0]["display_name"] == "Test 1"
+<<<<<<< HEAD
 
 
 class TestVertexBatchProcessorConfigInheritance:
@@ -531,8 +692,7 @@ class TestVertexBatchProcessorConfigInheritance:
         When building JSONL for Claude batch requests, the max_tokens
         parameter should be passed through to the message converter.
         """
-        from buttermilk.batch.managers.vertex import BatchJobManager
-        from buttermilk.batch.types import BatchRequest
+        from buttermilk._core.vertex_batch import BatchJobManager, BatchRequest
 
         mock_client = MagicMock()
         manager = BatchJobManager(client=mock_client)
@@ -559,8 +719,7 @@ class TestVertexBatchProcessorConfigInheritance:
 
         When max_tokens is None, the Claude converter should use its default value.
         """
-        from buttermilk.batch.managers.vertex import BatchJobManager
-        from buttermilk.batch.types import BatchRequest
+        from buttermilk._core.vertex_batch import BatchJobManager, BatchRequest
 
         mock_client = MagicMock()
         manager = BatchJobManager(client=mock_client)
@@ -604,7 +763,7 @@ class TestGeminiStructuredOutput:
 
     def test_build_request_without_schema(self):
         """Gemini request without schema should not include generationConfig."""
-        from buttermilk.batch.converters import GeminiMessageConverter
+        from buttermilk._core.vertex_batch import GeminiMessageConverter
 
         converter = GeminiMessageConverter()
         request = BatchRequest(
@@ -619,7 +778,7 @@ class TestGeminiStructuredOutput:
 
     def test_build_request_with_schema(self):
         """Gemini request with schema should include generationConfig."""
-        from buttermilk.batch.converters import GeminiMessageConverter
+        from buttermilk._core.vertex_batch import GeminiMessageConverter
 
         converter = GeminiMessageConverter()
         request = BatchRequest(
@@ -638,7 +797,7 @@ class TestGeminiStructuredOutput:
 
     def test_build_request_schema_preserves_messages(self):
         """Schema should not interfere with message structure."""
-        from buttermilk.batch.converters import GeminiMessageConverter
+        from buttermilk._core.vertex_batch import GeminiMessageConverter
 
         converter = GeminiMessageConverter()
         request = BatchRequest(
@@ -663,7 +822,7 @@ class TestClaudeStructuredOutput:
 
     def test_build_request_without_schema(self):
         """Claude request without schema should not include tools."""
-        from buttermilk.batch.converters import ClaudeMessageConverter
+        from buttermilk._core.vertex_batch import ClaudeMessageConverter
 
         converter = ClaudeMessageConverter()
         request = BatchRequest(
@@ -679,7 +838,7 @@ class TestClaudeStructuredOutput:
 
     def test_build_request_with_schema(self):
         """Claude request with schema should include tools and tool_choice."""
-        from buttermilk.batch.converters import ClaudeMessageConverter
+        from buttermilk._core.vertex_batch import ClaudeMessageConverter
 
         converter = ClaudeMessageConverter()
         request = BatchRequest(
@@ -703,7 +862,7 @@ class TestClaudeStructuredOutput:
 
     def test_extract_response_tool_use(self):
         """Claude extract_response should handle tool_use blocks."""
-        from buttermilk.batch.converters import ClaudeMessageConverter
+        from buttermilk._core.vertex_batch import ClaudeMessageConverter
 
         converter = ClaudeMessageConverter()
         entry = {
@@ -728,7 +887,7 @@ class TestClaudeStructuredOutput:
 
     def test_extract_response_text_fallback(self):
         """Claude extract_response should still handle plain text responses."""
-        from buttermilk.batch.converters import ClaudeMessageConverter
+        from buttermilk._core.vertex_batch import ClaudeMessageConverter
 
         converter = ClaudeMessageConverter()
         entry = {"response": {"content": [{"type": "text", "text": "Plain text response"}]}}
@@ -738,7 +897,7 @@ class TestClaudeStructuredOutput:
 
     def test_build_request_schema_preserves_system(self):
         """Schema should not interfere with system message handling."""
-        from buttermilk.batch.converters import ClaudeMessageConverter
+        from buttermilk._core.vertex_batch import ClaudeMessageConverter
 
         converter = ClaudeMessageConverter(max_tokens=8192)
         request = BatchRequest(
@@ -909,7 +1068,7 @@ class TestClaudeToolNameSanitization:
 
     def test_tool_name_with_spaces(self):
         """Tool name should sanitize spaces to underscores."""
-        from buttermilk.batch.converters import ClaudeMessageConverter
+        from buttermilk._core.vertex_batch import ClaudeMessageConverter
 
         converter = ClaudeMessageConverter()
         schema_with_spaces = {
@@ -934,7 +1093,7 @@ class TestClaudeToolNameSanitization:
 
     def test_tool_name_with_special_chars(self):
         """Tool name should sanitize special characters."""
-        from buttermilk.batch.converters import ClaudeMessageConverter
+        from buttermilk._core.vertex_batch import ClaudeMessageConverter
 
         converter = ClaudeMessageConverter()
         schema_with_special = {
@@ -960,7 +1119,7 @@ class TestClaudeToolNameSanitization:
 
     def test_tool_name_missing_title_uses_fallback(self):
         """Missing title should use structured_response as fallback."""
-        from buttermilk.batch.converters import ClaudeMessageConverter
+        from buttermilk._core.vertex_batch import ClaudeMessageConverter
 
         converter = ClaudeMessageConverter()
         schema_no_title = {
@@ -997,3 +1156,5 @@ class TestBatchRequestSerialization:
 
         # But the attribute should still be accessible for build_request
         assert request.response_schema == SAMPLE_SCHEMA
+=======
+>>>>>>> origin/stable

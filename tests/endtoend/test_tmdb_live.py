@@ -77,7 +77,13 @@ class TestTMDBLiveAPI:
         assert "overview" in title.metadata or "original_title" in title.metadata
 
     @pytest.mark.anyio
+<<<<<<< HEAD
     async def test_live_availability_batman_1989(self, tmdb_tool_live: TMDBTool) -> None:
+=======
+    async def test_live_availability_batman_1989(
+        self, tmdb_tool_live: TMDBTool
+    ) -> None:
+>>>>>>> origin/stable
         """Test availability checking for Batman (1989) using known movie ID."""
         # Create Title object directly from known movie ID (no search needed)
         title = Title(
@@ -116,7 +122,13 @@ class TestTMDBLiveAPI:
                 assert result.provider_name is None
 
     @pytest.mark.anyio
+<<<<<<< HEAD
     async def test_live_availability_batman_azteca_2025(self, tmdb_tool_live: TMDBTool) -> None:
+=======
+    async def test_live_availability_batman_azteca_2025(
+        self, tmdb_tool_live: TMDBTool
+    ) -> None:
+>>>>>>> origin/stable
         """Test availability checking for Batman Azteca: Choque de Imperios (2025)."""
         # Create Title object for the 2025 Batman movie
         title = Title(
@@ -145,7 +157,13 @@ class TestTMDBLiveAPI:
             # so we mainly test that the API call works correctly
 
     @pytest.mark.anyio
+<<<<<<< HEAD
     async def test_live_availability_multiple_batman_movies(self, tmdb_tool_live: TMDBTool) -> None:
+=======
+    async def test_live_availability_multiple_batman_movies(
+        self, tmdb_tool_live: TMDBTool
+    ) -> None:
+>>>>>>> origin/stable
         """Test availability checking for multiple Batman movies to compare results."""
         # Create Title objects for both Batman movies
         batman_1989 = Title(
@@ -185,7 +203,13 @@ class TestTMDBLiveAPI:
         # than the 2025 movie, but we don't assert this since availability changes
 
     @pytest.mark.anyio
+<<<<<<< HEAD
     async def test_live_complete_workflow_search_then_availability(self, tmdb_tool_live: TMDBTool) -> None:
+=======
+    async def test_live_complete_workflow_search_then_availability(
+        self, tmdb_tool_live: TMDBTool
+    ) -> None:
+>>>>>>> origin/stable
         """Test complete end-to-end workflow: search movie then check availability."""
         # Step 1: Search for a movie
         title = await tmdb_tool_live.search_movie(title="Inception", year=2010)
@@ -211,9 +235,19 @@ class TestTMDBLiveAPI:
             assert isinstance(result.available, bool)
 
     @pytest.mark.anyio
+<<<<<<< HEAD
     async def test_live_search_nonexistent_movie(self, tmdb_tool_live: TMDBTool) -> None:
         """Test searching for a movie that definitely doesn't exist."""
         title = await tmdb_tool_live.search_movie(title="Absolutely Nonexistent Movie Title 9999")
+=======
+    async def test_live_search_nonexistent_movie(
+        self, tmdb_tool_live: TMDBTool
+    ) -> None:
+        """Test searching for a movie that definitely doesn't exist."""
+        title = await tmdb_tool_live.search_movie(
+            title="Absolutely Nonexistent Movie Title 9999"
+        )
+>>>>>>> origin/stable
 
         # Should return None when movie not found
         assert title is None
@@ -249,13 +283,25 @@ class TestTMDBLiveAPI:
         # (This is the key insight - same content, different regional licensing)
 
     @pytest.mark.anyio
+<<<<<<< HEAD
     async def test_live_search_with_year_filtering(self, tmdb_tool_live: TMDBTool) -> None:
+=======
+    async def test_live_search_with_year_filtering(
+        self, tmdb_tool_live: TMDBTool
+    ) -> None:
+>>>>>>> origin/stable
         """Test that year filtering works correctly."""
         # Search for "Batman" without year (should get recent results)
         recent_title = await tmdb_tool_live.search_movie(title="Batman")
 
         # Search for "Batman" from 1989 (specific Tim Burton film)
+<<<<<<< HEAD
         year_filtered_title = await tmdb_tool_live.search_movie(title="Batman", year=1989)
+=======
+        year_filtered_title = await tmdb_tool_live.search_movie(
+            title="Batman", year=1989
+        )
+>>>>>>> origin/stable
 
         # Both should find movies
         assert recent_title is not None
@@ -272,7 +318,13 @@ class TestTMDBLiveAPI:
         # (Recent could be The Batman 2022, while 1989 is the Tim Burton film)
 
     @pytest.mark.anyio
+<<<<<<< HEAD
     async def test_live_error_handling_no_availability(self, tmdb_tool_live: TMDBTool) -> None:
+=======
+    async def test_live_error_handling_no_availability(
+        self, tmdb_tool_live: TMDBTool
+    ) -> None:
+>>>>>>> origin/stable
         """Test handling when a movie has no availability data."""
         # First search for the movie
         title = await tmdb_tool_live.search_movie(title="The Matrix")
@@ -336,7 +388,13 @@ class TestTMDBLiveAPI:
                 assert result.provider_id is None
 
     @pytest.mark.anyio
+<<<<<<< HEAD
     async def test_live_rate_limiting_resilience(self, tmdb_tool_live: TMDBTool) -> None:
+=======
+    async def test_live_rate_limiting_resilience(
+        self, tmdb_tool_live: TMDBTool
+    ) -> None:
+>>>>>>> origin/stable
         """Test that multiple rapid requests work within API rate limits."""
         movies = [
             ("The Shawshank Redemption", 1994),
@@ -372,7 +430,13 @@ class TestTMDBLiveAPI:
                         assert "too many requests" not in msg.lower()
 
     @pytest.mark.anyio
+<<<<<<< HEAD
     async def test_live_discover_movies_with_backup(self, tmdb_tool_live: TMDBTool, tmp_path) -> None:
+=======
+    async def test_live_discover_movies_with_backup(
+        self, tmdb_tool_live: TMDBTool, tmp_path
+    ) -> None:
+>>>>>>> origin/stable
         """Test discovering movies from TMDB with JSON backup using minimal data."""
         from datetime import date
 
@@ -404,7 +468,13 @@ class TestTMDBLiveAPI:
 
             # Year should be reasonable if present (around 1968-1969)
             if title.year:
+<<<<<<< HEAD
                 assert 1960 <= title.year <= 1975  # Should be around 1968-1969 for our test period
+=======
+                assert (
+                    1960 <= title.year <= 1975
+                )  # Should be around 1968-1969 for our test period
+>>>>>>> origin/stable
 
         # Test that we can create backup files manually (simulating the backup functionality)
         backup_file = tmp_path / "period_test.json"
@@ -430,7 +500,13 @@ class TestTMDBLiveAPI:
                 assert isinstance(loaded_data, list)
 
     @pytest.mark.anyio
+<<<<<<< HEAD
     async def test_fetch_single_page_with_bigquery_save(self, real_bm: BM, real_conf, tmdb_tool_live: TMDBTool, tmp_path) -> None:
+=======
+    async def test_fetch_single_page_with_bigquery_save(
+        self, real_bm: BM, real_conf, tmdb_tool_live: TMDBTool, tmp_path
+    ) -> None:
+>>>>>>> origin/stable
         """Test single page fetch with real API and BigQuery save."""
         from datetime import date
 
@@ -473,7 +549,13 @@ class TestTMDBLiveAPI:
                 # Try to query for some of the data we just saved
                 # Note: This is a simple existence check - may fail if table doesn't exist yet
                 try:
+<<<<<<< HEAD
                     saved_count = len(titles_storage) if hasattr(titles_storage, "__len__") else 0
+=======
+                    saved_count = (
+                        len(titles_storage) if hasattr(titles_storage, "__len__") else 0
+                    )
+>>>>>>> origin/stable
                     print(f"Saved {saved_count} titles to BigQuery test dataset from 1968")
                 except Exception as e:
                     print(f"Could not verify BigQuery save (table may not exist yet): {e}")
@@ -490,7 +572,13 @@ async def test_fetch_single_page_date_range_validation(
     from buttermilk.tools.catalog_test import DatePeriod
 
     # Fetch from a single day in 1969 for minimal data but likely results
+<<<<<<< HEAD
     period = DatePeriod(date(1969, 3, 20), date(1969, 3, 20))  # Single day in March 1969
+=======
+    period = DatePeriod(
+        date(1969, 3, 20), date(1969, 3, 20)
+    )  # Single day in March 1969
+>>>>>>> origin/stable
     titles, has_more = await tmdb_tool_live.fetch_single_page(period, page=1)
 
     # Verify that returned movies are from the correct date range
@@ -499,7 +587,13 @@ async def test_fetch_single_page_date_range_validation(
     # Check a few movies have reasonable dates (around 1969) if any exist
     for title in titles[:5]:  # Check first 5 movies
         if title.year:
+<<<<<<< HEAD
             assert 1960 <= title.year <= 1975, f"Movie year {title.year} should be near 1969"
+=======
+            assert 1960 <= title.year <= 1975, (
+                f"Movie year {title.year} should be near 1969"
+            )
+>>>>>>> origin/stable
 
         # Verify movie has basic required fields
         assert title.record_id

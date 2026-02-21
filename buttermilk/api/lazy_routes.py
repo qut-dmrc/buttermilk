@@ -109,7 +109,14 @@ def create_core_router() -> APIRouter:
     ):
         """Run a flow with provided inputs - core functionality."""
         # Access state via request.app.state
+<<<<<<< HEAD
         if not hasattr(request.app.state.flow_runner, "flows") or flow_name not in request.app.state.flow_runner.flows:
+=======
+        if (
+            not hasattr(request.app.state.flow_runner, "flows")
+            or flow_name not in request.app.state.flow_runner.flows
+        ):
+>>>>>>> origin/stable
             raise HTTPException(
                 status_code=404,
                 detail="Flow configuration not found or flow name invalid",
@@ -119,7 +126,13 @@ def create_core_router() -> APIRouter:
         if request.method == "GET":
             prompt = request.query_params.get("prompt", "")
             if not prompt:
+<<<<<<< HEAD
                 raise HTTPException(status_code=400, detail="Prompt parameter required for GET requests")
+=======
+                raise HTTPException(
+                    status_code=400, detail="Prompt parameter required for GET requests"
+                )
+>>>>>>> origin/stable
 
         # Create RunRequest if not provided
         if not run_request:

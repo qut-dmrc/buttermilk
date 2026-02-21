@@ -36,7 +36,14 @@ def register_library_configs_in_store(library_config_dir: Path) -> None:
     # Scan library config directory for all YAML files
     for config_file in library_config_dir.rglob("*.yaml"):
         # Skip config.yaml in root (it's the main config, not a group)
+<<<<<<< HEAD
         if config_file.name == "config.yaml" and config_file.parent == library_config_dir:
+=======
+        if (
+            config_file.name == "config.yaml"
+            and config_file.parent == library_config_dir
+        ):
+>>>>>>> origin/stable
             continue
 
         # Determine group from directory structure
@@ -58,12 +65,15 @@ def register_library_configs_in_store(library_config_dir: Path) -> None:
             with open(config_file, "r") as f:
                 config_dict = yaml.safe_load(f)
 
+<<<<<<< HEAD
             # Skip configs with defaults lists - these are main configs meant to be
             # loaded directly from filesystem, not registered as ConfigStore schemas.
             # Registering them causes Hydra validation conflicts (deprecated in 1.1).
             if config_dict and "defaults" in config_dict:
                 continue
 
+=======
+>>>>>>> origin/stable
             # Register in ConfigStore
             # Use library provider name for clarity
             if group:
@@ -176,7 +186,13 @@ class ConfigurationBootstrapper:
         self.config_path = config_path
         self.config_name = config_name
         self.overrides = overrides or []
+<<<<<<< HEAD
         self.config = self._load_configuration(config)  # ButtermilkConfig, not DictConfig
+=======
+        self.config = self._load_configuration(
+            config
+        )  # ButtermilkConfig, not DictConfig
+>>>>>>> origin/stable
 
         load_dotenv()
 
@@ -204,7 +220,13 @@ class ConfigurationBootstrapper:
 
                 if GlobalHydra.instance().is_initialized():
                     # We're already in a Hydra context, get the existing config
+<<<<<<< HEAD
                     dict_config = compose(config_name=self.config_name, overrides=self.overrides)
+=======
+                    dict_config = compose(
+                        config_name=self.config_name, overrides=self.overrides
+                    )
+>>>>>>> origin/stable
 
                 else:
                     # Determine library and project config directories
@@ -214,13 +236,25 @@ class ConfigurationBootstrapper:
                     is_custom_config = project_config_dir != library_config_dir
 
                     # Load configuration using Hydra compose API
+<<<<<<< HEAD
                     with initialize_config_dir(config_dir=str(project_config_dir), version_base="1.3"):
+=======
+                    with initialize_config_dir(
+                        config_dir=str(project_config_dir), version_base="1.3"
+                    ):
+>>>>>>> origin/stable
                         # Register library configs INSIDE the Hydra context for fallback
                         # This must happen AFTER initialize but BEFORE compose
                         if is_custom_config:
                             register_library_configs_in_store(library_config_dir)
 
+<<<<<<< HEAD
                         dict_config = compose(config_name=self.config_name, overrides=self.overrides)
+=======
+                        dict_config = compose(
+                            config_name=self.config_name, overrides=self.overrides
+                        )
+>>>>>>> origin/stable
 
             except Exception as e:
                 print(f"Failed to load configuration: {e}")
@@ -248,7 +282,13 @@ class ConfigurationBootstrapper:
             if otel_config.get("enabled", False):
                 env_vars.update(
                     {
+<<<<<<< HEAD
                         "OTEL_SERVICE_NAME": otel_config.get("service_name", "buttermilk"),
+=======
+                        "OTEL_SERVICE_NAME": otel_config.get(
+                            "service_name", "buttermilk"
+                        ),
+>>>>>>> origin/stable
                         "OTEL_RESOURCE_ATTRIBUTES": f"service.name={otel_config.get('service_name', 'buttermilk')}",
                     }
                 )
@@ -264,7 +304,13 @@ class ConfigurationBootstrapper:
                     if cloud_config.get("project_id"):
                         env_vars["GOOGLE_CLOUD_PROJECT"] = cloud_config["project_id"]
                     if cloud_config.get("credentials_path"):
+<<<<<<< HEAD
                         env_vars["GOOGLE_APPLICATION_CREDENTIALS"] = cloud_config["credentials_path"]
+=======
+                        env_vars["GOOGLE_APPLICATION_CREDENTIALS"] = cloud_config[
+                            "credentials_path"
+                        ]
+>>>>>>> origin/stable
 
         # Apply all environment variables
         for key, value in env_vars.items():
@@ -392,7 +438,13 @@ def _run_coro_sync(coro):
         except BaseException as e:
             fut.set_exception(e)
 
+<<<<<<< HEAD
     t = threading.Thread(target=_thread_runner, name="buttermilk-init-loop", daemon=True)
+=======
+    t = threading.Thread(
+        target=_thread_runner, name="buttermilk-init-loop", daemon=True
+    )
+>>>>>>> origin/stable
     t.start()
     return fut.result()
 
@@ -510,7 +562,13 @@ async def bootstrap_session_with_config_async(
         overrides=bootstrap_overrides,
         config=config,
     )
+<<<<<<< HEAD
     typed_config = bootstrapper.config  # Already ButtermilkConfig from _load_configuration()
+=======
+    typed_config = (
+        bootstrapper.config
+    )  # Already ButtermilkConfig from _load_configuration()
+>>>>>>> origin/stable
 
     # Resolve template paths
     template_paths = list(typed_config.session.template_paths)
@@ -551,7 +609,16 @@ async def bootstrap_session_with_config_async(
     set_bm(bm)
 
     # Log startup
+<<<<<<< HEAD
     run_type_str = typed_config.run.mode if hasattr(typed_config.run, "mode") else "session"
     bm.logger.info(f"Starting {run_type_str} for {bm.session_info.project_name} job {bm.session_info.job}")
+=======
+    run_type_str = (
+        typed_config.run.mode if hasattr(typed_config.run, "mode") else "session"
+    )
+    bm.logger.info(
+        f"Starting {run_type_str} for {bm.session_info.project_name} job {bm.session_info.job}"
+    )
+>>>>>>> origin/stable
 
     return bm, typed_config

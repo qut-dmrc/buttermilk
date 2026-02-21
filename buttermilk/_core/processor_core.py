@@ -174,13 +174,20 @@ class ProcessorCore(ObservabilityMixin, ABC):
     """Base class for single-record pipeline processors.
 
     Implements Processor protocol with OTEL tracing.
+<<<<<<< HEAD
     Supports typed data flow: processors can yield Any type, not just BaseRecord.
+=======
+>>>>>>> origin/stable
     """
 
     async def process(
         self,
         context: ProcessingContext,
+<<<<<<< HEAD
     ) -> AsyncGenerator[Any, None]:
+=======
+    ) -> AsyncGenerator[BaseRecord, None]:
+>>>>>>> origin/stable
         """Process with OTEL span wrapping.
 
         Creates an OpenTelemetry span for this processor execution,
@@ -190,8 +197,12 @@ class ProcessorCore(ObservabilityMixin, ABC):
             context: ProcessingContext with record and session state
 
         Yields:
+<<<<<<< HEAD
             Any: Output objects from _process_record(). Typically BaseRecord,
                  but can be any type for typed data flow.
+=======
+            Output records from _process_record()
+>>>>>>> origin/stable
         """
         tracer = trace.get_tracer("buttermilk.processor")
         parent_context = trace.set_span_in_context(context.span) if context.span else None
@@ -228,26 +239,42 @@ class ProcessorCore(ObservabilityMixin, ABC):
     async def _process_record(
         self,
         context: ProcessingContext,
+<<<<<<< HEAD
     ) -> AsyncGenerator[Any, None]:
+=======
+    ) -> AsyncGenerator[BaseRecord, None]:
+>>>>>>> origin/stable
         """Concrete processing logic. Must be implemented by subclasses.
 
         Args:
             context: ProcessingContext with record and session state
 
         Yields:
+<<<<<<< HEAD
             Any: Zero or more output objects (typically BaseRecord, but can be any type)
+=======
+            Zero or more output records
+>>>>>>> origin/stable
         """
         raise NotImplementedError("Subclasses must implement _process_record")
         yield
 
+<<<<<<< HEAD
     async def flush(self) -> AsyncGenerator[Any, None]:
+=======
+    async def flush(self) -> AsyncGenerator[BaseRecord, None]:
+>>>>>>> origin/stable
         """Flush any buffered records after source exhaustion.
 
         Default implementation yields nothing. Override in processors
         that buffer records (like BatchAccumulator).
 
         Yields:
+<<<<<<< HEAD
             Any: Any remaining buffered records/objects after processing.
+=======
+            Any remaining buffered records after processing.
+>>>>>>> origin/stable
         """
         return
         yield  # Make this a generator

@@ -149,7 +149,14 @@ class TestFileStorageColumnMapping:
 
         # Validate direct field mappings
         assert record.record_id == "OSB-TEST-001"
+<<<<<<< HEAD
         assert record.content == "This is the main fulltext content for vector processing..."
+=======
+        assert (
+            record.content
+            == "This is the main fulltext content for vector processing..."
+        )
+>>>>>>> origin/stable
 
         # Validate nested metadata mapping
         expected_metadata = {
@@ -164,7 +171,13 @@ class TestFileStorageColumnMapping:
 
         for key, expected_value in expected_metadata.items():
             assert key in record.metadata, f"Missing metadata key: {key}"
+<<<<<<< HEAD
             assert record.metadata[key] == expected_value, f"Metadata mismatch for {key}"
+=======
+            assert record.metadata[key] == expected_value, (
+                f"Metadata mismatch for {key}"
+            )
+>>>>>>> origin/stable
 
         # Validate that unmapped fields are preserved
         assert "unmapped_field" in record.metadata
@@ -283,7 +296,14 @@ class TestFileStorageColumnMapping:
 
         # Validate all metadata fields are correctly mapped
         assert record.metadata["title"] == "Mention of Al-Shabaab"
+<<<<<<< HEAD
         assert record.metadata["description"] == "The first post included a picture showing weapons..."
+=======
+        assert (
+            record.metadata["description"]
+            == "The first post included a picture showing weapons..."
+        )
+>>>>>>> origin/stable
         assert record.metadata["result"] == "leave up"
         assert record.metadata["type"] == "summary"
         assert record.metadata["location"] == "Somalia"
@@ -383,7 +403,14 @@ class TestFileStorageColumnMapping:
         assert record.metadata["title"] == "This exists"
 
         # Missing metadata field should be absent (not create empty entries)
+<<<<<<< HEAD
         assert "description" not in record.metadata or record.metadata["description"] is None
+=======
+        assert (
+            "description" not in record.metadata
+            or record.metadata["description"] is None
+        )
+>>>>>>> origin/stable
 
         # Other fields should be preserved
         assert record.metadata["other_field"] == "Should be preserved"

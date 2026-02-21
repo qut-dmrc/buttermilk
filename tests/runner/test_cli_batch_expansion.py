@@ -6,7 +6,11 @@ multiple pipeline runs, one per parameter variant.
 
 from __future__ import annotations
 
+<<<<<<< HEAD
 from unittest.mock import Mock
+=======
+from unittest.mock import Mock, call, patch
+>>>>>>> origin/stable
 
 import pytest
 
@@ -116,11 +120,25 @@ async def test_batch_simple_should_expand_parameters():
         )
 
     # VERIFY expected behavior
+<<<<<<< HEAD
     assert len(processor_calls) == 2, f"Should create 2 processors (one per variant), but created {len(processor_calls)}"
     assert processor_calls[0]["parameters"] == {"criteria": "tja"}
     assert processor_calls[1]["parameters"] == {"criteria": "glaad"}
 
     assert len(pipeline_calls) == 2, f"Should create 2 pipelines (one per variant), but created {len(pipeline_calls)}"
+=======
+    assert len(processor_calls) == 2, (
+        f"Should create 2 processors (one per variant), "
+        f"but created {len(processor_calls)}"
+    )
+    assert processor_calls[0]["parameters"] == {"criteria": "tja"}
+    assert processor_calls[1]["parameters"] == {"criteria": "glaad"}
+
+    assert len(pipeline_calls) == 2, (
+        f"Should create 2 pipelines (one per variant), "
+        f"but created {len(pipeline_calls)}"
+    )
+>>>>>>> origin/stable
 
 
 @pytest.mark.anyio
@@ -182,7 +200,25 @@ async def test_batch_simple_current_implementation_no_expansion():
     )
 
     # VERIFY current (wrong) behavior
+<<<<<<< HEAD
     assert len(processor_calls) == 1, "Current implementation creates 1 processor (should be 2 after implementing expansion)"
     assert processor_calls[0]["parameters"] is None, "Current implementation doesn't pass parameters (should pass expanded variant)"
 
     assert len(pipeline_calls) == 1, "Current implementation creates 1 pipeline (should be 2 after implementing expansion)"
+=======
+    assert len(processor_calls) == 1, (
+        f"Current implementation creates 1 processor "
+        f"(should be 2 after implementing expansion)"
+    )
+    assert processor_calls[0]["parameters"] is None, (
+        f"Current implementation doesn't pass parameters "
+        f"(should pass expanded variant)"
+    )
+
+    assert len(pipeline_calls) == 1, (
+        f"Current implementation creates 1 pipeline "
+        f"(should be 2 after implementing expansion)"
+    )
+
+
+>>>>>>> origin/stable

@@ -145,9 +145,12 @@ class cache:
     RECORDS = "records"
     """Pipeline record cache for processor outputs."""
 
+<<<<<<< HEAD
     BACKUP = "backup"
     """Backup directory for upload buffers and recovery data."""
 
+=======
+>>>>>>> origin/stable
 
 # Add any other constants used across the codebase here.
 # Ensure they are well-documented with their purpose and usage context.

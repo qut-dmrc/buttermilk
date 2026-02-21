@@ -32,7 +32,13 @@ async def test_run_flow_describe_only(flow_describer, image_bytes, real_bm):
         flow="testflow",  # Assuming a flow_id like "testflow"
         inputs=dict(record=record),
     )
+<<<<<<< HEAD
     async for result in flow_describer.run_flows(run_request=run_request):  # Pass run_request
+=======
+    async for result in flow_describer.run_flows(
+        run_request=run_request
+    ):  # Pass run_request
+>>>>>>> origin/stable
         assert result
         assert not result.error
         assert isinstance(result.record, Record)

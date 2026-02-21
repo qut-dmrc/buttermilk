@@ -135,8 +135,17 @@ class TestStorageConfigValidation:
 
         # Verify each storage config has correct type
         assert isinstance(orchestrator_config.storage["file_data"], FileStorageConfig)
+<<<<<<< HEAD
         assert isinstance(orchestrator_config.storage["bigquery_data"], BigQueryStorageConfig)
         assert isinstance(orchestrator_config.storage["plain_data"], FileStorageConfig)  # plaintext uses FileStorageConfig
+=======
+        assert isinstance(
+            orchestrator_config.storage["bigquery_data"], BigQueryStorageConfig
+        )
+        assert isinstance(
+            orchestrator_config.storage["plain_data"], FileStorageConfig
+        )  # plaintext uses FileStorageConfig
+>>>>>>> origin/stable
 
     def test_invalid_storage_type_fallback(self):
         """Test that configs with storage type bigquery work correctly."""

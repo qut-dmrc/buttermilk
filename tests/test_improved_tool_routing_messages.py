@@ -14,13 +14,25 @@ class TestImprovedToolRoutingMessages:
         host = HostAgent(agent_name="test_host", role="HOST")
 
         # Test with query argument
+<<<<<<< HEAD
         desc = host._describe_tool_call("search", {"query": "What is the weather in Paris today?"})
+=======
+        desc = host._describe_tool_call(
+            "search", {"query": "What is the weather in Paris today?"}
+        )
+>>>>>>> origin/stable
         assert desc == "search('What is the weather in Paris today?')"
 
         # Test with long query (should truncate)
         desc = host._describe_tool_call(
             "search",
+<<<<<<< HEAD
             {"query": "This is a very long query that should be truncated after 40 characters"},
+=======
+            {
+                "query": "This is a very long query that should be truncated after 40 characters"
+            },
+>>>>>>> origin/stable
         )
         assert desc == "search('This is a very long query that should be...')"
 
@@ -37,11 +49,23 @@ class TestImprovedToolRoutingMessages:
         assert desc == "route(target='agent.method')"
 
         # Test with nested inputs
+<<<<<<< HEAD
         desc = host._describe_tool_call("complex_tool", {"inputs": {"query": "nested query"}})
         assert desc == "complex_tool(query='nested query')"
 
         # Test with other arguments
         desc = host._describe_tool_call("compute", {"value": 42, "operation": "multiply"})
+=======
+        desc = host._describe_tool_call(
+            "complex_tool", {"inputs": {"query": "nested query"}}
+        )
+        assert desc == "complex_tool(query='nested query')"
+
+        # Test with other arguments
+        desc = host._describe_tool_call(
+            "compute", {"value": 42, "operation": "multiply"}
+        )
+>>>>>>> origin/stable
         assert desc == "compute(value='42')"
 
         # Test fallback
@@ -80,7 +104,14 @@ class TestImprovedToolRoutingMessages:
             arguments='{"query": "This is a very long search query that should be truncated after 50 characters to keep the message concise"}',
         )
         summary = agent._create_tool_call_summary([tool_call])
+<<<<<<< HEAD
         assert summary == "Searching for: This is a very long search query that should be tr..."
+=======
+        assert (
+            summary
+            == "Searching for: This is a very long search query that should be tr..."
+        )
+>>>>>>> origin/stable
 
         # Test single tool call with message
         tool_call = FunctionCall(
@@ -92,7 +123,13 @@ class TestImprovedToolRoutingMessages:
         assert summary == "Processing: System maintenance scheduled"
 
         # Test single tool call with target
+<<<<<<< HEAD
         tool_call = FunctionCall(id="4", name="invoke", arguments='{"target": "data_processor.analyze"}')
+=======
+        tool_call = FunctionCall(
+            id="4", name="invoke", arguments='{"target": "data_processor.analyze"}'
+        )
+>>>>>>> origin/stable
         summary = agent._create_tool_call_summary([tool_call])
         assert summary == "Targeting data_processor.analyze with invoke"
 
@@ -124,6 +161,13 @@ class TestImprovedToolRoutingMessages:
         assert summary == "Calling: search, analyze, report"
 
         # Test many different tools
+<<<<<<< HEAD
         tool_calls = [FunctionCall(id=str(i), name=f"tool_{i}", arguments="{}") for i in range(12, 20)]
+=======
+        tool_calls = [
+            FunctionCall(id=str(i), name=f"tool_{i}", arguments="{}")
+            for i in range(12, 20)
+        ]
+>>>>>>> origin/stable
         summary = agent._create_tool_call_summary(tool_calls)
         assert summary == "Orchestrating 8 tool calls across 8 tools"

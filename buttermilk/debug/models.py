@@ -77,7 +77,13 @@ class FlowHealthReport(BaseModel):
         if total_tests == 0:
             return "degraded"
 
+<<<<<<< HEAD
         failed_tests = sum(1 for test in self.mcp_test_results if test.status != "success")
+=======
+        failed_tests = sum(
+            1 for test in self.mcp_test_results if test.status != "success"
+        )
+>>>>>>> origin/stable
         failure_rate = failed_tests / total_tests
 
         if failure_rate == 0:

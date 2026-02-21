@@ -60,13 +60,19 @@ async def test_litellm_vertex_uses_token_provider(real_bm):
         ClientType.ANTHROPIC_VERTEX,
     }
     assert config.client_type in vertex_types, (
+<<<<<<< HEAD
         f"Model {model_name} uses {config.client_type}, expected a Vertex type. This test requires a Vertex model to verify token_provider works."
+=======
+        f"Model {model_name} uses {config.client_type}, expected a Vertex type. "
+        f"This test requires a Vertex model to verify token_provider works."
+>>>>>>> origin/stable
     )
 
     # Get wrapper via get_autogen_chat_client
     wrapper = llms.get_autogen_chat_client(model_name)
 
     # ASSERT: Should be LiteLLMWrapper for Vertex models
+<<<<<<< HEAD
     assert isinstance(wrapper, LiteLLMWrapper), f"Expected LiteLLMWrapper, got {type(wrapper).__name__}"
 
     # ASSERT: Should have token_provider field
@@ -77,6 +83,26 @@ async def test_litellm_vertex_uses_token_provider(real_bm):
 
     # ASSERT: token_provider should be callable
     assert callable(wrapper.token_provider), f"token_provider is not callable: {type(wrapper.token_provider)}"
+=======
+    assert isinstance(
+        wrapper, LiteLLMWrapper
+    ), f"Expected LiteLLMWrapper, got {type(wrapper).__name__}"
+
+    # ASSERT: Should have token_provider field
+    assert hasattr(
+        wrapper, "token_provider"
+    ), "LiteLLMWrapper missing token_provider field"
+
+    # ASSERT: token_provider should be set (not None) for Vertex models
+    assert (
+        wrapper.token_provider is not None
+    ), f"token_provider is None for Vertex model {model_name}"
+
+    # ASSERT: token_provider should be callable
+    assert callable(
+        wrapper.token_provider
+    ), f"token_provider is not callable: {type(wrapper.token_provider)}"
+>>>>>>> origin/stable
 
     # ACT: Call token_provider to get a fresh token
     token = wrapper.token_provider()
@@ -101,4 +127,10 @@ async def test_litellm_vertex_uses_token_provider(real_bm):
 
     # Verify response is reasonable (should contain "test" based on prompt)
     response_text = result.content.lower()
+<<<<<<< HEAD
     assert "test" in response_text, f"Response doesn't contain expected word: {result.content}"
+=======
+    assert (
+        "test" in response_text
+    ), f"Response doesn't contain expected word: {result.content}"
+>>>>>>> origin/stable

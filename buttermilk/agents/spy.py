@@ -151,7 +151,13 @@ class SpyAgent(RoutedAgent):
         """
         if isinstance(message, ExecutionTrace):
             if message.outputs:
+<<<<<<< HEAD
                 logger.debug(f"SpyAgent received message of type: {type(message)} on topic {ctx.topic_id}")  # Log received type and topic
+=======
+                logger.debug(
+                    f"SpyAgent received message of type: {type(message)} on topic {ctx.topic_id}"
+                )  # Log received type and topic
+>>>>>>> origin/stable
                 # # Check if there's records in the inputs and then make sure they don't have both 'text' and 'content' fields.
                 # if message.inputs and message.inputs.record:
                 #     for record in message.inputs.record:
@@ -162,7 +168,13 @@ class SpyAgent(RoutedAgent):
                 #             break
                 await self.manager.add(message)
             else:
+<<<<<<< HEAD
                 logger.debug(f"SpyAgent received message with no outputs: {message} on topic {ctx.topic_id}")
+=======
+                logger.debug(
+                    f"SpyAgent received message with no outputs: {message} on topic {ctx.topic_id}"
+                )
+>>>>>>> origin/stable
         else:
             msg = f"Spy database save agent received incompatible output type: {type(message)} on topic {ctx.topic_id}"
             raise ProcessingError(msg)

@@ -13,7 +13,10 @@ class TestCalculateTokenCost:
         """Test token cost calculation with OpenAI format usage dict."""
         # Mock the _get_cost_per_token function to return a mock cost_per_token
         from unittest.mock import MagicMock
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/stable
         mock_cost_per_token = MagicMock(return_value=(0.001, 0.002))  # $0.001 prompt, $0.002 completion
         mock_get_cost_per_token.return_value = mock_cost_per_token
 
@@ -23,11 +26,23 @@ class TestCalculateTokenCost:
             "total_tokens": 150,
         }
 
+<<<<<<< HEAD
         prompt_tokens, completion_tokens, total_cost = calculate_token_cost(model="gpt41", usage_dict=usage_dict)
 
         assert prompt_tokens == 100
         assert completion_tokens == 50
         assert total_cost == 0.003  # mock returns total cost: 0.001 (prompt) + 0.002 (completion)
+=======
+        prompt_tokens, completion_tokens, total_cost = calculate_token_cost(
+            model="gpt41", usage_dict=usage_dict
+        )
+
+        assert prompt_tokens == 100
+        assert completion_tokens == 50
+        assert (
+            total_cost == 0.003
+        )  # mock returns total cost: 0.001 (prompt) + 0.002 (completion)
+>>>>>>> origin/stable
         mock_cost_per_token.assert_called_once_with(
             model="azure/gpt-4.1",  # Should map to azure model
             prompt_tokens=100,
@@ -38,13 +53,22 @@ class TestCalculateTokenCost:
     def test_calculate_token_cost_with_usage_dict_anthropic(self, mock_get_cost_per_token):
         """Test token cost calculation with Anthropic format usage dict."""
         from unittest.mock import MagicMock
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/stable
         mock_cost_per_token = MagicMock(return_value=(0.0015, 0.0025))
         mock_get_cost_per_token.return_value = mock_cost_per_token
 
         usage_dict = {"input_tokens": 200, "output_tokens": 75}
 
+<<<<<<< HEAD
         prompt_tokens, completion_tokens, total_cost = calculate_token_cost(model="sonnet", usage_dict=usage_dict)
+=======
+        prompt_tokens, completion_tokens, total_cost = calculate_token_cost(
+            model="sonnet", usage_dict=usage_dict
+        )
+>>>>>>> origin/stable
 
         assert prompt_tokens == 200
         assert completion_tokens == 75
@@ -59,26 +83,50 @@ class TestCalculateTokenCost:
     def test_calculate_token_cost_with_explicit_tokens(self, mock_get_cost_per_token):
         """Test token cost calculation with explicitly provided tokens."""
         from unittest.mock import MagicMock
+<<<<<<< HEAD
 
         mock_cost_per_token = MagicMock(return_value=(0.001, 0.002))
         mock_get_cost_per_token.return_value = mock_cost_per_token
 
         prompt_tokens, completion_tokens, total_cost = calculate_token_cost(model="gpt-3.5-turbo", prompt_tokens=150, completion_tokens=100)
+=======
+        mock_cost_per_token = MagicMock(return_value=(0.001, 0.002))
+        mock_get_cost_per_token.return_value = mock_cost_per_token
+
+        prompt_tokens, completion_tokens, total_cost = calculate_token_cost(
+            model="gpt-3.5-turbo", prompt_tokens=150, completion_tokens=100
+        )
+>>>>>>> origin/stable
 
         assert prompt_tokens == 150
         assert completion_tokens == 100
         assert total_cost == 0.003
+<<<<<<< HEAD
         mock_cost_per_token.assert_called_once_with(model="gpt-3.5-turbo", prompt_tokens=150, completion_tokens=100)
+=======
+        mock_cost_per_token.assert_called_once_with(
+            model="gpt-3.5-turbo", prompt_tokens=150, completion_tokens=100
+        )
+>>>>>>> origin/stable
 
     @patch("buttermilk.utils.pricing._get_cost_per_token")
     def test_calculate_token_cost_with_error(self, mock_get_cost_per_token):
         """Test token cost calculation handles errors gracefully."""
         from unittest.mock import MagicMock
+<<<<<<< HEAD
 
         mock_cost_per_token = MagicMock(side_effect=Exception("Model not found"))
         mock_get_cost_per_token.return_value = mock_cost_per_token
 
         prompt_tokens, completion_tokens, total_cost = calculate_token_cost(model="unknown-model", prompt_tokens=100, completion_tokens=50)
+=======
+        mock_cost_per_token = MagicMock(side_effect=Exception("Model not found"))
+        mock_get_cost_per_token.return_value = mock_cost_per_token
+
+        prompt_tokens, completion_tokens, total_cost = calculate_token_cost(
+            model="unknown-model", prompt_tokens=100, completion_tokens=50
+        )
+>>>>>>> origin/stable
 
         assert prompt_tokens == 100
         assert completion_tokens == 50
@@ -87,7 +135,13 @@ class TestCalculateTokenCost:
     def test_calculate_token_cost_no_litellm(self):
         """Test behavior when litellm is not available."""
         with patch("buttermilk.utils.pricing._get_cost_per_token", return_value=None):
+<<<<<<< HEAD
             prompt_tokens, completion_tokens, total_cost = calculate_token_cost(model="gpt-4", prompt_tokens=100, completion_tokens=50)
+=======
+            prompt_tokens, completion_tokens, total_cost = calculate_token_cost(
+                model="gpt-4", prompt_tokens=100, completion_tokens=50
+            )
+>>>>>>> origin/stable
 
             assert prompt_tokens == 100
             assert completion_tokens == 50
@@ -97,7 +151,10 @@ class TestCalculateTokenCost:
     def test_model_mapping(self, mock_get_cost_per_token):
         """Test that buttermilk model names are properly mapped to litellm names."""
         from unittest.mock import MagicMock
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/stable
         mock_cost_per_token = MagicMock(return_value=(0.001, 0.002))
         mock_get_cost_per_token.return_value = mock_cost_per_token
 
@@ -117,9 +174,19 @@ class TestCalculateTokenCost:
         for buttermilk_model, expected_litellm_model in test_cases:
             mock_cost_per_token.reset_mock()
 
+<<<<<<< HEAD
             calculate_token_cost(model=buttermilk_model, prompt_tokens=100, completion_tokens=50)
 
             mock_cost_per_token.assert_called_once_with(model=expected_litellm_model, prompt_tokens=100, completion_tokens=50)
+=======
+            calculate_token_cost(
+                model=buttermilk_model, prompt_tokens=100, completion_tokens=50
+            )
+
+            mock_cost_per_token.assert_called_once_with(
+                model=expected_litellm_model, prompt_tokens=100, completion_tokens=50
+            )
+>>>>>>> origin/stable
 
 
 class TestExtractUsageFromMetadata:
@@ -134,7 +201,13 @@ class TestExtractUsageFromMetadata:
 
     def test_extract_nested_token_usage(self):
         """Test extracting usage from nested outputs.token_usage field."""
+<<<<<<< HEAD
         metadata = {"outputs": {"token_usage": {"prompt_tokens": 200, "completion_tokens": 100}}}
+=======
+        metadata = {
+            "outputs": {"token_usage": {"prompt_tokens": 200, "completion_tokens": 100}}
+        }
+>>>>>>> origin/stable
 
         usage = extract_usage_from_metadata(metadata)
         assert usage == {"prompt_tokens": 200, "completion_tokens": 100}

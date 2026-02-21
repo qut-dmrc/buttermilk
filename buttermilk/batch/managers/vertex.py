@@ -16,8 +16,8 @@ from buttermilk.batch.converters import (
     GeminiMessageConverter,
     OpenAIMessageConverter,
     _is_claude_model,
-    _is_deepseek_model,
     _is_llama_model,
+    _is_deepseek_model,
     get_message_converter,
 )
 from buttermilk.batch.manifests import BatchJobManifest

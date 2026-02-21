@@ -50,7 +50,13 @@ class AgentToolDefinition(BaseModel):
     def validate_agent_name(cls, value: str) -> str:
         """Ensure tool name only has alphanumeric, underscore, or hyphen chars."""
         if not re.fullmatch(r"[a-zA-Z0-9_-]+", value):
+<<<<<<< HEAD
             raise ValueError("Tool name must contain only letters, digits, underscores, or hyphens")
+=======
+            raise ValueError(
+                "Tool name must contain only letters, digits, underscores, or hyphens"
+            )
+>>>>>>> origin/stable
         return value
 
     # Implement Tool protocol properties and methods
@@ -76,13 +82,24 @@ class AgentToolDefinition(BaseModel):
         """Return the state type (None for stateless tools)."""
         return type(None)
 
+<<<<<<< HEAD
     async def run_json(self, args_json: str, cancellation_token: CancellationToken) -> str:
+=======
+    async def run_json(
+        self, args_json: str, cancellation_token: CancellationToken
+    ) -> str:
+>>>>>>> origin/stable
         """This method should never be called.
 
         The host agent intercepts tool calls before execution.
         """
         raise NotImplementedError(
+<<<<<<< HEAD
             f"AgentToolDefinition '{self.name}' is not directly executable. Tool calls should be intercepted and routed by the host agent.",
+=======
+            f"AgentToolDefinition '{self.name}' is not directly executable. "
+            "Tool calls should be intercepted and routed by the host agent.",
+>>>>>>> origin/stable
         )
 
     def return_value_as_string(self, value: Any) -> str:

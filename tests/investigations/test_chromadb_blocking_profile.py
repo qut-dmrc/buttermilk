@@ -127,7 +127,15 @@ class TestChromaDBBlockingProfile:
 
                 # Calculate expected heartbeats if not blocked
                 expected_beats = duration / 0.01
+<<<<<<< HEAD
                 blocking_pct = 0 if expected_beats == 0 else (1 - (heartbeat_count / expected_beats)) * 100
+=======
+                blocking_pct = (
+                    0
+                    if expected_beats == 0
+                    else (1 - (heartbeat_count / expected_beats)) * 100
+                )
+>>>>>>> origin/stable
 
                 # Convert max gap to ms
                 max_gap_ms = max_heartbeat_gap * 1000
@@ -155,7 +163,13 @@ class TestChromaDBBlockingProfile:
                 # Call synchronous function directly - THIS BLOCKS!
                 return test_collection.count()
 
+<<<<<<< HEAD
             await measure_blocking("collection.count() [DIRECT - blocks!]", direct_count)
+=======
+            await measure_blocking(
+                "collection.count() [DIRECT - blocks!]", direct_count
+            )
+>>>>>>> origin/stable
 
             # Test 3: client.list_collections() - wrapped in to_thread
             print("Testing client.list_collections()...")
@@ -171,20 +185,38 @@ class TestChromaDBBlockingProfile:
                 # Call synchronous function directly - THIS BLOCKS!
                 return embeddings._client.list_collections()
 
+<<<<<<< HEAD
             await measure_blocking("client.list_collections() [DIRECT - blocks!]", direct_list)
+=======
+            await measure_blocking(
+                "client.list_collections() [DIRECT - blocks!]", direct_list
+            )
+>>>>>>> origin/stable
 
             # Test 5: client.get_collection() - wrapped
             print("Testing client.get_collection()...")
             await measure_blocking(
                 "client.get_collection() [SYNC]",
+<<<<<<< HEAD
                 lambda: asyncio.to_thread(embeddings._client.get_collection, name="blocking_profile_data"),
+=======
+                lambda: asyncio.to_thread(
+                    embeddings._client.get_collection, name="blocking_profile_data"
+                ),
+>>>>>>> origin/stable
             )
 
             # Test 6: collection.get() - wrapped
             print("Testing collection.get()...")
             await measure_blocking(
                 "collection.get(limit=10) [SYNC]",
+<<<<<<< HEAD
                 lambda: asyncio.to_thread(test_collection.get, limit=10, include=["metadatas"]),
+=======
+                lambda: asyncio.to_thread(
+                    test_collection.get, limit=10, include=["metadatas"]
+                ),
+>>>>>>> origin/stable
             )
 
             # Test 7: collection.get() - direct call
@@ -194,27 +226,51 @@ class TestChromaDBBlockingProfile:
                 # Call synchronous function directly - THIS BLOCKS!
                 return test_collection.get(limit=10, include=["metadatas"])
 
+<<<<<<< HEAD
             await measure_blocking("collection.get(limit=10) [DIRECT - blocks!]", direct_get)
+=======
+            await measure_blocking(
+                "collection.get(limit=10) [DIRECT - blocks!]", direct_get
+            )
+>>>>>>> origin/stable
 
             # Test 8: collection.get() with larger result set - wrapped
             print("Testing collection.get(limit=100)...")
             await measure_blocking(
                 "collection.get(limit=100) [SYNC]",
+<<<<<<< HEAD
                 lambda: asyncio.to_thread(test_collection.get, limit=100, include=["metadatas", "documents"]),
+=======
+                lambda: asyncio.to_thread(
+                    test_collection.get, limit=100, include=["metadatas", "documents"]
+                ),
+>>>>>>> origin/stable
             )
 
             # Report results
             print("\n" + "=" * 80)
             print("ChromaDB Blocking Profile Results")
             print("=" * 80)
+<<<<<<< HEAD
             print(f"{'Operation':<45} {'Duration':<12} {'Blocking':<12} {'Max Gap':<12}")
+=======
+            print(
+                f"{'Operation':<45} {'Duration':<12} {'Blocking':<12} {'Max Gap':<12}"
+            )
+>>>>>>> origin/stable
             print("-" * 80)
 
             for op, metrics in sorted(results.items()):
                 duration_str = f"{metrics['duration_ms']:.2f}ms"
                 blocking_str = f"{metrics['blocking_pct']:.1f}%"
                 max_gap_str = f"{metrics['max_heartbeat_gap_ms']:.2f}ms"
+<<<<<<< HEAD
                 print(f"{op:<45} {duration_str:<12} {blocking_str:<12} {max_gap_str:<12}")
+=======
+                print(
+                    f"{op:<45} {duration_str:<12} {blocking_str:<12} {max_gap_str:<12}"
+                )
+>>>>>>> origin/stable
 
             print("=" * 80)
 
@@ -224,7 +280,14 @@ class TestChromaDBBlockingProfile:
 
             for op, metrics in results.items():
                 # Consider blocking if >50% of time blocks OR max gap >100ms
+<<<<<<< HEAD
                 if metrics["blocking_pct"] > 50 or metrics["max_heartbeat_gap_ms"] > 100:
+=======
+                if (
+                    metrics["blocking_pct"] > 50
+                    or metrics["max_heartbeat_gap_ms"] > 100
+                ):
+>>>>>>> origin/stable
                     blocking_ops.append(op)
                 else:
                     non_blocking_ops.append(op)
@@ -251,9 +314,21 @@ class TestChromaDBBlockingProfile:
                 )
 
             print("\nKey Findings:")
+<<<<<<< HEAD
             print("  - Operations wrapped with asyncio.to_thread() should show low blocking")
             print("  - Direct (DIRECT) calls should show high blocking (this is the problem!)")
             print("  - Max heartbeat gap indicates longest uninterrupted blocking period")
+=======
+            print(
+                "  - Operations wrapped with asyncio.to_thread() should show low blocking"
+            )
+            print(
+                "  - Direct (DIRECT) calls should show high blocking (this is the problem!)"
+            )
+            print(
+                "  - Max heartbeat gap indicates longest uninterrupted blocking period"
+            )
+>>>>>>> origin/stable
 
             # Validate that wrapped operations don't block excessively
             # Note: We expect DIRECT calls to block, so we only check wrapped ones
@@ -261,11 +336,22 @@ class TestChromaDBBlockingProfile:
             for op in wrapped_ops:
                 metrics = results[op]
                 assert metrics["max_heartbeat_gap_ms"] < 200, (
+<<<<<<< HEAD
                     f"{op} blocks event loop for {metrics['max_heartbeat_gap_ms']:.2f}ms (should be <200ms when wrapped with asyncio.to_thread)"
                 )
 
             print("\nTest complete - results saved above.")
             print("Check if current code uses asyncio.to_thread() for all ChromaDB operations.")
+=======
+                    f"{op} blocks event loop for {metrics['max_heartbeat_gap_ms']:.2f}ms "
+                    f"(should be <200ms when wrapped with asyncio.to_thread)"
+                )
+
+            print("\nTest complete - results saved above.")
+            print(
+                "Check if current code uses asyncio.to_thread() for all ChromaDB operations."
+            )
+>>>>>>> origin/stable
 
     async def test_ensure_collection_ready_nonblocking(self):
         """Verify _ensure_collection_ready doesn't block event loop.
@@ -327,7 +413,15 @@ class TestChromaDBBlockingProfile:
 
                 # Calculate metrics
                 expected_beats = duration / 0.01
+<<<<<<< HEAD
                 blocking_pct = (1 - (heartbeat_count / expected_beats)) * 100 if expected_beats > 0 else 0
+=======
+                blocking_pct = (
+                    (1 - (heartbeat_count / expected_beats)) * 100
+                    if expected_beats > 0
+                    else 0
+                )
+>>>>>>> origin/stable
                 max_gap_ms = max_heartbeat_gap * 1000
 
                 results[operation_name] = {
@@ -340,7 +434,13 @@ class TestChromaDBBlockingProfile:
 
                 print(f"\n{operation_name}:")
                 print(f"  Duration: {duration * 1000:.2f}ms")
+<<<<<<< HEAD
                 print(f"  Heartbeats: {heartbeat_count} (expected ~{expected_beats:.0f})")
+=======
+                print(
+                    f"  Heartbeats: {heartbeat_count} (expected ~{expected_beats:.0f})"
+                )
+>>>>>>> origin/stable
                 print(f"  Blocking: {blocking_pct:.1f}%")
                 print(f"  Max gap: {max_gap_ms:.2f}ms")
 
@@ -415,13 +515,27 @@ class TestChromaDBBlockingProfile:
             for op in direct_ops:
                 metrics = results[op]
                 print(f"  {op}")
+<<<<<<< HEAD
                 print(f"    Max gap: {metrics['max_heartbeat_gap_ms']:.2f}ms, Blocking: {metrics['blocking_pct']:.1f}%")
+=======
+                print(
+                    f"    Max gap: {metrics['max_heartbeat_gap_ms']:.2f}ms, "
+                    f"Blocking: {metrics['blocking_pct']:.1f}%"
+                )
+>>>>>>> origin/stable
 
             print("\nWrapped calls (NON-BLOCKING - desired behavior):")
             for op in wrapped_ops:
                 metrics = results[op]
                 print(f"  {op}")
+<<<<<<< HEAD
                 print(f"    Max gap: {metrics['max_heartbeat_gap_ms']:.2f}ms, Blocking: {metrics['blocking_pct']:.1f}%")
+=======
+                print(
+                    f"    Max gap: {metrics['max_heartbeat_gap_ms']:.2f}ms, "
+                    f"Blocking: {metrics['blocking_pct']:.1f}%"
+                )
+>>>>>>> origin/stable
 
             print("=" * 80)
 
@@ -451,6 +565,7 @@ class TestChromaDBBlockingProfile:
                 # On fast systems, ChromaDB operations may complete so quickly that
                 # even direct calls don't create measurable blocking gaps
                 if direct_metrics["duration_ms"] < 50:
+<<<<<<< HEAD
                     print("    NOTE: Operations are very fast (<50ms total), blocking may not be measurable")
 
             print("\n[Key Findings]")
@@ -458,17 +573,47 @@ class TestChromaDBBlockingProfile:
             print(f"    - 50x list_collections(): ~{results[direct_ops[0]]['duration_ms']:.0f}ms")
             print(f"    - 50x get_collection(): ~{results[direct_ops[1]]['duration_ms']:.0f}ms")
             print("  Individual operations are <1ms, too fast to create measurable blocking.")
+=======
+                    print(
+                        "    NOTE: Operations are very fast (<50ms total), "
+                        "blocking may not be measurable"
+                    )
+
+            print("\n[Key Findings]")
+            print("  On this system, ChromaDB operations are VERY fast:")
+            print(
+                f"    - 50x list_collections(): ~{results[direct_ops[0]]['duration_ms']:.0f}ms"
+            )
+            print(
+                f"    - 50x get_collection(): ~{results[direct_ops[1]]['duration_ms']:.0f}ms"
+            )
+            print(
+                "  Individual operations are <1ms, too fast to create measurable blocking."
+            )
+>>>>>>> origin/stable
             print("\n  However, in production with:")
             print("    - Slower disks (network storage, HDD)")
             print("    - Larger databases (more collections, more data)")
             print("    - Higher system load")
+<<<<<<< HEAD
             print("  These operations WILL block and MUST be wrapped with asyncio.to_thread().")
+=======
+            print(
+                "  These operations WILL block and MUST be wrapped with asyncio.to_thread()."
+            )
+>>>>>>> origin/stable
 
             print("\n[ACTION REQUIRED]")
             print("  Check buttermilk/data/vector.py _ensure_collection_ready():")
             print("    Line 886: client.list_collections() - NOT WRAPPED ❌")
             print("    Line 900: client.get_collection() - NOT WRAPPED ❌")
+<<<<<<< HEAD
             print("\n  These synchronous calls will block the event loop in production!")
+=======
+            print(
+                "\n  These synchronous calls will block the event loop in production!"
+            )
+>>>>>>> origin/stable
             print("  Solution: Wrap with `await asyncio.to_thread(...)`")
 
             # Assert that we at least ran the test

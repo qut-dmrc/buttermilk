@@ -7,6 +7,10 @@ and provides a _get_credential() helper method for secure credential access.
 from typing import Any
 
 import pytest
+<<<<<<< HEAD
+=======
+from pydantic import ValidationError
+>>>>>>> origin/stable
 
 from buttermilk.toxicity.toxicity import ToxicityModel
 from buttermilk.toxicity.types import EvalRecord

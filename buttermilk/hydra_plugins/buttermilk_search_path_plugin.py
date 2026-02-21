@@ -79,11 +79,23 @@ class ButtermilkSearchPathPlugin(SearchPathPlugin):
 
             # Check for installed packages matching our patterns
             for module_name in sys.modules:
+<<<<<<< HEAD
                 if any(self._matches_pattern(module_name, pattern) for pattern in patterns):
                     try:
                         spec = importlib.util.find_spec(f"{module_name}.conf")
                         if spec is not None:
                             external_packages.append((module_name, f"pkg://{module_name}.conf"))
+=======
+                if any(
+                    self._matches_pattern(module_name, pattern) for pattern in patterns
+                ):
+                    try:
+                        spec = importlib.util.find_spec(f"{module_name}.conf")
+                        if spec is not None:
+                            external_packages.append(
+                                (module_name, f"pkg://{module_name}.conf")
+                            )
+>>>>>>> origin/stable
                     except ImportError:
                         continue
 

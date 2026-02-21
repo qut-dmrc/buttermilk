@@ -17,9 +17,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from buttermilk.batch.manifests import BatchJobManifest
-from buttermilk.batch.managers.vertex import BatchJobManager
-from buttermilk.batch.types import BatchRequest
+from buttermilk._core.vertex_batch import (
+    BatchJobManager,
+    BatchJobManifest,
+    BatchRequest,
+)
 
 
 class FakeJobState:

@@ -10,7 +10,13 @@ class TestParameterExpansionProcessorConfig:
 
     def test_instantiation_with_variants(self):
         """Test that processor can be instantiated with variants dict."""
+<<<<<<< HEAD
         processor = ParameterExpansionProcessor(variants={"criteria": ["A", "B"], "model": ["X", "Y"]})
+=======
+        processor = ParameterExpansionProcessor(
+            variants={"criteria": ["A", "B"], "model": ["X", "Y"]}
+        )
+>>>>>>> origin/stable
         assert processor.variants == {"criteria": ["A", "B"], "model": ["X", "Y"]}
 
     def test_instantiation_without_variants_fails(self):
@@ -35,10 +41,19 @@ class TestParameterExpansionProcessorLogic:
     @pytest.mark.anyio
     async def test_expands_cartesian_product(self):
         """Verify cartesian product expansion creates correct number of records."""
+<<<<<<< HEAD
         from buttermilk._core.processing_context import ProcessingContext
         from buttermilk._core.types import BaseRecord
 
         processor = ParameterExpansionProcessor(variants={"criteria": ["A", "B"], "model": ["X", "Y"]})
+=======
+        from buttermilk._core.types import BaseRecord
+        from buttermilk._core.processing_context import ProcessingContext
+
+        processor = ParameterExpansionProcessor(
+            variants={"criteria": ["A", "B"], "model": ["X", "Y"]}
+        )
+>>>>>>> origin/stable
 
         record = BaseRecord(
             record_id="test-001",
@@ -74,10 +89,19 @@ class TestParameterExpansionProcessorLogic:
     @pytest.mark.anyio
     async def test_single_variant_expansion(self):
         """Verify single variant key expands to correct number of records."""
+<<<<<<< HEAD
         from buttermilk._core.processing_context import ProcessingContext
         from buttermilk._core.types import BaseRecord
 
         processor = ParameterExpansionProcessor(variants={"criteria": ["A", "B", "C"]})
+=======
+        from buttermilk._core.types import BaseRecord
+        from buttermilk._core.processing_context import ProcessingContext
+
+        processor = ParameterExpansionProcessor(
+            variants={"criteria": ["A", "B", "C"]}
+        )
+>>>>>>> origin/stable
         record = BaseRecord(record_id="test-002", content="test", metadata={})
         context = ProcessingContext(session_id="test-session", record=record)
 
@@ -90,11 +114,25 @@ class TestParameterExpansionProcessorLogic:
     @pytest.mark.anyio
     async def test_preserves_original_metadata(self):
         """Verify original metadata is preserved in expanded records."""
+<<<<<<< HEAD
         from buttermilk._core.processing_context import ProcessingContext
         from buttermilk._core.types import BaseRecord
 
         processor = ParameterExpansionProcessor(variants={"model": ["X"]})
         record = BaseRecord(record_id="test-003", content="test", metadata={"existing_key": "existing_value", "score": 0.95})
+=======
+        from buttermilk._core.types import BaseRecord
+        from buttermilk._core.processing_context import ProcessingContext
+
+        processor = ParameterExpansionProcessor(
+            variants={"model": ["X"]}
+        )
+        record = BaseRecord(
+            record_id="test-003",
+            content="test",
+            metadata={"existing_key": "existing_value", "score": 0.95}
+        )
+>>>>>>> origin/stable
         context = ProcessingContext(session_id="test-session", record=record)
 
         results = [r async for r in processor._process_record(context)]
@@ -112,10 +150,19 @@ class TestParameterExpansionProcessorLogic:
         Variant tracking is done via metadata.variant_suffix instead.
         Pipeline caching uses cache_key (added by pipeline) for 1:N differentiation.
         """
+<<<<<<< HEAD
         from buttermilk._core.processing_context import ProcessingContext
         from buttermilk._core.types import BaseRecord
 
         processor = ParameterExpansionProcessor(variants={"a": ["1", "2"], "b": ["x", "y"]})
+=======
+        from buttermilk._core.types import BaseRecord
+        from buttermilk._core.processing_context import ProcessingContext
+
+        processor = ParameterExpansionProcessor(
+            variants={"a": ["1", "2"], "b": ["x", "y"]}
+        )
+>>>>>>> origin/stable
         record = BaseRecord(record_id="orig", content="test", metadata={})
         context = ProcessingContext(session_id="test-session", record=record)
 

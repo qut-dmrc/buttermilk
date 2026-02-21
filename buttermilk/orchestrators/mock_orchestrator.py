@@ -52,6 +52,7 @@ class MockOrchestrator(Orchestrator):
     )
 
     # Controls frequency of message generation
+<<<<<<< HEAD
     message_interval: float = Field(default=2.0, description="Seconds between random message generation")
 
     # Private state
@@ -62,6 +63,26 @@ class MockOrchestrator(Orchestrator):
     _topic_type: str = PrivateAttr(default_factory=lambda: f"mock-flow-{shortuuid.uuid()[:8]}")
 
     _agent_ids: list[str] = PrivateAttr(default_factory=lambda: [f"agent-{i + 1}" for i in range(5)])  # Use simpler, consistent IDs
+=======
+    message_interval: float = Field(
+        default=2.0, description="Seconds between random message generation"
+    )
+
+    # Private state
+    _termination_handler: TerminationHandler | None = PrivateAttr(
+        default_factory=lambda: None
+    )
+    _interrupt_handler: InterruptHandler
+    _simulation_task: asyncio.Task | None = PrivateAttr(default_factory=lambda: None)
+    _client_websocket: Any = PrivateAttr(default_factory=lambda: None)
+    _topic_type: str = PrivateAttr(
+        default_factory=lambda: f"mock-flow-{shortuuid.uuid()[:8]}"
+    )
+
+    _agent_ids: list[str] = PrivateAttr(
+        default_factory=lambda: [f"agent-{i + 1}" for i in range(5)]
+    )  # Use simpler, consistent IDs
+>>>>>>> origin/stable
 
     async def _setup(self, request: RunRequest) -> None:
         """Setup the mock orchestrator environment"""
@@ -97,30 +118,63 @@ class MockOrchestrator(Orchestrator):
 
         await asyncio.sleep(0.1)  # Small delay for cleanup
 
+<<<<<<< HEAD
     async def _run(self, request: RunRequest | None = None, **ignored_tracing_kwargs) -> None:  # noqa
+=======
+    async def _run(
+        self, request: RunRequest | None = None, **ignored_tracing_kwargs
+    ) -> None:  # noqa
+>>>>>>> origin/stable
         """Override run to generate fake messages instead of using real agents"""
         try:
             # Setup the mock environment
             await self._setup(request or RunRequest(flow="mock_flow"))
 
             # Set callback on request if provided
+<<<<<<< HEAD
             if request and hasattr(request, "callback_to_ui") and request.callback_to_ui:
+=======
+            if (
+                request
+                and hasattr(request, "callback_to_ui")
+                and request.callback_to_ui
+            ):
+>>>>>>> origin/stable
                 self._client_websocket = request.callback_to_ui
 
             # Start generating messages
             if self.random_generation:
                 # Random, continuous message generation
+<<<<<<< HEAD
                 self._simulation_task = asyncio.create_task(self._generate_random_messages())
+=======
+                self._simulation_task = asyncio.create_task(
+                    self._generate_random_messages()
+                )
+>>>>>>> origin/stable
             else:
                 # Structured flow simulation
                 self._simulation_task = asyncio.create_task(self._simulate_flow())
 
             # Wait for termination signal
             while True:
+<<<<<<< HEAD
                 if self._termination_handler and self._termination_handler.has_terminated:
                     logger.info("Termination message received.")
                     break
                 if self._interrupt_handler and self._interrupt_handler.interrupt.is_set():
+=======
+                if (
+                    self._termination_handler
+                    and self._termination_handler.has_terminated
+                ):
+                    logger.info("Termination message received.")
+                    break
+                if (
+                    self._interrupt_handler
+                    and self._interrupt_handler.interrupt.is_set()
+                ):
+>>>>>>> origin/stable
                     await self._interrupt_handler.interrupt.wait()
                 await asyncio.sleep(0.1)
 
@@ -266,9 +320,21 @@ class MockOrchestrator(Orchestrator):
 
             # Add critic analysis with Differences output
             # Generate random experts using the new method
+<<<<<<< HEAD
             experts_pos1 = [self._generate_expert() for _ in range(random.randint(1, 3))]
             experts_pos2 = [self._generate_expert() for _ in range(random.randint(1, 3))]
             experts_pos3 = [self._generate_expert() for _ in range(random.randint(1, 3))]
+=======
+            experts_pos1 = [
+                self._generate_expert() for _ in range(random.randint(1, 3))
+            ]
+            experts_pos2 = [
+                self._generate_expert() for _ in range(random.randint(1, 3))
+            ]
+            experts_pos3 = [
+                self._generate_expert() for _ in range(random.randint(1, 3))
+            ]
+>>>>>>> origin/stable
 
             differences = Differences(
                 conclusion="Revise the document to address these points before finalization",
@@ -305,7 +371,13 @@ class MockOrchestrator(Orchestrator):
             judge_reasons = JudgeReasons(
                 conclusion="The content adheres to guidelines with minor concerns about citation formatting.",
                 prediction=random.choice([True, False]),  # Randomize prediction
+<<<<<<< HEAD
                 uncertainty=random.choice(["low", "medium", "high"]),  # Randomize uncertainty
+=======
+                uncertainty=random.choice(
+                    ["low", "medium", "high"]
+                ),  # Randomize uncertainty
+>>>>>>> origin/stable
                 reasons=[
                     "Content is factually accurate and well-supported",
                     "No harmful, misleading, or inappropriate material detected",
@@ -375,7 +447,13 @@ class MockOrchestrator(Orchestrator):
         """Generate a fake Expert object using a consistent agent_id."""
         # Use the aliased ExpertType from buttermilk._core.types
         agent_id = random.choice(self._agent_ids)
+<<<<<<< HEAD
         return Expert(name=f"Expert {agent_id}", answer_id=agent_id)  # Use agent_id for answer_id for consistency
+=======
+        return Expert(
+            name=f"Expert {agent_id}", answer_id=agent_id
+        )  # Use agent_id for answer_id for consistency
+>>>>>>> origin/stable
 
     def _generate_agent_trace(
         self,
@@ -427,9 +505,21 @@ class MockOrchestrator(Orchestrator):
                 # Position requires experts (list of Expert) and position (string)
                 # Expert requires name and answer_id
                 # Generate random experts using the new method
+<<<<<<< HEAD
                 experts_pos1 = [self._generate_expert() for _ in range(random.randint(1, 3))]
                 experts_pos2 = [self._generate_expert() for _ in range(random.randint(1, 3))]
                 experts_pos3 = [self._generate_expert() for _ in range(random.randint(1, 3))]
+=======
+                experts_pos1 = [
+                    self._generate_expert() for _ in range(random.randint(1, 3))
+                ]
+                experts_pos2 = [
+                    self._generate_expert() for _ in range(random.randint(1, 3))
+                ]
+                experts_pos3 = [
+                    self._generate_expert() for _ in range(random.randint(1, 3))
+                ]
+>>>>>>> origin/stable
 
                 outputs = Differences(
                     conclusion="Overall, there are some notable differences in the expert opinions.",
@@ -455,7 +545,13 @@ class MockOrchestrator(Orchestrator):
                                     position="Methodology is considered sound.",
                                 ),
                                 Position(
+<<<<<<< HEAD
                                     experts=[self._generate_expert()],  # Single expert position
+=======
+                                    experts=[
+                                        self._generate_expert()
+                                    ],  # Single expert position
+>>>>>>> origin/stable
                                     position="Concerns raised about sample size.",
                                 ),
                             ],
@@ -509,7 +605,13 @@ class MockOrchestrator(Orchestrator):
         message=None,
         total_steps=None,
         current_step=None,
+<<<<<<< HEAD
     ) -> FlowProgressUpdate | FlowEvent | TaskProcessingComplete | TaskProcessingStarted:
+=======
+    ) -> (
+        FlowProgressUpdate | FlowEvent | TaskProcessingComplete | TaskProcessingStarted
+    ):
+>>>>>>> origin/stable
         """Generate a fake progress update or flow event"""
         from buttermilk._core.contract import (
             FlowEvent,
@@ -526,19 +628,35 @@ class MockOrchestrator(Orchestrator):
             if event_class == TaskProcessingStarted:
                 # TaskProcessingStarted requires agent_id, role
                 return TaskProcessingStarted(
+<<<<<<< HEAD
                     agent_id=source or random.choice(self._agent_ids),  # Use agent_ids list
+=======
+                    agent_id=source
+                    or random.choice(self._agent_ids),  # Use agent_ids list
+>>>>>>> origin/stable
                     role=role or random.choice(["ASSISTANT", "RESEARCHER", "ANALYST"]),
                 )
             if event_class == TaskProcessingComplete:
                 # TaskProcessingComplete requires agent_id, role, is_error
                 return TaskProcessingComplete(
+<<<<<<< HEAD
                     agent_id=source or random.choice(self._agent_ids),  # Use agent_ids list
+=======
+                    agent_id=source
+                    or random.choice(self._agent_ids),  # Use agent_ids list
+>>>>>>> origin/stable
                     role=role or random.choice(["ASSISTANT", "RESEARCHER", "ANALYST"]),
                     is_error=random.choice([True, False]),
                 )
             # FlowEvent
             # FlowEvent requires source and content
+<<<<<<< HEAD
             event_type = random.choice(["flow_started", "flow_completed", "agent_selected", "error_occurred"])
+=======
+            event_type = random.choice(
+                ["flow_started", "flow_completed", "agent_selected", "error_occurred"]
+            )
+>>>>>>> origin/stable
 
             generated_source = source or "ORCHESTRATOR"  # Default source for FlowEvent
             generated_content = f"Flow event: {event_type}"  # Default content
@@ -565,7 +683,13 @@ class MockOrchestrator(Orchestrator):
             elif event_type == "agent_selected":
                 details.update(
                     {
+<<<<<<< HEAD
                         "agent_id": random.choice(self._agent_ids),  # Use agent_ids list
+=======
+                        "agent_id": random.choice(
+                            self._agent_ids
+                        ),  # Use agent_ids list
+>>>>>>> origin/stable
                         "task_description": "Processing a mock task.",
                     },
                 )
@@ -574,7 +698,13 @@ class MockOrchestrator(Orchestrator):
                 details.update(
                     {
                         "error_message": "A simulated error occurred.",
+<<<<<<< HEAD
                         "error_type": random.choice(["ValueError", "RuntimeError", "TimeoutError"]),
+=======
+                        "error_type": random.choice(
+                            ["ValueError", "RuntimeError", "TimeoutError"]
+                        ),
+>>>>>>> origin/stable
                     },
                 )
                 generated_content = f"Error occurred: {details.get('error_type')} - {details.get('error_message')}"
@@ -681,9 +811,19 @@ class MockOrchestrator(Orchestrator):
 
         if metadata is None:
             metadata = {
+<<<<<<< HEAD
                 "source": random.choice(["database", "api", "user_upload", "web_scrape"]),
                 "timestamp": datetime.now(UTC).isoformat(),
                 "category": random.choice(["document", "report", "article", "data", "message"]),
+=======
+                "source": random.choice(
+                    ["database", "api", "user_upload", "web_scrape"]
+                ),
+                "timestamp": datetime.now(UTC).isoformat(),
+                "category": random.choice(
+                    ["document", "report", "article", "data", "message"]
+                ),
+>>>>>>> origin/stable
                 "confidence": round(random.uniform(0.7, 0.99), 2),
                 "word_count": random.randint(100, 5000),
             }
@@ -706,15 +846,32 @@ class MockOrchestrator(Orchestrator):
             record_id=record_id,
             content=content,
             metadata=metadata,
+<<<<<<< HEAD
             mime=random.choice(["text/plain", "text/markdown", "text/html", "application/json"]),
         )
 
     def _generate_error_event(self, error_type=None, message=None, details=None) -> ErrorEvent:
+=======
+            mime=random.choice(
+                ["text/plain", "text/markdown", "text/html", "application/json"]
+            ),
+        )
+
+    def _generate_error_event(
+        self, error_type=None, message=None, details=None
+    ) -> ErrorEvent:
+>>>>>>> origin/stable
         """Generate a fake error event message"""
         from buttermilk._core.contract import ErrorEvent
 
         if error_type is None:
+<<<<<<< HEAD
             error_type = random.choice(["ValueError", "RuntimeError", "TimeoutError", "APIError"])
+=======
+            error_type = random.choice(
+                ["ValueError", "RuntimeError", "TimeoutError", "APIError"]
+            )
+>>>>>>> origin/stable
 
         if message is None:
             messages = [
@@ -727,8 +884,17 @@ class MockOrchestrator(Orchestrator):
         # ErrorEvent requires source and content
         # error_type, details, timestamp, agent_id, call_id are not part of ErrorEvent based on contract.py
 
+<<<<<<< HEAD
         generated_source = random.choice(["ASSISTANT", "RESEARCHER", "JUDGE", "ANALYST", "CRITIC", "ORCHESTRATOR"])
         generated_content = f"ERROR: {error_type} - {message}"  # Combine type and message into content
+=======
+        generated_source = random.choice(
+            ["ASSISTANT", "RESEARCHER", "JUDGE", "ANALYST", "CRITIC", "ORCHESTRATOR"]
+        )
+        generated_content = (
+            f"ERROR: {error_type} - {message}"  # Combine type and message into content
+        )
+>>>>>>> origin/stable
 
         return ErrorEvent(
             source=generated_source,

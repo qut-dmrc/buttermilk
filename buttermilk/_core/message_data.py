@@ -68,7 +68,13 @@ def extract_message_data(
     # The message content is nested under a key derived from the source.
     # e.g., if source is "AgentName-xyz", key becomes "AgentName".
     source_key = source.split("-", maxsplit=1)[0]
+<<<<<<< HEAD
     message_dict = scrub_serializable(message.model_dump())  # Serialize to dict, handling complex types
+=======
+    message_dict = scrub_serializable(
+        message.model_dump()
+    )  # Serialize to dict, handling complex types
+>>>>>>> origin/stable
 
     data_for_jmespath = {source_key: message_dict}
 
@@ -79,8 +85,19 @@ def extract_message_data(
                 search_result = jmespath.search(jmespath_expr, data_for_jmespath)
 
                 # Clean up search_result: remove None or empty sequences/mappings from list results
+<<<<<<< HEAD
                 if isinstance(search_result, Sequence) and not isinstance(search_result, str):
                     cleaned_sequence = [item for item in search_result if item is not None and item not in ([], {})]
+=======
+                if isinstance(search_result, Sequence) and not isinstance(
+                    search_result, str
+                ):
+                    cleaned_sequence = [
+                        item
+                        for item in search_result
+                        if item is not None and item not in ([], {})
+                    ]
+>>>>>>> origin/stable
                     if not cleaned_sequence:  # If list becomes empty after cleaning
                         search_result = None  # Treat as no result
                     else:
@@ -90,7 +107,13 @@ def extract_message_data(
                 if search_result is not None and search_result not in ([], {}):
                     extracted_data[target_key] = search_result
 
+<<<<<<< HEAD
             except jmespath_exceptions.JMESPathError as e:  # Catch specific JMESPath errors
+=======
+            except (
+                jmespath_exceptions.JMESPathError
+            ) as e:  # Catch specific JMESPath errors
+>>>>>>> origin/stable
                 logger.warning(
                     f"Error applying JMESPath expression '{jmespath_expr}' for key '{target_key}': {e!s}. Skipping this mapping.",
                 )

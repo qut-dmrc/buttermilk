@@ -137,7 +137,13 @@ class OrchestratorProtocol(BaseModel):
         """
         if isinstance(data, dict) and "storage" in data:
             if "storage" not in data:
+<<<<<<< HEAD
                 raise ValueError("'storage' field is required in orchestrator configuration")
+=======
+                raise ValueError(
+                    "'storage' field is required in orchestrator configuration"
+                )
+>>>>>>> origin/stable
 
             storage = data["storage"]
             if isinstance(storage, dict):
@@ -148,9 +154,19 @@ class OrchestratorProtocol(BaseModel):
                         from buttermilk._core.storage_config import StorageFactory
 
                         try:
+<<<<<<< HEAD
                             validated_storage[name] = StorageFactory.create_config(config)
                         except Exception as e:
                             raise ValueError(f"Failed to create storage config for '{name}': {e}") from e
+=======
+                            validated_storage[name] = StorageFactory.create_config(
+                                config
+                            )
+                        except Exception as e:
+                            raise ValueError(
+                                f"Failed to create storage config for '{name}': {e}"
+                            ) from e
+>>>>>>> origin/stable
                     else:
                         # Pass through as-is, let Pydantic handle validation
                         validated_storage[name] = config
@@ -235,10 +251,23 @@ class Orchestrator(OrchestratorProtocol, ABC):
                 try:
                     validated_agents[role_upper] = AgentVariants(**defn)  # type: ignore
                 except Exception as e:
+<<<<<<< HEAD
                     logger.error(f"Invalid AgentVariants configuration for role '{role_upper}': {defn}. Error: {e}")
                     raise ValueError(f"Invalid AgentVariants config for role '{role_upper}'") from e
             else:
                 raise TypeError(f"Invalid type for agent definition '{role_upper}': {type(defn)}. Expected dict or AgentVariants.")
+=======
+                    logger.error(
+                        f"Invalid AgentVariants configuration for role '{role_upper}': {defn}. Error: {e}"
+                    )
+                    raise ValueError(
+                        f"Invalid AgentVariants config for role '{role_upper}'"
+                    ) from e
+            else:
+                raise TypeError(
+                    f"Invalid type for agent definition '{role_upper}': {type(defn)}. Expected dict or AgentVariants."
+                )
+>>>>>>> origin/stable
         self.agents = validated_agents
         logger.debug(f"Agent roles validated: {list(self.agents.keys())}")
 
@@ -261,7 +290,13 @@ class Orchestrator(OrchestratorProtocol, ABC):
             Manual calls are rarely needed unless implementing custom orchestration logic.
         """
         self._bm = bm
+<<<<<<< HEAD
         logger.debug(f"Set session-scoped BM for orchestrator '{self.name}' with session_id: {bm.session_info.session_id}")
+=======
+        logger.debug(
+            f"Set session-scoped BM for orchestrator '{self.name}' with session_id: {bm.session_info.session_id}"
+        )
+>>>>>>> origin/stable
 
     def get_effective_bm(self) -> Any:
         """Get the effective BM instance (session-scoped if available, otherwise global singleton).
@@ -305,7 +340,13 @@ class Orchestrator(OrchestratorProtocol, ABC):
 
         # Precompute inputs for potential tracing and safe logging later
         try:
+<<<<<<< HEAD
             inputs = clean_empty_values(request.model_dump(mode="json", exclude={"tracing_attributes"}))
+=======
+            inputs = clean_empty_values(
+                request.model_dump(mode="json", exclude={"tracing_attributes"})
+            )
+>>>>>>> origin/stable
         except Exception:
             inputs = {}
 
@@ -315,6 +356,10 @@ class Orchestrator(OrchestratorProtocol, ABC):
         # Get OTEL tracer for business logic spans
         tracer = trace.get_tracer("buttermilk.orchestrator")
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> origin/stable
         # Create OTEL span for orchestrator execution
         with tracer.start_as_current_span(
             f"orchestrator.{self.name}",
@@ -338,12 +383,24 @@ class Orchestrator(OrchestratorProtocol, ABC):
                 await self._run(request=request)
                 # Log success, attach trace URL if present
                 msg = f"Orchestrator '{self.name}' run '{request.name}' finished successfully."
+<<<<<<< HEAD
                 if orchestrator_trace is not None and hasattr(orchestrator_trace, "ui_url"):
+=======
+                if orchestrator_trace is not None and hasattr(
+                    orchestrator_trace, "ui_url"
+                ):
+>>>>>>> origin/stable
                     msg += f" Tracing link: {orchestrator_trace.ui_url}"
                 logger.info(msg)
                 otel_span.set_status(trace.Status(trace.StatusCode.OK))
             except Exception as e:
+<<<<<<< HEAD
                 logger.exception(f"Orchestrator '{self.name}' run '{request.name}' failed: {e!s}")
+=======
+                logger.exception(
+                    f"Orchestrator '{self.name}' run '{request.name}' failed: {e!s}"
+                )
+>>>>>>> origin/stable
                 otel_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                 otel_span.record_exception(e)
                 raise
@@ -427,7 +484,13 @@ class Orchestrator(OrchestratorProtocol, ABC):
 
         async def publish_callback(message: FlowMessage) -> None:
             """Default no-op publish callback. Subclasses should implement actual publishing logic."""
+<<<<<<< HEAD
             logger.debug(f"Orchestrator '{self.name}' received message via default (no-op) publish_callback: {type(message).__name__}")
+=======
+            logger.debug(
+                f"Orchestrator '{self.name}' received message via default (no-op) publish_callback: {type(message).__name__}"
+            )
+>>>>>>> origin/stable
             # In a real implementation, this would involve:
             # - Sending the message to connected UI clients (e.g., via WebSockets).
             # - Placing the message on a queue for other services.

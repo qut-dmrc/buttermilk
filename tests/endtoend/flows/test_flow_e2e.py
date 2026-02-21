@@ -48,7 +48,13 @@ FLOW_TEST_CASES = [
 
 
 @pytest.mark.anyio
+<<<<<<< HEAD
 @pytest.mark.parametrize("flow_name,record_fixture_name,expected_roles", FLOW_TEST_CASES)
+=======
+@pytest.mark.parametrize(
+    "flow_name,record_fixture_name,expected_roles", FLOW_TEST_CASES
+)
+>>>>>>> origin/stable
 async def test_flow_execution_e2e(
     flow_name: str,
     record_fixture_name: str,
@@ -80,10 +86,21 @@ async def test_flow_execution_e2e(
     # Verify flow is configured in testing.yaml
     # Flows are loaded into real_conf.run.flows by Hydra defaults
     assert hasattr(real_conf, "run") and hasattr(real_conf.run, "flows"), (
+<<<<<<< HEAD
         "No flows configured in testing.yaml. Add flows: section with flow configurations in defaults."
     )
     flows_config = real_conf.run.flows
     assert flow_name in flows_config, f"Flow '{flow_name}' not found in testing.yaml flows. Available flows: {list(flows_config.keys())}"
+=======
+        "No flows configured in testing.yaml. "
+        "Add flows: section with flow configurations in defaults."
+    )
+    flows_config = real_conf.run.flows
+    assert flow_name in flows_config, (
+        f"Flow '{flow_name}' not found in testing.yaml flows. "
+        f"Available flows: {list(flows_config.keys())}"
+    )
+>>>>>>> origin/stable
 
     # Create FlowRunner with flows from config
     # This is the same entry point used by batch runs
@@ -136,12 +153,24 @@ async def test_flow_execution_e2e(
     # VERIFY: No error messages in flow execution
     error_messages = [msg for msg in messages if hasattr(msg, "error") and msg.error]
     assert not error_messages, (
+<<<<<<< HEAD
         f"Flow completed but produced {len(error_messages)} error messages. First error: {error_messages[0] if error_messages else 'N/A'}"
+=======
+        f"Flow completed but produced {len(error_messages)} error messages. "
+        f"First error: {error_messages[0] if error_messages else 'N/A'}"
+>>>>>>> origin/stable
     )
 
     # VERIFY: Template variables are filled in messages
     # Get traces that have LLM messages (from agents that call LLMs)
+<<<<<<< HEAD
     traces_with_messages = [msg for msg in messages if isinstance(msg, ExecutionTrace) and msg.messages and len(msg.messages) > 0]
+=======
+    traces_with_messages = [
+        msg for msg in messages
+        if isinstance(msg, ExecutionTrace) and msg.messages and len(msg.messages) > 0
+    ]
+>>>>>>> origin/stable
 
     for trace in traces_with_messages:
         # Check messages[0] (typically system prompt with template) has substantial content
@@ -170,13 +199,26 @@ async def test_flow_execution_e2e(
             )
 
     # VERIFY: trace.record is filled for traces that process records
+<<<<<<< HEAD
     traces_with_record = [msg for msg in messages if isinstance(msg, ExecutionTrace) and msg.record is not None]
+=======
+    traces_with_record = [
+        msg for msg in messages
+        if isinstance(msg, ExecutionTrace) and msg.record is not None
+    ]
+>>>>>>> origin/stable
 
     # At least some traces should have record context (agents processing the input record)
     # Note: Not all agents may have record (e.g., orchestrator traces)
     if traces_with_messages:
         # For flows that process records, we expect at least one trace to have record filled
+<<<<<<< HEAD
         assert len(traces_with_record) > 0 or not any("record" in str(trace.inputs).lower() for trace in traces_with_messages), (
+=======
+        assert len(traces_with_record) > 0 or not any(
+            "record" in str(trace.inputs).lower() for trace in traces_with_messages
+        ), (
+>>>>>>> origin/stable
             f"Expected at least one trace with record context filled. "
             f"Found {len(traces_with_record)} traces with record out of {len(traces_with_messages)} "
             f"traces with messages."
@@ -188,7 +230,12 @@ async def test_flow_execution_e2e(
 
         # Record should have essential fields
         assert "record_id" in record_dict or hasattr(record, "record_id"), (
+<<<<<<< HEAD
             f"trace.record missing record_id. Agent: {trace.agent_info.get('role', 'unknown')}. Record type: {type(record).__name__}"
+=======
+            f"trace.record missing record_id. Agent: {trace.agent_info.get('role', 'unknown')}. "
+            f"Record type: {type(record).__name__}"
+>>>>>>> origin/stable
         )
 
     # SUCCESS: Flow executed all agents and completed without errors

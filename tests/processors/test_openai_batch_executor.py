@@ -518,7 +518,7 @@ class TestOpenAIBatchProcessor:
     @pytest.mark.anyio
     async def test_process_batch_success(self):
         """OpenAIBatchProcessor._process_batch() should submit, wait, and return records."""
-        from buttermilk.batch.types import BatchResult
+        from buttermilk._core.vertex_batch import BatchResult
         from buttermilk.processors.openai_batch import OpenAIBatchProcessor
 
         processor = OpenAIBatchProcessor(

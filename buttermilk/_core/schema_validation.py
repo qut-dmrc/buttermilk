@@ -45,7 +45,13 @@ class SchemaValidator:
                 path = ".".join(str(p) for p in error.path) if error.path else "root"
                 error_messages.append(f"{path}: {error.message}")
 
+<<<<<<< HEAD
             raise SchemaValidationError(f"Schema validation failed: {'; '.join(error_messages)}", errors=errors)
+=======
+            raise SchemaValidationError(
+                f"Schema validation failed: {'; '.join(error_messages)}", errors=errors
+            )
+>>>>>>> origin/stable
 
     def is_valid(self, data: Any) -> bool:
         """Check if data is valid against the schema.
@@ -89,7 +95,13 @@ class SchemaValidator:
             )
 
 
+<<<<<<< HEAD
 def validate_tool_input(tool_schema: dict[str, Any], input_data: dict[str, Any]) -> dict[str, Any]:
+=======
+def validate_tool_input(
+    tool_schema: dict[str, Any], input_data: dict[str, Any]
+) -> dict[str, Any]:
+>>>>>>> origin/stable
     """Validate input data against a tool's input schema.
 
     Args:
@@ -252,7 +264,13 @@ def merge_schemas(*schemas: dict[str, Any]) -> dict[str, Any]:
         if "required" in schema:
             if "required" not in merged:
                 merged["required"] = []
+<<<<<<< HEAD
             merged["required"].extend(field for field in schema["required"] if field not in merged["required"])
+=======
+            merged["required"].extend(
+                field for field in schema["required"] if field not in merged["required"]
+            )
+>>>>>>> origin/stable
 
         # Merge other fields
         for key, value in schema.items():

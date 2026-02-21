@@ -13,7 +13,13 @@ from buttermilk.tools.chromadb_search import ChromaDBSearchTool, SearchResult
 
 
 @pytest.mark.integration
+<<<<<<< HEAD
 @pytest.mark.skip(reason="Requires zot flow configuration which is not in testing.yaml - needs environment-specific config")
+=======
+@pytest.mark.skip(
+    reason="Requires zot flow configuration which is not in testing.yaml - needs environment-specific config"
+)
+>>>>>>> origin/stable
 class TestChromaDBSearchToolIntegration:
     """Integration tests for ChromaDBSearchTool with real ChromaDB instance."""
 
@@ -58,9 +64,19 @@ class TestChromaDBSearchToolIntegration:
             logger.info("Search Result", result_num=i + 1)
             logger.info("  Document", document_title=result.document_title or "Unknown")
             logger.info("  Score", score=result.score)
+<<<<<<< HEAD
             logger.info("  Content preview", content_preview=f"{result.content[:200]}...")
             if result.metadata:
                 logger.info("  Metadata keys", metadata_keys=list(result.metadata.keys()))
+=======
+            logger.info(
+                "  Content preview", content_preview=f"{result.content[:200]}..."
+            )
+            if result.metadata:
+                logger.info(
+                    "  Metadata keys", metadata_keys=list(result.metadata.keys())
+                )
+>>>>>>> origin/stable
 
     @pytest.mark.anyio
     async def test_search_with_filter(self, search_tool):
@@ -96,7 +112,13 @@ class TestChromaDBSearchToolIntegration:
         # Verify no duplicate documents
         seen_docs = set()
         for result in results:
+<<<<<<< HEAD
             assert result.document_id not in seen_docs, f"Found duplicate document: {result.document_id}"
+=======
+            assert result.document_id not in seen_docs, (
+                f"Found duplicate document: {result.document_id}"
+            )
+>>>>>>> origin/stable
             seen_docs.add(result.document_id)
 
     @pytest.mark.anyio
@@ -140,7 +162,13 @@ class TestChromaDBSearchToolIntegration:
         assert function_tool.description
 
         # Test calling through the function interface
+<<<<<<< HEAD
         result = await function_tool.run_json({"query": "prosocial theory", "n_results": 2})
+=======
+        result = await function_tool.run_json(
+            {"query": "prosocial theory", "n_results": 2}
+        )
+>>>>>>> origin/stable
 
         assert "results" in result
         assert isinstance(result["results"], list)

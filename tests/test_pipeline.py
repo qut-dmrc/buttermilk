@@ -5,6 +5,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
+<<<<<<< HEAD
+=======
+from buttermilk._core.types import BaseRecord
+>>>>>>> origin/stable
 from buttermilk.pipeline import PipelineOrchestrator
 from buttermilk.tools.catalog_test import Observation, Title, TMDBTool
 from buttermilk.utils.uploader import AsyncDataUploader
@@ -52,7 +56,13 @@ class FakeUploader:
             context: ProcessingContext containing the record to process.
         """
         record = context.record  # Extract record from ProcessingContext
+<<<<<<< HEAD
         print(f"  Uploading: {type(record).__name__} - {record.record_id} - provider: {getattr(record, 'provider_name', 'N/A')}")
+=======
+        print(
+            f"  Uploading: {type(record).__name__} - {record.record_id} - provider: {getattr(record, 'provider_name', 'N/A')}"
+        )
+>>>>>>> origin/stable
         self.uploaded.append(record)
         yield record  # Pass through unchanged
 
@@ -151,7 +161,13 @@ async def test_multi_processor_pipeline(real_bm):
     print("About to iterate over orchestrator...")
     async for record in orchestrator():
         print(f"Got record: {record}")
+<<<<<<< HEAD
         print(f"Final output: {type(record).__name__} - {record.record_id} - provider: {getattr(record, 'provider_name', 'N/A')}")
+=======
+        print(
+            f"Final output: {type(record).__name__} - {record.record_id} - provider: {getattr(record, 'provider_name', 'N/A')}"
+        )
+>>>>>>> origin/stable
         results.append(record)
     print(f"Iteration complete, got {len(results)} results")
 
@@ -182,7 +198,13 @@ class MetadataAddingProcessor:
     async def process(self, context, **kwargs):
         """Add metadata to record without changing record_id."""
         record = context.record  # Extract record from ProcessingContext
+<<<<<<< HEAD
         print(f"  MetadataAddingProcessor processing: {record.record_id} - {self.metadata_key}")
+=======
+        print(
+            f"  MetadataAddingProcessor processing: {record.record_id} - {self.metadata_key}"
+        )
+>>>>>>> origin/stable
 
         # Create updated record with additional metadata but same record_id
         updated_metadata = record.metadata.copy() if record.metadata else {}
@@ -249,7 +271,13 @@ async def test_metadata_accumulation_and_record_id_preservation():
     print("Starting to iterate over orchestrator...")
     async for record in orchestrator():
         print(f"Got record: {record}")
+<<<<<<< HEAD
         print(f"Final result: {record.record_id} - metadata keys: {list(record.metadata.keys())}")
+=======
+        print(
+            f"Final result: {record.record_id} - metadata keys: {list(record.metadata.keys())}"
+        )
+>>>>>>> origin/stable
         results.append(record)
     print(f"Finished iteration, got {len(results)} results")
 
@@ -404,7 +432,13 @@ async def test_pipeline_tracks_processing_summary():
     async def source():
         from buttermilk._core.types import Record
 
+<<<<<<< HEAD
         records = [Record(record_id=f"test_{i}", content=f"Content {i}") for i in range(3)]
+=======
+        records = [
+            Record(record_id=f"test_{i}", content=f"Content {i}") for i in range(3)
+        ]
+>>>>>>> origin/stable
         for record in records:
             yield record
 
@@ -658,6 +692,7 @@ async def test_pipeline_summary_as_dict_export():
     assert isinstance(summary_dict["attempted"], int)
     assert isinstance(summary_dict["duration_ms"], int)
     assert isinstance(summary_dict["success_rate"], float)
+<<<<<<< HEAD
 
 
 # Tests for 1:N expansion with BatchAccumulator
@@ -809,3 +844,5 @@ async def test_1_to_n_expansion_partial_batch_flush():
     # Verify total records processed across all batches
     total_batched = sum(batch_calls)
     assert total_batched == 6, f"Expected 6 total records through batch processor, got {total_batched}"
+=======
+>>>>>>> origin/stable

@@ -43,6 +43,7 @@ class ChromaDBUploader(BaseModel):
 
     # ChromaDB configuration
     collection_name: str = Field(..., description="ChromaDB collection name")
+<<<<<<< HEAD
     persist_directory: str = Field(..., description="ChromaDB persist directory (can be remote)")
 
     # Sync configuration
@@ -52,6 +53,27 @@ class ChromaDBUploader(BaseModel):
 
     # Batch configuration
     upsert_batch_size: int = Field(default=1000, description="Batch size for ChromaDB upserts")
+=======
+    persist_directory: str = Field(
+        ..., description="ChromaDB persist directory (can be remote)"
+    )
+
+    # Sync configuration
+    sync_batch_size: int = Field(
+        default=50, description="Sync to remote every N records"
+    )
+    sync_interval_minutes: int = Field(
+        default=10, description="Sync to remote every N minutes"
+    )
+    disable_auto_sync: bool = Field(
+        default=False, description="Disable automatic syncing (manual only)"
+    )
+
+    # Batch configuration
+    upsert_batch_size: int = Field(
+        default=1000, description="Batch size for ChromaDB upserts"
+    )
+>>>>>>> origin/stable
     # Private attributes
     _client: ClientAPI | None = PrivateAttr(default=None)
     _collection: chromadb.Collection | None = PrivateAttr(default=None)
@@ -69,7 +91,13 @@ class ChromaDBUploader(BaseModel):
         )
         self._last_sync_time = time.time()
 
+<<<<<<< HEAD
     async def process(self, record: BaseRecord, *, processor_stage: str = "chromadb_upload", **kwargs) -> AsyncGenerator[BaseRecord, None]:
+=======
+    async def process(
+        self, record: BaseRecord, *, processor_stage: str = "chromadb_upload", **kwargs
+    ) -> AsyncGenerator[BaseRecord, None]:
+>>>>>>> origin/stable
         """Process a record by uploading its embedded chunks to ChromaDB.
 
         Args:
@@ -104,7 +132,18 @@ class ChromaDBUploader(BaseModel):
 
         # Check if chunks have embeddings
         chunks_with_embeddings = [
+<<<<<<< HEAD
             c for c in record.chunks if (c.get("embedding") if isinstance(c, dict) else getattr(c, "embedding", None)) is not None
+=======
+            c
+            for c in record.chunks
+            if (
+                c.get("embedding")
+                if isinstance(c, dict)
+                else getattr(c, "embedding", None)
+            )
+            is not None
+>>>>>>> origin/stable
         ]
         logger.debug(
             "ChromaDBUploader chunk embedding status",
@@ -192,7 +231,13 @@ class ChromaDBUploader(BaseModel):
         # Get or create collection
         if not self._collection:
             try:
+<<<<<<< HEAD
                 self._collection = await asyncio.to_thread(self._client.get_collection, name=self.collection_name)
+=======
+                self._collection = await asyncio.to_thread(
+                    self._client.get_collection, name=self.collection_name
+                )
+>>>>>>> origin/stable
                 collection_count = await asyncio.to_thread(self._collection.count)
                 logger.info(
                     "Using existing collection",
@@ -200,8 +245,17 @@ class ChromaDBUploader(BaseModel):
                     count=collection_count,
                 )
             except Exception:
+<<<<<<< HEAD
                 self._collection = await asyncio.to_thread(self._client.create_collection, name=self.collection_name)
                 logger.info("Created new collection", collection_name=self.collection_name)
+=======
+                self._collection = await asyncio.to_thread(
+                    self._client.create_collection, name=self.collection_name
+                )
+                logger.info(
+                    "Created new collection", collection_name=self.collection_name
+                )
+>>>>>>> origin/stable
 
         self._cache_initialized = True
 
@@ -270,7 +324,15 @@ class ChromaDBUploader(BaseModel):
                 "document_id": chunk["document_id"],
                 "content_type": chunk_metadata.get("content_type", "unknown"),
                 "chunk_type": chunk_metadata.get("chunk_type", "unknown"),
+<<<<<<< HEAD
                 **{k: v for k, v in chunk_metadata.items() if k not in ["content_type", "chunk_type"]},
+=======
+                **{
+                    k: v
+                    for k, v in chunk_metadata.items()
+                    if k not in ["content_type", "chunk_type"]
+                },
+>>>>>>> origin/stable
             }
             # Ensure metadata is serializable and ChromaDB-compatible
             enhanced_metadata = scrub_serializable(enhanced_metadata)
@@ -322,7 +384,13 @@ class ChromaDBUploader(BaseModel):
                 # Get the local cache path
                 local_cache_path = await self._get_local_cache_path()
                 if local_cache_path:
+<<<<<<< HEAD
                     await upload_chromadb_cache(str(local_cache_path), self._original_remote_path)
+=======
+                    await upload_chromadb_cache(
+                        str(local_cache_path), self._original_remote_path
+                    )
+>>>>>>> origin/stable
                     logger.info(
                         "Successfully synced ChromaDB to remote storage",
                         processed_count=self._processed_count,
@@ -343,19 +411,37 @@ class ChromaDBUploader(BaseModel):
     async def finalize_processing(self) -> bool:
         """Finalize processing by syncing to remote."""
         if self._original_remote_path:
+<<<<<<< HEAD
             logger.info("Final sync to remote storage", processed_count=self._processed_count)
+=======
+            logger.info(
+                "Final sync to remote storage", processed_count=self._processed_count
+            )
+>>>>>>> origin/stable
             try:
                 # Get the local cache path
                 local_cache_path = await self._get_local_cache_path()
                 if local_cache_path:
+<<<<<<< HEAD
                     await upload_chromadb_cache(str(local_cache_path), self._original_remote_path)
+=======
+                    await upload_chromadb_cache(
+                        str(local_cache_path), self._original_remote_path
+                    )
+>>>>>>> origin/stable
                     logger.info(
                         "Successfully completed final sync to remote storage",
                         processed_count=self._processed_count,
                     )
                     return True
                 else:
+<<<<<<< HEAD
                     logger.warning("Could not determine local cache path for final sync")
+=======
+                    logger.warning(
+                        "Could not determine local cache path for final sync"
+                    )
+>>>>>>> origin/stable
                     return False
             except Exception as e:
                 logger.error(
@@ -378,5 +464,11 @@ class ChromaDBUploader(BaseModel):
         if local_cache_path.exists():
             return local_cache_path
         else:
+<<<<<<< HEAD
             logger.warning("Local cache path does not exist", cache_path=str(local_cache_path))
+=======
+            logger.warning(
+                "Local cache path does not exist", cache_path=str(local_cache_path)
+            )
+>>>>>>> origin/stable
             return None

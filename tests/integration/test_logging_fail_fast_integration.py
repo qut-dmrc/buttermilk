@@ -47,7 +47,13 @@ class TestVerboseLoggingPreservation:
         # Set up verbose logging
         setup_console_logging(verbose=True)
         execution_context_id = f"verbose_preserve_{uuid.uuid4().hex[:8]}"
+<<<<<<< HEAD
         setup_file_logging(execution_context_id=execution_context_id, verbose=True, project_name="test")
+=======
+        setup_file_logging(
+            execution_context_id=execution_context_id, verbose=True, project_name="test"
+        )
+>>>>>>> origin/stable
 
         # Verify verbose logging is configured
         validation_initial = validate_logging_state(verbose_expected=True)
@@ -69,7 +75,13 @@ class TestVerboseLoggingPreservation:
             setup_console_logging(verbose=False)  # Should fail fast
 
         with pytest.raises(RuntimeError):
+<<<<<<< HEAD
             setup_file_logging(execution_context_id="different", verbose=False, project_name="test")  # Should fail fast
+=======
+            setup_file_logging(
+                execution_context_id="different", verbose=False, project_name="test"
+            )  # Should fail fast
+>>>>>>> origin/stable
 
         # Verify verbose logging is still intact
         validation_final = validate_logging_state(verbose_expected=True)
@@ -109,7 +121,13 @@ class TestVerboseLoggingPreservation:
             setup_console_logging(verbose=True)  # Should fail fast
 
         with pytest.raises(RuntimeError):
+<<<<<<< HEAD
             setup_file_logging(execution_context_id="different", verbose=True, project_name="test")  # Should fail fast
+=======
+            setup_file_logging(
+                execution_context_id="different", verbose=True, project_name="test"
+            )  # Should fail fast
+>>>>>>> origin/stable
 
         # Verify non-verbose logging is still intact
         validation_final = validate_logging_state(verbose_expected=False)
@@ -136,7 +154,13 @@ class TestCloudLoggingIntegration:
     @patch("buttermilk._core.log.logging")  # Patch logging to avoid side effects
     @patch("buttermilk._core.log.gcp_logging")
     @patch("buttermilk._core.log.CloudLoggingHandler")
+<<<<<<< HEAD
     def test_cloud_logging_deduplication_across_sessions(self, mock_cloud_handler_cls, mock_gcp_logging, mock_logging, mock_structlog):
+=======
+    def test_cloud_logging_deduplication_across_sessions(
+        self, mock_cloud_handler_cls, mock_gcp_logging, mock_logging, mock_structlog
+    ):
+>>>>>>> origin/stable
         """Test that cloud logging is properly deduplicated across multiple sessions."""
         from buttermilk._core.log import _cloud_logging_sessions, setup_cloud_logging
 
@@ -267,14 +291,26 @@ class TestErrorRecoveryAndValidation:
         setup_console_logging(verbose=True)
 
         validation = validate_logging_state(verbose_expected=True)
+<<<<<<< HEAD
         assert validation["valid"] is False  # Still invalid because file logging missing
+=======
+        assert (
+            validation["valid"] is False
+        )  # Still invalid because file logging missing
+>>>>>>> origin/stable
         assert validation["console_configured"] is True
         assert validation["file_configured"] is False
         assert "File logging not configured" in validation["issues"]
 
         # Complete the setup
         execution_context_id = f"partial_setup_{uuid.uuid4().hex[:8]}"
+<<<<<<< HEAD
         setup_file_logging(execution_context_id=execution_context_id, verbose=True, project_name="test")
+=======
+        setup_file_logging(
+            execution_context_id=execution_context_id, verbose=True, project_name="test"
+        )
+>>>>>>> origin/stable
 
         # Now validation should pass
         validation_complete = validate_logging_state(verbose_expected=True)
@@ -315,7 +351,13 @@ class TestErrorRecoveryAndValidation:
         # Set up verbose logging
         setup_console_logging(verbose=True)
         execution_context_id = f"real_logging_{uuid.uuid4().hex[:8]}"
+<<<<<<< HEAD
         log_files = setup_file_logging(execution_context_id=execution_context_id, verbose=True, project_name="test")
+=======
+        log_files = setup_file_logging(
+            execution_context_id=execution_context_id, verbose=True, project_name="test"
+        )
+>>>>>>> origin/stable
 
         # Verify setup is valid
         validation = validate_logging_state(verbose_expected=True)
@@ -386,7 +428,13 @@ class TestFailFastIntegrationExamples:
         # Step 1: Set up verbose logging at application start
         setup_console_logging(verbose=True)
         execution_context_id = f"verbose_workflow_{uuid.uuid4().hex[:8]}"
+<<<<<<< HEAD
         setup_file_logging(execution_context_id=execution_context_id, verbose=True, project_name="test")
+=======
+        setup_file_logging(
+            execution_context_id=execution_context_id, verbose=True, project_name="test"
+        )
+>>>>>>> origin/stable
 
         # Step 2: Validate logging is properly configured
         validation = validate_logging_state(verbose_expected=True)
@@ -400,10 +448,21 @@ class TestFailFastIntegrationExamples:
         logger.info("Operation completed successfully")
 
         # Step 4: Attempts to reconfigure should fail fast (protection working)
+<<<<<<< HEAD
         with pytest.raises(RuntimeError, match="Console logging has already been configured"):
             setup_console_logging(verbose=False)
 
         with pytest.raises(RuntimeError, match="File logging has already been configured"):
+=======
+        with pytest.raises(
+            RuntimeError, match="Console logging has already been configured"
+        ):
+            setup_console_logging(verbose=False)
+
+        with pytest.raises(
+            RuntimeError, match="File logging has already been configured"
+        ):
+>>>>>>> origin/stable
             setup_file_logging(execution_context_id="different", verbose=False)
 
         # Step 5: Logging should still work perfectly after failed reconfiguration attempts
@@ -430,7 +489,13 @@ class TestFailFastIntegrationExamples:
         # Step 3: Fix the issues by proper setup
         setup_console_logging(verbose=True)
         execution_context_id = f"error_recovery_{uuid.uuid4().hex[:8]}"
+<<<<<<< HEAD
         setup_file_logging(execution_context_id=execution_context_id, verbose=True, project_name="test")
+=======
+        setup_file_logging(
+            execution_context_id=execution_context_id, verbose=True, project_name="test"
+        )
+>>>>>>> origin/stable
 
         # Step 4: Verify the fixes worked
         fixed_validation = validate_logging_state(verbose_expected=True)

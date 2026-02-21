@@ -49,7 +49,13 @@ class NonInteractiveDebugClient:
         self.ws_url = f"ws://{host}:{port}/ws"
         self.client: FlowTestClient | None = None
         self.console = Console()
+<<<<<<< HEAD
         self.session_file = Path(tempfile.gettempdir()) / "buttermilk_debug_session.json"
+=======
+        self.session_file = (
+            Path(tempfile.gettempdir()) / "buttermilk_debug_session.json"
+        )
+>>>>>>> origin/stable
 
     def save_session(self, session_id: str):
         """Save session ID to file for reuse."""
@@ -149,7 +155,14 @@ class NonInteractiveDebugClient:
                     print(f"{timestamp_str}  {msg.type}: {content}")
 
                     # Check for flow completion
+<<<<<<< HEAD
                     if msg.type in ["flow_complete", "system_update"] and "complet" in content.lower():
+=======
+                    if (
+                        msg.type in ["flow_complete", "system_update"]
+                        and "complet" in content.lower()
+                    ):
+>>>>>>> origin/stable
                         flow_completed = True
 
                 last_message_count = len(current_messages)
@@ -201,7 +214,13 @@ class NonInteractiveDebugClient:
         # Use provided session_id or load from file
         session_id = session_id or self.load_session()
         if not session_id:
+<<<<<<< HEAD
             return {"error": "No session ID provided and no saved session found. Start a flow first."}
+=======
+            return {
+                "error": "No session ID provided and no saved session found. Start a flow first."
+            }
+>>>>>>> origin/stable
 
         if not await self.connect(session_id):
             return {"error": f"Failed to reconnect to session {session_id}"}
@@ -260,7 +279,13 @@ class NonInteractiveDebugClient:
         # Use provided session_id or load from file
         session_id = session_id or self.load_session()
         if not session_id:
+<<<<<<< HEAD
             return {"error": "No session ID provided and no saved session found. Start a flow first."}
+=======
+            return {
+                "error": "No session ID provided and no saved session found. Start a flow first."
+            }
+>>>>>>> origin/stable
 
         if not await self.connect(session_id):
             return {"error": f"Failed to reconnect to session {session_id}"}
@@ -279,7 +304,13 @@ class NonInteractiveDebugClient:
                 import re
 
                 pattern_re = re.compile(pattern, re.IGNORECASE)
+<<<<<<< HEAD
                 messages = [msg for msg in messages if pattern_re.search(msg.content or "")]
+=======
+                messages = [
+                    msg for msg in messages if pattern_re.search(msg.content or "")
+                ]
+>>>>>>> origin/stable
 
             # Collect results
             result = {
@@ -309,7 +340,13 @@ class NonInteractiveDebugClient:
         finally:
             await self.disconnect()
 
+<<<<<<< HEAD
     async def get_logs(self, lines: int = 50, min_level: str = "INFO", log_file: str | None = None) -> dict:
+=======
+    async def get_logs(
+        self, lines: int = 50, min_level: str = "INFO", log_file: str | None = None
+    ) -> dict:
+>>>>>>> origin/stable
         """Get recent log lines, with an optional minimum level filter.
 
         Args:
@@ -359,7 +396,15 @@ class NonInteractiveDebugClient:
 
                 # Filter by level
                 if min_level_num > 0:
+<<<<<<< HEAD
                     filtered_lines = [line for line in all_lines if get_line_level(line) >= min_level_num]
+=======
+                    filtered_lines = [
+                        line
+                        for line in all_lines
+                        if get_line_level(line) >= min_level_num
+                    ]
+>>>>>>> origin/stable
                 else:
                     filtered_lines = all_lines
 
@@ -419,7 +464,13 @@ def cli(ctx, host: str, port: int, json_output: bool, pretty: bool):
     ctx.obj["HOST"] = host
     ctx.obj["PORT"] = port
     # Pretty overrides json-output (pretty takes precedence)
+<<<<<<< HEAD
     ctx.obj["JSON_OUTPUT"] = not pretty if pretty else (json_output or True)  # Default to JSON
+=======
+    ctx.obj["JSON_OUTPUT"] = (
+        not pretty if pretty else (json_output or True)
+    )  # Default to JSON
+>>>>>>> origin/stable
 
 
 @cli.command()
@@ -452,7 +503,13 @@ def start(ctx, flow_name: str, query: str, record: str, criteria: str, wait: int
         if "error" in result:
             console.print(f"[red]Error: {result['error']}[/red]")
         else:
+<<<<<<< HEAD
             console.print(f"[green]Started flow '{flow_name}' - Session: {result['session_id']}[/green]")
+=======
+            console.print(
+                f"[green]Started flow '{flow_name}' - Session: {result['session_id']}[/green]"
+            )
+>>>>>>> origin/stable
             if query:
                 console.print(f"Query: {query}")
             if record:
@@ -461,7 +518,13 @@ def start(ctx, flow_name: str, query: str, record: str, criteria: str, wait: int
                 console.print(f"Criteria: {criteria}")
             console.print(f"\n[dim]Messages ({len(result['messages'])})[/dim]:")
             for msg in result["messages"]:
+<<<<<<< HEAD
                 timestamp = datetime.fromisoformat(msg["timestamp"]).strftime("%H:%M:%S")
+=======
+                timestamp = datetime.fromisoformat(msg["timestamp"]).strftime(
+                    "%H:%M:%S"
+                )
+>>>>>>> origin/stable
                 msg_type = msg["type"]
                 content = msg["content"] or "(no content)"
                 # Truncate for console readability
@@ -473,7 +536,13 @@ def start(ctx, flow_name: str, query: str, record: str, criteria: str, wait: int
 
 @cli.command()
 @click.argument("content")
+<<<<<<< HEAD
 @click.option("--type", "msg_type", default="response", help="Message type (default: response)")
+=======
+@click.option(
+    "--type", "msg_type", default="response", help="Message type (default: response)"
+)
+>>>>>>> origin/stable
 @click.option("--wait", default=5, help="Seconds to wait for responses")
 @click.option("--session", help="Session ID (uses saved session if not provided)")
 @click.pass_context
@@ -497,11 +566,23 @@ def send(ctx, content: str, msg_type: str, wait: int, session: str | None):
         if "error" in result:
             console.print(f"[red]Error: {result['error']}[/red]")
         else:
+<<<<<<< HEAD
             console.print(f"[green]Sent {msg_type} to session {result['session_id']}[/green]")
             console.print(f"Content: {content}")
             console.print(f"\n[dim]New messages ({len(result['messages'])})[/dim]:")
             for msg in result["messages"]:
                 timestamp = datetime.fromisoformat(msg["timestamp"]).strftime("%H:%M:%S")
+=======
+            console.print(
+                f"[green]Sent {msg_type} to session {result['session_id']}[/green]"
+            )
+            console.print(f"Content: {content}")
+            console.print(f"\n[dim]New messages ({len(result['messages'])})[/dim]:")
+            for msg in result["messages"]:
+                timestamp = datetime.fromisoformat(msg["timestamp"]).strftime(
+                    "%H:%M:%S"
+                )
+>>>>>>> origin/stable
                 msg_type = msg["type"]
                 content = msg["content"] or "(no content)"
                 if len(content) > 100:
@@ -516,7 +597,13 @@ def send(ctx, content: str, msg_type: str, wait: int, session: str | None):
 @click.option("--type", "msg_type", help="Filter by message type")
 @click.option("--session", help="Session ID (uses saved session if not provided)")
 @click.pass_context
+<<<<<<< HEAD
 def wait(ctx, wait: int, pattern: str | None, msg_type: str | None, session: str | None):
+=======
+def wait(
+    ctx, wait: int, pattern: str | None, msg_type: str | None, session: str | None
+):
+>>>>>>> origin/stable
     """Wait for and collect messages from the current session.
 
     Examples:
@@ -539,17 +626,35 @@ def wait(ctx, wait: int, pattern: str | None, msg_type: str | None, session: str
         if "error" in result:
             console.print(f"[red]Error: {result['error']}[/red]")
         else:
+<<<<<<< HEAD
             console.print(f"[green]Messages from session {result['session_id']}[/green]")
+=======
+            console.print(
+                f"[green]Messages from session {result['session_id']}[/green]"
+            )
+>>>>>>> origin/stable
             if pattern or msg_type:
                 console.print(f"[dim]Filters: pattern={pattern}, type={msg_type}[/dim]")
             console.print(f"\n[dim]Messages ({len(result['messages'])})[/dim]:")
             for msg in result["messages"]:
+<<<<<<< HEAD
                 timestamp = datetime.fromisoformat(msg["timestamp"]).strftime("%H:%M:%S")
+=======
+                timestamp = datetime.fromisoformat(msg["timestamp"]).strftime(
+                    "%H:%M:%S"
+                )
+>>>>>>> origin/stable
                 content = msg["content"] or "(no content)"
                 if len(content) > 100:
                     content = content[:100] + "..."
                 agent = msg["agent_role"] or "system"
+<<<<<<< HEAD
                 console.print(f"[dim]{timestamp}[/dim] [{msg['type']}] {agent}: {content}")
+=======
+                console.print(
+                    f"[dim]{timestamp}[/dim] [{msg['type']}] {agent}: {content}"
+                )
+>>>>>>> origin/stable
 
 
 @cli.command()
@@ -609,7 +714,13 @@ def clear_session(ctx):
     "--level",
     "-l",
     default="INFO",
+<<<<<<< HEAD
     type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], case_sensitive=False),
+=======
+    type=click.Choice(
+        ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], case_sensitive=False
+    ),
+>>>>>>> origin/stable
     help="Minimum log level to display.",
 )
 @click.option("--file", "-f", default=None, help="Specific log file to read (optional)")
@@ -661,7 +772,13 @@ def list_logs(ctx, count: int):
             "log_files": [
                 {
                     "path": log,
+<<<<<<< HEAD
                     "modified": datetime.fromtimestamp(os.path.getmtime(log)).isoformat(),
+=======
+                    "modified": datetime.fromtimestamp(
+                        os.path.getmtime(log)
+                    ).isoformat(),
+>>>>>>> origin/stable
                     "size": os.path.getsize(log),
                 }
                 for log in recent_logs
@@ -670,12 +787,27 @@ def list_logs(ctx, count: int):
         print(json.dumps(result, indent=2))
     else:
         console = Console()
+<<<<<<< HEAD
         console.print(f"[green]Most recent {len(recent_logs)} Buttermilk log files:[/green]\n")
         for log in recent_logs:
             mtime = datetime.fromtimestamp(os.path.getmtime(log))
             size = os.path.getsize(log)
             console.print(f"[dim]{mtime.strftime('%Y-%m-%d %H:%M:%S')}[/dim]  {os.path.basename(log)}  [dim]({size:,} bytes)[/dim]")
         console.print(f"\n[dim]Total Buttermilk log files in /tmp/: {len(log_files)}[/dim]")
+=======
+        console.print(
+            f"[green]Most recent {len(recent_logs)} Buttermilk log files:[/green]\n"
+        )
+        for log in recent_logs:
+            mtime = datetime.fromtimestamp(os.path.getmtime(log))
+            size = os.path.getsize(log)
+            console.print(
+                f"[dim]{mtime.strftime('%Y-%m-%d %H:%M:%S')}[/dim]  {os.path.basename(log)}  [dim]({size:,} bytes)[/dim]"
+            )
+        console.print(
+            f"\n[dim]Total Buttermilk log files in /tmp/: {len(log_files)}[/dim]"
+        )
+>>>>>>> origin/stable
 
 
 @cli.command()
@@ -753,6 +885,7 @@ def analyze(ctx, file: str | None):
 
                         # Collect sample error messages (limit to first 10)
                         if len(error_messages) < 10:
+<<<<<<< HEAD
                             error_messages.append(
                                 {
                                     "timestamp": ts,
@@ -760,6 +893,13 @@ def analyze(ctx, file: str | None):
                                     "event": event[:200] if event else "",  # Truncate long messages
                                 }
                             )
+=======
+                            error_messages.append({
+                                "timestamp": ts,
+                                "module": module,
+                                "event": event[:200] if event else "",  # Truncate long messages
+                            })
+>>>>>>> origin/stable
 
                 except json.JSONDecodeError:
                     level_counts["parse_error"] = level_counts.get("parse_error", 0) + 1

@@ -9,7 +9,13 @@ from PIL import Image, ImageStat
 from buttermilk._core.image import ImageRecord
 
 # Skip module if replicate not installed (requires ml extras)
+<<<<<<< HEAD
 pytest.importorskip("replicate", reason="replicate package not installed - requires ml extras")
+=======
+pytest.importorskip(
+    "replicate", reason="replicate package not installed - requires ml extras"
+)
+>>>>>>> origin/stable
 
 pytestmark = pytest.mark.anyio
 

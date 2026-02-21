@@ -10,7 +10,13 @@ pytestmark = pytest.mark.anyio
 
 
 async def test_gsheet_exporter(real_flow_runner):
+<<<<<<< HEAD
     run_request = RunRequest(flow=TEST_FLOW_ID, session_id="test_session")  # Replaced Job with RunRequest and mapped args
+=======
+    run_request = RunRequest(
+        flow=TEST_FLOW_ID, session_id="test_session"
+    )  # Replaced Job with RunRequest and mapped args
+>>>>>>> origin/stable
 
     # Mock the flow's run_flows method to return a mock ExecutionTrace with outputs
     class MockExecutionTrace:
@@ -33,7 +39,13 @@ async def test_gsheet_exporter(real_flow_runner):
 
     # Run the flow and check that the gsheet exporter saves correctly
     # This test might need a mock for the actual gsheet saving logic
+<<<<<<< HEAD
     async for result in real_flow_runner.run_flows(run_request=run_request):  # Pass run_request
+=======
+    async for result in real_flow_runner.run_flows(
+        run_request=run_request
+    ):  # Pass run_request
+>>>>>>> origin/stable
         assert result
         assert isinstance(result, MockExecutionTrace)
         assert result.outputs["sheet_url"] == "mock_url"
