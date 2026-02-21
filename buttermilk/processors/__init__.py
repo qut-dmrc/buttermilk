@@ -9,7 +9,6 @@ from .batch_accumulator import BatchAccumulator
 from .chromadb_uploader import ChromaDBUploader
 from .embeddings import EmbeddingGenerator
 from .jmespath_transform import JMESPathTransform
-from .openai_batch import OpenAIBatchProcessor
 from .parallel import ParallelProcessor
 from .unified_processors import GroupchatProcessor, LLMProcessor, ParameterExpansionProcessor
 from .variants import VariantProcessor
@@ -23,7 +22,6 @@ __all__ = [
     "GroupchatProcessor",
     "JMESPathTransform",
     "LLMProcessor",
-    "OpenAIBatchProcessor",
     "ParallelProcessor",
     "ParameterExpansionProcessor",
     "VariantProcessor",
