@@ -1,5 +1,6 @@
 import pytest
 
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.processor_core import BatchProcessorCore
 from buttermilk._core.types import BaseRecord
 from buttermilk.batch.executors.sync import SyncBatchExecutor
@@ -9,9 +10,10 @@ from buttermilk.batch.runner import BatchPipelineRunner
 class MockBatchProcessor(BatchProcessorCore):
     """Simple mock batch processor that uppercases content."""
 
-    async def _process_batch(self, records: list[BaseRecord]) -> list[BaseRecord]:
+    async def _process_batch(self, contexts: list[ProcessingContext]) -> list[BaseRecord]:
         results = []
-        for record in records:
+        for ctx in contexts:
+            record = ctx.record
             if isinstance(record.content, str):
                 new_content = record.content.upper()
                 results.append(record.model_copy(update={"content": new_content}))

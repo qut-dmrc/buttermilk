@@ -70,6 +70,18 @@ class BatchAccumulator(ProcessorCore):
             if not hasattr(bp, "process_batch"):
                 raise TypeError(f"batch_processors[{i}] must implement BatchProcessor protocol (missing process_batch method): {type(bp)}")
 
+    def _transfer_variant_params(self, context: ProcessingContext) -> None:
+        """Transfer _variant_params from record.metadata to context.variant_params.
+
+        Pops _variant_params from metadata to keep records clean.
+        This bridges ParameterExpansionProcessor (which writes to metadata)
+        with batch processors (which read from context.variant_params).
+        """
+        if context.record.metadata and "_variant_params" in context.record.metadata:
+            variant_params = context.record.metadata.pop("_variant_params")
+            if isinstance(variant_params, dict):
+                context.variant_params = variant_params
+
     async def _process_record(
         self,
         context: ProcessingContext,
@@ -82,6 +94,9 @@ class BatchAccumulator(ProcessorCore):
         Yields:
             BaseRecord: Individual records after batch processing (when batch is full)
         """
+        # Transfer variant params from record metadata to context
+        self._transfer_variant_params(context)
+
         # Use lock to protect buffer operations from concurrent access
         # This prevents race conditions where multiple tasks see len >= batch_size
         # and process the same batch multiple times
@@ -108,6 +123,9 @@ class BatchAccumulator(ProcessorCore):
     async def _process_batch_from_contexts(self, contexts: list[ProcessingContext]) -> AsyncGenerator[BaseRecord, None]:
         """Process a batch of contexts through batch processors and yield results.
 
+        The first batch processor receives the original contexts (with variant_params).
+        Subsequent batch processors receive output records wrapped in minimal contexts.
+
         Args:
             contexts: List of ProcessingContext objects to process
 
@@ -127,19 +145,19 @@ class BatchAccumulator(ProcessorCore):
             processor_count=len(self.batch_processors),
         )
 
-        # Extract records from contexts
-        records = [ctx.record for ctx in contexts]
+        # First batch processor gets the original contexts
+        current_contexts = contexts
 
         # Run each batch processor in sequence
         for i, bp in enumerate(self.batch_processors):
             processor_name = getattr(bp, "name", None) or type(bp).__name__
             logger.debug(
                 f"Running batch processor {i + 1}/{len(self.batch_processors)}: {processor_name}",
-                input_count=len(records),
+                input_count=len(current_contexts),
             )
 
             try:
-                records = await bp.process_batch(records)
+                output_records = await bp.process_batch(current_contexts)
             except Exception as e:
                 logger.error(
                     f"Batch processor {processor_name} failed",
@@ -148,14 +166,24 @@ class BatchAccumulator(ProcessorCore):
                 )
                 raise
 
+            # Wrap output records in minimal contexts for subsequent processors
+            if i < len(self.batch_processors) - 1:
+                current_contexts = [
+                    ProcessingContext(
+                        session_id=contexts[0].session_id,
+                        record=record,
+                    )
+                    for record in output_records
+                ]
+
         logger.info(
             f"BatchAccumulator batch {batch_num} complete",
             input_count=input_count,
-            output_count=len(records),
+            output_count=len(output_records),
         )
 
         # Demux: yield individual records
-        for record in records:
+        for record in output_records:
             yield record
 
     async def flush(self) -> AsyncGenerator[BaseRecord, None]:

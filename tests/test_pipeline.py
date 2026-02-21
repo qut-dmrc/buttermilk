@@ -684,7 +684,8 @@ async def test_1_to_n_expansion_with_batch_accumulator():
     class TrackingBatchProcessor(BatchProcessor):
         """Batch processor that tracks all records it receives."""
 
-        async def process_batch(self, records: list) -> list:
+        async def process_batch(self, contexts: list) -> list:
+            records = [ctx.record for ctx in contexts]
             processed_records.extend(records)
             return records
 
@@ -761,7 +762,8 @@ async def test_1_to_n_expansion_partial_batch_flush():
     class CountingBatchProcessor(BatchProcessor):
         """Batch processor that counts batch sizes."""
 
-        async def process_batch(self, records: list) -> list:
+        async def process_batch(self, contexts: list) -> list:
+            records = [ctx.record for ctx in contexts]
             batch_calls.append(len(records))
             return records
 

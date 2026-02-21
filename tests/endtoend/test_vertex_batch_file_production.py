@@ -3,9 +3,15 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import Record
 from buttermilk._core.vertex_batch import BatchJobManager
 from buttermilk.processors.vertex_batch import VertexBatchProcessor
+
+
+def _wrap_records(records: list[Record]) -> list[ProcessingContext]:
+    """Wrap records in minimal ProcessingContexts for batch processor calls."""
+    return [ProcessingContext(session_id="test", record=r) for r in records]
 
 
 class TestVertexBatchFileProduction:
@@ -16,7 +22,7 @@ class TestVertexBatchFileProduction:
     """
 
     @pytest.mark.endtoend
-    def test_gemini_jsonl_structure(self):
+    def test_gemini_jsonl_structure(self, real_bm):
         """Verify Gemini JSONL output structure matches Vertex Batch API requirements.
 
         This test checks the Google 'Generative AI' schema which is required for
@@ -46,7 +52,7 @@ class TestVertexBatchFileProduction:
         ]
 
         # Execution
-        requests = processor.prepare_batch_requests(records)
+        requests = processor.prepare_batch_requests(_wrap_records(records))
 
         # Build JSONL
         manager = BatchJobManager(client=MagicMock())
@@ -78,7 +84,7 @@ class TestVertexBatchFileProduction:
             assert req["system_instruction"]["parts"][0]["text"] == "You are a helpful assistant."
 
     @pytest.mark.endtoend
-    def test_claude_jsonl_structure(self):
+    def test_claude_jsonl_structure(self, real_bm):
         """Verify Claude JSONL output structure matches Vertex Batch API requirements.
 
         This test checks the Anthropic 'Messages' schema adapter which is required
@@ -107,7 +113,7 @@ class TestVertexBatchFileProduction:
         ]
 
         # Execution
-        requests = processor.prepare_batch_requests(records)
+        requests = processor.prepare_batch_requests(_wrap_records(records))
 
         # Build JSONL
         manager = BatchJobManager(client=MagicMock())
@@ -144,7 +150,7 @@ class TestVertexBatchDryRun:
     """
 
     @pytest.mark.anyio
-    async def test_dry_run_writes_to_gcs(self, mocker):
+    async def test_dry_run_writes_to_gcs(self, real_bm, mocker):
         """Verify dry_run=True writes batch JSONL to GCS but does not submit job.
 
         When dry_run is enabled:
@@ -153,9 +159,13 @@ class TestVertexBatchDryRun:
         - Records should be returned with dry_run metadata including GCS URI
         - No batch job API calls should be made
         """
-        # Mock the GCS upload - patch in utils.save where it's defined
+        # Mock the GCS upload - patch both where defined and where imported
         mock_upload = mocker.patch(
             "buttermilk.utils.save.upload_text",
+            return_value="gs://test-bucket/dry_run_abc123/input.jsonl",
+        )
+        mocker.patch(
+            "buttermilk._core.vertex_batch.upload_text",
             return_value="gs://test-bucket/dry_run_abc123/input.jsonl",
         )
 
@@ -175,8 +185,10 @@ class TestVertexBatchDryRun:
             dry_run=True,
         )
 
-        # Mock _ensure_manager to return a mock manager
-        mock_manager = BatchJobManager(client=MagicMock())
+        # Mock _ensure_manager to return a mock manager with realistic client
+        mock_client = MagicMock()
+        mock_client._location = "us-central1"
+        mock_manager = BatchJobManager(client=mock_client)
         mocker.patch.object(processor, "_ensure_manager", return_value=mock_manager)
 
         records = [
@@ -189,7 +201,7 @@ class TestVertexBatchDryRun:
         ]
 
         # Process with dry_run=True
-        results = await processor._process_batch(records)
+        results = await processor._process_batch(_wrap_records(records))
 
         # Verify GCS upload was called with JSONL content
         mock_upload.assert_called_once()
@@ -231,7 +243,7 @@ class TestVertexBatchDryRun:
         # Default should be False
         assert processor.dry_run is False
 
-    def test_dry_run_prepare_batch_requests_still_works(self):
+    def test_dry_run_prepare_batch_requests_still_works(self, real_bm):
         """Verify prepare_batch_requests works normally with dry_run=True.
 
         Dry-run mode should not affect the request preparation logic.
@@ -254,7 +266,7 @@ class TestVertexBatchDryRun:
         ]
 
         # prepare_batch_requests should work identically
-        requests = processor.prepare_batch_requests(records)
+        requests = processor.prepare_batch_requests(_wrap_records(records))
 
         assert len(requests) == 1
         assert requests[0].record_id == "prepare_test"

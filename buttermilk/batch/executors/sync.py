@@ -1,3 +1,4 @@
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.processor_core import BatchProcessorCore
 from buttermilk._core.types import BaseRecord
 from buttermilk.batch.executors.base import BatchExecutor
@@ -14,10 +15,15 @@ class SyncBatchExecutor(BatchExecutor):
     ) -> BatchExecutionResult:
         """Execute processing synchronously.
 
-        Simply calls processor.process_batch(records).
+        Wraps bare records in minimal ProcessingContexts before calling
+        processor.process_batch(), which expects contexts.
         """
         try:
-            output_records = await processor.process_batch(records)
+            contexts = [
+                ProcessingContext(session_id="sync_batch", record=record)
+                for record in records
+            ]
+            output_records = await processor.process_batch(contexts)
             return BatchExecutionResult(status=BatchJobStatus.COMPLETED, output_records=output_records, processed_count=len(output_records))
         except Exception as e:
             return BatchExecutionResult(status=BatchJobStatus.FAILED, error=str(e), processed_count=0)

@@ -116,17 +116,10 @@ class PipelineExecutor:
 
         processor = self.processors[processor_index]
 
-        # Process the batch
-        # Process the batch
-        async for output_record in processor.process_batch(buffer):
+        # Process the batch — process_batch returns a list, not an async generator
+        output_records = await processor.process_batch(buffer)
+        for output_record in output_records:
             # Create new context for the next stage
-            # Use the session_id from the first context in the batch (maintained scope)
-            # Lineage tracking is implicitly handled by the processor returning one or more records
-            # that correspond to inputs.
-
-            # Note: We use buffer[0] for shared context properties, but ideally
-            # we should track which input record produced which output if possible.
-            # However, for simple flattening, preserving session/resources is enough.
             next_context = ProcessingContext(
                 session_id=buffer[0].session_id,
                 record=output_record,

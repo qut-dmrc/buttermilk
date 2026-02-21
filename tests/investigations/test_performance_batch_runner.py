@@ -18,8 +18,8 @@ class SlowExpander(ProcessorCore):
 
 
 class FastBatchProcessor(BatchProcessorCore):
-    async def _process_batch(self, records: list[BaseRecord]) -> list[BaseRecord]:
-        return records
+    async def _process_batch(self, contexts: list[ProcessingContext]) -> list[BaseRecord]:
+        return [ctx.record for ctx in contexts]
 
 
 @pytest.mark.anyio

@@ -15,9 +15,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.processor_core import ProcessorCore
 from buttermilk._core.types import BaseRecord
 from buttermilk.processors.unified_processors import EmbeddingProcessor
+
+
+def _wrap_records(records: list[BaseRecord]) -> list[ProcessingContext]:
+    """Wrap records in minimal ProcessingContexts for batch processor calls."""
+    return [ProcessingContext(session_id="test", record=r) for r in records]
 
 
 class TestEmbeddingProcessorPydantic:
@@ -121,7 +127,7 @@ class TestEmbeddingProcessorBatchProcessing:
             mock_genai.Client.return_value.models.embed_content.return_value = mock_response
 
             # Process batch - now returns list, not async generator
-            outputs = await processor.process_batch(records)
+            outputs = await processor.process_batch(_wrap_records(records))
 
             # Verify all records processed
             assert len(outputs) == 3
@@ -153,7 +159,7 @@ class TestEmbeddingProcessorBatchProcessing:
         ]
 
         # Process batch (should pass through without error)
-        outputs = await processor.process_batch(records)
+        outputs = await processor.process_batch(_wrap_records(records))
 
         # Should return the record unchanged
         assert len(outputs) == 1
@@ -199,7 +205,7 @@ class TestEmbeddingProcessorBatchProcessing:
             mock_genai.Client.return_value.models.embed_content.side_effect = mock_embed_content
 
             # Process batch
-            outputs = await processor.process_batch(records)
+            outputs = await processor.process_batch(_wrap_records(records))
 
             # Verify all records processed
             assert len(outputs) == 5
@@ -253,7 +259,7 @@ class TestEmbeddingProcessorErrorHandling:
             mock_genai.Client.return_value.models.embed_content.side_effect = mock_embed_content
 
             # Process should succeed after retries
-            outputs = await processor.process_batch(records)
+            outputs = await processor.process_batch(_wrap_records(records))
 
             # Verify processing succeeded
             assert len(outputs) == 1
@@ -283,7 +289,7 @@ class TestEmbeddingProcessorErrorHandling:
 
             # Processing should raise after max retries (fail-fast)
             with pytest.raises(Exception, match="Persistent API error"):
-                await processor.process_batch(records)
+                await processor.process_batch(_wrap_records(records))
 
 
 class TestEmbeddingProcessorFinalization:

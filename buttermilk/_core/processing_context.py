@@ -48,6 +48,7 @@ class ProcessingContext:
 
     # State
     metadata: dict[str, Any] = field(default_factory=dict)
+    variant_params: dict[str, Any] = field(default_factory=dict)
 
     # Observability
     span: Optional[Span] = None

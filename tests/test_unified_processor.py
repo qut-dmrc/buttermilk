@@ -995,7 +995,7 @@ class TestBatchProcessor:
 
     @pytest.mark.anyio
     async def test_batch_processor_protocol_implementation(self):
-        """Verify BatchProcessor protocol works with simple list in/out."""
+        """Verify BatchProcessor protocol works with contexts in, records out."""
         from buttermilk._core.processor_core import ObservabilityMixin
 
         # Create a simple batch processor implementing the protocol
@@ -1004,7 +1004,8 @@ class TestBatchProcessor:
 
             processed_batches: list = Field(default_factory=list)
 
-            async def process_batch(self, records: list[BaseRecord]) -> list[BaseRecord]:
+            async def process_batch(self, contexts: list[ProcessingContext]) -> list[BaseRecord]:
+                records = [ctx.record for ctx in contexts]
                 # Store batch for verification
                 self.processed_batches.append(records)
                 # Return records unchanged
@@ -1012,11 +1013,17 @@ class TestBatchProcessor:
 
         processor = SimpleBatchProcessor()
 
-        # Create records
-        records = [BaseRecord(record_id=f"batch-{i}", content=f"content-{i}") for i in range(3)]
+        # Create contexts
+        contexts = [
+            ProcessingContext(
+                session_id="test",
+                record=BaseRecord(record_id=f"batch-{i}", content=f"content-{i}"),
+            )
+            for i in range(3)
+        ]
 
         # Process batch
-        outputs = await processor.process_batch(records)
+        outputs = await processor.process_batch(contexts)
 
         # Verify all records processed
         assert len(outputs) == 3
@@ -1037,7 +1044,8 @@ class TestBatchProcessor:
         class SimpleBatchProcessor(ObservabilityMixin):
             batch_sizes: list = Field(default_factory=list)
 
-            async def process_batch(self, records: list[BaseRecord]) -> list[BaseRecord]:
+            async def process_batch(self, contexts: list[ProcessingContext]) -> list[BaseRecord]:
+                records = [ctx.record for ctx in contexts]
                 self.batch_sizes.append(len(records))
                 # Add metadata to track batch size
                 return [record.model_copy(update={"metadata": {"batch_size": len(records)}}) for record in records]
@@ -1060,10 +1068,15 @@ class TestBatchProcessor:
         ]
 
         # Process records through accumulator
+        from buttermilk.pipeline import RecordBufferedException
+
         all_outputs = []
         for context in contexts:
-            async for output in accumulator.process(context):
-                all_outputs.append(output)
+            try:
+                async for output in accumulator.process(context):
+                    all_outputs.append(output)
+            except RecordBufferedException:
+                pass  # Expected when buffer is not yet full
 
         # Flush remaining
         async for output in accumulator.flush():

@@ -396,9 +396,12 @@ class ParameterExpansionProcessor(ProcessorCore):
             variant_suffix = "_".join(suffix_parts)
 
             # Store variant info in metadata only - record_id stays unchanged
+            # Variant parameters are namespaced under _variant_params to avoid
+            # field name collisions with record data. BatchAccumulator transfers
+            # these to context.variant_params before passing to batch processors.
             new_metadata = {
                 **(record.metadata if record.metadata else {}),
-                **combo,  # Variant parameters as flat keys
+                "_variant_params": combo,  # Namespaced variant parameters
                 "variant_suffix": variant_suffix,  # For deduplication/tracking if needed
             }
 
@@ -734,19 +737,20 @@ class EmbeddingProcessor(ProcessorCore):
 
     async def process_batch(
         self,
-        records: list[BaseRecord],
+        contexts: list[ProcessingContext],
     ) -> list[BaseRecord]:
-        """Process batch of records by generating embeddings for their chunks.
+        """Process batch of contexts by generating embeddings for their chunks.
 
         Implements BatchProcessor protocol.
 
         Args:
-            records: List of BaseRecord objects to process
+            contexts: List of ProcessingContext objects to process
 
         Returns:
             list[BaseRecord]: Records with embeddings added to chunks
         """
         start_time = time.time()
+        records = [ctx.record for ctx in contexts]
 
         # Collect all records and their chunks
         records_with_chunks = []
@@ -797,7 +801,7 @@ class EmbeddingProcessor(ProcessorCore):
         context: ProcessingContext,
     ) -> AsyncGenerator[BaseRecord, None]:
         """Process a single record (delegates to process_batch for single item)."""
-        results = await self.process_batch([context.record])
+        results = await self.process_batch([context])
         for record in results:
             yield record
 

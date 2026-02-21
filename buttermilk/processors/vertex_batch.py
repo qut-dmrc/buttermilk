@@ -43,6 +43,7 @@ from pydantic import BaseModel, Field, PrivateAttr
 
 from buttermilk import logger
 from buttermilk._core.exceptions import FatalError
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.processor_core import BatchProcessorCore
 from buttermilk._core.types import BaseRecord
 from buttermilk._core.vertex_batch import BatchResult
@@ -128,28 +129,23 @@ class BatchLLMProcessor(BatchProcessorCore):
             output_model=self.output_model,
         )
 
-    def _resolve_field(self, field_name: str, record: BaseRecord) -> Any:
-        """Resolve a configuration field, checking for overrides in record metadata.
+    def _resolve_field(self, field_name: str, context: ProcessingContext) -> Any:
+        """Resolve a configuration field, checking context.variant_params first.
 
         Resolution order:
-        1. record.metadata[field_name]
+        1. context.variant_params[field_name] (from ParameterExpansionProcessor)
         2. self[field_name] (configured default)
 
         Args:
             field_name: Name of the field to resolve (e.g., 'model', 'template')
-            record: Record to check metadata
+            context: ProcessingContext with variant_params
 
         Returns:
             Resolved value for the field.
         """
-        # 1. Check record metadata
-        if record.metadata:
-            if field_name in record.metadata:
-                return record.metadata[field_name]
-            # Also check nested 'variant_params' from VariantProcessor
-            variant_params = record.metadata.get("variant_params", {})
-            if isinstance(variant_params, dict) and field_name in variant_params:
-                return variant_params[field_name]
+        # 1. Check context variant_params (set by BatchAccumulator from _variant_params)
+        if context.variant_params and field_name in context.variant_params:
+            return context.variant_params[field_name]
 
         # 2. Fallback to configured default
         return getattr(self, field_name, None)
@@ -194,15 +190,15 @@ class BatchLLMProcessor(BatchProcessorCore):
 
     def prepare_batch_requests(
         self,
-        records: list[BaseRecord],
+        contexts: list[ProcessingContext],
     ) -> list[Any]:
-        """Prepare batch requests from records.
+        """Prepare batch requests from contexts.
 
         Renders templates, converts to LiteLLM message format, and creates
         BatchRequest objects. Provider-agnostic -- works with any executor.
 
         Args:
-            records: List of BaseRecord objects
+            contexts: List of ProcessingContext objects
 
         Returns:
             List of BatchRequest objects
@@ -212,18 +208,17 @@ class BatchLLMProcessor(BatchProcessorCore):
 
         requests: list[BatchRequest] = []
 
-        for record in records:
-            # Dynamically resolve model and template for this record
-            resolved_model = self._resolve_field("model", record)
-            resolved_template = self._resolve_field("template", record)
+        for context in contexts:
+            record = context.record
+
+            # Dynamically resolve model and template from context variant_params
+            resolved_model = self._resolve_field("model", context)
+            resolved_template = self._resolve_field("template", context)
 
             # Prepare template variables
             # Mix in record fields so template can access {{ record.foo }} or {{ foo }}
             if hasattr(record, "model_dump"):
                 record_dict = record.model_dump()
-                # Prioritize record fields, but allow explicit template_vars to override?
-                # Usually we want record data to be available.
-                # LLMCore strategy: merge record fields into template_vars.
                 variant_vars = {
                     **self.template_vars,
                     **record_dict.get("metadata", {}),
@@ -235,11 +230,14 @@ class BatchLLMProcessor(BatchProcessorCore):
                     **(record.metadata if record.metadata else {}),
                 }
 
+            # Also merge variant_params into template vars for template rendering
+            if context.variant_params:
+                variant_vars.update(context.variant_params)
+
             # Additional context for template if needed
             variant_vars["record"] = record
 
             # Render template to get full message history
-            # This uses the standard LLMCore logic via utility functions
             try:
                 result = render_template(
                     template=resolved_template,
@@ -251,7 +249,6 @@ class BatchLLMProcessor(BatchProcessorCore):
                 messages, _ = make_messages(result.rendered)
             except Exception as e:
                 logger.warning(f"Failed to render template for record {record.record_id}: {e}")
-                # We could skip or add error record. For now, skip to avoid blocking batch.
                 continue
 
             if not messages:
@@ -259,38 +256,31 @@ class BatchLLMProcessor(BatchProcessorCore):
                 continue
 
             # Convert to LiteLLM format (standardized intermediate format)
-            # BatchJobManager will convert this to provider-specific (Gemini/Claude) format
             litellm_messages = autogen_to_litellm_messages(messages)
 
-            # Extract variant from record metadata if present (set by VariantProcessor or ParameterExpansionProcessor)
-            # Build structured variant dict for full traceability
+            # Extract variant info for traceability
             variant_from_metadata = None
             if record.metadata:
-                # ParameterExpansionProcessor uses variant_suffix for tracking (e.g., "criteria=tja")
                 variant_suffix = record.metadata.get("variant_suffix")
                 if variant_suffix:
                     variant_from_metadata = variant_suffix
-                # Also check for explicit variant key (from VariantProcessor)
                 elif record.metadata.get("variant"):
                     variant_from_metadata = record.metadata.get("variant")
-                # Fallback for old style metadata
                 elif record.metadata.get("variant_name") or record.metadata.get("instruction_type"):
                     variant_from_metadata = record.metadata.get("variant_name") or record.metadata.get("instruction_type")
 
-            # Extract processor_index from variant metadata if present, else use configured default
-            processor_index = self.processor_index  # Default from processor config
+            # Extract processor_index from variant metadata if present
+            processor_index = self.processor_index
             if record.metadata:
                 variant_info = record.metadata.get("variant", {})
                 if isinstance(variant_info, dict) and "index" in variant_info:
                     processor_index = variant_info.get("index")
 
             # Build structured variant with full model info for traceability
-            # This ensures manifests contain complete provenance information
             structured_variant: dict[str, Any] = {
                 "template": resolved_template,
                 "model": resolved_model,
             }
-            # Include model parameters from config if available
             from buttermilk import bm
 
             if resolved_model in bm.llms.connections:
@@ -300,7 +290,6 @@ class BatchLLMProcessor(BatchProcessorCore):
                     "region": config.configs.get("region"),
                     "max_output_tokens": self._get_resolved_max_tokens(),
                 }
-            # Include variant from metadata (e.g., criteria name from ParameterExpansionProcessor)
             if variant_from_metadata:
                 if isinstance(variant_from_metadata, dict):
                     structured_variant["metadata_variant"] = variant_from_metadata
@@ -325,9 +314,9 @@ class BatchLLMProcessor(BatchProcessorCore):
 
     async def _process_batch(
         self,
-        records: list[BaseRecord],
+        contexts: list[ProcessingContext],
     ) -> list[BaseRecord]:
-        """Process a batch of records.
+        """Process a batch of contexts.
 
         Base implementation raises NotImplementedError. This class is designed
         to be used with an external executor via prepare_batch_requests().
@@ -335,7 +324,7 @@ class BatchLLMProcessor(BatchProcessorCore):
         this to implement direct batch submission.
 
         Args:
-            records: List of BaseRecord objects to process
+            contexts: List of ProcessingContext objects to process
 
         Returns:
             List of processed BaseRecord objects with LLM outputs
@@ -616,26 +605,27 @@ class VertexBatchProcessor(BatchLLMProcessor):
 
     async def _process_batch(
         self,
-        records: list[BaseRecord],
+        contexts: list[ProcessingContext],
     ) -> list[BaseRecord]:
-        """Process a batch of records through Vertex AI Batch Prediction API.
+        """Process a batch of contexts through Vertex AI Batch Prediction API.
 
         Supports mixed models in a single batch by splitting into multiple
         Vertex AI batch jobs automatically.
 
         Args:
-            records: List of BaseRecord objects to process
+            contexts: List of ProcessingContext objects to process
 
         Returns:
             List of processed BaseRecord objects with LLM outputs
         """
-        if not records:
+        if not contexts:
             return []
 
         start_time = time.time()
+        records = [ctx.record for ctx in contexts]
 
-        # Prepare batch requests (handles dynamic model resolution per record)
-        requests = self.prepare_batch_requests(records)
+        # Prepare batch requests (handles dynamic model resolution per context)
+        requests = self.prepare_batch_requests(contexts)
 
         # Dry-run mode: log prepared requests and return placeholder records
         if self.dry_run:
@@ -955,23 +945,24 @@ class OpenAIBatchProcessor(BatchLLMProcessor):
 
     async def _process_batch(
         self,
-        records: list[BaseRecord],
+        contexts: list[ProcessingContext],
     ) -> list[BaseRecord]:
-        """Process a batch of records through OpenAI/Azure OpenAI Batch API.
+        """Process a batch of contexts through OpenAI/Azure OpenAI Batch API.
 
         Args:
-            records: List of BaseRecord objects to process
+            contexts: List of ProcessingContext objects to process
 
         Returns:
             List of processed BaseRecord objects with LLM outputs
         """
-        if not records:
+        if not contexts:
             return []
 
         start_time = time.time()
+        records = [ctx.record for ctx in contexts]
 
-        # Prepare batch requests (handles dynamic model resolution per record)
-        requests = self.prepare_batch_requests(records)
+        # Prepare batch requests (handles dynamic model resolution per context)
+        requests = self.prepare_batch_requests(contexts)
 
         # Dry-run mode: log prepared requests and return placeholder records
         if self.dry_run:

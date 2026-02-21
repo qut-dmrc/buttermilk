@@ -68,17 +68,20 @@ class BatchProcessor(Protocol):
     Designed for operations that benefit from batching, such as LLM calls,
     embeddings, or bulk API operations. Used inside BatchAccumulator.
 
-    This is the golden path for batch processing - simple list in, list out.
+    Contexts go in, records come out. Batch processors receive
+    ProcessingContexts (which carry variant_params for configuration)
+    and return BaseRecords.
     """
 
     async def process_batch(
         self,
-        records: list[BaseRecord],
+        contexts: list[ProcessingContext],
     ) -> list[BaseRecord]:
-        """Process a batch of records.
+        """Process a batch of contexts.
 
         Args:
-            records: List of input records.
+            contexts: List of ProcessingContext objects containing records
+                and variant_params for configuration.
 
         Returns:
             List of output records. Can be same length, shorter (filtering),

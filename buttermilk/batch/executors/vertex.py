@@ -1,4 +1,5 @@
 from buttermilk import logger
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.processor_core import BatchProcessorCore
 from buttermilk._core.types import BaseRecord
 from buttermilk._core.vertex_batch import BatchJobManager
@@ -43,8 +44,13 @@ class VertexBatchExecutor(BatchExecutor):
 
         # 2. Prepare Requests
         try:
+            # Wrap bare records in minimal contexts for prepare_batch_requests
+            contexts = [
+                ProcessingContext(session_id="vertex_batch", record=record)
+                for record in records
+            ]
             # Duck typing: Assume method exists and returns list[BatchRequest]
-            requests = processor.prepare_batch_requests(records)  # type: ignore
+            requests = processor.prepare_batch_requests(contexts)  # type: ignore
 
             # Get model from processor
             model = getattr(processor, "model", None)
