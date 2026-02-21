@@ -72,6 +72,20 @@ class LLMProcessor(ProcessorCore):
             fail_on_unfilled_parameters=self.fail_on_unfilled_parameters,
         )
 
+    def _resolve_field(self, field_name: str, context: ProcessingContext) -> Any:
+        """Resolve a configuration field, checking context.variant_params first.
+
+        Resolution order:
+        1. context.variant_params[field_name] (from ParameterExpansionProcessor)
+        2. self[field_name] (configured default)
+
+        This enables LLMProcessor to work inside BatchAccumulator with
+        ParameterExpansionProcessor, using the same pattern as VertexBatchProcessor.
+        """
+        if context.variant_params and field_name in context.variant_params:
+            return context.variant_params[field_name]
+        return getattr(self, field_name, None)
+
     async def _process_record(
         self,
         context: ProcessingContext,
@@ -92,11 +106,16 @@ class LLMProcessor(ProcessorCore):
         # Safely get record_id for typed objects
         record_id = getattr(context.record, "record_id", None) or str(type(context.record).__name__)
 
+        # Resolve model and template from variant_params (for BatchAccumulator use)
+        # or fall back to configured defaults
+        resolved_model = self._resolve_field("model", context)
+        resolved_template = self._resolve_field("template", context)
+
         logger.debug(
             "LLMProcessor starting",
             record_id=record_id,
-            model=self.model,
-            template=self.template,
+            model=resolved_model,
+            template=resolved_template,
         )
 
         # Build template variables by flattening record data
@@ -110,8 +129,21 @@ class LLMProcessor(ProcessorCore):
             # For non-Pydantic records
             template_vars = {"record": context.record}
 
+        # Create LLMCore with resolved params if they differ from defaults
+        llm_core = self._llm_core
+        if resolved_model != self.model or resolved_template != self.template:
+            llm_core = LLMCore(
+                model=resolved_model,
+                template=resolved_template,
+                temperature=self.temperature,
+                max_tokens=self.max_tokens,
+                template_vars=self.input_variables,
+                output_model=self.output_model,
+                fail_on_unfilled_parameters=self.fail_on_unfilled_parameters,
+            )
+
         # Use LLMCore.process_with_llm() for LLM inference
-        llm_result = await self._llm_core.process_with_llm(
+        llm_result = await llm_core.process_with_llm(
             template_vars=template_vars,
             record=context.record,
             parent_trace_id=context.session_id,

@@ -1091,3 +1091,173 @@ class TestBatchProcessor:
     async def test_executor_handles_batch_accumulator(self):
         """Verify PipelineExecutor works with BatchAccumulator."""
         pass
+
+    @pytest.mark.anyio
+    async def test_batch_accumulator_accepts_live_processor(self):
+        """Verify BatchAccumulator accepts a ProcessorCore (live) in batch_processors."""
+        from buttermilk.processors.batch_accumulator import BatchAccumulator
+
+        # A simple live processor (ProcessorCore subclass)
+        class PassthroughProcessor(ProcessorCore):
+            async def _process_record(self, context: ProcessingContext) -> AsyncGenerator[BaseRecord, None]:
+                yield context.record
+
+        live_processor = PassthroughProcessor()
+
+        # Should not raise TypeError
+        accumulator = BatchAccumulator(
+            batch_size=2,
+            batch_processors=[live_processor],
+        )
+        assert len(accumulator.batch_processors) == 1
+
+    @pytest.mark.anyio
+    async def test_batch_accumulator_rejects_invalid_processor(self):
+        """Verify BatchAccumulator rejects objects without process_batch or process."""
+        from buttermilk.processors.batch_accumulator import BatchAccumulator
+
+        class InvalidProcessor:
+            pass
+
+        with pytest.raises(TypeError, match="must implement"):
+            BatchAccumulator(
+                batch_size=2,
+                batch_processors=[InvalidProcessor()],
+            )
+
+    @pytest.mark.anyio
+    async def test_batch_accumulator_mixed_batch_and_live_fanout(self):
+        """Verify fan-out with mixed batch + live processors."""
+        from buttermilk._core.processor_core import ObservabilityMixin
+        from buttermilk.pipeline import RecordBufferedException
+        from buttermilk.processors.batch_accumulator import BatchAccumulator
+
+        # Batch processor: tags records with "batch"
+        class MockBatchProcessor(ObservabilityMixin):
+            async def process_batch(self, contexts: list[ProcessingContext]) -> list[BaseRecord]:
+                return [
+                    ctx.record.model_copy(update={"metadata": {**ctx.record.metadata, "source": "batch"}})
+                    for ctx in contexts
+                ]
+
+        # Live processor: tags records with "live"
+        class MockLiveProcessor(ProcessorCore):
+            async def _process_record(self, context: ProcessingContext) -> AsyncGenerator[BaseRecord, None]:
+                yield context.record.model_copy(update={"metadata": {**context.record.metadata, "source": "live"}})
+
+        batch_bp = MockBatchProcessor()
+        live_bp = MockLiveProcessor()
+
+        accumulator = BatchAccumulator(
+            batch_size=2,
+            batch_processors=[batch_bp, live_bp],
+        )
+
+        contexts = [
+            ProcessingContext(
+                session_id="session",
+                record=BaseRecord(record_id=f"rec-{i}", content=f"content-{i}"),
+            )
+            for i in range(2)
+        ]
+
+        all_outputs = []
+        for ctx in contexts:
+            try:
+                async for output in accumulator.process(ctx):
+                    all_outputs.append(output)
+            except RecordBufferedException:
+                pass
+
+        # Flush if needed
+        async for output in accumulator.flush():
+            all_outputs.append(output)
+
+        # Each processor produces 2 records => 4 total
+        assert len(all_outputs) == 4
+
+        batch_records = [r for r in all_outputs if r.metadata.get("source") == "batch"]
+        live_records = [r for r in all_outputs if r.metadata.get("source") == "live"]
+        assert len(batch_records) == 2
+        assert len(live_records) == 2
+
+    @pytest.mark.anyio
+    async def test_batch_accumulator_live_processor_error_continues(self):
+        """Verify live processor errors don't block other processors in fan-out."""
+        from buttermilk._core.processor_core import ObservabilityMixin
+        from buttermilk.pipeline import RecordBufferedException
+        from buttermilk.processors.batch_accumulator import BatchAccumulator
+
+        # This live processor always fails
+        class FailingProcessor(ProcessorCore):
+            async def _process_record(self, context: ProcessingContext) -> AsyncGenerator[BaseRecord, None]:
+                raise ValueError("Intentional failure")
+                yield  # noqa: unreachable
+
+        # This batch processor succeeds
+        class SucceedingBatchProcessor(ObservabilityMixin):
+            async def process_batch(self, contexts: list[ProcessingContext]) -> list[BaseRecord]:
+                return [ctx.record for ctx in contexts]
+
+        accumulator = BatchAccumulator(
+            batch_size=1,
+            batch_processors=[FailingProcessor(), SucceedingBatchProcessor()],
+        )
+
+        ctx = ProcessingContext(
+            session_id="session",
+            record=BaseRecord(record_id="rec-0", content="content"),
+        )
+
+        all_outputs = []
+        async for output in accumulator.process(ctx):
+            all_outputs.append(output)
+
+        # Only the succeeding batch processor produces output
+        assert len(all_outputs) == 1
+        assert all_outputs[0].record_id == "rec-0"
+
+
+class TestLLMProcessorVariantParams:
+    """Test LLMProcessor variant_params resolution for BatchAccumulator use."""
+
+    def test_resolve_field_returns_variant_param(self):
+        """Verify _resolve_field prefers context.variant_params over self."""
+        from buttermilk.processors.unified_processors import LLMProcessor
+
+        processor = LLMProcessor(model="default-model", template="default-template")
+        context = ProcessingContext(
+            session_id="test",
+            record=BaseRecord(record_id="test", content="c"),
+            variant_params={"model": "override-model", "template": "override-template"},
+        )
+
+        assert processor._resolve_field("model", context) == "override-model"
+        assert processor._resolve_field("template", context) == "override-template"
+
+    def test_resolve_field_falls_back_to_default(self):
+        """Verify _resolve_field falls back to self when no variant_params."""
+        from buttermilk.processors.unified_processors import LLMProcessor
+
+        processor = LLMProcessor(model="default-model", template="default-template")
+        context = ProcessingContext(
+            session_id="test",
+            record=BaseRecord(record_id="test", content="c"),
+        )
+
+        assert processor._resolve_field("model", context) == "default-model"
+        assert processor._resolve_field("template", context) == "default-template"
+
+    def test_resolve_field_partial_override(self):
+        """Verify _resolve_field can override one field while keeping the other default."""
+        from buttermilk.processors.unified_processors import LLMProcessor
+
+        processor = LLMProcessor(model="default-model", template="default-template")
+        context = ProcessingContext(
+            session_id="test",
+            record=BaseRecord(record_id="test", content="c"),
+            variant_params={"template": "override-template"},
+        )
+
+        assert processor._resolve_field("model", context) == "default-model"
+        assert processor._resolve_field("template", context) == "override-template"

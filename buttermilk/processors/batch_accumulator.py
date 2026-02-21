@@ -67,8 +67,8 @@ class BatchAccumulator(ProcessorCore):
         # Required because pipeline concurrency allows multiple tasks to access this processor
         self._lock = asyncio.Lock()
         for i, bp in enumerate(self.batch_processors):
-            if not hasattr(bp, "process_batch"):
-                raise TypeError(f"batch_processors[{i}] must implement BatchProcessor protocol (missing process_batch method): {type(bp)}")
+            if not (hasattr(bp, "process_batch") or hasattr(bp, "process")):
+                raise TypeError(f"batch_processors[{i}] must implement BatchProcessor (process_batch) or Processor (process) protocol: {type(bp)}")
 
     def _transfer_variant_params(self, context: ProcessingContext) -> None:
         """Transfer _variant_params from record.metadata to context.variant_params.
@@ -153,17 +153,23 @@ class BatchAccumulator(ProcessorCore):
 
         for i, bp in enumerate(self.batch_processors):
             processor_name = getattr(bp, "name", None) or type(bp).__name__
+            is_batch = hasattr(bp, "process_batch")
             logger.debug(
-                f"Running batch processor {i + 1}/{len(self.batch_processors)}: {processor_name}",
+                f"Running {'batch' if is_batch else 'live'} processor {i + 1}/{len(self.batch_processors)}: {processor_name}",
                 input_count=len(contexts),
             )
 
             try:
-                output_records = await bp.process_batch(contexts)
-                all_output_records.extend(output_records)
+                if is_batch:
+                    output_records = await bp.process_batch(contexts)
+                    all_output_records.extend(output_records)
+                else:
+                    # ProcessorCore: call process() per context concurrently
+                    live_records = await self._run_live_processor(bp, contexts)
+                    all_output_records.extend(live_records)
             except Exception as e:
                 logger.error(
-                    f"Batch processor {processor_name} failed, continuing with remaining processors",
+                    f"{'Batch' if is_batch else 'Live'} processor {processor_name} failed, continuing with remaining processors",
                     batch_num=batch_num,
                     error=str(e),
                 )
@@ -180,6 +186,45 @@ class BatchAccumulator(ProcessorCore):
         # Demux: yield individual records
         for record in all_output_records:
             yield record
+
+    async def _run_live_processor(self, processor: Any, contexts: list[ProcessingContext]) -> list[BaseRecord]:
+        """Run a live (ProcessorCore) processor across all contexts concurrently.
+
+        Uses asyncio.gather for throughput — each context is processed independently.
+
+        Args:
+            processor: A ProcessorCore instance with a process() method
+            contexts: List of ProcessingContext objects to process
+
+        Returns:
+            list[BaseRecord]: Collected output records from all contexts
+        """
+
+        async def _process_one(ctx: ProcessingContext) -> list[BaseRecord]:
+            records: list[BaseRecord] = []
+            async for record in processor.process(ctx):
+                records.append(record)
+            return records
+
+        results = await asyncio.gather(
+            *[_process_one(ctx) for ctx in contexts],
+            return_exceptions=True,
+        )
+
+        output_records: list[BaseRecord] = []
+        processor_name = getattr(processor, "name", None) or type(processor).__name__
+        for ctx, result in zip(contexts, results):
+            if isinstance(result, Exception):
+                record_id = getattr(ctx.record, "record_id", "unknown")
+                logger.error(
+                    f"Live processor {processor_name} failed for record {record_id}",
+                    error=str(result),
+                )
+                # Continue processing other records (fan-out semantics)
+            else:
+                output_records.extend(result)
+
+        return output_records
 
     async def flush(self) -> AsyncGenerator[BaseRecord, None]:
         """Process any remaining buffered records.
