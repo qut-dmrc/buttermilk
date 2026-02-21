@@ -74,7 +74,7 @@ class BatchLLMProcessor(BatchProcessorCore):
     """
 
     model: str = Field(..., description="Model identifier (as registered in buttermilk)")
-    template: str = Field(..., description="Jinja2 template for criteria")
+    template: str | None = Field(default=None, description="Jinja2 template for criteria. When used with ParameterExpansionProcessor, template comes from context.variant_params.")
     template_vars: dict[str, Any] = Field(
         default_factory=dict,
         description="Static variables for template rendering",
@@ -214,6 +214,10 @@ class BatchLLMProcessor(BatchProcessorCore):
             # Dynamically resolve model and template from context variant_params
             resolved_model = self._resolve_field("model", context)
             resolved_template = self._resolve_field("template", context)
+
+            if not resolved_template:
+                logger.warning(f"Skipping record {record.record_id}: no template resolved (not in variant_params or config)")
+                continue
 
             # Prepare template variables
             # Mix in record fields so template can access {{ record.foo }} or {{ foo }}

@@ -145,19 +145,22 @@ class BatchAccumulator(ProcessorCore):
             processor_count=len(self.batch_processors),
         )
 
-        # First batch processor gets the original contexts
-        current_contexts = contexts
+        # Fan-out: each batch processor gets the ORIGINAL contexts independently.
+        # This is correct for multi-model pipelines where each processor handles
+        # the same records (e.g., deepseek-r1, llama-maverick, gpt-mini all
+        # process the same expanded records with the same variant_params).
+        all_output_records: list[BaseRecord] = []
 
-        # Run each batch processor in sequence
         for i, bp in enumerate(self.batch_processors):
             processor_name = getattr(bp, "name", None) or type(bp).__name__
             logger.debug(
                 f"Running batch processor {i + 1}/{len(self.batch_processors)}: {processor_name}",
-                input_count=len(current_contexts),
+                input_count=len(contexts),
             )
 
             try:
-                output_records = await bp.process_batch(current_contexts)
+                output_records = await bp.process_batch(contexts)
+                all_output_records.extend(output_records)
             except Exception as e:
                 logger.error(
                     f"Batch processor {processor_name} failed",
@@ -166,24 +169,14 @@ class BatchAccumulator(ProcessorCore):
                 )
                 raise
 
-            # Wrap output records in minimal contexts for subsequent processors
-            if i < len(self.batch_processors) - 1:
-                current_contexts = [
-                    ProcessingContext(
-                        session_id=contexts[0].session_id,
-                        record=record,
-                    )
-                    for record in output_records
-                ]
-
         logger.info(
             f"BatchAccumulator batch {batch_num} complete",
             input_count=input_count,
-            output_count=len(output_records),
+            output_count=len(all_output_records),
         )
 
         # Demux: yield individual records
-        for record in output_records:
+        for record in all_output_records:
             yield record
 
     async def flush(self) -> AsyncGenerator[BaseRecord, None]:
