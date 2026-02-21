@@ -163,11 +163,13 @@ class BatchAccumulator(ProcessorCore):
                 all_output_records.extend(output_records)
             except Exception as e:
                 logger.error(
-                    f"Batch processor {processor_name} failed",
+                    f"Batch processor {processor_name} failed, continuing with remaining processors",
                     batch_num=batch_num,
                     error=str(e),
                 )
-                raise
+                # Fan-out: continue with remaining processors even if one fails.
+                # Each processor is independent (different model), so one failure
+                # shouldn't block the others.
 
         logger.info(
             f"BatchAccumulator batch {batch_num} complete",

@@ -1067,6 +1067,16 @@ class OpenAIBatchProcessor(BatchLLMProcessor):
 
             dry_run_uri = upload_text(jsonl_content, uri=input_uri, content_type="application/jsonl")
             logger.info(f"[DRY RUN] Batch file written to {dry_run_uri}")
+
+            # Save manifest for traceability (matches Vertex dry run behaviour)
+            manager._save_manifest(
+                job_id=dry_run_job_id,
+                openai_batch_id=f"dry_run_{dry_run_job_id}",
+                model=self.model,
+                input_file_id=dry_run_uri,
+                requests=requests,
+                metadata={"processor": "OpenAIBatchProcessor", "dry_run": "true"},
+            )
         except Exception as e:
             logger.warning(f"[DRY RUN] Could not save batch file to storage: {e}")
 

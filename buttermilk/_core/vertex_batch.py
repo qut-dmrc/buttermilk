@@ -329,8 +329,9 @@ class OpenAIMessageConverter(BatchMessageConverter):
         When request.response_schema is set, includes response_format with
         json_schema for native structured output.
         """
+        # Use converter's model (resolved deployment name) over request.model (short alias)
         body: dict[str, Any] = {
-            "model": request.model or self.model,
+            "model": self.model or request.model,
             "messages": request.messages,
         }
 
