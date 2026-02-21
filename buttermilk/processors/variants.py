@@ -14,6 +14,7 @@ from pydantic import Field, PrivateAttr
 from buttermilk._core.log import logger
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.processor_core import ProcessorCore
+from buttermilk.pipeline import RecordBufferedException
 
 
 class VariantProcessor(ProcessorCore):
@@ -154,6 +155,8 @@ class VariantProcessor(ProcessorCore):
                         }
                         output = output.model_copy(update={"metadata": metadata})
                     await output_queue.put((variant_idx, output, None))
+            except RecordBufferedException:
+                raise
             except Exception as e:
                 await output_queue.put((variant_idx, None, e))
 
