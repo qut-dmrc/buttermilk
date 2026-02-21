@@ -138,7 +138,7 @@ def submit(config: Path, json_output: bool, provider: str) -> None:
     async def run_submit() -> dict:
         bm = await init_async(job="batch-submit")
 
-        from buttermilk._core.vertex_batch import BatchRequest
+        from buttermilk.batch.types import BatchRequest
 
         model = batch_config.get("model", "gemini-2.5-flash")
         requests_data = batch_config.get("requests", [])
@@ -148,7 +148,7 @@ def submit(config: Path, json_output: bool, provider: str) -> None:
             raise ValueError("No requests found in config file")
 
         if provider == "openai":
-            from buttermilk._core.vertex_batch import OpenAIBatchJobManager
+            from buttermilk.batch.managers.openai import OpenAIBatchJobManager
             from buttermilk.batch.executors.openai import _create_openai_batch_client
 
             client, endpoint = _create_openai_batch_client(model)
@@ -165,7 +165,7 @@ def submit(config: Path, json_output: bool, provider: str) -> None:
                 "save_dir": bm.session_info.save_dir,
             }
         else:
-            from buttermilk._core.vertex_batch import BatchJobManager
+            from buttermilk.batch.managers.vertex import BatchJobManager
 
             manager = BatchJobManager(client=bm.genai)
             job = await manager.submit_batch(model=model, requests=requests)
@@ -247,7 +247,8 @@ def status(job_id: str, json_output: bool, save_dir: str | None, search: bool) -
         manifest_type = _detect_manifest_type(manifest_data)
 
         if manifest_type == "openai":
-            from buttermilk._core.vertex_batch import OpenAIBatchJobManager, OpenAIBatchManifest
+            from buttermilk.batch.manifests import OpenAIBatchManifest
+            from buttermilk.batch.managers.openai import OpenAIBatchJobManager
             from buttermilk.batch.executors.openai import _create_openai_batch_client
 
             manifest = OpenAIBatchManifest(**manifest_data)
@@ -273,7 +274,7 @@ def status(job_id: str, json_output: bool, save_dir: str | None, search: bool) -
                 "error": status_info.get("error"),
             }
         else:
-            from buttermilk._core.vertex_batch import BatchJobManager
+            from buttermilk.batch.managers.vertex import BatchJobManager
 
             manager = BatchJobManager(client=bm.genai)
             if save_dir:
@@ -352,7 +353,8 @@ def fetch(job_id: str, json_output: bool, output: str | None, save_dir: str | No
         manifest_type = _detect_manifest_type(manifest_data)
 
         if manifest_type == "openai":
-            from buttermilk._core.vertex_batch import OpenAIBatchJobManager, OpenAIBatchManifest
+            from buttermilk.batch.manifests import OpenAIBatchManifest
+            from buttermilk.batch.managers.openai import OpenAIBatchJobManager
             from buttermilk.batch.executors.openai import _create_openai_batch_client
 
             manifest = OpenAIBatchManifest(**manifest_data)
@@ -367,7 +369,7 @@ def fetch(job_id: str, json_output: bool, output: str | None, save_dir: str | No
             manager = OpenAIBatchJobManager(client=client, endpoint=endpoint)
             return manager.fetch_results(job_id)
         else:
-            from buttermilk._core.vertex_batch import BatchJobManager
+            from buttermilk.batch.managers.vertex import BatchJobManager
 
             manager = BatchJobManager(client=bm.genai)
             if save_dir:
@@ -470,7 +472,7 @@ def list_jobs(json_output: bool, limit: int, save_dir: str | None) -> None:
     from cloudpathlib import AnyPath
 
     from buttermilk import init_async
-    from buttermilk._core.vertex_batch import BatchJobManifest, OpenAIBatchManifest
+    from buttermilk.batch.manifests import BatchJobManifest, OpenAIBatchManifest
 
     async def run_list() -> list[dict]:
         bm = await init_async(job="batch-list")

@@ -9,11 +9,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from buttermilk._core.vertex_batch import (
-    BatchJobManager,
-    BatchRequest,
-    BatchResult,
-)
+from buttermilk.batch.managers.vertex import BatchJobManager
+from buttermilk.batch.types import BatchRequest, BatchResult
 from buttermilk._core.vertex_caching import CriteriaCacheManager
 
 
@@ -242,14 +239,14 @@ class TestLlamaBatchSupport:
 
     def test_is_llama_model_with_llama_prefix(self):
         """_is_llama_model should detect llama model names."""
-        from buttermilk._core.vertex_batch import _is_llama_model
+        from buttermilk.batch.converters import _is_llama_model
 
         assert _is_llama_model("llama-4-maverick-17b-128e-instruct-maas")
         assert _is_llama_model("meta/llama-4-maverick-17b-128e-instruct-maas")
 
     def test_is_llama_model_negative(self):
         """_is_llama_model should not match non-llama models."""
-        from buttermilk._core.vertex_batch import _is_llama_model
+        from buttermilk.batch.converters import _is_llama_model
 
         assert not _is_llama_model("gemini-2.5-flash")
         assert not _is_llama_model("claude-sonnet-4")
@@ -257,14 +254,14 @@ class TestLlamaBatchSupport:
 
     def test_get_message_converter_routes_llama_to_openai(self):
         """Llama models should use OpenAIMessageConverter."""
-        from buttermilk._core.vertex_batch import OpenAIMessageConverter, get_message_converter
+        from buttermilk.batch.converters import OpenAIMessageConverter, get_message_converter
 
         converter = get_message_converter("meta/llama-4-maverick-17b-128e-instruct-maas")
         assert isinstance(converter, OpenAIMessageConverter)
 
     def test_get_message_converter_routes_llama_short_name(self):
         """Llama models without meta/ prefix should also route to OpenAI converter."""
-        from buttermilk._core.vertex_batch import OpenAIMessageConverter, get_message_converter
+        from buttermilk.batch.converters import OpenAIMessageConverter, get_message_converter
 
         converter = get_message_converter("llama-4-maverick-17b-128e-instruct-maas")
         assert isinstance(converter, OpenAIMessageConverter)
@@ -534,7 +531,8 @@ class TestVertexBatchProcessorConfigInheritance:
         When building JSONL for Claude batch requests, the max_tokens
         parameter should be passed through to the message converter.
         """
-        from buttermilk._core.vertex_batch import BatchJobManager, BatchRequest
+        from buttermilk.batch.managers.vertex import BatchJobManager
+        from buttermilk.batch.types import BatchRequest
 
         mock_client = MagicMock()
         manager = BatchJobManager(client=mock_client)
@@ -561,7 +559,8 @@ class TestVertexBatchProcessorConfigInheritance:
 
         When max_tokens is None, the Claude converter should use its default value.
         """
-        from buttermilk._core.vertex_batch import BatchJobManager, BatchRequest
+        from buttermilk.batch.managers.vertex import BatchJobManager
+        from buttermilk.batch.types import BatchRequest
 
         mock_client = MagicMock()
         manager = BatchJobManager(client=mock_client)
@@ -605,7 +604,7 @@ class TestGeminiStructuredOutput:
 
     def test_build_request_without_schema(self):
         """Gemini request without schema should not include generationConfig."""
-        from buttermilk._core.vertex_batch import GeminiMessageConverter
+        from buttermilk.batch.converters import GeminiMessageConverter
 
         converter = GeminiMessageConverter()
         request = BatchRequest(
@@ -620,7 +619,7 @@ class TestGeminiStructuredOutput:
 
     def test_build_request_with_schema(self):
         """Gemini request with schema should include generationConfig."""
-        from buttermilk._core.vertex_batch import GeminiMessageConverter
+        from buttermilk.batch.converters import GeminiMessageConverter
 
         converter = GeminiMessageConverter()
         request = BatchRequest(
@@ -639,7 +638,7 @@ class TestGeminiStructuredOutput:
 
     def test_build_request_schema_preserves_messages(self):
         """Schema should not interfere with message structure."""
-        from buttermilk._core.vertex_batch import GeminiMessageConverter
+        from buttermilk.batch.converters import GeminiMessageConverter
 
         converter = GeminiMessageConverter()
         request = BatchRequest(
@@ -664,7 +663,7 @@ class TestClaudeStructuredOutput:
 
     def test_build_request_without_schema(self):
         """Claude request without schema should not include tools."""
-        from buttermilk._core.vertex_batch import ClaudeMessageConverter
+        from buttermilk.batch.converters import ClaudeMessageConverter
 
         converter = ClaudeMessageConverter()
         request = BatchRequest(
@@ -680,7 +679,7 @@ class TestClaudeStructuredOutput:
 
     def test_build_request_with_schema(self):
         """Claude request with schema should include tools and tool_choice."""
-        from buttermilk._core.vertex_batch import ClaudeMessageConverter
+        from buttermilk.batch.converters import ClaudeMessageConverter
 
         converter = ClaudeMessageConverter()
         request = BatchRequest(
@@ -704,7 +703,7 @@ class TestClaudeStructuredOutput:
 
     def test_extract_response_tool_use(self):
         """Claude extract_response should handle tool_use blocks."""
-        from buttermilk._core.vertex_batch import ClaudeMessageConverter
+        from buttermilk.batch.converters import ClaudeMessageConverter
 
         converter = ClaudeMessageConverter()
         entry = {
@@ -729,7 +728,7 @@ class TestClaudeStructuredOutput:
 
     def test_extract_response_text_fallback(self):
         """Claude extract_response should still handle plain text responses."""
-        from buttermilk._core.vertex_batch import ClaudeMessageConverter
+        from buttermilk.batch.converters import ClaudeMessageConverter
 
         converter = ClaudeMessageConverter()
         entry = {"response": {"content": [{"type": "text", "text": "Plain text response"}]}}
@@ -739,7 +738,7 @@ class TestClaudeStructuredOutput:
 
     def test_build_request_schema_preserves_system(self):
         """Schema should not interfere with system message handling."""
-        from buttermilk._core.vertex_batch import ClaudeMessageConverter
+        from buttermilk.batch.converters import ClaudeMessageConverter
 
         converter = ClaudeMessageConverter(max_tokens=8192)
         request = BatchRequest(
@@ -910,7 +909,7 @@ class TestClaudeToolNameSanitization:
 
     def test_tool_name_with_spaces(self):
         """Tool name should sanitize spaces to underscores."""
-        from buttermilk._core.vertex_batch import ClaudeMessageConverter
+        from buttermilk.batch.converters import ClaudeMessageConverter
 
         converter = ClaudeMessageConverter()
         schema_with_spaces = {
@@ -935,7 +934,7 @@ class TestClaudeToolNameSanitization:
 
     def test_tool_name_with_special_chars(self):
         """Tool name should sanitize special characters."""
-        from buttermilk._core.vertex_batch import ClaudeMessageConverter
+        from buttermilk.batch.converters import ClaudeMessageConverter
 
         converter = ClaudeMessageConverter()
         schema_with_special = {
@@ -961,7 +960,7 @@ class TestClaudeToolNameSanitization:
 
     def test_tool_name_missing_title_uses_fallback(self):
         """Missing title should use structured_response as fallback."""
-        from buttermilk._core.vertex_batch import ClaudeMessageConverter
+        from buttermilk.batch.converters import ClaudeMessageConverter
 
         converter = ClaudeMessageConverter()
         schema_no_title = {

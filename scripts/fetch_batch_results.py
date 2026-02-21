@@ -82,7 +82,8 @@ def _locate_manifest(job_id: str) -> AnyPath | None:
 
 async def _fetch_vertex_results(job_id: str, manifest_data: dict) -> None:
     """Fetch results for a Vertex AI batch job."""
-    from buttermilk._core.vertex_batch import BatchJobManager, BatchJobManifest
+    from buttermilk.batch.manifests import BatchJobManifest
+    from buttermilk.batch.managers.vertex import BatchJobManager
 
     manifest = BatchJobManifest(**manifest_data)
     logger.info(f"Loaded Vertex manifest for job {job_id} (Vertex Job: {manifest.vertex_job_name})")
@@ -143,7 +144,8 @@ async def _fetch_vertex_results(job_id: str, manifest_data: dict) -> None:
 
 def _fetch_openai_results(job_id: str, manifest_data: dict) -> None:
     """Fetch results for an OpenAI/Azure batch job."""
-    from buttermilk._core.vertex_batch import OpenAIBatchJobManager, OpenAIBatchManifest
+    from buttermilk.batch.manifests import OpenAIBatchManifest
+    from buttermilk.batch.managers.openai import OpenAIBatchJobManager
     from buttermilk.batch.executors.openai import _create_openai_batch_client
 
     manifest = OpenAIBatchManifest(**manifest_data)

@@ -10,10 +10,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from buttermilk._core.vertex_batch import (
-    BatchJobManager,
-    BatchRequest,
-)
+from buttermilk.batch.managers.vertex import BatchJobManager
+from buttermilk.batch.types import BatchRequest
 
 # =============================================================================
 # Sample fixtures
@@ -41,14 +39,14 @@ class TestOpenAIMessageConverter:
 
     def test_import_converter(self):
         """OpenAIMessageConverter should be importable from vertex_batch."""
-        from buttermilk._core.vertex_batch import OpenAIMessageConverter
+        from buttermilk.batch.converters import OpenAIMessageConverter
 
         converter = OpenAIMessageConverter()
         assert converter is not None
 
     def test_build_request_basic(self):
         """Build a basic OpenAI batch request with user message."""
-        from buttermilk._core.vertex_batch import OpenAIMessageConverter
+        from buttermilk.batch.converters import OpenAIMessageConverter
 
         converter = OpenAIMessageConverter()
         request = BatchRequest(
@@ -69,7 +67,7 @@ class TestOpenAIMessageConverter:
 
     def test_build_request_with_system_message(self):
         """OpenAI format passes system messages through directly (not extracted)."""
-        from buttermilk._core.vertex_batch import OpenAIMessageConverter
+        from buttermilk.batch.converters import OpenAIMessageConverter
 
         converter = OpenAIMessageConverter()
         request = BatchRequest(
@@ -94,7 +92,7 @@ class TestOpenAIMessageConverter:
 
     def test_build_request_with_assistant_message(self):
         """Multi-turn conversation should preserve all roles."""
-        from buttermilk._core.vertex_batch import OpenAIMessageConverter
+        from buttermilk.batch.converters import OpenAIMessageConverter
 
         converter = OpenAIMessageConverter()
         request = BatchRequest(
@@ -117,7 +115,7 @@ class TestOpenAIMessageConverter:
 
     def test_build_request_with_max_tokens(self):
         """max_tokens should be included in the request body."""
-        from buttermilk._core.vertex_batch import OpenAIMessageConverter
+        from buttermilk.batch.converters import OpenAIMessageConverter
 
         converter = OpenAIMessageConverter(max_tokens=2048)
         request = BatchRequest(
@@ -133,7 +131,7 @@ class TestOpenAIMessageConverter:
 
     def test_build_request_without_max_tokens(self):
         """Without max_tokens, body should not include it (let API use default)."""
-        from buttermilk._core.vertex_batch import OpenAIMessageConverter
+        from buttermilk.batch.converters import OpenAIMessageConverter
 
         converter = OpenAIMessageConverter()
         request = BatchRequest(
@@ -149,7 +147,7 @@ class TestOpenAIMessageConverter:
 
     def test_build_request_with_structured_output(self):
         """Structured output should use response_format with json_schema."""
-        from buttermilk._core.vertex_batch import OpenAIMessageConverter
+        from buttermilk.batch.converters import OpenAIMessageConverter
 
         converter = OpenAIMessageConverter()
         request = BatchRequest(
@@ -172,7 +170,7 @@ class TestOpenAIMessageConverter:
 
     def test_build_request_without_structured_output(self):
         """Without schema, no response_format should be set."""
-        from buttermilk._core.vertex_batch import OpenAIMessageConverter
+        from buttermilk.batch.converters import OpenAIMessageConverter
 
         converter = OpenAIMessageConverter()
         request = BatchRequest(
@@ -188,7 +186,7 @@ class TestOpenAIMessageConverter:
 
     def test_build_request_schema_missing_title_uses_fallback(self):
         """Schema without title should use fallback name."""
-        from buttermilk._core.vertex_batch import OpenAIMessageConverter
+        from buttermilk.batch.converters import OpenAIMessageConverter
 
         converter = OpenAIMessageConverter()
         schema_no_title = {
@@ -211,7 +209,7 @@ class TestOpenAIMessageConverter:
 
     def test_build_request_model_from_request(self):
         """Model should come from BatchRequest.model field."""
-        from buttermilk._core.vertex_batch import OpenAIMessageConverter
+        from buttermilk.batch.converters import OpenAIMessageConverter
 
         converter = OpenAIMessageConverter()
         request = BatchRequest(
@@ -227,7 +225,7 @@ class TestOpenAIMessageConverter:
 
     def test_build_request_no_model_on_request(self):
         """When model is None on request, body should still have model key (may be None)."""
-        from buttermilk._core.vertex_batch import OpenAIMessageConverter
+        from buttermilk.batch.converters import OpenAIMessageConverter
 
         converter = OpenAIMessageConverter(model="gpt-4o")
         request = BatchRequest(
@@ -244,7 +242,7 @@ class TestOpenAIMessageConverter:
 
     def test_extract_response_success(self):
         """Extract response from successful OpenAI batch result."""
-        from buttermilk._core.vertex_batch import OpenAIMessageConverter
+        from buttermilk.batch.converters import OpenAIMessageConverter
 
         converter = OpenAIMessageConverter()
         entry = {
@@ -275,7 +273,7 @@ class TestOpenAIMessageConverter:
 
     def test_extract_response_empty_choices(self):
         """Empty choices should return None."""
-        from buttermilk._core.vertex_batch import OpenAIMessageConverter
+        from buttermilk.batch.converters import OpenAIMessageConverter
 
         converter = OpenAIMessageConverter()
         entry = {"response": {"status_code": 200, "body": {"choices": []}}}
@@ -285,7 +283,7 @@ class TestOpenAIMessageConverter:
 
     def test_extract_response_no_response(self):
         """Missing response key should return None."""
-        from buttermilk._core.vertex_batch import OpenAIMessageConverter
+        from buttermilk.batch.converters import OpenAIMessageConverter
 
         converter = OpenAIMessageConverter()
         entry = {"error": {"message": "Something went wrong"}}
@@ -295,7 +293,7 @@ class TestOpenAIMessageConverter:
 
     def test_extract_response_error_status(self):
         """Non-200 status code should still try to extract."""
-        from buttermilk._core.vertex_batch import OpenAIMessageConverter
+        from buttermilk.batch.converters import OpenAIMessageConverter
 
         converter = OpenAIMessageConverter()
         entry = {
@@ -311,7 +309,7 @@ class TestOpenAIMessageConverter:
 
     def test_extract_response_tool_calls(self):
         """Extract response with tool_calls (structured output via function calling)."""
-        from buttermilk._core.vertex_batch import OpenAIMessageConverter
+        from buttermilk.batch.converters import OpenAIMessageConverter
 
         converter = OpenAIMessageConverter()
         entry = {
@@ -359,7 +357,7 @@ class TestOpenAIModelDetection:
 
     def test_is_openai_model_gpt(self):
         """GPT models should be detected as OpenAI."""
-        from buttermilk._core.vertex_batch import _is_openai_model
+        from buttermilk.batch.converters import _is_openai_model
 
         assert _is_openai_model("gpt-4o") is True
         assert _is_openai_model("gpt-4o-mini") is True
@@ -368,7 +366,7 @@ class TestOpenAIModelDetection:
 
     def test_is_openai_model_negative(self):
         """Non-GPT models should not be detected as OpenAI."""
-        from buttermilk._core.vertex_batch import _is_openai_model
+        from buttermilk.batch.converters import _is_openai_model
 
         assert _is_openai_model("gemini-2.5-flash") is False
         assert _is_openai_model("claude-sonnet-4") is False
@@ -376,7 +374,7 @@ class TestOpenAIModelDetection:
 
     def test_is_openai_model_case_insensitive(self):
         """Model detection should be case-insensitive."""
-        from buttermilk._core.vertex_batch import _is_openai_model
+        from buttermilk.batch.converters import _is_openai_model
 
         assert _is_openai_model("GPT-4o") is True
         assert _is_openai_model("Gpt-4o-Mini") is True
@@ -392,35 +390,35 @@ class TestConverterFactory:
 
     def test_factory_returns_openai_converter_for_gpt(self):
         """Factory should return OpenAIMessageConverter for GPT models."""
-        from buttermilk._core.vertex_batch import OpenAIMessageConverter, get_message_converter
+        from buttermilk.batch.converters import OpenAIMessageConverter, get_message_converter
 
         converter = get_message_converter("gpt-4o")
         assert isinstance(converter, OpenAIMessageConverter)
 
     def test_factory_returns_openai_converter_for_gpt_mini(self):
         """Factory should return OpenAIMessageConverter for gpt-4o-mini."""
-        from buttermilk._core.vertex_batch import OpenAIMessageConverter, get_message_converter
+        from buttermilk.batch.converters import OpenAIMessageConverter, get_message_converter
 
         converter = get_message_converter("gpt-4o-mini")
         assert isinstance(converter, OpenAIMessageConverter)
 
     def test_factory_still_returns_gemini_for_gemini(self):
         """Factory should still return GeminiMessageConverter for Gemini models."""
-        from buttermilk._core.vertex_batch import GeminiMessageConverter, get_message_converter
+        from buttermilk.batch.converters import GeminiMessageConverter, get_message_converter
 
         converter = get_message_converter("gemini-2.5-flash")
         assert isinstance(converter, GeminiMessageConverter)
 
     def test_factory_still_returns_claude_for_claude(self):
         """Factory should still return ClaudeMessageConverter for Claude models."""
-        from buttermilk._core.vertex_batch import ClaudeMessageConverter, get_message_converter
+        from buttermilk.batch.converters import ClaudeMessageConverter, get_message_converter
 
         converter = get_message_converter("claude-sonnet-4")
         assert isinstance(converter, ClaudeMessageConverter)
 
     def test_factory_passes_max_tokens(self):
         """Factory should pass max_tokens to OpenAI converter."""
-        from buttermilk._core.vertex_batch import OpenAIMessageConverter, get_message_converter
+        from buttermilk.batch.converters import OpenAIMessageConverter, get_message_converter
 
         converter = get_message_converter("gpt-4o", max_tokens=8192)
         assert isinstance(converter, OpenAIMessageConverter)

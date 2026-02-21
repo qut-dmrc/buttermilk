@@ -28,11 +28,8 @@ from pathlib import Path
 
 import pytest
 
-from buttermilk._core.vertex_batch import (
-    BatchRequest,
-    BatchResult,
-    OpenAIBatchJobManager,
-)
+from buttermilk.batch.managers.openai import OpenAIBatchJobManager
+from buttermilk.batch.types import BatchRequest, BatchResult
 
 pytestmark = [pytest.mark.slow, pytest.mark.anyio, pytest.mark.timeout(600)]
 

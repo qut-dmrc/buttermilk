@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from buttermilk._core.types import Record
-from buttermilk._core.vertex_batch import BatchJobManager
+from buttermilk.batch.managers.vertex import BatchJobManager
 from buttermilk.processors.vertex_batch import VertexBatchProcessor
 
 

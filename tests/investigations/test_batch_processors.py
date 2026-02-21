@@ -5,7 +5,8 @@ import pytest
 
 from buttermilk._core.dmrc import set_bm
 from buttermilk._core.llms import ClientType
-from buttermilk._core.vertex_batch import _DEEPSEEK_MODEL_PATTERNS, BatchJobManager, OpenAIMessageConverter, _is_deepseek_model
+from buttermilk.batch.converters import _DEEPSEEK_MODEL_PATTERNS, OpenAIMessageConverter, _is_deepseek_model
+from buttermilk.batch.managers.vertex import BatchJobManager
 from buttermilk.batch.managers.openai import OpenAIBatchJobManager
 from buttermilk.processors.openai_batch import OpenAIBatchProcessor
 

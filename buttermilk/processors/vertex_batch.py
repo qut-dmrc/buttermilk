@@ -530,7 +530,7 @@ class VertexBatchProcessor(BatchLLMProcessor):
     def _resolve_output_schema(self) -> dict[str, Any] | None:
         """Resolve output_class to a Vertex AI-appropriate JSON schema dict.
 
-        Applies Vertex AI transforms (resolve , make all required,
+        Applies Vertex AI transforms (resolve $refs, make all required,
         convert enum values for Gemini).
 
         Returns:
