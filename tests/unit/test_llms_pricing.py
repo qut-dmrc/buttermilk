@@ -71,9 +71,9 @@ class TestLiteLLMModelNameResolution:
         assert result == "azure/gpt-5-nano"
 
     def test_openai_direct_api_resolution(self):
-        """Test OpenAI models with direct API stay as-is."""
+        """Test OpenAI models with direct API get openai/ prefix for LiteLLM routing."""
         result = LLMs.lookup_litellm_model_name("gpt-4o", "openai")
-        assert result == "gpt-4o"
+        assert result == "openai/gpt-4o"
 
     def test_llama_vertex_openai_resolution(self):
         """Test Llama models on Vertex OpenAI endpoint resolve correctly."""

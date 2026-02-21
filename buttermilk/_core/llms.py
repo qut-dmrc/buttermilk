@@ -1430,13 +1430,13 @@ class LLMs(BaseModel):
         # Handle special cases and extract base model name
         base_model = LLMs._extract_base_model_name(model_name, client_type)
 
-        # For certain client types, we need the model name as-is (already has correct prefix)
+        # For native API client types (gemini, anthropic), bare model names work
+        # For openai client_type, always add the openai/ prefix — LiteLLM needs it
+        # for provider routing, especially with custom base_url (e.g., grok on Azure AI)
         if client_type in {
             "gemini",
-            "openai",
             "anthropic",
         } and not model_name.startswith(expected_prefix + "/"):
-            # These often use bare model names without provider prefix
             return model_name
 
         # If the model name already has the correct prefix, return as-is
@@ -1528,8 +1528,8 @@ class LLMs(BaseModel):
         config = self.connections[name]
         model_name = config.configs.get("model")
 
-        # Resolve litellm model name using internal method
-        resolved_litellm = self.lookup_litellm_model_name(model_name or name, config.client_type.value) or model_name
+        # Resolve litellm model name: explicit override > lookup > raw model_name
+        resolved_litellm = config.litellm_model or self.lookup_litellm_model_name(model_name or name, config.client_type.value) or model_name
 
         # Zentropi is a classification API, not an LLM - use ZentropiClassifier agent instead
         if config.client_type == ClientType.ZENTROPI:

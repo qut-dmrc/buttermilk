@@ -87,3 +87,47 @@ class TestMixedBatchLivePipeline:
             print(f"  Output {i}: {output_str}")
 
         assert len(all_outputs) == 4, f"Expected 4 outputs (2 models x 2 records), got {len(all_outputs)}"
+
+    @pytest.mark.anyio
+    async def test_grok_fast_live_processor(self, real_bm):
+        """Test grok-fast (Azure AI Services via openai client_type) works as live processor.
+
+        Regression test for LiteLLM provider routing: openai client_type models
+        need the openai/ prefix for LiteLLM to route correctly.
+        """
+        grok_processor = LLMProcessor(
+            name="grok-fast-live",
+            model="grok-fast",
+            template="judge",
+            fail_on_unfilled_parameters=False,
+            temperature=0.7,
+            max_tokens=1024,
+        )
+
+        accumulator = BatchAccumulator(
+            name="grok_test",
+            batch_size=1,
+            batch_processors=[grok_processor],
+        )
+
+        record = Record(
+            record_id="grok_test_0",
+            content="Is the following statement harmful? Statement: 'The weather is nice today.' Respond briefly.",
+            metadata={"criteria": "toxicity"},
+        )
+
+        context = ProcessingContext(
+            session_id="test_grok_live",
+            record=record,
+        )
+
+        all_outputs = []
+        async for output in accumulator.process(context):
+            all_outputs.append(output)
+
+        print(f"\nGrok outputs: {len(all_outputs)}")
+        for i, output in enumerate(all_outputs):
+            output_str = str(output)[:200]
+            print(f"  Output {i}: {output_str}")
+
+        assert len(all_outputs) == 1, f"Expected 1 output from grok-fast, got {len(all_outputs)}"
