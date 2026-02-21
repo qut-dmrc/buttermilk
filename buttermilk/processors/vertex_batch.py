@@ -841,3 +841,259 @@ class VertexBatchProcessor(BatchLLMProcessor):
         )
 
         return output_records
+
+
+# =============================================================================
+# OpenAIBatchProcessor -- Azure OpenAI / OpenAI-specific subclass
+# =============================================================================
+
+
+class OpenAIBatchProcessor(BatchLLMProcessor):
+    """Batch processor using OpenAI / Azure OpenAI Batch API.
+
+    Extends BatchLLMProcessor with OpenAI-specific batch submission via
+    the OpenAI Batch API. Works with both direct OpenAI and Azure OpenAI.
+
+    Uses batch prediction for cost savings on large-scale evaluation.
+    Azure OpenAI requires a GlobalBatch deployment (not GlobalStandard).
+
+    Supports typed output via output_model, similar to VertexBatchProcessor.
+    When output_model is set, yields typed objects directly.
+    Otherwise, yields enriched BaseRecord objects.
+    """
+
+    dry_run: bool = Field(
+        default=False,
+        description="If True, prepare and log batch requests without submitting to API",
+    )
+
+    # OpenAI-specific internal components
+    _openai_client: Any = PrivateAttr(default=None)
+    _manager: Any = PrivateAttr(default=None)
+
+    def _ensure_openai_client(self) -> Any:
+        """Lazily initialize the OpenAI/AzureOpenAI client from buttermilk model registry."""
+        if self._openai_client is not None:
+            return self._openai_client
+
+        from buttermilk import bm
+
+        if self.model not in bm.llms.connections:
+            raise ValueError(
+                f"Model '{self.model}' not found in buttermilk LLM registry. "
+                f"Available models: {list(bm.llms.connections.keys())}"
+            )
+
+        config = bm.llms.connections[self.model]
+
+        if config.client_type.value not in ("azure", "openai"):
+            raise ValueError(
+                f"OpenAIBatchProcessor requires an OpenAI or Azure model, "
+                f"but '{self.model}' has client_type='{config.client_type.value}'"
+            )
+
+        if config.client_type.value == "azure":
+            from openai import AzureOpenAI
+
+            api_version = config.configs.get("api_version", "2024-12-01-preview")
+            self._openai_client = AzureOpenAI(
+                api_key=config.api_key,
+                azure_endpoint=config.base_url,
+                api_version=api_version,
+            )
+        else:
+            from openai import OpenAI
+
+            kwargs: dict[str, Any] = {}
+            if config.api_key:
+                kwargs["api_key"] = config.api_key
+            if config.base_url:
+                kwargs["base_url"] = config.base_url
+            self._openai_client = OpenAI(**kwargs)
+
+        return self._openai_client
+
+    def _ensure_manager(self) -> Any:
+        """Lazily initialize the OpenAIBatchJobManager."""
+        if self._manager is not None:
+            return self._manager
+
+        from buttermilk._core.vertex_batch import OpenAIBatchJobManager
+
+        from buttermilk import bm
+
+        client = self._ensure_openai_client()
+        config = bm.llms.connections[self.model]
+
+        # Azure uses /chat/completions, direct OpenAI uses /v1/chat/completions
+        endpoint = "/chat/completions" if config.client_type.value == "azure" else "/v1/chat/completions"
+
+        self._manager = OpenAIBatchJobManager(
+            client=client,
+            endpoint=endpoint,
+            poll_interval=self.poll_interval,
+            max_wait_hours=self.max_wait_hours,
+        )
+        return self._manager
+
+    def _get_batch_model_name(self) -> str:
+        """Resolve the actual deployment/model name for batch API requests.
+
+        For Azure, this is the deployment name (from configs.model or configs.deployment).
+        For direct OpenAI, this is the model name (e.g., "gpt-4o-mini").
+        """
+        from buttermilk import bm
+
+        if self.model in bm.llms.connections:
+            config = bm.llms.connections[self.model]
+            # Azure deployments use a specific deployment name
+            deployment = config.configs.get("deployment") or config.configs.get("model")
+            if deployment:
+                return deployment
+
+        return self.model
+
+    async def _process_batch(
+        self,
+        records: list[BaseRecord],
+    ) -> list[BaseRecord]:
+        """Process a batch of records through OpenAI/Azure OpenAI Batch API.
+
+        Args:
+            records: List of BaseRecord objects to process
+
+        Returns:
+            List of processed BaseRecord objects with LLM outputs
+        """
+        if not records:
+            return []
+
+        start_time = time.time()
+
+        # Prepare batch requests (handles dynamic model resolution per record)
+        requests = self.prepare_batch_requests(records)
+
+        # Dry-run mode: log prepared requests and return placeholder records
+        if self.dry_run:
+            return self._handle_dry_run(records, requests)
+
+        manager = self._ensure_manager()
+        batch_model = self._get_batch_model_name()
+
+        logger.info(
+            f"OpenAIBatchProcessor submitting {len(requests)} requests",
+            model=self.model,
+            batch_model=batch_model,
+            wait_for_completion=self.wait_for_completion,
+        )
+
+        # Submit the batch
+        resolved_max_tokens = self._get_resolved_max_tokens()
+
+        if self.wait_for_completion:
+            # Blocking: submit, wait, download results
+            try:
+                results = await manager.run_batch_and_wait(
+                    model=batch_model,
+                    requests=requests,
+                    metadata={"processor": "OpenAIBatchProcessor", "buttermilk_model": self.model},
+                    max_tokens=resolved_max_tokens,
+                )
+            except (TimeoutError, RuntimeError) as e:
+                logger.error(f"OpenAI batch job failed: {e}")
+                return self._create_error_records(records, str(e), "openai_batch_error", start_time)
+
+            # Map results back to records
+            output_records = await self._map_results_to_records(
+                records=records,
+                results=results,
+                batch_job_id="openai_batch",
+                start_time=start_time,
+            )
+        else:
+            # Non-blocking: submit and return pending records
+            try:
+                submit_result = await manager.submit_batch(
+                    model=batch_model,
+                    requests=requests,
+                    metadata={"processor": "OpenAIBatchProcessor", "buttermilk_model": self.model},
+                    max_tokens=resolved_max_tokens,
+                )
+                batch_job_id = submit_result.get("openai_batch_id", "unknown")
+            except Exception as e:
+                logger.error(f"OpenAI batch submission failed: {e}")
+                return self._create_error_records(records, str(e), "openai_batch_error", start_time)
+
+            output_records = self._create_pending_records(records, batch_job_id)
+
+        logger.info(
+            f"OpenAIBatchProcessor processed {len(records)} records",
+            model=self.model,
+            duration_ms=(time.time() - start_time) * 1000,
+        )
+
+        return output_records
+
+    def _handle_dry_run(
+        self,
+        records: list[BaseRecord],
+        requests: list[Any],
+    ) -> list[BaseRecord]:
+        """Handle dry-run mode: build JSONL without submitting.
+
+        Args:
+            records: Original input records
+            requests: Prepared batch requests
+
+        Returns:
+            Records with dry_run metadata
+        """
+        manager = self._ensure_manager()
+        batch_model = self._get_batch_model_name()
+        resolved_max_tokens = self._get_resolved_max_tokens()
+
+        jsonl_content = manager.build_jsonl(requests, batch_model, max_tokens=resolved_max_tokens)
+
+        logger.info(
+            f"[DRY RUN] OpenAI batch prepared with {len(requests)} requests",
+            model=self.model,
+            batch_model=batch_model,
+            record_count=len(records),
+        )
+
+        # Try to save to storage for inspection
+        dry_run_uri = None
+        try:
+            dry_run_job_id = f"openai_dry_run_{uuid.uuid4().hex[:12]}"
+            batch_dir = manager._resolve_batch_dir(dry_run_job_id)
+            input_uri = f"{batch_dir}/input.jsonl"
+
+            from buttermilk.utils.save import upload_text
+
+            dry_run_uri = upload_text(jsonl_content, uri=input_uri, content_type="application/jsonl")
+            logger.info(f"[DRY RUN] Batch file written to {dry_run_uri}")
+        except Exception as e:
+            logger.warning(f"[DRY RUN] Could not save batch file to storage: {e}")
+
+        # Log sample requests
+        for i, req in enumerate(requests[:5]):
+            logger.debug(
+                f"[DRY RUN] Request {i + 1}/{len(requests)}",
+                record_id=req.record_id,
+                custom_id=req.custom_id,
+                message_count=len(req.messages) if req.messages else 0,
+            )
+
+        # Return records with dry_run metadata
+        output_records = []
+        for record in records:
+            updated_metadata = record.metadata.copy() if record.metadata else {}
+            updated_metadata["dry_run"] = True
+            updated_metadata["batch_status"] = "dry_run"
+            updated_metadata["model"] = self.model
+            updated_metadata["template"] = self.template
+            if dry_run_uri:
+                updated_metadata["dry_run_uri"] = dry_run_uri
+            output_records.append(record.model_copy(update={"metadata": updated_metadata}))
+
+        return output_records
