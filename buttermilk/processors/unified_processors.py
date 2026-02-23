@@ -73,14 +73,12 @@ class LLMProcessor(ProcessorCore):
         )
 
     def _resolve_field(self, field_name: str, context: ProcessingContext) -> Any:
-        """Resolve a configuration field, checking context.variant_params first.
+        """Resolve a configuration field, checking variant params first.
 
         Resolution order:
-        1. context.variant_params[field_name] (from ParameterExpansionProcessor)
+        1. context.variant_params[field_name] (promoted from record metadata
+           by the pipeline orchestrator, or set by BatchAccumulator)
         2. self[field_name] (configured default)
-
-        This enables LLMProcessor to work inside BatchAccumulator with
-        ParameterExpansionProcessor, using the same pattern as VertexBatchProcessor.
         """
         if context.variant_params and field_name in context.variant_params:
             return context.variant_params[field_name]
@@ -103,6 +101,8 @@ class LLMProcessor(ProcessorCore):
         Raises:
             ProcessingError: If LLM processing fails
         """
+        start_time = time.time()
+
         # Safely get record_id for typed objects
         record_id = getattr(context.record, "record_id", None) or str(type(context.record).__name__)
 
@@ -142,27 +142,93 @@ class LLMProcessor(ProcessorCore):
                 fail_on_unfilled_parameters=self.fail_on_unfilled_parameters,
             )
 
-        # Use LLMCore.process_with_llm() for LLM inference
-        llm_result = await llm_core.process_with_llm(
-            template_vars=template_vars,
-            record=context.record,
-            parent_trace_id=context.session_id,
-        )
+        # Processor stage name for trace emission
+        processor_stage = f"LLMProcessor/{resolved_model}"
 
-        # Check for errors
-        if llm_result.error:
-            from buttermilk._core.exceptions import ProcessingError
+        try:
+            # Use LLMCore.process_with_llm() for LLM inference
+            llm_result = await llm_core.process_with_llm(
+                template_vars=template_vars,
+                record=context.record,
+                parent_trace_id=context.session_id,
+            )
 
-            raise ProcessingError(f"LLM processing failed: {llm_result.error}")
+            # Check for errors
+            if llm_result.error:
+                raise ProcessingError(f"LLM processing failed: {llm_result.error}")
 
-        logger.debug(
-            "LLMProcessor yielding output",
-            record_id=record_id,
-            output_type=type(llm_result.content).__name__,
-        )
+            logger.debug(
+                "LLMProcessor yielding output",
+                record_id=record_id,
+                output_type=type(llm_result.content).__name__,
+            )
 
-        # Yield the LLM output directly (typed or string)
-        yield llm_result.content
+            # Emit execution trace to BigQuery for observability
+            duration_ms = (time.time() - start_time) * 1000
+
+            # Build metadata with model config for complete traceability
+            model_configs = {}
+            try:
+                if resolved_model in bm.llms.connections:
+                    llm_config = bm.llms.connections[resolved_model]
+                    model_configs = llm_config.configs.copy() if llm_config.configs else {}
+            except RuntimeError:
+                pass  # BM not initialized (unit tests) — model_configs stays empty
+
+            extra_metadata = {
+                **llm_result.metadata,
+                "llm_config": {
+                    "model": resolved_model,
+                    "template": resolved_template,
+                    **model_configs,
+                },
+            }
+
+            await self._emit_success_trace(
+                record=context.record,
+                outputs=llm_result.content,
+                processor_stage=processor_stage,
+                parent_trace_id=context.session_id,
+                duration_ms=duration_ms,
+                messages=llm_result.messages,
+                inputs=llm_result.resolved_inputs if llm_result.resolved_inputs else template_vars,
+                extra_metadata=extra_metadata,
+                execution_type="llm_processing",
+                trace_id=llm_result.trace_id,
+                component_name=f"LLMProcessor({resolved_model})",
+            )
+
+            # Enrich original record with LLM output in metadata
+            # (matches GroupchatProcessor pattern — preserves full execution context)
+            enriched_metadata = {
+                **(context.record.metadata if context.record.metadata else {}),
+                "llm_output": {
+                    "content": llm_result.content,
+                    "model": resolved_model,
+                    "template": resolved_template,
+                    "trace_id": llm_result.trace_id,
+                },
+            }
+
+            yield context.record.model_copy(update={"metadata": enriched_metadata})
+
+        except ProcessingError:
+            # Emit error trace for observability
+            duration_ms = (time.time() - start_time) * 1000
+            import sys
+
+            error = sys.exc_info()[1]
+            await self._emit_error_trace(
+                record=context.record,
+                error=error,
+                processor_stage=processor_stage,
+                parent_trace_id=context.session_id,
+                duration_ms=duration_ms,
+                inputs=template_vars,
+                execution_type="llm_processing",
+                component_name=f"LLMProcessor({resolved_model})",
+            )
+            raise
 
 
 class GroupchatProcessor(ProcessorCore):

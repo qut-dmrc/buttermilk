@@ -89,10 +89,11 @@ class TestLLMProcessorProtocol:
         """Verify LLMProcessor class can be imported."""
         assert LLMProcessor is not None
 
-    def test_llm_processor_inherits_from_unified_processor(self):
-        """Verify LLMProcessor inherits from UnifiedProcessor."""
-        # LLMProcessor should inherit from UnifiedProcessor
-        assert issubclass(LLMProcessor, UnifiedProcessor)
+    def test_llm_processor_inherits_from_processor_core(self):
+        """Verify LLMProcessor inherits from ProcessorCore."""
+        from buttermilk._core.processor_core import ProcessorCore
+
+        assert issubclass(LLMProcessor, ProcessorCore)
 
     def test_llm_processor_implements_processor_protocol(self):
         """Verify LLMProcessor implements the Processor protocol."""
@@ -155,7 +156,7 @@ class TestLLMProcessorProcessing:
         )
         mock_bm.llms.get_autogen_chat_client.return_value = mock_client
 
-        with patch("buttermilk._core.llm_core.bm", mock_bm):
+        with patch("buttermilk._core.llm_core.bm", mock_bm), patch("buttermilk.processors.unified_processors.bm", mock_bm):
             # Process the record
             outputs = []
             async for output in processor.process(context):
@@ -169,7 +170,8 @@ class TestLLMProcessorProcessing:
             assert output_record.record_id == "llm-001"
 
             # Verify LLM output is in the configured output column (default "llm_output")
-            assert hasattr(output_record, "llm_output") or "llm_output" in output_record.metadata
+            assert "llm_output" in output_record.metadata
+            assert output_record.metadata["llm_output"]["content"] == "LLM generated response"
 
     @pytest.mark.anyio
     async def test_llm_processor_uses_template(self):
@@ -202,7 +204,7 @@ class TestLLMProcessorProcessing:
         )
         mock_bm.llms.get_autogen_chat_client.return_value = mock_client
 
-        with patch("buttermilk._core.llm_core.bm", mock_bm):
+        with patch("buttermilk._core.llm_core.bm", mock_bm), patch("buttermilk.processors.unified_processors.bm", mock_bm):
             outputs = []
             async for output in processor.process(context):
                 outputs.append(output)
@@ -247,7 +249,7 @@ class TestLLMProcessorProcessing:
         )
         mock_bm.llms.get_autogen_chat_client.return_value = mock_client
 
-        with patch("buttermilk._core.llm_core.bm", mock_bm):
+        with patch("buttermilk._core.llm_core.bm", mock_bm), patch("buttermilk.processors.unified_processors.bm", mock_bm):
             outputs = []
             async for output in processor.process(context):
                 outputs.append(output)
@@ -256,9 +258,9 @@ class TestLLMProcessorProcessing:
             output_record = outputs[0]
 
             # Verify metadata contains LLM execution info
-            # Metadata structure should follow LLMCore patterns
-            assert "metadata" in output_record.model_dump()
-            # Should have usage, model, finish_reason, etc.
+            assert "llm_output" in output_record.metadata
+            assert output_record.metadata["llm_output"]["model"] == "gpt-4"
+            assert output_record.metadata["llm_output"]["template"] == "test/simple"
 
     @pytest.mark.anyio
     async def test_llm_processor_with_input_variables(self):
@@ -291,7 +293,7 @@ class TestLLMProcessorProcessing:
         )
         mock_bm.llms.get_autogen_chat_client.return_value = mock_client
 
-        with patch("buttermilk._core.llm_core.bm", mock_bm):
+        with patch("buttermilk._core.llm_core.bm", mock_bm), patch("buttermilk.processors.unified_processors.bm", mock_bm):
             outputs = []
             async for output in processor.process(context):
                 outputs.append(output)
@@ -342,7 +344,7 @@ class TestLLMProcessorIntegration:
         )
         mock_bm.llms.get_autogen_chat_client.return_value = mock_client
 
-        with patch("buttermilk._core.llm_core.bm", mock_bm):
+        with patch("buttermilk._core.llm_core.bm", mock_bm), patch("buttermilk.processors.unified_processors.bm", mock_bm):
             # Process the record
             outputs = []
             async for output in processor.process(context):
@@ -359,7 +361,9 @@ class TestLLMProcessorIntegration:
             assert output_record.metadata["source"] == "test"
 
             # Verify LLM output was added
-            # (Exact structure depends on implementation, but output should exist)
+            assert "llm_output" in output_record.metadata
+            assert output_record.metadata["llm_output"]["content"] == "Processed output from LLM"
+            assert output_record.metadata["llm_output"]["model"] == "gpt-4"
 
     @pytest.mark.anyio
     async def test_llm_processor_with_structured_output(self):
@@ -400,12 +404,15 @@ class TestLLMProcessorIntegration:
         )
         mock_bm.llms.get_autogen_chat_client.return_value = mock_client
 
-        with patch("buttermilk._core.llm_core.bm", mock_bm):
+        with patch("buttermilk._core.llm_core.bm", mock_bm), patch("buttermilk.processors.unified_processors.bm", mock_bm):
             outputs = []
             async for output in processor.process(context):
                 outputs.append(output)
 
             assert len(outputs) == 1
+            output_record = outputs[0]
 
-            # Structured output handling will depend on implementation
-            # This test validates the processor can handle ModelOutput
+            # Structured output is stored in metadata.llm_output.content
+            assert "llm_output" in output_record.metadata
+            # Original record fields preserved
+            assert output_record.record_id == "structured-001"

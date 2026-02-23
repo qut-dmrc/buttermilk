@@ -393,12 +393,20 @@ class PipelineOrchestrator(BaseModel):
                                 # This links processor operations back to their source records
                                 parent_trace_id = getattr(current_record, "parent_call_id", None)
 
+                                # Extract variant_params from record metadata (set by ParameterExpansionProcessor)
+                                # and promote them to ProcessingContext so downstream processors
+                                # access them via context.variant_params (not record.metadata)
+                                variant_params = {}
+                                if hasattr(current_record, "metadata") and isinstance(current_record.metadata, dict):
+                                    variant_params = current_record.metadata.get("_variant_params", {})
+
                                 # All processors now use unified ProcessingContext interface
                                 context = ProcessingContext(
                                     session_id=parent_trace_id or processor_stage_name,
                                     record=current_record,
                                     batch_id=self.pipeline_name,
                                     span=processor_span,
+                                    variant_params=variant_params,
                                 )
                                 async for output_record in processor.process(context):
                                     outputs.append(output_record)

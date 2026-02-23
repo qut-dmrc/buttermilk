@@ -256,7 +256,7 @@ def _get_session_info() -> Any:
         from buttermilk import bm
 
         return bm.session_info
-    except ImportError:
+    except (ImportError, RuntimeError):
         logger.warning("Buttermilk global instance (bm) not available to get session_info.")
         return None
     except AttributeError:
@@ -284,7 +284,7 @@ def _get_session_id() -> str:
 
         if hasattr(bm, "session_info") and bm.session_info and hasattr(bm.session_info, "session_id"):
             return bm.session_info.session_id
-    except (ImportError, AttributeError):
+    except (ImportError, AttributeError, RuntimeError):
         pass
 
     # Last resort: generate a default session ID
