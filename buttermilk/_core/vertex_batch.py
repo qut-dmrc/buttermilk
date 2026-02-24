@@ -759,7 +759,7 @@ class BatchJobManager(BaseModel):
         # First, resolve short alias to full model name if it exists in the registry
         resolved_model = self._resolve_model_alias(model)
 
-        if "claude" in resolved_model.lower() or "anthropic" in resolved_model.lower():
+        if _is_claude_model(resolved_model):
             # Claude models use publisher path
             claude_map = {
                 "claude-sonnet-4": "publishers/anthropic/models/claude-sonnet-4",
