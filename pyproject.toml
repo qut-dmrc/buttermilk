@@ -11,13 +11,13 @@ dependencies = [
   # Core framework - configuration, logging, types
   "pydantic>=2.8.2,<3.0.0",
   "hydra-core>=1.3.2,<2.0.0",
-  "structlog>=24.1.0,<25.0.0",
+  "structlog>=24.1.0",
   "pyyaml>=6.0.2,<7.0.0",
   "python-dotenv>=1.1.1",
   # Essential utilities
   "shortuuid>=1.0.13,<2.0.0",
   "psutil>=5.9.5,<6.0.0",
-  "httpx>=0.27.2,<1.0.0",
+  "httpx>=0.27.2,<2.0.0",
   "requests>=2.32.3,<3.0.0",
   "rich>=13.9.4,<14.0.0",
   "anyio>=4.7.0,<5.0.0",
@@ -30,12 +30,11 @@ dependencies = [
   # JSON/data handling
   "json-repair>=0.28.3,<1.0.0",
   "jsonschema>=4.0.0,<5.0.0",
-  "marshmallow==3.23.2",
+  "marshmallow>=3.23.2,<4.0.0",
   # File paths
   "cloudpathlib>=0.20.0,<1.0.0",
-  "pathlib>=1.0.1,<2.0.0",
   # Utilities
-  "regex>=2024.9.11,<2025.0.0",
+  "regex>=2024.9.11",
   "unidecode>=1.3.8,<2.0.0",
   "validators>=0.33.0,<1.0.0",
   "keyring>23.4.0",
@@ -71,7 +70,7 @@ dependencies = [
   "bleach>=6.2.0,<7.0.0",
   "urllib3>=2.2.2,<3.0.0",
   "pillow>=10.0.0",
-  "pdfminer-six==20240706",
+  "pdfminer-six>=20240706",
   "json5>=0.10.0",
   "jq>=1.8.0,<2.0.0",
   "gql<4.0.0",
@@ -100,6 +99,7 @@ dependencies = [
   "aioconsole>=0.8.2",
   "langdetect>=1.0.9",
   "replicate>=0.34.2",
+  "matplotlib>=3.10.8",
 ]
 
 [project.optional-dependencies]
@@ -116,7 +116,6 @@ ml = [
   "azure-ai-inference>=1.0.0b9",
   "azure-ai-ml==1.18.0",
   "azure-monitor-opentelemetry-exporter==1.0.0b41",
-  "buttermilk[azure]",
   "replicate>=0.32.1,<1.0.0",
   "torch>=2.5.1,<3.0.0",
   "scipy>=1.15.3",
@@ -153,8 +152,8 @@ dev = [
   "pyzotero>=1.6.11",
   "themoviedb>=1.0.2",
   # Data tools
-  "fsspec>=2024.6.1,<2025.0.0",
-  "gcsfs>=2024.6.1,<2025.0.0",
+  "fsspec>=2024.6.1",
+  "gcsfs>=2024.6.1",
   "pandas-stubs>=2.2.3.241126",
   "openpyxl>=3.1.5,<4.0.0",
   # Visualization
