@@ -128,6 +128,9 @@ _CLAUDE_MODEL_PATTERNS = ("claude", "anthropic")
 # Model name patterns that indicate OpenAI/GPT models
 _OPENAI_MODEL_PATTERNS = ("gpt",)
 
+# Model name patterns that indicate Llama/Meta models
+_LLAMA_MODEL_PATTERNS = ("llama", "meta")
+
 
 class BatchMessageConverter(ABC):
     """Abstract base for converting LiteLLM messages to provider-specific batch format."""
@@ -391,6 +394,12 @@ def _is_claude_model(model: str) -> bool:
     model_lower = model.lower()
     return any(pattern in model_lower for pattern in _CLAUDE_MODEL_PATTERNS)
 
+
+
+def _is_llama_model(model: str) -> bool:
+    """Check if model identifier indicates a Llama/Meta model."""
+    model_lower = model.lower()
+    return any(pattern in model_lower for pattern in _LLAMA_MODEL_PATTERNS)
 
 def _is_openai_model(model: str) -> bool:
     """Check if model identifier indicates an OpenAI/GPT model."""
