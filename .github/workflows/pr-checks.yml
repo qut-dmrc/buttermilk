@@ -26,7 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
@@ -61,8 +61,11 @@ jobs:
           uv run ruff format
 
       - name: Commit and push fixes
-        if: steps.lint-initial.outcome == 'failure' || steps.format-initial.outcome == 'failure'
+        if: |
+          (steps.lint-initial.outcome == 'failure' || steps.format-initial.outcome == 'failure') &&
+          github.event.pull_request.head.repo.full_name == github.repository
         run: |
+          git checkout -B ${{ github.event.pull_request.head.ref }}
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
@@ -70,7 +73,7 @@ jobs:
             echo "No formatting changes to commit"
           else
             git commit -m "style: autofix lint and formatting"
-            git push
+            git push origin ${{ github.event.pull_request.head.ref }}
           fi
 
       # Final gate: re-check after fixes (or confirm clean on first pass)
@@ -92,6 +95,7 @@ jobs:
     with:
       pr_number: ${{ github.event.pull_request.number }}
       head_ref: ${{ github.event.pull_request.head.ref }}
+      head_sha: ${{ github.event.pull_request.head.sha }}
     secrets: inherit
 
   # ──────────────────────────────────────────────
@@ -104,7 +108,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -132,7 +136,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v5

@@ -12,6 +12,10 @@ on:
       head_ref:
         required: true
         type: string
+      head_sha:
+        required: false
+        type: string
+        default: ''
 
 jobs:
   gatekeeper:
@@ -30,7 +34,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ inputs.head_ref }}
+          ref: ${{ inputs.head_sha || inputs.head_ref }}
 
       - name: Read gatekeeper instructions
         id: gatekeeper-prompt
