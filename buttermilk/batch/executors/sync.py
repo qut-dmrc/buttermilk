@@ -19,10 +19,7 @@ class SyncBatchExecutor(BatchExecutor):
         processor.process_batch(), which expects contexts.
         """
         try:
-            contexts = [
-                ProcessingContext(session_id="sync_batch", record=record)
-                for record in records
-            ]
+            contexts = [ProcessingContext(session_id="sync_batch", record=record) for record in records]
             output_records = await processor.process_batch(contexts)
             return BatchExecutionResult(status=BatchJobStatus.COMPLETED, output_records=output_records, processed_count=len(output_records))
         except Exception as e:
