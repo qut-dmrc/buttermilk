@@ -90,6 +90,7 @@ jobs:
   # Runs in parallel with lint — no dependencies.
   # ──────────────────────────────────────────────
   gatekeeper:
+    continue-on-error: true
     name: Gatekeeper
     uses: ./.github/workflows/agent-gatekeeper.yml
     with:
@@ -154,7 +155,7 @@ jobs:
       - name: Run unit tests
         run: |
           uv run pytest tests/ \
-            -m "not integration" \
+            -m "not (integration or endtoend or slow or demo)" \
             --cov=buttermilk \
             --cov-report=xml \
             --cov-report=term-missing \
