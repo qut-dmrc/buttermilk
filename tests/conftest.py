@@ -55,6 +55,10 @@ def pytest_collection_modifyitems(items):
             item.add_marker(pytest.mark.demo)
         if "integration" in p.parts:
             item.add_marker(pytest.mark.integration)
+        # Tests using real_bm fixture (or fixtures depending on it) require
+        # GCP credentials and real infrastructure — mark as integration.
+        if "real_bm" in getattr(item, "fixturenames", ()):
+            item.add_marker(pytest.mark.integration)
 
 
 # Session-scoped anyio_backend fixture ensures:
