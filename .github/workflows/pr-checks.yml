@@ -153,8 +153,11 @@ jobs:
         run: uv sync --extra dev
 
       - name: Run unit tests
+        env:
+          ZOTERO_LIBRARY_ID: "0"
         run: |
           uv run pytest tests/ \
+            --ignore=tests/endtoend \
             -m "not (integration or endtoend or slow or demo)" \
             --cov=buttermilk \
             --cov-report=xml \
