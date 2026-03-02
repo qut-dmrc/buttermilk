@@ -154,9 +154,9 @@ def convert_enum_values_to_strings(obj: Any) -> Any:
             else:
                 new_obj[k] = convert_enum_values_to_strings(v)
 
-        # If we have an enum, ensure type is string if it was integer or number
+        # If we have an enum, ensure type is string if it was integer
         if "enum" in new_obj:
-            if new_obj.get("type") in ("integer", "number"):
+            if new_obj.get("type") == "integer":
                 new_obj["type"] = "string"
 
         return new_obj

@@ -45,7 +45,10 @@ class VertexBatchExecutor(BatchExecutor):
         # 2. Prepare Requests
         try:
             # Wrap bare records in minimal contexts for prepare_batch_requests
-            contexts = [ProcessingContext(session_id="vertex_batch", record=record) for record in records]
+            contexts = [
+                ProcessingContext(session_id="vertex_batch", record=record)
+                for record in records
+            ]
             # Duck typing: Assume method exists and returns list[BatchRequest]
             requests = processor.prepare_batch_requests(contexts)  # type: ignore
 

@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from google.genai.types import BatchJob, JobState
 
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.processor_core import BatchProcessorCore
 from buttermilk._core.types import BaseRecord
 from buttermilk.batch.executors.vertex import BatchExecutionResult, BatchJobStatus, VertexBatchExecutor

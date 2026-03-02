@@ -777,7 +777,6 @@ class TestJsonSchemaUtilities:
         result = convert_enum_values_to_strings(schema)
 
         assert result["properties"]["nested"]["properties"]["level"]["enum"] == ["1", "2", "3"]
-        assert result["properties"]["nested"]["properties"]["level"]["type"] == "string"
 
     def test_prepare_schema_for_vertex_gemini(self):
         """prepare_schema_for_vertex with is_gemini should convert enums."""

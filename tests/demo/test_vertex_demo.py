@@ -182,7 +182,6 @@ class TestVertexBatchProcessorDemo:
         # ==== PROCESSING ====
         print("\n🔄 Processing batch...")
         from buttermilk._core.processing_context import ProcessingContext
-
         ctx = ProcessingContext(session_id="demo", record=record)
         results = await processor.process_batch([ctx])
 

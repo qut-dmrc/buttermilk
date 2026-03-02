@@ -395,11 +395,11 @@ def _is_claude_model(model: str) -> bool:
     return any(pattern in model_lower for pattern in _CLAUDE_MODEL_PATTERNS)
 
 
+
 def _is_llama_model(model: str) -> bool:
     """Check if model identifier indicates a Llama/Meta model."""
     model_lower = model.lower()
     return any(pattern in model_lower for pattern in _LLAMA_MODEL_PATTERNS)
-
 
 def _is_openai_model(model: str) -> bool:
     """Check if model identifier indicates an OpenAI/GPT model."""
