@@ -15,25 +15,20 @@ def run_git(args: list[str]) -> Optional[str]:
     try:
         return subprocess.check_output(["git"] + args, stderr=subprocess.PIPE).decode().strip()
     except subprocess.CalledProcessError as e:
-        # If git describe fails, we handle this gracefully
-        if "No names found" in e.stderr.decode():
+        stderr = e.stderr.decode(errors="replace") if e.stderr is not None else ""
+        # Only treat known "no tags" / "no exact match" errors as non-fatal.
+        if "No names found" in stderr or "no tag exactly matches" in stderr:
             return None
-        # Handle detached head or other scenarios if needed
-        return None
+        # For all other git errors, re-raise so CI fails loudly instead of tagging from a bad state.
+        raise
 
 def get_latest_tag() -> Optional[str]:
     """Get the latest tag from git."""
-    try:
-        return run_git(["describe", "--tags", "--abbrev=0"])
-    except Exception:
-        return None
+    return run_git(["describe", "--tags", "--abbrev=0"])
 
 def is_current_commit_tagged() -> Optional[str]:
     """Check if the current commit is already tagged."""
-    try:
-        return run_git(["describe", "--tags", "--exact-match"])
-    except Exception:
-        return None
+    return run_git(["describe", "--tags", "--exact-match"])
 
 def bump_version(current_ver: Version, branch: str) -> str:
     """Calculate the next version based on branch."""
@@ -88,8 +83,8 @@ def main():
             print(f"Error: Latest tag '{latest_tag}' is not a valid version.")
             sys.exit(1)
     else:
-        print("No tags found. Starting at 0.0.0")
-        current_ver = Version("0.0.0")
+        print("No tags found. Starting at 0.6.1")
+        current_ver = Version("0.6.1")
 
     try:
         new_ver_str = bump_version(current_ver, branch)
