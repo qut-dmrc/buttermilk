@@ -1,3 +1,4 @@
+import importlib.metadata
 from typing import TYPE_CHECKING
 
 import structlog
@@ -25,6 +26,11 @@ from ._core.constants import (
 
 tracer = trace.get_tracer(_TRACER_NAME)
 logger = structlog.get_logger(_LOGGER_NAME)
+
+try:
+    __version__ = importlib.metadata.version("buttermilk")
+except importlib.metadata.PackageNotFoundError:
+    __version__ = "unknown"
 
 
 class BMAccessor:
@@ -160,6 +166,7 @@ __all__ = [
     "stdout_redirected_to_stderr",
     "stdout_suppressed",
     "suppress_stdout_completely",
+    "__version__",
 ]
 
 # Replace the placeholder BM with the real class now that all imports are complete
