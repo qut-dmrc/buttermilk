@@ -40,7 +40,7 @@ jobs:
           version: "latest"
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --extra dev
 
       # Initial check: identify problems but don't fail the job yet
       - name: Ruff lint (initial)
@@ -121,7 +121,7 @@ jobs:
           version: "latest"
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --extra dev
 
       - name: Run mypy
         run: uv run mypy buttermilk --ignore-missing-imports
@@ -149,7 +149,7 @@ jobs:
           version: "latest"
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --extra dev
 
       - name: Run unit tests
         run: |

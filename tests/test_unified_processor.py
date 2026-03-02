@@ -1135,10 +1135,7 @@ class TestBatchProcessor:
         # Batch processor: tags records with "batch"
         class MockBatchProcessor(ObservabilityMixin):
             async def process_batch(self, contexts: list[ProcessingContext]) -> list[BaseRecord]:
-                return [
-                    ctx.record.model_copy(update={"metadata": {**ctx.record.metadata, "source": "batch"}})
-                    for ctx in contexts
-                ]
+                return [ctx.record.model_copy(update={"metadata": {**ctx.record.metadata, "source": "batch"}}) for ctx in contexts]
 
         # Live processor: tags records with "live"
         class MockLiveProcessor(ProcessorCore):
@@ -1185,7 +1182,6 @@ class TestBatchProcessor:
     async def test_batch_accumulator_live_processor_error_continues(self):
         """Verify live processor errors don't block other processors in fan-out."""
         from buttermilk._core.processor_core import ObservabilityMixin
-        from buttermilk.pipeline import RecordBufferedException
         from buttermilk.processors.batch_accumulator import BatchAccumulator
 
         # This live processor always fails
