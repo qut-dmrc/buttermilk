@@ -1,14 +1,15 @@
-import os
 import argparse
+import os
 import subprocess
 import sys
 from typing import Optional
 
 try:
-    from packaging.version import Version, InvalidVersion
+    from packaging.version import InvalidVersion, Version
 except ImportError:
     print("Error: 'packaging' library not found. Install it with 'pip install packaging'.")
     sys.exit(1)
+
 
 def run_git(args: list[str]) -> Optional[str]:
     """Run a git command and return the output."""
@@ -22,13 +23,16 @@ def run_git(args: list[str]) -> Optional[str]:
         # For all other git errors, re-raise so CI fails loudly instead of tagging from a bad state.
         raise
 
+
 def get_latest_tag() -> Optional[str]:
     """Get the latest tag from git."""
     return run_git(["describe", "--tags", "--abbrev=0"])
 
+
 def is_current_commit_tagged() -> Optional[str]:
     """Check if the current commit is already tagged."""
     return run_git(["describe", "--tags", "--exact-match"])
+
 
 def bump_version(current_ver: Version, branch: str) -> str:
     """Calculate the next version based on branch."""
@@ -40,6 +44,7 @@ def bump_version(current_ver: Version, branch: str) -> str:
         return f"{current_ver.major}.{current_ver.minor}.{current_ver.micro + 1}"
     else:
         raise ValueError(f"Branch '{branch}' not configured for auto-bump.")
+
 
 def main():
     parser = argparse.ArgumentParser(description="Bump version based on branch.")
@@ -115,6 +120,7 @@ def main():
         except subprocess.CalledProcessError as e:
             print(f"Error creating/pushing tag: {e}")
             sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
