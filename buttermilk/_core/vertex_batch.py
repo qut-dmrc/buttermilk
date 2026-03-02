@@ -126,7 +126,10 @@ class BatchResult(BaseModel):
 _CLAUDE_MODEL_PATTERNS = ("claude", "anthropic")
 
 # Model name patterns that indicate OpenAI/GPT models
-_OPENAI_MODEL_PATTERNS = ("gpt",)
+_OPENAI_MODEL_PATTERNS = ("gpt", "grok")
+
+# Model name patterns that indicate Llama/Meta models (use OpenAI batch format on Vertex)
+_LLAMA_MODEL_PATTERNS = ("llama", "meta/")
 
 
 class BatchMessageConverter(ABC):
@@ -398,6 +401,12 @@ def _is_openai_model(model: str) -> bool:
     return any(pattern in model_lower for pattern in _OPENAI_MODEL_PATTERNS)
 
 
+def _is_llama_model(model: str) -> bool:
+    """Check if model identifier indicates a Llama/Meta model."""
+    model_lower = model.lower()
+    return any(pattern in model_lower for pattern in _LLAMA_MODEL_PATTERNS)
+
+
 def get_message_converter(model: str, **kwargs: Any) -> BatchMessageConverter:
     """Factory function to get the appropriate converter for a model.
 
@@ -410,7 +419,7 @@ def get_message_converter(model: str, **kwargs: Any) -> BatchMessageConverter:
     """
     if _is_claude_model(model):
         return ClaudeMessageConverter(max_tokens=kwargs.get("max_tokens"))
-    if _is_openai_model(model):
+    if _is_openai_model(model) or _is_llama_model(model):
         return OpenAIMessageConverter(max_tokens=kwargs.get("max_tokens"), model=model)
     return GeminiMessageConverter()
 
