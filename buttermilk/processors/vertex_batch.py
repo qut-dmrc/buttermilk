@@ -879,13 +879,17 @@ class OpenAIBatchProcessor(BatchLLMProcessor):
         from buttermilk import bm
 
         if self.model not in bm.llms.connections:
-            raise ValueError(f"Model '{self.model}' not found in buttermilk LLM registry. Available models: {list(bm.llms.connections.keys())}")
+            raise ValueError(
+                f"Model '{self.model}' not found in buttermilk LLM registry. "
+                f"Available models: {list(bm.llms.connections.keys())}"
+            )
 
         config = bm.llms.connections[self.model]
 
         if config.client_type.value not in ("azure", "openai"):
             raise ValueError(
-                f"OpenAIBatchProcessor requires an OpenAI or Azure model, but '{self.model}' has client_type='{config.client_type.value}'"
+                f"OpenAIBatchProcessor requires an OpenAI or Azure model, "
+                f"but '{self.model}' has client_type='{config.client_type.value}'"
             )
 
         if config.client_type.value == "azure":
@@ -914,8 +918,9 @@ class OpenAIBatchProcessor(BatchLLMProcessor):
         if self._manager is not None:
             return self._manager
 
-        from buttermilk import bm
         from buttermilk._core.vertex_batch import OpenAIBatchJobManager
+
+        from buttermilk import bm
 
         client = self._ensure_openai_client()
         config = bm.llms.connections[self.model]

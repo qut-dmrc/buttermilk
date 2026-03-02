@@ -1,38 +1,39 @@
-import argparse
 import os
+import argparse
 import subprocess
 import sys
 from typing import Optional
 
 try:
-    from packaging.version import InvalidVersion, Version
+    from packaging.version import Version, InvalidVersion
 except ImportError:
     print("Error: 'packaging' library not found. Install it with 'pip install packaging'.")
     sys.exit(1)
-
 
 def run_git(args: list[str]) -> Optional[str]:
     """Run a git command and return the output."""
     try:
         return subprocess.check_output(["git"] + args, stderr=subprocess.PIPE).decode().strip()
     except subprocess.CalledProcessError as e:
-        stderr = e.stderr.decode(errors="replace") if e.stderr is not None else ""
-        # Only treat known "no tags" / "no exact match" errors as non-fatal.
-        if "No names found" in stderr or "no tag exactly matches" in stderr:
+        # If git describe fails, we handle this gracefully
+        if "No names found" in e.stderr.decode():
             return None
-        # For all other git errors, re-raise so CI fails loudly instead of tagging from a bad state.
-        raise
-
+        # Handle detached head or other scenarios if needed
+        return None
 
 def get_latest_tag() -> Optional[str]:
     """Get the latest tag from git."""
-    return run_git(["describe", "--tags", "--abbrev=0"])
-
+    try:
+        return run_git(["describe", "--tags", "--abbrev=0"])
+    except Exception:
+        return None
 
 def is_current_commit_tagged() -> Optional[str]:
     """Check if the current commit is already tagged."""
-    return run_git(["describe", "--tags", "--exact-match"])
-
+    try:
+        return run_git(["describe", "--tags", "--exact-match"])
+    except Exception:
+        return None
 
 def bump_version(current_ver: Version, branch: str) -> str:
     """Calculate the next version based on branch."""
@@ -44,7 +45,6 @@ def bump_version(current_ver: Version, branch: str) -> str:
         return f"{current_ver.major}.{current_ver.minor}.{current_ver.micro + 1}"
     else:
         raise ValueError(f"Branch '{branch}' not configured for auto-bump.")
-
 
 def main():
     parser = argparse.ArgumentParser(description="Bump version based on branch.")
@@ -88,8 +88,8 @@ def main():
             print(f"Error: Latest tag '{latest_tag}' is not a valid version.")
             sys.exit(1)
     else:
-        print("No tags found. Starting at 0.6.1")
-        current_ver = Version("0.6.1")
+        print("No tags found. Starting at 0.0.0")
+        current_ver = Version("0.0.0")
 
     try:
         new_ver_str = bump_version(current_ver, branch)
@@ -120,7 +120,6 @@ def main():
         except subprocess.CalledProcessError as e:
             print(f"Error creating/pushing tag: {e}")
             sys.exit(1)
-
 
 if __name__ == "__main__":
     main()

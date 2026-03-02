@@ -182,6 +182,7 @@ requires = ["setuptools>=68", "wheel", "setuptools_scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
+fallback_version = "0.6.2"
 
 [tool.setuptools]
 
