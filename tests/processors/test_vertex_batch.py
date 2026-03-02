@@ -755,6 +755,7 @@ class TestJsonSchemaUtilities:
         result = convert_enum_values_to_strings(schema)
 
         assert result["properties"]["status"]["enum"] == ["0", "1", "2"]
+        assert result["properties"]["status"]["type"] == "string"
         assert result["properties"]["name"]["type"] == "string"
 
     def test_convert_enum_nested(self):

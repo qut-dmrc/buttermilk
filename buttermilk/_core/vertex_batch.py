@@ -131,6 +131,9 @@ _OPENAI_MODEL_PATTERNS = ("gpt", "grok")
 # Model name patterns that indicate Llama/Meta models (use OpenAI batch format on Vertex)
 _LLAMA_MODEL_PATTERNS = ("llama", "meta/")
 
+# Model name patterns that indicate Llama/Meta models
+_LLAMA_MODEL_PATTERNS = ("llama", "meta")
+
 
 class BatchMessageConverter(ABC):
     """Abstract base for converting LiteLLM messages to provider-specific batch format."""
@@ -393,6 +396,12 @@ def _is_claude_model(model: str) -> bool:
     """Check if model identifier indicates a Claude/Anthropic model."""
     model_lower = model.lower()
     return any(pattern in model_lower for pattern in _CLAUDE_MODEL_PATTERNS)
+
+
+def _is_llama_model(model: str) -> bool:
+    """Check if model identifier indicates a Llama/Meta model."""
+    model_lower = model.lower()
+    return any(pattern in model_lower for pattern in _LLAMA_MODEL_PATTERNS)
 
 
 def _is_openai_model(model: str) -> bool:

@@ -138,6 +138,7 @@ def convert_enum_values_to_strings(obj: Any) -> Any:
 
     Vertex AI requires enum values to be strings, not integers.
     This converts any integer values in enum arrays to their string representation.
+    Also updates 'type' to 'string' if it was 'integer' when an enum is present.
 
     Args:
         obj: JSON schema node to process
@@ -146,9 +147,19 @@ def convert_enum_values_to_strings(obj: Any) -> Any:
         Processed schema with string enum values
     """
     if isinstance(obj, dict):
-        return {
-            k: ([str(v) for v in val] if k == "enum" and isinstance(val, list) else convert_enum_values_to_strings(val)) for k, val in obj.items()
-        }
+        new_obj = {}
+        for k, v in obj.items():
+            if k == "enum" and isinstance(v, list):
+                new_obj[k] = [str(item) for item in v]
+            else:
+                new_obj[k] = convert_enum_values_to_strings(v)
+
+        # If we have an enum, ensure type is string if it was integer
+        if "enum" in new_obj:
+            if new_obj.get("type") == "integer":
+                new_obj["type"] = "string"
+
+        return new_obj
     elif isinstance(obj, list):
         return [convert_enum_values_to_strings(item) for item in obj]
     return obj
