@@ -11,6 +11,7 @@ from .embeddings import EmbeddingGenerator
 from .jmespath_transform import JMESPathTransform
 from .parallel import ParallelProcessor
 from .unified_processors import GroupchatProcessor, LLMProcessor, ParameterExpansionProcessor
+from .variant_batch import VariantBatchProcessor
 from .variants import VariantProcessor
 from .vertex_batch import BatchLLMProcessor, OpenAIBatchProcessor, VertexBatchProcessor
 
@@ -25,6 +26,7 @@ __all__ = [
     "OpenAIBatchProcessor",
     "ParallelProcessor",
     "ParameterExpansionProcessor",
+    "VariantBatchProcessor",
     "VariantProcessor",
     "VertexBatchProcessor",
 ]

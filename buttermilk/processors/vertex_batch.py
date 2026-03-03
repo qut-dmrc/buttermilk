@@ -46,7 +46,7 @@ from buttermilk._core.exceptions import FatalError
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.processor_core import BatchProcessorCore
 from buttermilk._core.types import BaseRecord
-from buttermilk._core.vertex_batch import BatchResult
+from buttermilk._core.vertex_batch import BatchJobManager, BatchResult, OpenAIBatchJobManager
 from buttermilk.utils.import_utils import load_class
 from buttermilk.utils.templating import make_messages, render_template
 
@@ -115,6 +115,8 @@ class BatchLLMProcessor(BatchProcessorCore):
 
     _output_class: type[BaseModel] | None = PrivateAttr(default=None)
     _output_schema: dict[str, Any] | None = PrivateAttr(default=None)
+    _client: Any = PrivateAttr(default=None)
+    _manager: BatchJobManager | OpenAIBatchJobManager | None = PrivateAttr(default=None)
 
     def model_post_init(self, __context: Any) -> None:
         """Initialize after Pydantic initialization."""
@@ -190,6 +192,135 @@ class BatchLLMProcessor(BatchProcessorCore):
 
         # Default fallback
         return 4096
+
+    def _get_resolved_region(self) -> str | None:
+        """Resolve region from model registry config.
+
+        Returns:
+            Region string from model config, or None if not configured.
+        """
+        from buttermilk import bm
+
+        if self.model in bm.llms.connections:
+            config = bm.llms.connections[self.model]
+            return config.configs.get("region")
+
+        return None
+
+    def _ensure_client(self) -> None:
+        """Lazily initialize the LLM client via buttermilk infrastructure."""
+        if self._client is None:
+            from buttermilk import bm
+
+            # Use buttermilk's LLM infrastructure for proper model routing
+            self._client = bm.llms[self.model]
+
+    def _ensure_manager(self) -> BatchJobManager | OpenAIBatchJobManager:
+        """Lazily initialize the batch job manager via buttermilk infrastructure.
+
+        Routes to the appropriate manager based on client_type from model registry:
+        - azure, openai -> OpenAIBatchJobManager (OpenAI Batch API)
+        - Everything else -> BatchJobManager (Vertex AI Batch API)
+        """
+        if self._manager is None:
+            from buttermilk import bm
+
+            # Check client_type from model registry for routing
+            config = bm.llms.connections.get(self.model)
+            client_type = config.client_type.value if config else None
+
+            if client_type in ("azure", "openai"):
+                self._manager = self._create_openai_manager(config)
+            else:
+                self._manager = self._create_vertex_manager(config)
+
+        return self._manager
+
+    def _create_vertex_manager(self, config: Any = None) -> BatchJobManager:
+        """Create a Vertex AI BatchJobManager.
+
+        Args:
+            config: Model connection config from buttermilk registry
+
+        Returns:
+            Configured BatchJobManager instance
+        """
+        from google import genai
+
+        from buttermilk import bm
+
+        resolved_model = self.model
+        resolved_region = self._get_resolved_region()
+
+        if config and "model" in config.configs:
+            resolved_model = config.configs["model"]
+
+        # Gemini 3 models require the global endpoint
+        if "gemini-3" in resolved_model.lower():
+            project_id = bm.cloud_manager.gcp_cloud_cfg.project_id
+            client = genai.Client(
+                vertexai=True,
+                project=project_id,
+                location="global",
+            )
+            logger.info(f"Using global endpoint for Gemini 3 model: {self.model} -> {resolved_model}")
+        elif resolved_region:
+            project_id = bm.cloud_manager.gcp_cloud_cfg.project_id
+            client = genai.Client(
+                vertexai=True,
+                project=project_id,
+                location=resolved_region,
+            )
+            logger.info(f"Using region {resolved_region} for model: {self.model}")
+        else:
+            client = bm.genai
+
+        return BatchJobManager(
+            client=client,
+            poll_interval=self.poll_interval,
+            max_wait_hours=self.max_wait_hours,
+        )
+
+    def _create_openai_manager(self, config: Any) -> OpenAIBatchJobManager:
+        """Create an OpenAI BatchJobManager for Azure/OpenAI models.
+
+        Args:
+            config: Model connection config from buttermilk registry
+
+        Returns:
+            Configured OpenAIBatchJobManager instance
+        """
+        client_type = config.client_type.value
+
+        if client_type == "azure":
+            from openai import AzureOpenAI
+
+            client = AzureOpenAI(
+                api_key=config.api_key,
+                azure_endpoint=config.configs.get("base_url", ""),
+                api_version=config.configs.get("api_version", "2025-03-01-preview"),
+            )
+            endpoint = "/chat/completions"
+        else:
+            from openai import OpenAI
+
+            client = OpenAI(
+                api_key=config.api_key,
+                base_url=config.configs.get("base_url"),
+            )
+            endpoint = "/v1/chat/completions"
+
+        logger.info(
+            f"Using OpenAI Batch API for model: {self.model} (client_type={client_type})",
+        )
+
+        return OpenAIBatchJobManager(
+            client=client,
+            endpoint=endpoint,
+            poll_interval=self.poll_interval,
+            max_wait_hours=self.max_wait_hours,
+        )
+
 
     def prepare_batch_requests(
         self,
@@ -342,6 +473,7 @@ class BatchLLMProcessor(BatchProcessorCore):
             f"with prepare_batch_requests() instead, or use VertexBatchProcessor "
             f"for direct Vertex AI batch submission."
         )
+
 
     def _create_pending_records(
         self,
@@ -765,7 +897,15 @@ class VertexBatchProcessor(BatchLLMProcessor):
         # Build JSONL content using the same logic as real submission
         manager = self._ensure_manager()
         resolved_max_tokens = self._get_resolved_max_tokens()
-        jsonl_content = manager.build_jsonl(requests, self.model, max_tokens=resolved_max_tokens)
+
+        # Get client_type for correct message format routing
+        from buttermilk import bm
+        config = bm.llms.connections.get(self.model)
+        client_type = config.client_type.value if config else None
+
+        jsonl_content = manager.build_jsonl(
+            requests, self.model, max_tokens=resolved_max_tokens, client_type=client_type,
+        )
 
         # Generate a dry-run job ID and upload to GCS
         dry_run_job_id = f"dry_run_{uuid.uuid4().hex[:12]}"
@@ -776,30 +916,39 @@ class VertexBatchProcessor(BatchLLMProcessor):
         result_uri = upload_text(jsonl_content, uri=input_uri, content_type="application/jsonl")
 
         # Save manifest for job recovery inspection during dry run
-        # Pass explicit region since dry_run vertex_job_name isn't a real Vertex path
-        resolved_region = self._get_resolved_region()
-        if resolved_region is None:
-            # Check if Gemini 3 model (uses global endpoint)
-            from buttermilk import bm
+        if isinstance(manager, BatchJobManager):
+            # Vertex path: save full manifest with region info
+            resolved_region = self._get_resolved_region()
+            if resolved_region is None:
+                # Check if Gemini 3 model (uses global endpoint)
+                from buttermilk import bm
+                resolved_model = self.model
+                if self.model in bm.llms.connections:
+                    config = bm.llms.connections[self.model]
+                    if "model" in config.configs:
+                        resolved_model = config.configs["model"]
+                if "gemini-3" in resolved_model.lower():
+                    resolved_region = "global"
 
-            resolved_model = self.model
-            if self.model in bm.llms.connections:
-                config = bm.llms.connections[self.model]
-                if "model" in config.configs:
-                    resolved_model = config.configs["model"]
-            if "gemini-3" in resolved_model.lower():
-                resolved_region = "global"
-
-        output_uri = manager._get_output_uri(dry_run_job_id)
-        manager._save_manifest(
-            job_id=dry_run_job_id,
-            vertex_job_name=f"dry_run_{dry_run_job_id}",
-            model=self.model,
-            input_uri=result_uri,
-            output_uri=output_uri,
-            requests=requests,
-            region=resolved_region,
-        )
+            output_uri = manager._get_output_uri(dry_run_job_id)
+            manager._save_manifest(
+                job_id=dry_run_job_id,
+                vertex_job_name=f"dry_run_{dry_run_job_id}",
+                model=self.model,
+                input_uri=result_uri,
+                output_uri=output_uri,
+                requests=requests,
+                region=resolved_region,
+            )
+        else:
+            # OpenAI path: save simplified manifest
+            manager._save_manifest(
+                job_id=dry_run_job_id,
+                openai_batch_id=f"dry_run_{dry_run_job_id}",
+                model=self.model,
+                input_file_id="dry_run",
+                requests=requests,
+            )
 
         logger.info(
             "[DRY RUN] Batch file written to GCS",
