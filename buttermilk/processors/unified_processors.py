@@ -43,8 +43,21 @@ class LLMProcessor(ProcessorCore):
     Uses LLMCore internally to handle template rendering and LLM calls.
     Yields the LLM output directly as a typed object (or string if no output_model).
 
-    This processor enables typed data flow where processors yield their
-    natural output type rather than embedding results in BaseRecord fields.
+    LLMCore is built per-record (trivially cheap — no network calls at init),
+    which enables per-record overrides of ``model``, ``template``, and other
+    config fields via the ``inputs`` JMESPath mapping inherited from
+    ProcessorCore.
+
+    Example YAML config with per-record model/template override::
+
+        steps:
+          - processor: LLMProcessor
+            model: gpt-4o            # default model
+            template: analyze_text   # default template
+            inputs:
+              model: record.metadata.model        # override model per-record
+              template: record.metadata.template   # override template per-record
+              country: record.metadata.country     # additional template variable
     """
 
     model: str = Field(..., description="LLM model identifier")
@@ -58,31 +71,37 @@ class LLMProcessor(ProcessorCore):
     # LLM outputs are non-deterministic (unless temperature=0), so skip caching
     skip_cache: bool = Field(default=True, description="Skip pipeline caching for non-deterministic LLM outputs")
 
-    _llm_core: Any = PrivateAttr(default=None)
+    # Config fields that can be overridden per-record via inputs
+    _OVERRIDABLE_CONFIG_FIELDS = frozenset({"model", "template", "temperature", "max_tokens"})
 
-    def model_post_init(self, __context: Any) -> None:
-        """Create LLMCore instance after Pydantic initialization."""
-        self._llm_core = LLMCore(
-            model=self.model,
-            template=self.template,
+    def _build_llm_core(
+        self,
+        *,
+        model: str,
+        template: str,
+        extra_template_vars: dict[str, Any] | None = None,
+    ) -> LLMCore:
+        """Build an LLMCore instance with the given parameters.
+
+        Args:
+            model: LLM model identifier
+            template: Jinja2 template name
+            extra_template_vars: Additional template variables resolved from
+                inputs (merged with input_variables, with inputs taking priority)
+        """
+        template_vars = {**self.input_variables}
+        if extra_template_vars:
+            template_vars.update(extra_template_vars)
+
+        return LLMCore(
+            model=model,
+            template=template,
             temperature=self.temperature,
             max_tokens=self.max_tokens,
-            template_vars=self.input_variables,
+            template_vars=template_vars,
             output_model=self.output_model,
             fail_on_unfilled_parameters=self.fail_on_unfilled_parameters,
         )
-
-    def _resolve_field(self, field_name: str, context: ProcessingContext) -> Any:
-        """Resolve a configuration field, checking variant params first.
-
-        Resolution order:
-        1. context.variant_params[field_name] (promoted from record metadata
-           by the pipeline orchestrator, or set by BatchAccumulator)
-        2. self[field_name] (configured default)
-        """
-        if context.variant_params and field_name in context.variant_params:
-            return context.variant_params[field_name]
-        return getattr(self, field_name, None)
 
     async def _process_record(
         self,
@@ -90,13 +109,16 @@ class LLMProcessor(ProcessorCore):
     ) -> AsyncGenerator[Any, None]:
         """Process a record through LLM inference.
 
+        Resolution order for config fields (model, template, etc.):
+        1. ``inputs`` JMESPath mappings (per-record, from record envelope)
+        2. ``context.variant_params`` (from BatchAccumulator / pipeline orchestrator)
+        3. Processor config defaults (from YAML)
+
         Args:
             context: Processing context containing the record to process
 
         Yields:
-            Any: The LLM output directly (typed model if output_model set, else string).
-                 Supports typed data flow - yields the natural output type rather than
-                 wrapping in BaseRecord.
+            BaseRecord: The input record enriched with LLM output in metadata.
 
         Raises:
             ProcessingError: If LLM processing fails
@@ -106,10 +128,26 @@ class LLMProcessor(ProcessorCore):
         # Safely get record_id for typed objects
         record_id = getattr(context.record, "record_id", None) or str(type(context.record).__name__)
 
-        # Resolve model and template from variant_params (for BatchAccumulator use)
-        # or fall back to configured defaults
-        resolved_model = self._resolve_field("model", context)
-        resolved_template = self._resolve_field("template", context)
+        # Resolve per-record overrides via JMESPath inputs
+        resolved = self._resolve_inputs(context)
+
+        # Separate config overrides from additional template variables
+        config_overrides: dict[str, Any] = {}
+        extra_template_vars: dict[str, Any] = {}
+        for key, value in resolved.items():
+            if key in self._OVERRIDABLE_CONFIG_FIELDS:
+                config_overrides[key] = value
+            else:
+                extra_template_vars[key] = value
+
+        # Also check variant_params (from BatchAccumulator)
+        if context.variant_params:
+            for field in ("model", "template"):
+                if field not in config_overrides and field in context.variant_params:
+                    config_overrides[field] = context.variant_params[field]
+
+        resolved_model = config_overrides["model"] if "model" in config_overrides else self.model
+        resolved_template = config_overrides["template"] if "template" in config_overrides else self.template
 
         logger.debug(
             "LLMProcessor starting",
@@ -129,23 +167,12 @@ class LLMProcessor(ProcessorCore):
             # For non-Pydantic records
             template_vars = {"record": context.record}
 
-        # Merge variant_params into template vars for template rendering
-        # (e.g., criteria from ParameterExpansionProcessor)
-        if context.variant_params:
-            template_vars.update(context.variant_params)
-
-        # Create LLMCore with resolved params if they differ from defaults
-        llm_core = self._llm_core
-        if resolved_model != self.model or resolved_template != self.template:
-            llm_core = LLMCore(
-                model=resolved_model,
-                template=resolved_template,
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
-                template_vars=self.input_variables,
-                output_model=self.output_model,
-                fail_on_unfilled_parameters=self.fail_on_unfilled_parameters,
-            )
+        # Build LLMCore per-record (trivially cheap — no network calls at init)
+        llm_core = self._build_llm_core(
+            model=resolved_model,
+            template=resolved_template,
+            extra_template_vars=extra_template_vars,
+        )
 
         # Processor stage name for trace emission
         processor_stage = f"LLMProcessor/{resolved_model}"
@@ -908,7 +935,7 @@ class EmbeddingProcessor(ProcessorCore):
         for record in results:
             yield record
 
-    async def _embed_all_chunks(self, records: list[BaseRecord]) -> None:
+    async def _embed_all_chunks(self, records: list[BaseRecord]) -> None:  # noqa: PLR0912
         """Generate embeddings for all chunks across all records.
 
         Args:
@@ -1038,7 +1065,6 @@ class EmbeddingProcessor(ProcessorCore):
             batch_texts = [text for _, _, text in batch]
 
             # Retry logic
-            last_exception = None
             for attempt in range(self.embedding_max_retries):
                 try:
                     embeddings = await _run_embed_batch(batch_texts, attempt=attempt)
@@ -1049,7 +1075,6 @@ class EmbeddingProcessor(ProcessorCore):
                     break
 
                 except Exception as exc:
-                    last_exception = exc
                     if self._is_rate_limit_error(exc):
                         # Exponential backoff for rate limits
                         wait_time = min(

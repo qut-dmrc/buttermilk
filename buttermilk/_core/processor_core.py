@@ -12,6 +12,7 @@ The design enables consistent observability across all processor types.
 from abc import ABC, abstractmethod
 from typing import Any, AsyncGenerator, Optional
 
+import jmespath
 from opentelemetry import trace
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, computed_field
 
@@ -101,7 +102,7 @@ class ObservabilityMixin(BaseModel):
             metadata.update(extra_metadata)
         return metadata
 
-    async def _emit_success_trace(
+    async def _emit_success_trace(  # noqa: PLR0913
         self,
         record: BaseRecord,
         outputs: Any,
@@ -139,7 +140,7 @@ class ObservabilityMixin(BaseModel):
         await self._emit_trace(execution_trace)
         return trace_id
 
-    async def _emit_error_trace(
+    async def _emit_error_trace(  # noqa: PLR0913
         self,
         record: Optional[BaseRecord],
         error: Exception,
@@ -175,7 +176,53 @@ class ProcessorCore(ObservabilityMixin, ABC):
 
     Implements Processor protocol with OTEL tracing.
     Supports typed data flow: processors can yield Any type, not just BaseRecord.
+
+    The ``inputs`` field provides opt-in JMESPath-based resolution of per-record
+    values from the record envelope.  Keys that match processor config fields
+    (e.g. ``model``, ``template``) override those fields for the current record;
+    all other keys are injected as template variables.
+
+    Example YAML config::
+
+        steps:
+          - processor: LLMProcessor
+            model: gpt-4o            # default
+            template: analyze_text   # default
+            inputs:
+              model: record.metadata.model        # per-record override
+              template: record.metadata.template
+              country: record.metadata.country     # template variable
     """
+
+    inputs: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "JMESPath mappings from record fields to processor inputs. "
+            "Paths are evaluated against {'record': record.model_dump()}. "
+            "E.g. {'model': 'record.metadata.model', 'content': 'record.text'}"
+        ),
+    )
+
+    def _resolve_inputs(self, context: ProcessingContext) -> dict[str, Any]:
+        """Resolve ``inputs`` from the record via JMESPath.
+
+        Returns a dict of resolved values (only keys whose JMESPath expression
+        matched a non-None value in the record envelope).
+        """
+        if not self.inputs:
+            return {}
+
+        if hasattr(context.record, "model_dump"):
+            envelope = {"record": context.record.model_dump()}
+        else:
+            envelope = {"record": context.record}
+
+        resolved: dict[str, Any] = {}
+        for name, path in self.inputs.items():
+            value = jmespath.search(path, envelope)
+            if value is not None:
+                resolved[name] = value
+        return resolved
 
     async def process(
         self,

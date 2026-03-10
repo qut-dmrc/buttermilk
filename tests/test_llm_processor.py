@@ -214,7 +214,7 @@ class TestLLMProcessorProcessing:
             # Verify LLM was called with messages from the template
             assert mock_client.call_chat.called
             call_args = mock_client.call_chat.call_args
-            messages_sent = call_args.kwargs.get("messages", call_args[0] if call_args[0] else [])
+            messages_sent = call_args.kwargs["messages"]
 
             # Should have messages from template (system + user)
             assert len(messages_sent) >= 1
@@ -416,3 +416,230 @@ class TestLLMProcessorIntegration:
             assert "llm_output" in output_record.metadata
             # Original record fields preserved
             assert output_record.record_id == "structured-001"
+
+
+class TestLLMProcessorInputs:
+    """Test JMESPath-based inputs resolution for per-record config overrides."""
+
+    def test_inputs_field_defaults_to_empty(self):
+        """Verify inputs defaults to empty dict."""
+        processor = LLMProcessor(model="gpt-4", template="test/simple")
+        assert processor.inputs == {}
+
+    def test_inputs_field_accepted_in_config(self):
+        """Verify inputs can be set via config."""
+        processor = LLMProcessor(
+            model="gpt-4",
+            template="test/simple",
+            inputs={"model": "record.metadata.model"},
+        )
+        assert processor.inputs == {"model": "record.metadata.model"}
+
+    @pytest.mark.anyio
+    async def test_inputs_overrides_model_per_record(self):
+        """Verify inputs can override model from record metadata."""
+        processor = LLMProcessor(
+            model="gpt-4",
+            template="test/simple",
+            inputs={"model": "record.metadata.model"},
+        )
+
+        record = BaseRecord(
+            record_id="inputs-001",
+            content="Test content",
+            metadata={"var": "test", "model": "claude-3-opus"},
+        )
+
+        context = ProcessingContext(session_id="inputs-session", record=record)
+
+        mock_bm = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.call_chat.return_value = CreateResult(
+            content="Response from overridden model",
+            finish_reason="stop",
+            usage=RequestUsage(prompt_tokens=10, completion_tokens=10),
+            cached=False,
+        )
+        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.connections = {}
+
+        with patch("buttermilk._core.llm_core.bm", mock_bm), patch("buttermilk.processors.unified_processors.bm", mock_bm):
+            outputs = []
+            async for output in processor.process(context):
+                outputs.append(output)
+
+            assert len(outputs) == 1
+            # The LLM client should have been fetched with the overridden model
+            mock_bm.llms.get_autogen_chat_client.assert_called_with("claude-3-opus")
+            # Enriched metadata should reflect the resolved model
+            assert outputs[0].metadata["llm_output"]["model"] == "claude-3-opus"
+
+    @pytest.mark.anyio
+    async def test_inputs_overrides_template_per_record(self):
+        """Verify inputs can override template from record metadata."""
+        processor = LLMProcessor(
+            model="gpt-4",
+            template="test/simple",
+            inputs={"template": "record.metadata.template_name"},
+        )
+
+        record = BaseRecord(
+            record_id="inputs-002",
+            content="Test content",
+            metadata={"var": "test", "text": "Some text to analyze", "template_name": "test/structured_output"},
+        )
+
+        context = ProcessingContext(session_id="inputs-session", record=record)
+
+        mock_bm = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.call_chat.return_value = CreateResult(
+            content="Response",
+            finish_reason="stop",
+            usage=RequestUsage(prompt_tokens=10, completion_tokens=10),
+            cached=False,
+        )
+        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.connections = {}
+
+        with patch("buttermilk._core.llm_core.bm", mock_bm), patch("buttermilk.processors.unified_processors.bm", mock_bm):
+            outputs = []
+            async for output in processor.process(context):
+                outputs.append(output)
+
+            assert len(outputs) == 1
+            # Enriched metadata should reflect the resolved template
+            assert outputs[0].metadata["llm_output"]["template"] == "test/structured_output"
+
+    @pytest.mark.anyio
+    async def test_inputs_injects_extra_template_vars(self):
+        """Verify non-config inputs are injected as template variables."""
+        processor = LLMProcessor(
+            model="gpt-4",
+            template="test/simple",
+            inputs={"country": "record.metadata.country"},
+        )
+
+        record = BaseRecord(
+            record_id="inputs-003",
+            content="Test content",
+            metadata={"var": "test", "country": "Australia"},
+        )
+
+        context = ProcessingContext(session_id="inputs-session", record=record)
+
+        mock_bm = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.call_chat.return_value = CreateResult(
+            content="Response",
+            finish_reason="stop",
+            usage=RequestUsage(prompt_tokens=10, completion_tokens=10),
+            cached=False,
+        )
+        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.connections = {}
+
+        with patch("buttermilk._core.llm_core.bm", mock_bm), patch("buttermilk.processors.unified_processors.bm", mock_bm):
+            outputs = []
+            async for output in processor.process(context):
+                outputs.append(output)
+
+            assert len(outputs) == 1
+            # Model stays as default since we didn't override it
+            assert outputs[0].metadata["llm_output"]["model"] == "gpt-4"
+
+    @pytest.mark.anyio
+    async def test_inputs_falls_back_to_default_when_missing(self):
+        """Verify that when a JMESPath path resolves to None, the default is used."""
+        processor = LLMProcessor(
+            model="gpt-4",
+            template="test/simple",
+            inputs={"model": "record.metadata.model"},
+        )
+
+        # Record has no 'model' in metadata
+        record = BaseRecord(
+            record_id="inputs-004",
+            content="Test content",
+            metadata={"var": "test"},
+        )
+
+        context = ProcessingContext(session_id="inputs-session", record=record)
+
+        mock_bm = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.call_chat.return_value = CreateResult(
+            content="Response",
+            finish_reason="stop",
+            usage=RequestUsage(prompt_tokens=10, completion_tokens=10),
+            cached=False,
+        )
+        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.connections = {}
+
+        with patch("buttermilk._core.llm_core.bm", mock_bm), patch("buttermilk.processors.unified_processors.bm", mock_bm):
+            outputs = []
+            async for output in processor.process(context):
+                outputs.append(output)
+
+            assert len(outputs) == 1
+            # Should fall back to configured default
+            mock_bm.llms.get_autogen_chat_client.assert_called_with("gpt-4")
+            assert outputs[0].metadata["llm_output"]["model"] == "gpt-4"
+
+    @pytest.mark.anyio
+    async def test_no_inputs_behaves_identically_to_before(self):
+        """Verify that a processor with no inputs works the same as before the refactor."""
+        processor = LLMProcessor(
+            model="gpt-4",
+            template="test/simple",
+        )
+
+        record = BaseRecord(
+            record_id="inputs-005",
+            content="Test content",
+            metadata={"var": "test"},
+        )
+
+        context = ProcessingContext(session_id="inputs-session", record=record)
+
+        mock_bm = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.call_chat.return_value = CreateResult(
+            content="Response",
+            finish_reason="stop",
+            usage=RequestUsage(prompt_tokens=10, completion_tokens=10),
+            cached=False,
+        )
+        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.connections = {}
+
+        with patch("buttermilk._core.llm_core.bm", mock_bm), patch("buttermilk.processors.unified_processors.bm", mock_bm):
+            outputs = []
+            async for output in processor.process(context):
+                outputs.append(output)
+
+            assert len(outputs) == 1
+            assert outputs[0].metadata["llm_output"]["model"] == "gpt-4"
+            assert outputs[0].metadata["llm_output"]["template"] == "test/simple"
+
+    def test_resolve_inputs_with_top_level_record_fields(self):
+        """Verify _resolve_inputs can access top-level record fields."""
+        processor = LLMProcessor(
+            model="gpt-4",
+            template="test/simple",
+            inputs={"content_text": "record.content", "ds_name": "record.dataset_name"},
+        )
+
+        record = BaseRecord(
+            record_id="resolve-001",
+            content="The actual content",
+            dataset_name="my_dataset",
+            metadata={},
+        )
+
+        context = ProcessingContext(session_id="test", record=record)
+        resolved = processor._resolve_inputs(context)
+
+        assert resolved["content_text"] == "The actual content"
+        assert resolved["ds_name"] == "my_dataset"
