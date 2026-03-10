@@ -89,6 +89,7 @@ def test_analyze_document_quality_aggregates_chunks():
     assert result["corruption_rate"] == 25.0  # 1 out of 4 = 25%
 
 
+@pytest.mark.slow
 def test_analyze_document_quality_highly_corrupt_document():
     """Test analyze_document_quality() with 95%+ corrupt document."""
     # Arrange: Create corrupt chunk with 25 CID patterns (above 20 threshold)
@@ -183,9 +184,9 @@ def test_is_document_corrupt_threshold(corrupted_chunk_count, total_chunks, thre
     # Assert - verify corruption detection logic
     expected_rate = (corrupted_chunk_count / total_chunks) * 100
     assert result["corruption_rate"] == pytest.approx(expected_rate, rel=0.01), f"Corruption rate should be {expected_rate}%"
-    assert result["is_corrupt"] is expected_corrupt, (
-        f"With {expected_rate}% corruption and {threshold}% threshold, is_corrupt should be {expected_corrupt}"
-    )
+    assert (
+        result["is_corrupt"] is expected_corrupt
+    ), f"With {expected_rate}% corruption and {threshold}% threshold, is_corrupt should be {expected_corrupt}"
     assert result["corrupted_chunks"] == corrupted_chunk_count
     assert result["total_chunks"] == total_chunks
     assert result["threshold"] == threshold
