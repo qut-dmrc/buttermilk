@@ -27,7 +27,7 @@ from pydantic import BaseModel, Field, PrivateAttr, model_validator
 from buttermilk import bm, logger
 from buttermilk._core.contract import ErrorEvent
 from buttermilk._core.exceptions import FatalError, ProcessingError
-from buttermilk._core.processor_core import ObservabilityMixin
+from buttermilk._core.processor_core import ObservabilityMixin, TraceParams
 
 if TYPE_CHECKING:
     from buttermilk._core.llms import CreateResult, ModelOutput
@@ -226,15 +226,17 @@ class LLMCore(ObservabilityMixin):
                 await self._emit_success_trace(
                     record=record,
                     outputs=result.content,
-                    processor_stage=processor_stage,
-                    parent_trace_id=parent_trace_id,
-                    duration_ms=duration_ms,
-                    messages=result.messages,
-                    inputs=result.resolved_inputs if result.resolved_inputs else kwargs,
-                    extra_metadata=combined_metadata,
-                    execution_type="llm_processing",
-                    trace_id=result.trace_id,
-                    component_name=component_name,
+                    tp=TraceParams(
+                        processor_stage=processor_stage,
+                        parent_trace_id=parent_trace_id,
+                        duration_ms=duration_ms,
+                        messages=result.messages,
+                        inputs=result.resolved_inputs if result.resolved_inputs else kwargs,
+                        extra_metadata=combined_metadata,
+                        execution_type="llm_processing",
+                        trace_id=result.trace_id,
+                        component_name=component_name,
+                    ),
                 )
 
                 span.set_status(trace.Status(trace.StatusCode.OK))
@@ -257,12 +259,14 @@ class LLMCore(ObservabilityMixin):
                 await self._emit_error_trace(
                     record=record,
                     error=e,
-                    processor_stage=processor_stage,
-                    parent_trace_id=parent_trace_id,
-                    duration_ms=duration_ms,
-                    inputs=inputs_for_trace,
-                    execution_type="llm_processing",
-                    component_name=component_name,
+                    tp=TraceParams(
+                        processor_stage=processor_stage,
+                        parent_trace_id=parent_trace_id,
+                        duration_ms=duration_ms,
+                        inputs=inputs_for_trace,
+                        execution_type="llm_processing",
+                        component_name=component_name,
+                    ),
                 )
 
                 span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
@@ -274,6 +278,110 @@ class LLMCore(ObservabilityMixin):
                 span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                 span.record_exception(e)
                 raise ProcessingError(f"LLMCore processing failed: {e}") from e
+
+    def _normalize_inputs(
+        self,
+        template_vars: dict[str, Any] | None,
+        record: Optional[BaseRecord],
+        context: Optional[list[LLMMessage]],
+        _template_vars_derived_from_record: bool,
+    ) -> tuple[dict[str, Any], list[LLMMessage]]:
+        """Normalize template_vars and context, returning (template_vars, context)."""
+        if template_vars is None:
+            template_vars = {}
+
+        if context is None:
+            context = []
+        elif not isinstance(context, list):
+            context = [context]
+
+        # Detect potential record mismatch
+        if template_vars and record is not None:
+            actual_template_vars = template_vars.get("template_vars", template_vars)
+            tv_text = actual_template_vars.get("text") if isinstance(actual_template_vars, dict) else None
+            record_text = getattr(record, "text", None)
+            if tv_text and record_text and tv_text != record_text:
+                logger.warning("Record mismatch detected: template_vars.text differs from record.text. This may indicate data integrity issues.")
+
+        return template_vars, context
+
+    def _build_resolved_inputs(
+        self,
+        template_vars: dict[str, Any],
+        context: list[LLMMessage],
+        record: Optional[BaseRecord],
+        _template_vars_derived_from_record: bool,
+    ) -> dict[str, Any]:
+        """Build resolved inputs dict for traceability."""
+        if _template_vars_derived_from_record and record:
+            bulky_fields = {"text", "content", "metadata", "images", "attachments", "embedding"}
+            template_vars_for_trace = {k: v for k, v in template_vars.items() if k not in bulky_fields}
+        else:
+            template_vars_for_trace = template_vars
+
+        return {
+            **self.template_vars,
+            **template_vars_for_trace,
+            "context": context,
+        }
+
+    def _collect_result_metadata(self, result: LLMResult, llm_result: Any, record: Optional[BaseRecord]) -> None:
+        """Populate result with template metadata, hashes, and LLM response metadata."""
+        from buttermilk._core.llms import ModelOutput
+
+        # Template metadata
+        result.metadata["template"] = {
+            "template_name": self._template_metadata.get("template_name"),
+            "unfilled_vars": self._template_metadata.get("unfilled_vars", []),
+        }
+
+        # Hashes
+        result.metadata["hashes"] = {
+            "template_hash": self._template_metadata.get("template_hash"),
+        }
+        if record is not None:
+            result.metadata["hashes"]["record_hash"] = record.record_hash
+            if hasattr(record, "ground_truth_hash") and record.ground_truth_hash:
+                result.metadata["hashes"]["ground_truth_hash"] = record.ground_truth_hash
+            result.metadata["record_id"] = record.record_id
+
+        # Extract content
+        if self._resolved_output_model and isinstance(llm_result, ModelOutput):
+            result.content = llm_result.parsed_object
+        else:
+            result.content = llm_result.content
+
+        # Store messages
+        from autogen_core.models import AssistantMessage
+
+        result.messages = result.messages.copy() if result.messages else []
+        if result.content:
+            if isinstance(result.content, str):
+                content_str = result.content
+            elif hasattr(result.content, "model_dump_json"):
+                content_str = result.content.model_dump_json()
+            else:
+                content_str = str(result.content)
+            result.messages.append(AssistantMessage(content=content_str, source=self.model))
+
+        # Model name and usage
+        model_name = self.model
+        if isinstance(llm_result, ModelOutput) and hasattr(llm_result, "metadata"):
+            model_name = llm_result.metadata.get("model", self.model)
+
+        result.metadata = {
+            **result.metadata,
+            "model": model_name,
+            "finish_reason": llm_result.finish_reason,
+            "usage": llm_result.usage,
+        }
+
+        # Pricing
+        if isinstance(llm_result, ModelOutput) and hasattr(llm_result, "metadata"):
+            if "pricing" in llm_result.metadata:
+                result.metadata["pricing"] = llm_result.metadata["pricing"]
+
+        result.metadata = scrub_serializable(result.metadata)
 
     async def process_with_llm(
         self,
@@ -308,13 +416,11 @@ class LLMCore(ObservabilityMixin):
                 context=conversation_history,
             )
         """
-        # Lazy import to avoid loading litellm at module load time
         from buttermilk._core.llms import ModelOutput
 
         tracer = trace.get_tracer("buttermilk.llm_core")
         result = LLMResult(content=None, error=None)
 
-        # Build span attributes
         span_attributes = {
             "llm.model": self.model,
             "llm.template": self.template,
@@ -324,132 +430,38 @@ class LLMCore(ObservabilityMixin):
 
         with tracer.start_as_current_span("llm_core.process", attributes=span_attributes) as span:
             try:
-                # === NORMALIZE INPUTS ===
-                # template_vars are passed explicitly; record is handled separately
-                # by make_messages() which inserts it at {{ record }} placeholders
-                if template_vars is None:
-                    template_vars = {}
+                template_vars, context = self._normalize_inputs(
+                    template_vars,
+                    record,
+                    context,
+                    _template_vars_derived_from_record,
+                )
 
-                # Ensure context is always a list
-                if context is None:
-                    context = []
-                elif not isinstance(context, list):
-                    context = [context]
-
-                # Detect potential record mismatch
-                # Check if template_vars was passed as a kwarg (nested dict case from process() method)
-                if template_vars is not None and record is not None:
-                    # If template_vars dict contains a 'template_vars' key, user passed it through process()
-                    actual_template_vars = template_vars.get("template_vars", template_vars)
-                    tv_text = actual_template_vars.get("text") if isinstance(actual_template_vars, dict) else None
-                    record_text = getattr(record, "text", None)
-                    if tv_text and record_text and tv_text != record_text:
-                        logger.warning(
-                            "Record mismatch detected: template_vars.text differs from record.text. This may indicate data integrity issues."
-                        )
-
-                # Store resolved inputs for traceability
-                # Avoid duplication: if template_vars was derived from record, strip BULKY
-                # content fields but keep lightweight identifiers (record_id, dataset_name, etc.)
-                # Full record is in trace.record
-                if _template_vars_derived_from_record and record:
-                    # Only strip bulky content fields - keep identifiers for quick reference
-                    bulky_fields = {"text", "content", "metadata", "images", "attachments", "embedding"}
-                    template_vars_for_trace = {k: v for k, v in template_vars.items() if k not in bulky_fields}
-                else:
-                    template_vars_for_trace = template_vars
-
-                # Flatten template_vars directly into inputs (no wrapper)
-                # Record data lives ONLY in trace.record, not duplicated in inputs
-                # Include both config-time template_vars and runtime template_vars
-                result.resolved_inputs = {
-                    **self.template_vars,  # Config template vars (criteria, instructions, etc.)
-                    **template_vars_for_trace,  # Runtime template vars (override config)
-                    "context": context,  # Conversation history (reserved key)
-                }
-
-                # Store this for later use in trace emission
+                result.resolved_inputs = self._build_resolved_inputs(
+                    template_vars,
+                    context,
+                    record,
+                    _template_vars_derived_from_record,
+                )
                 result.metadata["_template_vars_from_record"] = _template_vars_derived_from_record
 
-                # Fill template
+                # Fill template and call LLM
                 llm_messages = await self._fill_template(template_vars, record=record, context=context)
+                result.messages = llm_messages.copy()
 
-                # Store template metadata (without hash - hash goes to hashes dict)
-                result.metadata["template"] = {
-                    "template_name": self._template_metadata.get("template_name"),
-                    "unfilled_vars": self._template_metadata.get("unfilled_vars", []),
-                }
-
-                # Consolidate all hashes in metadata.hashes
-                result.metadata["hashes"] = {
-                    "template_hash": self._template_metadata.get("template_hash"),
-                }
-                if record is not None:
-                    result.metadata["hashes"]["record_hash"] = record.record_hash
-                    if hasattr(record, "ground_truth_hash") and record.ground_truth_hash:
-                        result.metadata["hashes"]["ground_truth_hash"] = record.ground_truth_hash
-                    # Store record_id separately (not a hash)
-                    result.metadata["record_id"] = record.record_id
-
-                # Call LLM
                 llm_result = await self._call_llm_with_trace(
                     messages=llm_messages,
                     cancellation_token=cancellation_token,
                     parent_trace_id=parent_trace_id,
                 )
 
-                # Check for errors in LLM result
                 if isinstance(llm_result, ModelOutput) and llm_result.error_message:
                     raise ProcessingError(llm_result.error_message)
 
-                # Extract content based on output type
-                if self._resolved_output_model and isinstance(llm_result, ModelOutput):
-                    result.content = llm_result.parsed_object
-                else:
-                    result.content = llm_result.content
-
-                # Store messages (input prompts + LLM response)
-                from autogen_core.models import AssistantMessage
-
-                result.messages = llm_messages.copy()
-                # Add the assistant's response as a message
-                if result.content:
-                    # Convert content to string, handling BaseModel via model_dump_json
-                    if isinstance(result.content, str):
-                        content_str = result.content
-                    elif hasattr(result.content, "model_dump_json"):
-                        content_str = result.content.model_dump_json()
-                    else:
-                        content_str = str(result.content)
-
-                    result.messages.append(AssistantMessage(content=content_str, source=self.model))
-
-                # Collect metadata (preserve existing template metadata)
-                # Model name comes from LLM wrapper (actual from API or config as fallback)
-                model_name = self.model  # Default to config name
-                if isinstance(llm_result, ModelOutput) and hasattr(llm_result, "metadata"):
-                    # Use model from wrapper (already contains actual API model or fallback)
-                    model_name = llm_result.metadata.get("model", self.model)
-
-                result.metadata = {
-                    **result.metadata,  # Keep template metadata added earlier
-                    "model": model_name,  # Actual model from API or config name as fallback
-                    "finish_reason": llm_result.finish_reason,
-                    "usage": llm_result.usage,
-                }
-
-                # Add pricing if available
-                if isinstance(llm_result, ModelOutput) and hasattr(llm_result, "metadata"):
-                    if "pricing" in llm_result.metadata:
-                        result.metadata["pricing"] = llm_result.metadata["pricing"]
-
-                # Ensure all metadata is serializable
-                result.metadata = scrub_serializable(result.metadata)
-
+                self._collect_result_metadata(result, llm_result, record)
                 span.set_status(trace.Status(trace.StatusCode.OK))
 
             except ProcessingError as e:
-                # Don't log here - let the final handler log once
                 result.error = str(e)
                 span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                 span.record_exception(e)

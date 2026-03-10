@@ -10,6 +10,7 @@ The design enables consistent observability across all processor types.
 """
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Any, AsyncGenerator, Optional
 
 import jmespath
@@ -21,6 +22,25 @@ from buttermilk._core.contract import ExecutionTrace
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord
 from buttermilk.pipeline import RecordBufferedException
+
+
+@dataclass
+class TraceParams:
+    """Parameters for emitting execution traces.
+
+    Groups the arguments for _emit_success_trace / _emit_error_trace
+    to keep method signatures concise.
+    """
+
+    processor_stage: str
+    parent_trace_id: Optional[str]
+    duration_ms: float
+    execution_type: str = "processing"
+    component_name: Optional[str] = None
+    messages: Optional[list] = None
+    inputs: Optional[dict[str, Any]] = None
+    extra_metadata: Optional[dict[str, Any]] = None
+    trace_id: Optional[str] = None
 
 
 class ObservabilityMixin(BaseModel):
@@ -102,69 +122,67 @@ class ObservabilityMixin(BaseModel):
             metadata.update(extra_metadata)
         return metadata
 
-    async def _emit_success_trace(  # noqa: PLR0913
+    async def _emit_success_trace(
         self,
         record: BaseRecord,
         outputs: Any,
-        processor_stage: str,
-        parent_trace_id: Optional[str],
-        duration_ms: float,
-        messages: Optional[list] = None,
-        inputs: Optional[dict[str, Any]] = None,
-        extra_metadata: Optional[dict[str, Any]] = None,
-        execution_type: str = "processing",
-        trace_id: Optional[str] = None,
-        component_name: Optional[str] = None,
+        tp: TraceParams,
     ) -> str:
-        """Emit a success execution trace."""
+        """Emit a success execution trace.
+
+        Args:
+            record: The record being processed.
+            outputs: The processing outputs.
+            tp: Trace parameters (stage, timing, metadata, etc.).
+        """
         import uuid
 
-        if trace_id is None:
-            trace_id = str(uuid.uuid4())
+        trace_id = tp.trace_id or str(uuid.uuid4())
 
-        agent_info = self._build_agent_info(processor_stage, execution_type)
-        if component_name:
-            agent_info["component_name"] = component_name
+        agent_info = self._build_agent_info(tp.processor_stage, tp.execution_type)
+        if tp.component_name:
+            agent_info["component_name"] = tp.component_name
 
         execution_trace = ExecutionTrace(
             call_id=trace_id,
             agent_info=agent_info,
-            inputs=inputs,
+            inputs=tp.inputs,
             outputs=outputs,
-            messages=messages,
-            metadata=self._build_trace_metadata(record, duration_ms, extra_metadata),
-            parent_call_id=parent_trace_id,
+            messages=tp.messages,
+            metadata=self._build_trace_metadata(record, tp.duration_ms, tp.extra_metadata),
+            parent_call_id=tp.parent_trace_id,
             record=record,
         )
 
         await self._emit_trace(execution_trace)
         return trace_id
 
-    async def _emit_error_trace(  # noqa: PLR0913
+    async def _emit_error_trace(
         self,
         record: Optional[BaseRecord],
         error: Exception,
-        processor_stage: str,
-        parent_trace_id: Optional[str],
-        duration_ms: float,
-        inputs: Optional[dict[str, Any]] = None,
-        execution_type: str = "processing",
-        component_name: Optional[str] = None,
+        tp: TraceParams,
     ) -> None:
-        """Emit an error execution trace."""
-        agent_info = self._build_agent_info(processor_stage, execution_type)
-        if component_name:
-            agent_info["component_name"] = component_name
+        """Emit an error execution trace.
+
+        Args:
+            record: The record being processed (may be None).
+            error: The exception that occurred.
+            tp: Trace parameters (stage, timing, metadata, etc.).
+        """
+        agent_info = self._build_agent_info(tp.processor_stage, tp.execution_type)
+        if tp.component_name:
+            agent_info["component_name"] = tp.component_name
 
         error_trace = ExecutionTrace(
             agent_info=agent_info,
-            inputs=inputs,
+            inputs=tp.inputs,
             error={
                 "event": str(error),
                 "details": {"error_type": type(error).__name__},
             },
-            metadata=self._build_trace_metadata(record, duration_ms),
-            parent_call_id=parent_trace_id,
+            metadata=self._build_trace_metadata(record, tp.duration_ms),
+            parent_call_id=tp.parent_trace_id,
             record=record,
         )
 

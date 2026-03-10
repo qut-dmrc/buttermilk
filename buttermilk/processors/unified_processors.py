@@ -30,7 +30,7 @@ from buttermilk._core.contract import ExecutionTrace, TaskProcessingComplete
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llm_core import LLMCore
 from buttermilk._core.processing_context import ProcessingContext
-from buttermilk._core.processor_core import ProcessorCore
+from buttermilk._core.processor_core import ProcessorCore, TraceParams
 from buttermilk._core.types import BaseRecord, RunRequest
 from buttermilk.data.vector import _sanitize_metadata_for_chroma
 from buttermilk.runner.flowrunner import OrchestratorFactory
@@ -219,15 +219,17 @@ class LLMProcessor(ProcessorCore):
             await self._emit_success_trace(
                 record=context.record,
                 outputs=llm_result.content,
-                processor_stage=processor_stage,
-                parent_trace_id=context.session_id,
-                duration_ms=duration_ms,
-                messages=llm_result.messages,
-                inputs=llm_result.resolved_inputs if llm_result.resolved_inputs else template_vars,
-                extra_metadata=extra_metadata,
-                execution_type="llm_processing",
-                trace_id=llm_result.trace_id,
-                component_name=f"LLMProcessor({resolved_model})",
+                tp=TraceParams(
+                    processor_stage=processor_stage,
+                    parent_trace_id=context.session_id,
+                    duration_ms=duration_ms,
+                    messages=llm_result.messages,
+                    inputs=llm_result.resolved_inputs if llm_result.resolved_inputs else template_vars,
+                    extra_metadata=extra_metadata,
+                    execution_type="llm_processing",
+                    trace_id=llm_result.trace_id,
+                    component_name=f"LLMProcessor({resolved_model})",
+                ),
             )
 
             # Enrich original record with LLM output in metadata
@@ -253,12 +255,14 @@ class LLMProcessor(ProcessorCore):
             await self._emit_error_trace(
                 record=context.record,
                 error=error,
-                processor_stage=processor_stage,
-                parent_trace_id=context.session_id,
-                duration_ms=duration_ms,
-                inputs=template_vars,
-                execution_type="llm_processing",
-                component_name=f"LLMProcessor({resolved_model})",
+                tp=TraceParams(
+                    processor_stage=processor_stage,
+                    parent_trace_id=context.session_id,
+                    duration_ms=duration_ms,
+                    inputs=template_vars,
+                    execution_type="llm_processing",
+                    component_name=f"LLMProcessor({resolved_model})",
+                ),
             )
             raise
 
@@ -935,7 +939,25 @@ class EmbeddingProcessor(ProcessorCore):
         for record in results:
             yield record
 
-    async def _embed_all_chunks(self, records: list[BaseRecord]) -> None:  # noqa: PLR0912
+    @staticmethod
+    def _get_chunk_text(chunk: Any) -> str | None:
+        """Extract text from a chunk (dict or object)."""
+        if isinstance(chunk, dict):
+            return chunk.get("text", "")
+        if hasattr(chunk, "text"):
+            return chunk.text
+        logger.warning(f"Unsupported chunk type: {type(chunk)}")
+        return None
+
+    @staticmethod
+    def _set_chunk_embedding(chunk: Any, embedding: Any) -> None:
+        """Set embedding on a chunk (dict or object)."""
+        if isinstance(chunk, dict):
+            chunk["embedding"] = embedding
+        elif hasattr(chunk, "embedding"):
+            chunk.embedding = embedding
+
+    async def _embed_all_chunks(self, records: list[BaseRecord]) -> None:
         """Generate embeddings for all chunks across all records.
 
         Args:
@@ -948,16 +970,9 @@ class EmbeddingProcessor(ProcessorCore):
         embeddings_input = []
         for record_idx, record in enumerate(records):
             for chunk_idx, chunk in enumerate(record.chunks):
-                # Support both dict and object chunks
-                if isinstance(chunk, dict):
-                    text = chunk.get("text", "")
-                elif hasattr(chunk, "text"):
-                    text = chunk.text
-                else:
-                    logger.warning(f"Unsupported chunk type: {type(chunk)}")
-                    continue
-
-                embeddings_input.append((record_idx, chunk_idx, text))
+                text = self._get_chunk_text(chunk)
+                if text is not None:
+                    embeddings_input.append((record_idx, chunk_idx, text))
 
         if not embeddings_input:
             raise ValueError("No chunks found to embed")
@@ -969,15 +984,8 @@ class EmbeddingProcessor(ProcessorCore):
         success_count = 0
         for record_idx, chunk_idx, embedding in embedding_results:
             if embedding is not None:
-                record = records[record_idx]
-                chunk = record.chunks[chunk_idx]
-
-                # Set embedding based on chunk type
-                if isinstance(chunk, dict):
-                    chunk["embedding"] = embedding
-                elif hasattr(chunk, "embedding"):
-                    chunk.embedding = embedding
-
+                chunk = records[record_idx].chunks[chunk_idx]
+                self._set_chunk_embedding(chunk, embedding)
                 success_count += 1
 
         total_chunks = len(embeddings_input)
@@ -994,10 +1002,7 @@ class EmbeddingProcessor(ProcessorCore):
             # Clear embeddings to avoid partial state
             for record in records:
                 for chunk in record.chunks:
-                    if isinstance(chunk, dict):
-                        chunk["embedding"] = None
-                    elif hasattr(chunk, "embedding"):
-                        chunk.embedding = None
+                    self._set_chunk_embedding(chunk, None)
             raise ValueError(f"Partial embedding failure: {success_count}/{total_chunks} succeeded")
 
         logger.debug("Generated embeddings", count=success_count)

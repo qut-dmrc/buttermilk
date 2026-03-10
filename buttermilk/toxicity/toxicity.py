@@ -41,7 +41,7 @@ from buttermilk._core.contract import (
     AgentInput,
     ExecutionTrace,
 )  # Import AgentInput and ExecutionTrace
-from buttermilk._core.processor_core import ProcessorCore
+from buttermilk._core.processor_core import ProcessorCore, TraceParams
 from buttermilk._core.types import BaseRecord
 from buttermilk.utils.utils import read_text, read_yaml, scrub_serializable
 
@@ -364,21 +364,25 @@ class ToxicityClassifierCore(ProcessorCore):
                 "labels": eval_record.labels,
                 "error": eval_record.error,
             },
-            processor_stage=processor_stage,
-            parent_trace_id=parent_trace_id,
-            duration_ms=duration_ms,
-            inputs={
-                "content": content[:500] if len(content) > 500 else content,
-                "record_id": record.record_id,
-            },
-            extra_metadata={"eval_id": eval_record.eval_id},
-            execution_type="toxicity_classification",
-            trace_id=trace_id,
-            parameters={
-                "model": self.model,
-                "process_chain": self.process_chain,
-                "standard": self.standard,
-            },
+            tp=TraceParams(
+                processor_stage=processor_stage,
+                parent_trace_id=parent_trace_id,
+                duration_ms=duration_ms,
+                inputs={
+                    "content": content[:500] if len(content) > 500 else content,
+                    "record_id": record.record_id,
+                },
+                extra_metadata={
+                    "eval_id": eval_record.eval_id,
+                    "parameters": {
+                        "model": self.model,
+                        "process_chain": self.process_chain,
+                        "standard": self.standard,
+                    },
+                },
+                execution_type="toxicity_classification",
+                trace_id=trace_id,
+            ),
         )
 
         # Build output dict with prediction and optional labels
@@ -465,11 +469,11 @@ class _HF(ToxicityClassifierCore):
         try:
             result = response[0][0]["generated_text"].strip()
             return str(result[len(prompt) :])
-        except:
+        except (KeyError, IndexError, TypeError, AttributeError):
             try:
                 result = response.generations[0][0].text.strip()
                 return str(result[len(prompt) :])
-            except:
+            except (KeyError, IndexError, TypeError, AttributeError):
                 result = response.strip()
                 return result
 

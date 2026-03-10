@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_valid
 
 from buttermilk import logger
 from buttermilk._core.exceptions import ProcessingError
-from buttermilk._core.processor_core import ProcessorCore
+from buttermilk._core.processor_core import ProcessorCore, TraceParams
 from buttermilk._core.types import BaseRecord
 from buttermilk.utils.templating import render_template
 from buttermilk.utils.validators import import_class_from_path
@@ -200,14 +200,16 @@ class ClassifierCore(ProcessorCore):
                 await self._emit_success_trace(
                     record=record,
                     outputs=output_content,
-                    processor_stage=processor_stage,
-                    parent_trace_id=parent_trace_id,
-                    duration_ms=processing_time_ms,
-                    messages=trace_messages,
-                    inputs=kwargs if kwargs else None,
-                    extra_metadata=stage_metadata,
-                    execution_type="classification",
-                    trace_id=result.trace_id,
+                    tp=TraceParams(
+                        processor_stage=processor_stage,
+                        parent_trace_id=parent_trace_id,
+                        duration_ms=processing_time_ms,
+                        messages=trace_messages,
+                        inputs=kwargs if kwargs else None,
+                        extra_metadata=stage_metadata,
+                        execution_type="classification",
+                        trace_id=result.trace_id,
+                    ),
                 )
 
                 yield result.content
@@ -217,11 +219,13 @@ class ClassifierCore(ProcessorCore):
                 await self._emit_error_trace(
                     record=record,
                     error=e,
-                    processor_stage=processor_stage,
-                    parent_trace_id=parent_trace_id,
-                    duration_ms=int((time.time() - start_time) * 1000),
-                    inputs=kwargs if kwargs else None,
-                    execution_type="classification",
+                    tp=TraceParams(
+                        processor_stage=processor_stage,
+                        parent_trace_id=parent_trace_id,
+                        duration_ms=int((time.time() - start_time) * 1000),
+                        inputs=kwargs if kwargs else None,
+                        execution_type="classification",
+                    ),
                 )
 
                 span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
@@ -273,8 +277,8 @@ class ClassifierCore(ProcessorCore):
             metadata={"api_response": api_response},
             template_metadata={
                 "name": self.template,
-                "hash": template_hash,
-                "unfilled_vars": list(unfilled_vars),
+                "hash": result.template_hash,
+                "unfilled_vars": list(result.unfilled_vars),
             },
             rendered_prompt=rendered_text,
         )
@@ -552,8 +556,8 @@ class HuggingFaceClassifier(ClassifierCore):
             metadata={"api_response": raw_response},
             template_metadata={
                 "name": self.template,
-                "hash": template_hash,
-                "unfilled_vars": list(unfilled_vars),
+                "hash": result.template_hash,
+                "unfilled_vars": list(result.unfilled_vars),
             },
             rendered_prompt=rendered_text,
         )
@@ -768,8 +772,8 @@ class ZentropiClassifier(ClassifierCore):
             metadata={"api_response": api_response},
             template_metadata={
                 "name": self.template,
-                "hash": template_hash,
-                "unfilled_vars": list(unfilled_vars),
+                "hash": result.template_hash,
+                "unfilled_vars": list(result.unfilled_vars),
             },
             rendered_prompt=criteria,
         )

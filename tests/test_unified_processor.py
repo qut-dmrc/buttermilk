@@ -537,7 +537,7 @@ class TestUnifiedProcessorTracing:
         clear_recorded_spans()
 
         # Create processor that raises an error
-        class ErrorProcessor(UnifiedProcessor):  # noqa: F821
+        class ErrorProcessor(ProcessorCore):
             async def _process_record(self, context: ProcessingContext) -> AsyncGenerator[BaseRecord, None]:
                 raise ValueError("Intentional test error")
                 yield  # Make it a generator
