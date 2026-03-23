@@ -30,7 +30,7 @@ CHAT_MODELS = [
     "gpt-4o",
     "llama-maverick",
     "claude-sonnet",
-    "gpt-oss-safeguard-20b",
+    "deepseek-v3",
 ]
 
 CHEAP_CHAT_MODELS = [
