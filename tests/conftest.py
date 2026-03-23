@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
-
 # weave import removed
 from pytest import MarkDecorator
 
@@ -30,7 +29,8 @@ CHAT_MODELS = [
     "gpt-4o",
     "llama-maverick",
     "claude-sonnet",
-    "gpt-oss-safeguard-20b",
+    "deepseek-v3",
+    "mistral-small",
 ]
 
 CHEAP_CHAT_MODELS = [

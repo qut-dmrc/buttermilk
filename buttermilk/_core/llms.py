@@ -151,6 +151,7 @@ class ClientType(Enum):
     VERTEX_OPENAI = "vertex_openai"  # OpenAI-compatible endpoint on Vertex (legacy)
     LLAMA_VERTEX = "llama_vertex"  # Llama models on Vertex AI via native LiteLLM
     DEEPSEEK_VERTEX = "deepseek_vertex"  # DeepSeek models on Vertex AI via native LiteLLM
+    MISTRAL_VERTEX = "mistral_vertex"  # Mistral models on Vertex AI via native LiteLLM
     HUGGINGFACE = "huggingface"  # HuggingFace Inference API (serverless or dedicated)
     ZENTROPI = "zentropi"  # Zentropi toxicity/content moderation API
 
@@ -368,7 +369,7 @@ class LLMConfig(BaseModel):
 # cat .cache/buttermilk/models.json | jq "keys[]"
 # ```
 """A predefined list of chat model identifiers available within the Buttermilk setup."""
-CHAT_MODELS = ["gemini-pro", "gemini-flash", "gemini-flash-lite", "gpt-mini", "gpt-nano", "gpt-4o", "llama-maverick", "claude-sonnet"]
+CHAT_MODELS = ["gemini-pro", "gemini-flash", "gemini-flash-lite", "gpt-mini", "gpt-nano", "gpt-4o", "llama-maverick", "claude-sonnet", "deepseek-v3"]
 
 """A predefined list of identifiers for cost-effective chat models."""
 CHEAP_CHAT_MODELS = [
@@ -1379,6 +1380,7 @@ class LLMs(BaseModel):
             "vertex_openai": "vertex_ai",  # For litellm pricing, Vertex models need vertex_ai prefix
             "llama_vertex": "vertex_ai",  # Llama on Vertex via native LiteLLM support
             "deepseek_vertex": "vertex_ai",  # DeepSeek on Vertex via native LiteLLM support
+            "mistral_vertex": "vertex_ai",  # Mistral on Vertex via native LiteLLM support
             "anthropic_vertex": "vertex_ai",  # Anthropic-on-Vertex
             "anthropic": "anthropic",
             "zentropi": "zentropi",  # Zentropi custom API
@@ -1479,6 +1481,12 @@ class LLMs(BaseModel):
             # Keep deepseek-ai/ prefix - litellm needs it for proper routing
             return model_name
 
+        # For mistral_vertex, strip the mistralai/ prefix - LiteLLM adds it as the publisher
+        if client_type == "mistral_vertex":
+            if model_name.startswith("mistralai/"):
+                return model_name[len("mistralai/"):]
+            return model_name
+
         # For anthropic_vertex clients with provider-specific models, preserve format
         if client_type == "anthropic_vertex" and "/" in model_name:
             return model_name
@@ -1571,7 +1579,7 @@ class LLMs(BaseModel):
             vertex_project = config.configs.get("project_id")
             vertex_location = config.configs.get("region")
 
-        elif config.client_type in (ClientType.LLAMA_VERTEX, ClientType.DEEPSEEK_VERTEX):
+        elif config.client_type in (ClientType.LLAMA_VERTEX, ClientType.DEEPSEEK_VERTEX, ClientType.MISTRAL_VERTEX):
             # Vertex AI MaaS models via native LiteLLM support (Llama, DeepSeek, etc.)
             # LiteLLM handles auth and endpoint construction - no base_url needed
             if not bm.gcp_credentials:
@@ -1586,7 +1594,7 @@ class LLMs(BaseModel):
 
         # Determine if token_provider is needed for this provider
         token_provider = None
-        if config.client_type in (ClientType.VERTEX_OPENAI, ClientType.GEMINI_VERTEX, ClientType.LLAMA_VERTEX, ClientType.DEEPSEEK_VERTEX):
+        if config.client_type in (ClientType.VERTEX_OPENAI, ClientType.GEMINI_VERTEX, ClientType.LLAMA_VERTEX, ClientType.DEEPSEEK_VERTEX, ClientType.MISTRAL_VERTEX):
             # Vertex models need GCP token refresh
             def get_vertex_token() -> str:
                 return bm.get_gcp_access_token()

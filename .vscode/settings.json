@@ -70,13 +70,6 @@
     "**/*.backup": true
   },
   "explorer.excludeGitIgnore": true,
-  "python-envs.pythonProjects": [
-    {
-      "path": "",
-      "envManager": "ms-python.python:system",
-      "packageManager": "ms-python.python:pip"
-    }
-  ],
   "[jinja]": {
     "editor.defaultFormatter": "GlenBuktenica.unicode-substitutions"
   },
@@ -103,4 +96,5 @@
   "peacock.color": "#ecff68",
   "python.languageServer": "None",
   "python.analysis.typeCheckingMode": "off",
+  "python-envs.defaultEnvManager": "ms-python.python:system",
 }
