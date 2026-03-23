@@ -21,7 +21,7 @@ class TestVertexBatchFileProduction:
     expected by Vertex AI Batch API for both Gemini and Claude models.
     """
 
-    @pytest.mark.endtoend
+    @pytest.mark.slow
     def test_gemini_jsonl_structure(self, real_bm):
         """Verify Gemini JSONL output structure matches Vertex Batch API requirements.
 
@@ -83,7 +83,7 @@ class TestVertexBatchFileProduction:
             assert "system_instruction" in req, f"Missing system_instruction in line {i}"
             assert req["system_instruction"]["parts"][0]["text"] == "You are a helpful assistant."
 
-    @pytest.mark.endtoend
+    @pytest.mark.slow
     def test_claude_jsonl_structure(self, real_bm):
         """Verify Claude JSONL output structure matches Vertex Batch API requirements.
 
