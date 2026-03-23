@@ -112,19 +112,13 @@ async def test_scorer_structured_output_with_real_data(
     # Get the LLM instance for this model
     llm = real_bm.llms[model_name]
 
-    # Load the scorer template
-    scorer_template_path = "/Users/suzor/src/buttermilk/buttermilk/templates/prompt/score.jinja2"
-    with open(scorer_template_path) as f:
-        template_content = f.read()
+    # Load and render the scorer template
+    from buttermilk.utils.templating import load_template
 
-    # Create Jinja2 environment to handle template properly
-    from jinja2 import Environment
-
-    env = Environment()
-    template = env.from_string(template_content)
-
-    # Render the template with real data
-    rendered_prompt = template.render(**REAL_TEMPLATE_VARS)
+    rendered_prompt, _, _ = load_template(
+        template="score",
+        template_vars=REAL_TEMPLATE_VARS,
+    )
 
     # Split into system and user messages based on template structure
     # The template has "# System:" and "# User:" markers

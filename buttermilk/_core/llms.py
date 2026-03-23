@@ -368,7 +368,7 @@ class LLMConfig(BaseModel):
 # cat .cache/buttermilk/models.json | jq "keys[]"
 # ```
 """A predefined list of chat model identifiers available within the Buttermilk setup."""
-CHAT_MODELS = ["gemini-pro", "gemini-flash", "gemini-flash-lite", "gpt-mini", "gpt-nano", "gpt-4o", "llama-maverick", "claude-sonnet"]
+CHAT_MODELS = ["gemini-pro", "gemini-flash", "gemini-flash-lite", "gpt-mini", "gpt-nano", "gpt-4o", "llama-maverick", "claude-sonnet", "deepseek-v3"]
 
 """A predefined list of identifiers for cost-effective chat models."""
 CHEAP_CHAT_MODELS = [
