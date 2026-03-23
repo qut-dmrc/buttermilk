@@ -129,6 +129,11 @@ class LLMProcessor(ProcessorCore):
             # For non-Pydantic records
             template_vars = {"record": context.record}
 
+        # Merge variant_params into template vars for template rendering
+        # (e.g., criteria from ParameterExpansionProcessor)
+        if context.variant_params:
+            template_vars.update(context.variant_params)
+
         # Create LLMCore with resolved params if they differ from defaults
         llm_core = self._llm_core
         if resolved_model != self.model or resolved_template != self.template:
