@@ -11,6 +11,7 @@ import pytest
 import yaml
 
 from buttermilk._core.config_bootstrap import bootstrap_session_with_config_async
+from buttermilk._core.log import reset_logging_configuration
 
 
 @pytest.mark.anyio
@@ -76,6 +77,9 @@ async def test_template_paths_resolve_against_config_source_dir(tmp_path: Path):
 
     with open(config_cache_file, "w") as f:
         yaml.dump(config_data, f)
+
+    # Reset logging state to avoid "already configured" error from parallel tests
+    reset_logging_configuration()
 
     # Call bootstrap with BOTH config_dir (cache) and config_source_dir (original)
     # The config_source_dir parameter should take precedence for path resolution

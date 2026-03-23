@@ -169,7 +169,8 @@ class TestTMDBGetAvailability:
                 [("flatrate", list), ("rent", list), ("buy", list), ("link", str)],
             )
 
-            mock_providers = Mock()
+            from types import SimpleNamespace
+            mock_providers = SimpleNamespace()
             mock_providers.results = {
                 "US": RegionData(
                     flatrate=[
@@ -223,9 +224,9 @@ class TestTMDBGetAvailability:
 
         with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
             # Mock empty providers response - needs to be an object with .results attribute
-            from unittest.mock import Mock
+            from types import SimpleNamespace
 
-            mock_providers = Mock()
+            mock_providers = SimpleNamespace()
             mock_providers.results = {}
 
             # Mock the movie(id) method to return an object with watch_providers
@@ -831,7 +832,9 @@ class TestTMDBGetAvailabilityById:
         )
 
         # Convert each region dict to a dataclass instance
-        mock_response = Mock()
+        # Use SimpleNamespace (not Mock) so hasattr() returns False for absent fields
+        from types import SimpleNamespace
+        mock_response = SimpleNamespace()
         mock_response.results = {}
         for region_code, region_data in raw_data["results"].items():
             mock_response.results[region_code] = RegionData(
@@ -935,6 +938,7 @@ class TestTMDBGetAvailabilityById:
     async def test_get_availability_by_id_handles_empty_provider_types(self, tmdb_tool):
         """Test that empty provider types yield null observations."""
         from dataclasses import make_dataclass
+        from types import SimpleNamespace
         from unittest.mock import Mock
 
         RegionData = make_dataclass(
@@ -947,7 +951,7 @@ class TestTMDBGetAvailabilityById:
             ],
         )
 
-        mock_response = Mock()
+        mock_response = SimpleNamespace()
         mock_response.results = {
             "AU": RegionData(
                 link="",
@@ -1018,7 +1022,9 @@ class TestTMDBGetAvailabilityById:
         )
 
         # Simulate truncated response - only AE region present
-        mock_response = Mock()
+        # Use SimpleNamespace (not Mock) so hasattr() returns False for absent fields
+        from types import SimpleNamespace
+        mock_response = SimpleNamespace()
         mock_response.results = {
             "AE": RegionData(
                 link="https://www.themoviedb.org/movie/1013482-borderline/watch?locale=AE",
@@ -1092,7 +1098,9 @@ class TestTMDBGetAvailabilityById:
 
         # Create a response where AE processes fine but AU will cause an error
         # by having a provider dict that's missing required keys
-        mock_response = Mock()
+        # Use SimpleNamespace (not Mock) so hasattr() returns False for absent fields
+        from types import SimpleNamespace
+        mock_response = SimpleNamespace()
 
         # Create a custom class that raises during iteration for AU
         class BrokenRegionData:

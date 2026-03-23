@@ -60,9 +60,11 @@ class TestParameterExpansionProcessorLogic:
         assert len(results) == 4
 
         # Verify each record has correct metadata
+        # Variant params are namespaced under _variant_params to avoid field name collisions
         for r in results:
-            assert "criteria" in r.metadata
-            assert "model" in r.metadata
+            assert "_variant_params" in r.metadata
+            assert "criteria" in r.metadata["_variant_params"]
+            assert "model" in r.metadata["_variant_params"]
             assert r.metadata["original_key"] == "original_value"  # Preserved
             assert "variant_suffix" in r.metadata  # For tracking/deduplication
 
@@ -84,7 +86,7 @@ class TestParameterExpansionProcessorLogic:
         results = [r async for r in processor._process_record(context)]
 
         assert len(results) == 3
-        criteria_values = [r.metadata["criteria"] for r in results]
+        criteria_values = [r.metadata["_variant_params"]["criteria"] for r in results]
         assert set(criteria_values) == {"A", "B", "C"}
 
     @pytest.mark.anyio
@@ -102,7 +104,7 @@ class TestParameterExpansionProcessorLogic:
         assert len(results) == 1
         assert results[0].metadata["existing_key"] == "existing_value"
         assert results[0].metadata["score"] == 0.95
-        assert results[0].metadata["model"] == "X"
+        assert results[0].metadata["_variant_params"]["model"] == "X"
 
     @pytest.mark.anyio
     async def test_record_id_immutable_variant_suffix_in_metadata(self):
