@@ -10,8 +10,10 @@ The design enables consistent observability across all processor types.
 """
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Any, AsyncGenerator, Optional
 
+import jmespath
 from opentelemetry import trace
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, computed_field
 
@@ -20,6 +22,25 @@ from buttermilk._core.contract import ExecutionTrace
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord
 from buttermilk.pipeline import RecordBufferedException
+
+
+@dataclass
+class TraceParams:
+    """Parameters for emitting execution traces.
+
+    Groups the arguments for _emit_success_trace / _emit_error_trace
+    to keep method signatures concise.
+    """
+
+    processor_stage: str
+    parent_trace_id: Optional[str]
+    duration_ms: float
+    execution_type: str = "processing"
+    component_name: Optional[str] = None
+    messages: Optional[list] = None
+    inputs: Optional[dict[str, Any]] = None
+    extra_metadata: Optional[dict[str, Any]] = None
+    trace_id: Optional[str] = None
 
 
 class ObservabilityMixin(BaseModel):
@@ -105,34 +126,31 @@ class ObservabilityMixin(BaseModel):
         self,
         record: BaseRecord,
         outputs: Any,
-        processor_stage: str,
-        parent_trace_id: Optional[str],
-        duration_ms: float,
-        messages: Optional[list] = None,
-        inputs: Optional[dict[str, Any]] = None,
-        extra_metadata: Optional[dict[str, Any]] = None,
-        execution_type: str = "processing",
-        trace_id: Optional[str] = None,
-        component_name: Optional[str] = None,
+        tp: TraceParams,
     ) -> str:
-        """Emit a success execution trace."""
+        """Emit a success execution trace.
+
+        Args:
+            record: The record being processed.
+            outputs: The processing outputs.
+            tp: Trace parameters (stage, timing, metadata, etc.).
+        """
         import uuid
 
-        if trace_id is None:
-            trace_id = str(uuid.uuid4())
+        trace_id = tp.trace_id or str(uuid.uuid4())
 
-        agent_info = self._build_agent_info(processor_stage, execution_type)
-        if component_name:
-            agent_info["component_name"] = component_name
+        agent_info = self._build_agent_info(tp.processor_stage, tp.execution_type)
+        if tp.component_name:
+            agent_info["component_name"] = tp.component_name
 
         execution_trace = ExecutionTrace(
             call_id=trace_id,
             agent_info=agent_info,
-            inputs=inputs,
+            inputs=tp.inputs,
             outputs=outputs,
-            messages=messages,
-            metadata=self._build_trace_metadata(record, duration_ms, extra_metadata),
-            parent_call_id=parent_trace_id,
+            messages=tp.messages,
+            metadata=self._build_trace_metadata(record, tp.duration_ms, tp.extra_metadata),
+            parent_call_id=tp.parent_trace_id,
             record=record,
         )
 
@@ -143,27 +161,28 @@ class ObservabilityMixin(BaseModel):
         self,
         record: Optional[BaseRecord],
         error: Exception,
-        processor_stage: str,
-        parent_trace_id: Optional[str],
-        duration_ms: float,
-        inputs: Optional[dict[str, Any]] = None,
-        execution_type: str = "processing",
-        component_name: Optional[str] = None,
+        tp: TraceParams,
     ) -> None:
-        """Emit an error execution trace."""
-        agent_info = self._build_agent_info(processor_stage, execution_type)
-        if component_name:
-            agent_info["component_name"] = component_name
+        """Emit an error execution trace.
+
+        Args:
+            record: The record being processed (may be None).
+            error: The exception that occurred.
+            tp: Trace parameters (stage, timing, metadata, etc.).
+        """
+        agent_info = self._build_agent_info(tp.processor_stage, tp.execution_type)
+        if tp.component_name:
+            agent_info["component_name"] = tp.component_name
 
         error_trace = ExecutionTrace(
             agent_info=agent_info,
-            inputs=inputs,
+            inputs=tp.inputs,
             error={
                 "event": str(error),
                 "details": {"error_type": type(error).__name__},
             },
-            metadata=self._build_trace_metadata(record, duration_ms),
-            parent_call_id=parent_trace_id,
+            metadata=self._build_trace_metadata(record, tp.duration_ms),
+            parent_call_id=tp.parent_trace_id,
             record=record,
         )
 
@@ -175,7 +194,53 @@ class ProcessorCore(ObservabilityMixin, ABC):
 
     Implements Processor protocol with OTEL tracing.
     Supports typed data flow: processors can yield Any type, not just BaseRecord.
+
+    The ``inputs`` field provides opt-in JMESPath-based resolution of per-record
+    values from the record envelope.  Keys that match processor config fields
+    (e.g. ``model``, ``template``) override those fields for the current record;
+    all other keys are injected as template variables.
+
+    Example YAML config::
+
+        steps:
+          - processor: LLMProcessor
+            model: gpt-4o            # default
+            template: analyze_text   # default
+            inputs:
+              model: record.metadata.model        # per-record override
+              template: record.metadata.template
+              country: record.metadata.country     # template variable
     """
+
+    inputs: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "JMESPath mappings from record fields to processor inputs. "
+            "Paths are evaluated against {'record': record.model_dump()}. "
+            "E.g. {'model': 'record.metadata.model', 'content': 'record.text'}"
+        ),
+    )
+
+    def _resolve_inputs(self, context: ProcessingContext) -> dict[str, Any]:
+        """Resolve ``inputs`` from the record via JMESPath.
+
+        Returns a dict of resolved values (only keys whose JMESPath expression
+        matched a non-None value in the record envelope).
+        """
+        if not self.inputs:
+            return {}
+
+        if hasattr(context.record, "model_dump"):
+            envelope = {"record": context.record.model_dump()}
+        else:
+            envelope = {"record": context.record}
+
+        resolved: dict[str, Any] = {}
+        for name, path in self.inputs.items():
+            value = jmespath.search(path, envelope)
+            if value is not None:
+                resolved[name] = value
+        return resolved
 
     async def process(
         self,

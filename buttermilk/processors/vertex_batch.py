@@ -44,7 +44,7 @@ from pydantic import BaseModel, Field, PrivateAttr
 from buttermilk import logger
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.processing_context import ProcessingContext
-from buttermilk._core.processor_core import BatchProcessorCore
+from buttermilk._core.processor_core import BatchProcessorCore, TraceParams
 from buttermilk._core.types import BaseRecord
 from buttermilk._core.vertex_batch import BatchJobManager, BatchResult, OpenAIBatchJobManager
 from buttermilk.utils.import_utils import load_class
@@ -297,8 +297,8 @@ class BatchLLMProcessor(BatchProcessorCore):
 
             client = AzureOpenAI(
                 api_key=config.api_key,
-                azure_endpoint=config.configs.get("base_url", ""),
-                api_version=config.configs.get("api_version", "2025-03-01-preview"),
+                azure_endpoint=config.configs["base_url"],
+                api_version=config.configs["api_version"],
             )
             endpoint = "/chat/completions"
         else:
@@ -321,6 +321,49 @@ class BatchLLMProcessor(BatchProcessorCore):
             max_wait_hours=self.max_wait_hours,
         )
 
+    @staticmethod
+    def _extract_variant_from_metadata(record: BaseRecord) -> Any:
+        """Extract variant identifier from record metadata for traceability."""
+        if not record.metadata:
+            return None
+        for key in ("variant_suffix", "variant", "variant_name", "instruction_type"):
+            value = record.metadata.get(key)
+            if value:
+                return value
+        return None
+
+    def _extract_processor_index(self, record: BaseRecord) -> Any:
+        """Extract processor_index from variant metadata if present."""
+        if not record.metadata:
+            return self.processor_index
+        variant_info = record.metadata.get("variant", {})
+        if isinstance(variant_info, dict) and "index" in variant_info:
+            return variant_info["index"]
+        return self.processor_index
+
+    def _build_structured_variant(
+        self,
+        resolved_model: str,
+        resolved_template: str,
+        variant_from_metadata: Any,
+    ) -> dict[str, Any]:
+        """Build structured variant dict with model info for traceability."""
+        from buttermilk import bm
+
+        structured_variant: dict[str, Any] = {
+            "template": resolved_template,
+            "model": resolved_model,
+        }
+        if resolved_model in bm.llms.connections:
+            config = bm.llms.connections[resolved_model]
+            structured_variant["model_config"] = {
+                "resolved_model": config.configs["model"] if "model" in config.configs else resolved_model,
+                "region": config.configs.get("region"),
+                "max_output_tokens": self._get_resolved_max_tokens(),
+            }
+        if variant_from_metadata:
+            structured_variant["metadata_variant"] = variant_from_metadata if isinstance(variant_from_metadata, dict) else str(variant_from_metadata)
+        return structured_variant
 
     def prepare_batch_requests(
         self,
@@ -396,43 +439,14 @@ class BatchLLMProcessor(BatchProcessorCore):
             # Convert to LiteLLM format (standardized intermediate format)
             litellm_messages = autogen_to_litellm_messages(messages)
 
-            # Extract variant info for traceability
-            variant_from_metadata = None
-            if record.metadata:
-                variant_suffix = record.metadata.get("variant_suffix")
-                if variant_suffix:
-                    variant_from_metadata = variant_suffix
-                elif record.metadata.get("variant"):
-                    variant_from_metadata = record.metadata.get("variant")
-                elif record.metadata.get("variant_name") or record.metadata.get("instruction_type"):
-                    variant_from_metadata = record.metadata.get("variant_name") or record.metadata.get("instruction_type")
-
-            # Extract processor_index from variant metadata if present
-            processor_index = self.processor_index
-            if record.metadata:
-                variant_info = record.metadata.get("variant", {})
-                if isinstance(variant_info, dict) and "index" in variant_info:
-                    processor_index = variant_info.get("index")
-
-            # Build structured variant with full model info for traceability
-            structured_variant: dict[str, Any] = {
-                "template": resolved_template,
-                "model": resolved_model,
-            }
-            from buttermilk import bm
-
-            if resolved_model in bm.llms.connections:
-                config = bm.llms.connections[resolved_model]
-                structured_variant["model_config"] = {
-                    "resolved_model": config.configs.get("model", resolved_model),
-                    "region": config.configs.get("region"),
-                    "max_output_tokens": self._get_resolved_max_tokens(),
-                }
-            if variant_from_metadata:
-                if isinstance(variant_from_metadata, dict):
-                    structured_variant["metadata_variant"] = variant_from_metadata
-                else:
-                    structured_variant["metadata_variant"] = str(variant_from_metadata)
+            # Extract variant and traceability info
+            variant_from_metadata = self._extract_variant_from_metadata(record)
+            processor_index = self._extract_processor_index(record)
+            structured_variant = self._build_structured_variant(
+                resolved_model,
+                resolved_template,
+                variant_from_metadata,
+            )
 
             req = BatchRequest(
                 custom_id=str(uuid.uuid4()),
@@ -473,7 +487,6 @@ class BatchLLMProcessor(BatchProcessorCore):
             f"with prepare_batch_requests() instead, or use VertexBatchProcessor "
             f"for direct Vertex AI batch submission."
         )
-
 
     def _create_pending_records(
         self,
@@ -566,11 +579,13 @@ class BatchLLMProcessor(BatchProcessorCore):
                 await self._emit_error_trace(
                     record=record,
                     error=Exception(result.error),
-                    processor_stage=self.name or "batch_llm",
-                    parent_trace_id=None,
-                    duration_ms=duration_ms / len(records),
-                    inputs={},
-                    execution_type="llm_processing (batch)",
+                    tp=TraceParams(
+                        processor_stage=self.name or "batch_llm",
+                        parent_trace_id=None,
+                        duration_ms=duration_ms / len(records),
+                        inputs={},
+                        execution_type="llm_processing (batch)",
+                    ),
                 )
                 error_record = record.model_copy(update={"error": [*(record.error or []), result.error]})
                 output_records.append(error_record)
@@ -596,21 +611,23 @@ class BatchLLMProcessor(BatchProcessorCore):
             await self._emit_success_trace(
                 record=record,
                 outputs=final_output,
-                processor_stage=self.name or "batch_llm",
-                parent_trace_id=None,
-                duration_ms=duration_ms / len(records),
-                messages=[],  # Batch API doesn't return full message history
-                inputs={},
-                extra_metadata={
-                    "llm_config": {
-                        "model": self.model,
-                        "template": self.template,
-                        "batch_job_id": batch_job_id,
+                tp=TraceParams(
+                    processor_stage=self.name or "batch_llm",
+                    parent_trace_id=None,
+                    duration_ms=duration_ms / len(records),
+                    messages=[],  # Batch API doesn't return full message history
+                    inputs={},
+                    extra_metadata={
+                        "llm_config": {
+                            "model": self.model,
+                            "template": self.template,
+                            "batch_job_id": batch_job_id,
+                        },
+                        "usage": result.usage,
+                        "cost_usd": result.cost_usd,
                     },
-                    "usage": result.usage,
-                    "cost_usd": result.cost_usd,
-                },
-                execution_type="llm_processing (batch)",
+                    execution_type="llm_processing (batch)",
+                ),
             )
 
             # Yield the typed output or enriched record
@@ -811,7 +828,7 @@ class VertexBatchProcessor(BatchLLMProcessor):
 
             # Blocking mode: wait for completion and parse results
             try:
-                completed_job = await manager.wait_for_completion(job)
+                await manager.wait_for_completion(job)
             except (TimeoutError, RuntimeError) as e:
                 logger.error(f"Batch job for {model_name} failed: {e}")
                 return [
@@ -900,11 +917,15 @@ class VertexBatchProcessor(BatchLLMProcessor):
 
         # Get client_type for correct message format routing
         from buttermilk import bm
+
         config = bm.llms.connections.get(self.model)
         client_type = config.client_type.value if config else None
 
         jsonl_content = manager.build_jsonl(
-            requests, self.model, max_tokens=resolved_max_tokens, client_type=client_type,
+            requests,
+            self.model,
+            max_tokens=resolved_max_tokens,
+            client_type=client_type,
         )
 
         # Generate a dry-run job ID and upload to GCS
@@ -922,6 +943,7 @@ class VertexBatchProcessor(BatchLLMProcessor):
             if resolved_region is None:
                 # Check if Gemini 3 model (uses global endpoint)
                 from buttermilk import bm
+
                 resolved_model = self.model
                 if self.model in bm.llms.connections:
                     config = bm.llms.connections[self.model]
@@ -1037,7 +1059,7 @@ class OpenAIBatchProcessor(BatchLLMProcessor):
         if config.client_type.value == "azure":
             from openai import AzureOpenAI
 
-            api_version = config.configs.get("api_version", "2024-12-01-preview")
+            api_version = config.configs["api_version"]
             self._openai_client = AzureOpenAI(
                 api_key=config.api_key,
                 azure_endpoint=config.base_url,

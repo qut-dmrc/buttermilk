@@ -369,7 +369,7 @@ class TestTransformProcessor:
         """Verify processor fails fast on invalid JMESPath expression."""
         # Creating the processor should fail fast on invalid expression
         with pytest.raises(ValueError, match="Invalid JMESPath expression"):
-            processor = TransformProcessor(
+            TransformProcessor(
                 expression="metadata..invalid[[syntax",
                 output_field="result",
             )
@@ -537,7 +537,7 @@ class TestUnifiedProcessorTracing:
         clear_recorded_spans()
 
         # Create processor that raises an error
-        class ErrorProcessor(UnifiedProcessor):
+        class ErrorProcessor(ProcessorCore):
             async def _process_record(self, context: ProcessingContext) -> AsyncGenerator[BaseRecord, None]:
                 raise ValueError("Intentional test error")
                 yield  # Make it a generator
@@ -1188,7 +1188,7 @@ class TestBatchProcessor:
         class FailingProcessor(ProcessorCore):
             async def _process_record(self, context: ProcessingContext) -> AsyncGenerator[BaseRecord, None]:
                 raise ValueError("Intentional failure")
-                yield  # noqa: unreachable
+                yield  # noqa: RET506
 
         # This batch processor succeeds
         class SucceedingBatchProcessor(ObservabilityMixin):
@@ -1215,24 +1215,14 @@ class TestBatchProcessor:
 
 
 class TestLLMProcessorVariantParams:
-    """Test LLMProcessor variant_params resolution for BatchAccumulator use."""
+    """Test LLMProcessor variant_params resolution for BatchAccumulator use.
 
-    def test_resolve_field_returns_variant_param(self):
-        """Verify _resolve_field prefers context.variant_params over self."""
-        from buttermilk.processors.unified_processors import LLMProcessor
+    variant_params are resolved inline in _process_record() and used to
+    override model/template when building LLMCore per-record.
+    """
 
-        processor = LLMProcessor(model="default-model", template="default-template")
-        context = ProcessingContext(
-            session_id="test",
-            record=BaseRecord(record_id="test", content="c"),
-            variant_params={"model": "override-model", "template": "override-template"},
-        )
-
-        assert processor._resolve_field("model", context) == "override-model"
-        assert processor._resolve_field("template", context) == "override-template"
-
-    def test_resolve_field_falls_back_to_default(self):
-        """Verify _resolve_field falls back to self when no variant_params."""
+    def test_resolve_inputs_returns_empty_without_inputs(self):
+        """Verify _resolve_inputs returns empty dict when no inputs configured."""
         from buttermilk.processors.unified_processors import LLMProcessor
 
         processor = LLMProcessor(model="default-model", template="default-template")
@@ -1241,19 +1231,59 @@ class TestLLMProcessorVariantParams:
             record=BaseRecord(record_id="test", content="c"),
         )
 
-        assert processor._resolve_field("model", context) == "default-model"
-        assert processor._resolve_field("template", context) == "default-template"
+        assert processor._resolve_inputs(context) == {}
 
-    def test_resolve_field_partial_override(self):
-        """Verify _resolve_field can override one field while keeping the other default."""
+    def test_resolve_inputs_extracts_from_metadata(self):
+        """Verify _resolve_inputs extracts values via JMESPath."""
         from buttermilk.processors.unified_processors import LLMProcessor
 
-        processor = LLMProcessor(model="default-model", template="default-template")
+        processor = LLMProcessor(
+            model="default-model",
+            template="default-template",
+            inputs={"model": "record.metadata.model"},
+        )
         context = ProcessingContext(
             session_id="test",
-            record=BaseRecord(record_id="test", content="c"),
-            variant_params={"template": "override-template"},
+            record=BaseRecord(record_id="test", content="c", metadata={"model": "override-model"}),
         )
 
-        assert processor._resolve_field("model", context) == "default-model"
-        assert processor._resolve_field("template", context) == "override-template"
+        resolved = processor._resolve_inputs(context)
+        assert resolved["model"] == "override-model"
+
+    def test_resolve_inputs_falls_back_when_path_missing(self):
+        """Verify _resolve_inputs omits keys when JMESPath path resolves to None."""
+        from buttermilk.processors.unified_processors import LLMProcessor
+
+        processor = LLMProcessor(
+            model="default-model",
+            template="default-template",
+            inputs={"model": "record.metadata.model"},
+        )
+        context = ProcessingContext(
+            session_id="test",
+            record=BaseRecord(record_id="test", content="c", metadata={}),
+        )
+
+        resolved = processor._resolve_inputs(context)
+        assert "model" not in resolved
+
+    def test_resolve_inputs_partial_override(self):
+        """Verify _resolve_inputs resolves only fields present in metadata."""
+        from buttermilk.processors.unified_processors import LLMProcessor
+
+        processor = LLMProcessor(
+            model="default-model",
+            template="default-template",
+            inputs={
+                "model": "record.metadata.model",
+                "template": "record.metadata.template",
+            },
+        )
+        context = ProcessingContext(
+            session_id="test",
+            record=BaseRecord(record_id="test", content="c", metadata={"template": "override-template"}),
+        )
+
+        resolved = processor._resolve_inputs(context)
+        assert "model" not in resolved
+        assert resolved["template"] == "override-template"

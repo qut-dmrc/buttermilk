@@ -218,8 +218,8 @@ class TestLLMProcessorTypedOutput:
         assert not hasattr(processor, "output_col")
         assert not hasattr(processor, "yield_typed")
 
-        # Confirm inner core doesn't have them either
-        assert not hasattr(processor._llm_core, "output_col")
+        # LLMCore is built per-record (no _llm_core attr)
+        assert not hasattr(processor, "_llm_core")
 
     def test_llm_processor_has_output_model_field(self):
         """LLMProcessor should have output_model field for typed output."""
