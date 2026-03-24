@@ -10,6 +10,8 @@ validation to ensure fail-fast behavior.
 
 import pytest
 
+pytestmark = pytest.mark.slow
+
 from buttermilk._core.config import AgentVariants
 from buttermilk._core.types import RunRequest
 from buttermilk.orchestrators.groupchat import AutogenOrchestrator

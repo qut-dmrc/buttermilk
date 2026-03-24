@@ -3,6 +3,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+pytestmark = pytest.mark.slow
+
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import Record
 from buttermilk._core.vertex_batch import BatchJobManager

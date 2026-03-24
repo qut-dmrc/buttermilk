@@ -16,6 +16,8 @@ NO mocks except for external system boundaries we don't control in tests.
 import pandas as pd
 import pytest
 
+pytestmark = pytest.mark.slow
+
 from buttermilk.agents.imagegen import VertexImagen3Fast, VertexImagen4Fast
 from buttermilk.data.sources.character_prompt_source import CharacterPromptSource
 from buttermilk.pipeline import PipelineOrchestrator

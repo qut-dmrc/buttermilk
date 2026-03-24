@@ -2,6 +2,8 @@
 
 import pytest
 
+pytestmark = pytest.mark.slow
+
 torch = pytest.importorskip("torch")
 
 from buttermilk._core.types import Record

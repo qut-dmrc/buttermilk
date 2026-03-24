@@ -15,6 +15,8 @@ from typing import Any
 
 import pytest
 
+pytestmark = pytest.mark.slow
+
 from buttermilk._core.contract import ExecutionTrace
 from buttermilk._core.types import RunRequest
 from buttermilk.runner.flowrunner import FlowRunner

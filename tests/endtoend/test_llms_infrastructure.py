@@ -3,6 +3,10 @@
 These tests verify that LLMs are properly configured and accessible.
 """
 
+import pytest
+
+pytestmark = pytest.mark.slow
+
 from buttermilk import BM
 
 

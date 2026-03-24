@@ -1,5 +1,7 @@
 import pytest
 
+pytestmark = pytest.mark.integration
+
 from buttermilk._core.llms import CHAT_MODELS
 from buttermilk._core.types import (
     Record,

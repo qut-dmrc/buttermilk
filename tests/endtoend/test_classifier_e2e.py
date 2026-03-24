@@ -17,6 +17,8 @@ import json
 import os
 
 import pytest
+
+pytestmark = pytest.mark.slow
 from pydantic import BaseModel
 
 from buttermilk import logger

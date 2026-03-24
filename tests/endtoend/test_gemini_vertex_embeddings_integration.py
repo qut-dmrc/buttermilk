@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+pytestmark = pytest.mark.slow
+
 from buttermilk.processors.embeddings import GeminiEmbeddingFunction
 
 if TYPE_CHECKING:

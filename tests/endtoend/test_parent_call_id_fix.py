@@ -14,6 +14,8 @@ import datetime
 
 import pytest
 
+pytestmark = pytest.mark.slow
+
 from buttermilk import logger
 from buttermilk._core.llm_core import LLMCore
 from buttermilk._core.types import BaseRecord

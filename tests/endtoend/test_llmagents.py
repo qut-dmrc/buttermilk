@@ -1,5 +1,7 @@
 import pytest
 
+pytestmark = pytest.mark.slow
+
 # Buttermilk core imports
 from buttermilk._core.contract import AgentInput, AgentOutput, ExecutionTrace
 from buttermilk._core.llms import CHAT_MODELS, CHEAP_CHAT_MODELS
