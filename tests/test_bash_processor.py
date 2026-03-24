@@ -142,6 +142,7 @@ class TestPDFToTextProcessor:
     """Test PDFToTextProcessor - specialized processor for pdftotext."""
 
     @pytest.mark.anyio
+    @pytest.mark.skipif(not __import__("shutil").which("pdftotext"), reason="pdftotext not installed (install poppler-utils)")
     async def test_pdftotext_processor_extracts_text_from_pdf(self, tmp_path):
         """PDFToTextProcessor should use pdftotext to extract text from PDFs.
 

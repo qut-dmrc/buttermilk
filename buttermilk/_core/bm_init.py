@@ -636,23 +636,21 @@ class BM(BaseModel):
 
         from buttermilk._core.execution_context import get_execution_context
 
-        # Get execution context for the execution_context_id
-        exec_ctx = get_execution_context()
-
-        # Extract components from IDs:
-        # exec format: exec-{timestamp}-{slug}-{node}-{user}
-        # session format: session-{timestamp}-{slug}-{node}-{user}
-        # Example: exec-20251224T1921Z-ZoYkuM8a-dev3-debian
-        # Split:   ['exec', '20251224T1921Z', 'ZoYkuM8a', 'dev3', 'debian']
-        exec_parts = exec_ctx.execution_context_id.split("-")
+        # Try to get execution context to incorporate exec ID into path.
+        # When BM is used without an ExecutionContext (e.g. create_session_bm_async),
+        # fall back to session-only components.
         session_parts = self.session_info.session_id.split("-")
-
-        exec_timestamp = exec_parts[1]  # e.g., "20251224T1921Z"
-        exec_slug = exec_parts[2]  # 8-char UUID
+        session_timestamp = session_parts[1]  # e.g., "20251224T1921Z"
         session_slug = session_parts[2]  # 8-char UUID
 
-        # Collapsed directory name: {timestamp}-{exec_slug}-{session_slug}
-        collapsed_dir = f"{exec_timestamp}-{exec_slug}-{session_slug}"
+        try:
+            exec_ctx = get_execution_context()
+            exec_parts = exec_ctx.execution_context_id.split("-")
+            exec_slug = exec_parts[2]  # 8-char UUID
+            collapsed_dir = f"{session_timestamp}-{exec_slug}-{session_slug}"
+        except RuntimeError:
+            # No ExecutionContext — use session-only components
+            collapsed_dir = f"{session_timestamp}-{session_slug}"
 
         # Construct full save directory path
         save_dir_path = AnyPath(self.save_dir_base) / self.session_info.project_name / self.session_info.job / collapsed_dir

@@ -27,6 +27,10 @@ class MockToxicityModel(ToxicityModel):
         """Mock interpret implementation."""
         return EvalRecord(prediction=False)
 
+    async def _process_record(self, context):
+        """Mock _process_record to satisfy ProcessorCore abstract method."""
+        yield context.record
+
 
 class TestToxicityModelCredentials:
     """Test credentials handling in ToxicityModel base class."""

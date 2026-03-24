@@ -609,8 +609,8 @@ class TMDBTool:
 
             # Process each region returned by TMDB
             for region_code, region_data in response.results.items():
-                # Convert dataclass to dict for easier processing
-                providers_raw = asdict(region_data)
+                # region_data is a plain dict from themoviedb library
+                providers_raw = region_data if isinstance(region_data, dict) else asdict(region_data)
                 normalized_region = self._normalize_region(region_code)
 
                 # Process each provider type (flatrate, rent, buy, ads, free)

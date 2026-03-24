@@ -205,8 +205,8 @@ async def test_litellm_create_uses_token_provider_for_auth():
         mock_response.model = "test-model"
         return mock_response
 
-    # Patch litellm.acompletion where it's imported in llms.py
-    with patch("buttermilk._core.llms.acompletion", new=mock_acompletion):
+    # Patch _get_acompletion() since the module uses lazy import via this function
+    with patch("buttermilk._core.llms._get_acompletion", return_value=mock_acompletion):
         # Create LiteLLMWrapper with token_provider
         # Must create inside patch context so it doesn't try to validate with real litellm
         model_info = {"family": "test", "structured_output": False}
