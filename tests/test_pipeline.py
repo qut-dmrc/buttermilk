@@ -852,8 +852,9 @@ class AlwaysFailingProcessor:
         self.error_cls = error_cls
 
     async def process(self, context, **kwargs):
+        if False:
+            yield  # make this an async generator
         raise self.error_cls("Simulated failure")
-        yield  # make it a generator  # noqa: E111
 
 
 class FilteringProcessor:

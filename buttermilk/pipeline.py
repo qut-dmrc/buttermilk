@@ -358,6 +358,8 @@ class PipelineOrchestrator(BaseModel):
                     ) as processor_span:
                         next_queue = []
                         buffered_count = 0  # Track how many records were buffered
+                        local_variant_errors = 0  # Track errors in this processor stage
+                        local_filtered_count = 0  # Track filtered records in this stage
 
                         # Process each record in the current queue through this processor
                         for current_record in processing_queue:
@@ -447,6 +449,7 @@ class PipelineOrchestrator(BaseModel):
                                     error_type=type(e).__name__,
                                 )
                                 self._summary.increment_variant_errors()
+                                local_variant_errors += 1
                                 continue
 
                             if not outputs:
@@ -458,6 +461,7 @@ class PipelineOrchestrator(BaseModel):
                                         f"Variant filtered in {processor_stage_name}, continuing",
                                         record_id=getattr(current_record, "record_id", "unknown"),
                                     )
+                                    local_filtered_count += 1
                                     continue
                                 raise RecordSkippedException(f"Record was filtered out by processor in {processor_stage_name}")
                             else:
@@ -496,15 +500,24 @@ class PipelineOrchestrator(BaseModel):
 
                         # In continue_on_error mode, check if ALL records failed/filtered
                         if not next_queue and buffered_count == 0 and len(processing_queue) > 0:
+                            if local_variant_errors == 0:
+                                # All records were filtered (not errored) — this is a skip, not a failure
+                                raise RecordSkippedException(
+                                    f"All {local_filtered_count} records filtered in {processor_stage_name}"
+                                )
                             raise RuntimeError(
                                 f"All {len(processing_queue)} records failed in {processor_stage_name} "
-                                f"({self._summary.variant_errors} variant errors)"
+                                f"({local_variant_errors} variant errors)"
                             )
 
                         # Set processor span attributes for outputs
                         processor_span.set_attribute("outputs.count", len(next_queue))
-                        processor_span.set_attribute("filtered", False)
-                        processor_span.set_status(trace.Status(trace.StatusCode.OK))
+                        if local_variant_errors > 0:
+                            processor_span.set_attribute("variant_errors.count", local_variant_errors)
+                            processor_span.set_status(trace.Status(trace.StatusCode.ERROR, f"{local_variant_errors} variant(s) failed"))
+                        else:
+                            processor_span.set_attribute("filtered", False)
+                            processor_span.set_status(trace.Status(trace.StatusCode.OK))
 
                         # Move to next stage with all outputs from this processor
                         processing_queue = next_queue
