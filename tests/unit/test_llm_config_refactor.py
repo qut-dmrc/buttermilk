@@ -18,6 +18,7 @@ def test_client_type_enum():
         "vertex_openai",
         "llama_vertex",
         "deepseek_vertex",
+        "mistral_vertex",
         "huggingface",
         "zentropi",
     ]

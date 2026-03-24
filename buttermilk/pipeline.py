@@ -56,7 +56,7 @@ NON-GOALS
 
 import asyncio
 import time
-from typing import Any, AsyncGenerator, AsyncIterator, Mapping, Optional
+from typing import Any, AsyncGenerator, AsyncIterator, Literal, Mapping, Optional
 
 import hydra
 import pydantic
@@ -118,6 +118,12 @@ class PipelineOrchestrator(BaseModel):
         default=1,
         ge=1,
         description="Number of times to replicate each source record (for reliability studies)",
+    )
+    error_mode: Literal["fail_fast", "continue_on_error"] = Field(
+        default="fail_fast",
+        description="Error handling for expanded variant records within a processing chain. "
+        "'fail_fast' (default): one failure aborts all sibling variants. "
+        "'continue_on_error': log error, drop failed variant, continue with survivors.",
     )
 
     # Inputs configured after instantiation
@@ -287,6 +293,7 @@ class PipelineOrchestrator(BaseModel):
         span_attributes = {
             "record.id": record_id,
             "pipeline.name": self.pipeline_name,
+            "pipeline.error_mode": self.error_mode,
             "processor.count": len(self.processors),
             "record.title": record_title,
         }
@@ -351,6 +358,8 @@ class PipelineOrchestrator(BaseModel):
                     ) as processor_span:
                         next_queue = []
                         buffered_count = 0  # Track how many records were buffered
+                        local_variant_errors = 0  # Track errors in this processor stage
+                        local_filtered_count = 0  # Track filtered records in this stage
 
                         # Process each record in the current queue through this processor
                         for current_record in processing_queue:
@@ -418,14 +427,42 @@ class PipelineOrchestrator(BaseModel):
                                 buffered_count += 1
                                 continue
                             except Exception as e:
-                                # Don't log here - let the task wrapper handle error logging
-                                # to avoid duplicate error messages
+                                # FatalError always propagates — infrastructure failures
+                                # (auth, quota) mean all remaining variants will also fail
+                                from buttermilk._core.exceptions import FatalError
+
+                                if isinstance(e, FatalError):
+                                    processor_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
+                                    raise
+
+                                if self.error_mode == "fail_fast":
+                                    processor_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
+                                    raise
+
+                                # continue_on_error: log loudly, track, skip this record
                                 processor_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
-                                raise
+                                logger.error(
+                                    f"Variant failed in {processor_stage_name}, continuing ({self.error_mode})",
+                                    record_id=getattr(current_record, "record_id", "unknown"),
+                                    variant_params=variant_params,
+                                    error=str(e),
+                                    error_type=type(e).__name__,
+                                )
+                                self._summary.increment_variant_errors()
+                                local_variant_errors += 1
+                                continue
 
                             if not outputs:
                                 # This record was filtered out by this processor
                                 processor_span.set_attribute("filtered", True)
+                                if self.error_mode == "continue_on_error" and len(processing_queue) > 1:
+                                    # Variant was filtered — drop it, continue with siblings
+                                    logger.debug(
+                                        f"Variant filtered in {processor_stage_name}, continuing",
+                                        record_id=getattr(current_record, "record_id", "unknown"),
+                                    )
+                                    local_filtered_count += 1
+                                    continue
                                 raise RecordSkippedException(f"Record was filtered out by processor in {processor_stage_name}")
                             else:
                                 # Trace record state AFTER processor
@@ -461,10 +498,26 @@ class PipelineOrchestrator(BaseModel):
                             # to the caller (will be processed later via flush())
                             raise RecordBufferedException(f"All {buffered_count} records buffered in {processor_stage_name}")
 
+                        # In continue_on_error mode, check if ALL records failed/filtered
+                        if not next_queue and buffered_count == 0 and len(processing_queue) > 0:
+                            if local_variant_errors == 0:
+                                # All records were filtered (not errored) — this is a skip, not a failure
+                                raise RecordSkippedException(
+                                    f"All {local_filtered_count} records filtered in {processor_stage_name}"
+                                )
+                            raise RuntimeError(
+                                f"All {len(processing_queue)} records failed in {processor_stage_name} "
+                                f"({local_variant_errors} variant errors)"
+                            )
+
                         # Set processor span attributes for outputs
                         processor_span.set_attribute("outputs.count", len(next_queue))
-                        processor_span.set_attribute("filtered", False)
-                        processor_span.set_status(trace.Status(trace.StatusCode.OK))
+                        if local_variant_errors > 0:
+                            processor_span.set_attribute("variant_errors.count", local_variant_errors)
+                            processor_span.set_status(trace.Status(trace.StatusCode.ERROR, f"{local_variant_errors} variant(s) failed"))
+                        else:
+                            processor_span.set_attribute("filtered", False)
+                            processor_span.set_status(trace.Status(trace.StatusCode.OK))
 
                         # Move to next stage with all outputs from this processor
                         processing_queue = next_queue

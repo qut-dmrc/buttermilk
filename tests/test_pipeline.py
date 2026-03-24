@@ -811,3 +811,233 @@ async def test_1_to_n_expansion_partial_batch_flush():
     # Verify total records processed across all batches
     total_batched = sum(batch_calls)
     assert total_batched == 6, f"Expected 6 total records through batch processor, got {total_batched}"
+
+
+# ─── Error mode tests (Issue #371) ──────────────────────────────────
+
+
+class ExpandingProcessor:
+    """Processor that expands 1 record into N records (simulates ParameterExpansionProcessor)."""
+
+    def __init__(self, count: int = 3):
+        self.count = count
+
+    async def process(self, context, **kwargs):
+        record = context.record
+        for i in range(self.count):
+            new_metadata = {**(record.metadata or {}), "_variant_params": {"variant": i}, "variant_suffix": f"variant={i}"}
+            yield record.model_copy(update={"metadata": new_metadata})
+
+
+class SelectivelyFailingProcessor:
+    """Processor that fails on records with specific variant params."""
+
+    def __init__(self, fail_on_variants: set[int] | None = None, error_cls: type = ValueError):
+        self.fail_on_variants = fail_on_variants or set()
+        self.error_cls = error_cls
+        self.processed = []
+
+    async def process(self, context, **kwargs):
+        variant = (context.variant_params or {}).get("variant")
+        if variant in self.fail_on_variants:
+            raise self.error_cls(f"Simulated failure for variant={variant}")
+        self.processed.append(context.record)
+        yield context.record
+
+
+class AlwaysFailingProcessor:
+    """Processor that always raises."""
+
+    def __init__(self, error_cls: type = ValueError):
+        self.error_cls = error_cls
+
+    async def process(self, context, **kwargs):
+        if False:
+            yield  # make this an async generator
+        raise self.error_cls("Simulated failure")
+
+
+class FilteringProcessor:
+    """Processor that filters out records with specific variant params (yields nothing)."""
+
+    def __init__(self, filter_variants: set[int] | None = None):
+        self.filter_variants = filter_variants or set()
+
+    async def process(self, context, **kwargs):
+        variant = (context.variant_params or {}).get("variant")
+        if variant in self.filter_variants:
+            return  # yield nothing = filter
+        yield context.record
+
+
+@pytest.mark.anyio
+async def test_error_mode_default_is_fail_fast():
+    """Default error_mode is fail_fast: one variant failure kills all siblings."""
+    from buttermilk._core.types import BaseRecord
+
+    async def source():
+        yield BaseRecord(record_id="rec1")
+
+    expander = ExpandingProcessor(count=3)
+    failer = SelectivelyFailingProcessor(fail_on_variants={1})
+
+    orchestrator = PipelineOrchestrator(
+        pipeline_name="test_fail_fast",
+        source=source(),
+        processors=[expander, failer],
+        enable_record_cache=False,
+    )
+
+    results = []
+    async for record in orchestrator():
+        results.append(record)
+
+    # fail_fast: the source record is marked as failed, no outputs
+    assert len(results) == 0
+    assert orchestrator._summary.failed == 1
+    assert orchestrator._summary.variant_errors == 0
+
+
+@pytest.mark.anyio
+async def test_continue_on_error_partial_success():
+    """continue_on_error: one variant failure drops that variant, others continue."""
+    from buttermilk._core.types import BaseRecord
+
+    async def source():
+        yield BaseRecord(record_id="rec1")
+
+    expander = ExpandingProcessor(count=3)
+    failer = SelectivelyFailingProcessor(fail_on_variants={1})  # variant=1 fails
+
+    orchestrator = PipelineOrchestrator(
+        pipeline_name="test_continue",
+        source=source(),
+        processors=[expander, failer],
+        enable_record_cache=False,
+        error_mode="continue_on_error",
+    )
+
+    results = []
+    async for record in orchestrator():
+        results.append(record)
+
+    # 2 of 3 variants succeed
+    assert len(results) == 2
+    assert orchestrator._summary.processed == 1  # source record counted as processed
+    assert orchestrator._summary.variant_errors == 1
+    assert orchestrator._summary.failed == 0
+
+
+@pytest.mark.anyio
+async def test_continue_on_error_all_fail():
+    """continue_on_error: if ALL variants fail, source record is marked failed."""
+    from buttermilk._core.types import BaseRecord
+
+    async def source():
+        yield BaseRecord(record_id="rec1")
+
+    expander = ExpandingProcessor(count=3)
+    failer = AlwaysFailingProcessor()
+
+    orchestrator = PipelineOrchestrator(
+        pipeline_name="test_all_fail",
+        source=source(),
+        processors=[expander, failer],
+        enable_record_cache=False,
+        error_mode="continue_on_error",
+    )
+
+    results = []
+    async for record in orchestrator():
+        results.append(record)
+
+    # All variants failed → source record failed, no outputs
+    assert len(results) == 0
+    assert orchestrator._summary.failed == 1
+    assert orchestrator._summary.variant_errors == 3
+
+
+@pytest.mark.anyio
+async def test_fatal_error_bypasses_continue_on_error():
+    """FatalError always propagates, even in continue_on_error mode."""
+    from buttermilk._core.exceptions import FatalError
+    from buttermilk._core.types import BaseRecord
+
+    async def source():
+        yield BaseRecord(record_id="rec1")
+
+    expander = ExpandingProcessor(count=3)
+    failer = AlwaysFailingProcessor(error_cls=FatalError)
+
+    orchestrator = PipelineOrchestrator(
+        pipeline_name="test_fatal",
+        source=source(),
+        processors=[expander, failer],
+        enable_record_cache=False,
+        error_mode="continue_on_error",
+    )
+
+    results = []
+    async for record in orchestrator():
+        results.append(record)
+
+    # FatalError bypasses continue_on_error, source record fails immediately
+    assert len(results) == 0
+    assert orchestrator._summary.failed == 1
+    # variant_errors is 0 because FatalError raises immediately, not caught by continue logic
+    assert orchestrator._summary.variant_errors == 0
+
+
+@pytest.mark.anyio
+async def test_continue_on_error_filtered_variant():
+    """continue_on_error: filtered variant (zero outputs) drops it, others continue."""
+    from buttermilk._core.types import BaseRecord
+
+    async def source():
+        yield BaseRecord(record_id="rec1")
+
+    expander = ExpandingProcessor(count=3)
+    filterer = FilteringProcessor(filter_variants={0})  # variant=0 filtered
+
+    orchestrator = PipelineOrchestrator(
+        pipeline_name="test_filtered",
+        source=source(),
+        processors=[expander, filterer],
+        enable_record_cache=False,
+        error_mode="continue_on_error",
+    )
+
+    results = []
+    async for record in orchestrator():
+        results.append(record)
+
+    # 2 of 3 variants pass the filter
+    assert len(results) == 2
+    assert orchestrator._summary.processed == 1
+
+
+@pytest.mark.anyio
+async def test_continue_on_error_noop_single_record():
+    """continue_on_error is effectively a no-op for non-expanded pipelines."""
+    from buttermilk._core.types import BaseRecord
+
+    async def source():
+        yield BaseRecord(record_id="rec1")
+
+    failer = AlwaysFailingProcessor()
+
+    orchestrator = PipelineOrchestrator(
+        pipeline_name="test_noop",
+        source=source(),
+        processors=[failer],
+        enable_record_cache=False,
+        error_mode="continue_on_error",
+    )
+
+    results = []
+    async for record in orchestrator():
+        results.append(record)
+
+    # Single record fails → source record failed (continue_on_error can't help)
+    assert len(results) == 0
+    assert orchestrator._summary.failed == 1
