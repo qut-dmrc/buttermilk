@@ -3,6 +3,8 @@
 from typing import Literal
 
 import pytest
+
+pytestmark = pytest.mark.slow
 from autogen_core import CancellationToken, FunctionCall
 from autogen_core.models import SystemMessage, UserMessage
 from autogen_core.tools import FunctionTool

@@ -1,6 +1,8 @@
 """Test LLM functionality across all models."""
 
 import pytest
+
+pytestmark = pytest.mark.slow
 from autogen_core.models import SystemMessage, UserMessage
 from pydantic import BaseModel, Field
 

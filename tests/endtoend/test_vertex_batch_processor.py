@@ -18,6 +18,8 @@ Test Philosophy:
 
 import pytest
 
+pytestmark = pytest.mark.slow
+
 from buttermilk._core.types import Record
 from tests.conftest import CHEAP_CHAT_MODELS
 

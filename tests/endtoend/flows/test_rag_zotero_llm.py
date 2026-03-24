@@ -1,6 +1,8 @@
 """Test RAG Zotero agent with actual LLM calls and structured outputs."""
 
 import pytest
+
+pytestmark = pytest.mark.slow
 from autogen_core.tools import FunctionTool
 from pydantic import BaseModel
 

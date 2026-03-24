@@ -1,6 +1,8 @@
 from typing import Any
 
 import pytest
+
+pytestmark = pytest.mark.integration
 from fastapi.testclient import TestClient
 
 from buttermilk import BM
