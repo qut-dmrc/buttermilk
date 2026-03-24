@@ -96,6 +96,7 @@ class TestMessageFormatConversion:
         assert result.cached is False
 
 
+@pytest.mark.slow
 @pytest.mark.anyio
 class TestLiteLLMWrapperCreate:
     """Test LiteLLMWrapper.create() method."""
@@ -199,6 +200,7 @@ class TestLiteLLMWrapperCreate:
             assert mock_acompletion.call_count == 2  # Initial + 1 retry
 
 
+@pytest.mark.slow
 @pytest.mark.anyio
 class TestLiteLLMWrapperStructuredOutput:
     """Test structured output with LiteLLMWrapper."""
