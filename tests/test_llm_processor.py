@@ -643,3 +643,136 @@ class TestLLMProcessorInputs:
 
         assert resolved["content_text"] == "The actual content"
         assert resolved["ds_name"] == "my_dataset"
+
+
+class TestLLMProcessorVariantParamsTemplateVars:
+    """Regression tests for issue #373: variant_params must be merged into template vars.
+
+    ParameterExpansionProcessor stores criteria/model/etc in record.metadata["_variant_params"].
+    The pipeline promotes these to context.variant_params.  LLMProcessor must merge the
+    non-config fields (e.g. criteria) into the template variables so templates can render them.
+    """
+
+    @pytest.mark.anyio
+    async def test_variant_params_non_config_fields_reach_template(self):
+        """Non-config variant_params (e.g. criteria) must be passed to the template.
+
+        Regression: #364 dropped non-config variant_params from template rendering,
+        causing "unfilled parameters: criteria" errors for every record.
+        """
+        processor = LLMProcessor(
+            model="gpt-4",
+            template="test/with_unfilled_vars",
+            fail_on_unfilled_parameters=False,  # allow missing_var; required_var comes from variant_params
+        )
+
+        record = BaseRecord(record_id="reg-373", content="some content")
+        context = ProcessingContext(
+            session_id="test",
+            record=record,
+            variant_params={"required_var": "from_variant"},
+        )
+
+        mock_bm = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.call_chat.return_value = CreateResult(
+            content="ok",
+            finish_reason="stop",
+            usage=RequestUsage(prompt_tokens=5, completion_tokens=5),
+            cached=False,
+        )
+        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.connections = {}
+
+        with patch("buttermilk._core.llm_core.bm", mock_bm), patch("buttermilk.processors.unified_processors.bm", mock_bm):
+            outputs = []
+            async for output in processor.process(context):
+                outputs.append(output)
+
+        # If variant_params weren't merged, required_var would be unfilled and
+        # process_with_llm would raise ProcessingError; getting here means the fix works.
+        assert len(outputs) == 1
+
+    @pytest.mark.anyio
+    async def test_variant_params_config_fields_override_model_and_template(self):
+        """Config-level variant_params (model, template) still override processor defaults."""
+        processor = LLMProcessor(
+            model="default-model",
+            template="test/simple",
+        )
+
+        record = BaseRecord(record_id="reg-373b", content="content", metadata={"var": "test"})
+        context = ProcessingContext(
+            session_id="test",
+            record=record,
+            variant_params={"model": "override-model", "template": "test/simple"},
+        )
+
+        mock_bm = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.call_chat.return_value = CreateResult(
+            content="ok",
+            finish_reason="stop",
+            usage=RequestUsage(prompt_tokens=5, completion_tokens=5),
+            cached=False,
+        )
+        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.connections = {}
+
+        with patch("buttermilk._core.llm_core.bm", mock_bm), patch("buttermilk.processors.unified_processors.bm", mock_bm):
+            outputs = []
+            async for output in processor.process(context):
+                outputs.append(output)
+
+        assert len(outputs) == 1
+        assert mock_bm.llms.get_autogen_chat_client.call_args[0][0] == "override-model"
+
+    @pytest.mark.anyio
+    async def test_inputs_jmespath_takes_priority_over_variant_params(self):
+        """JMESPath inputs override variant_params for the same key."""
+        processor = LLMProcessor(
+            model="gpt-4",
+            template="test/with_unfilled_vars",
+            inputs={"required_var": "record.metadata.from_record"},
+            fail_on_unfilled_parameters=False,
+        )
+
+        record = BaseRecord(
+            record_id="reg-373c",
+            content="content",
+            metadata={"from_record": "record_wins"},
+        )
+        context = ProcessingContext(
+            session_id="test",
+            record=record,
+            variant_params={"required_var": "variant_loses"},
+        )
+
+        mock_bm = MagicMock()
+        mock_client = AsyncMock()
+        mock_client.call_chat.return_value = CreateResult(
+            content="ok",
+            finish_reason="stop",
+            usage=RequestUsage(prompt_tokens=5, completion_tokens=5),
+            cached=False,
+        )
+        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.connections = {}
+
+        with patch("buttermilk._core.llm_core.bm", mock_bm), patch("buttermilk.processors.unified_processors.bm", mock_bm):
+            # Spy on _build_llm_core to verify the right extra_template_vars are used
+            original_build = processor._build_llm_core
+            build_calls = []
+
+            def spy_build(**kwargs):
+                build_calls.append(kwargs)
+                return original_build(**kwargs)
+
+            processor._build_llm_core = spy_build
+            outputs = []
+            async for output in processor.process(context):
+                outputs.append(output)
+
+        # JMESPath "record_wins" should override variant_params "variant_loses"
+        assert len(build_calls) == 1
+        assert build_calls[0]["extra_template_vars"].get("required_var") == "record_wins"

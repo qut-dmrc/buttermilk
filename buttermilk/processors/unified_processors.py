@@ -140,11 +140,17 @@ class LLMProcessor(ProcessorCore):
             else:
                 extra_template_vars[key] = value
 
-        # Also check variant_params (from BatchAccumulator)
+        # Also check variant_params (from BatchAccumulator / pipeline orchestrator)
         if context.variant_params:
-            for field in ("model", "template"):
-                if field not in config_overrides and field in context.variant_params:
-                    config_overrides[field] = context.variant_params[field]
+            for key, value in context.variant_params.items():
+                if key in self._OVERRIDABLE_CONFIG_FIELDS:
+                    # Config overrides (model, template, etc.) — inputs JMESPath takes priority
+                    if key not in config_overrides:
+                        config_overrides[key] = value
+                else:
+                    # Non-config params (e.g., criteria) go to template vars — inputs JMESPath takes priority
+                    if key not in extra_template_vars:
+                        extra_template_vars[key] = value
 
         resolved_model = config_overrides["model"] if "model" in config_overrides else self.model
         resolved_template = config_overrides["template"] if "template" in config_overrides else self.template
