@@ -49,7 +49,8 @@ def test_sexuality_gender_prompts_are_grammatically_correct():
         # Using case-insensitive regex to allow various sexuality descriptors
         # Gender may be one or more words (e.g., "woman" or "trans woman")
         # Pattern: (A|An) + one or more words + "person"
-        pattern = r"(a|an)\s+[\w\s]+person"
+        # Allow hyphens and apostrophes for values like "Two-Spirit" and "Fa'afafine"
+        pattern = r"(a|an)\s+[\w\s'\-]+person"
         assert re.search(pattern, prompt, re.IGNORECASE), (
             f"Prompt doesn't match expected pattern '[article] [sexuality] [gender] person [scenario]': {prompt}"
         )
@@ -84,7 +85,8 @@ def test_character_str_with_sexuality_and_gender_includes_person():
     # Should have proper article-adjective-noun structure
     # Format: "A [sexuality] [gender] person" or "An [sexuality] [gender] person"
     # Gender may be multiple words (e.g., "trans woman")
-    pattern = r"(A|An)\s+[\w\s]+person"
+    # Allow hyphens and apostrophes for values like "Two-Spirit" and "Fa'afafine"
+    pattern = r"(A|An)\s+[\w\s'\-]+person"
     assert re.search(pattern, char_str, re.IGNORECASE), (
         f"Character string doesn't match expected pattern '[article] [sexuality] [gender] person': {char_str}"
     )

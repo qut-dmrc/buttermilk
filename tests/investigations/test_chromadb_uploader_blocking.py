@@ -38,6 +38,7 @@ pytestmark = pytest.mark.anyio
 class TestChromaDBUploaderBlocking:
     """Test ChromaDBUploader for event loop blocking."""
 
+    @pytest.mark.slow
     async def test_ensure_cache_initialized_blocking(self):
         """Verify _ensure_cache_initialized doesn't block event loop.
 
