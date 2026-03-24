@@ -18,13 +18,13 @@ def test_sexuality_iv(idgen):
     component differing.
     """
     character = idgen.generate_identity()
-    # Explicitly use a non-default sexuality so variants[0] is never "straight"
-    # (the default/majority value placed in variants[1])
-    character.sexuality = "Gay"
     variants = idgen.mask(character=character, mask=["sexuality"])
+    # blind variant has no sexuality
     assert variants[-1].sexuality is None
+    # default variant has the majority/default sexuality
     assert str.lower(variants[1].sexuality) == "straight"
-    assert str.lower(variants[0].sexuality) != "straight"
+    # original variant retains the original character's sexuality unchanged
+    assert variants[0].sexuality == character.sexuality
 
 
 def test_scenario_with_gender_sexuality_ethnicity_ivs(idgen):
