@@ -3,7 +3,9 @@ import json
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
+
+pytestmark = pytest.mark.integration
 
 from buttermilk._core.contract import AgentInput, ExecutionTrace
 
@@ -40,7 +42,7 @@ def client():
 
 @pytest.mark.anyio
 async def test_run_flow(client: TestClient):
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         response = await ac.post(
             "/flow",
             json={

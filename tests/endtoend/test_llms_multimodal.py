@@ -3,6 +3,8 @@ from io import BytesIO
 import pytest
 from PIL import Image
 
+pytestmark = pytest.mark.slow
+
 from buttermilk._core.types import Record
 
 

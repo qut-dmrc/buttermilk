@@ -6,6 +6,8 @@ They use a module-scoped fixture to share the BM instance across tests.
 
 import pytest
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.fixture(scope="module")
 def bm_instance():
