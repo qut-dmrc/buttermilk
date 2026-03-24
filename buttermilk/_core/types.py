@@ -798,6 +798,7 @@ class ProcessingSummary(BaseModel):
     processed: int = Field(default=0, description="Number of items successfully processed")
     skipped: int = Field(default=0, description="Number of items intentionally skipped")
     failed: int = Field(default=0, description="Number of items that failed processing")
+    variant_errors: int = Field(default=0, description="Individual variant records that failed within continue_on_error chains")
     start_time: float = Field(
         default_factory=lambda: time.time(),
         description="Unix timestamp when processing started",
@@ -820,6 +821,10 @@ class ProcessingSummary(BaseModel):
     def increment_failed(self) -> None:
         """Increment failed counter."""
         object.__setattr__(self, "failed", self.failed + 1)
+
+    def increment_variant_errors(self) -> None:
+        """Increment variant_errors counter (individual variant failures in continue_on_error mode)."""
+        object.__setattr__(self, "variant_errors", self.variant_errors + 1)
 
     def duration_ms(self) -> int:
         """Calculate duration in milliseconds from start_time to now.
@@ -850,14 +855,17 @@ class ProcessingSummary(BaseModel):
         duration_sec = self.duration_ms() / 1000.0
         success_pct = self.success_rate() * 100
 
-        return (
+        parts = [
             f"✅ Processing complete: "
             f"attempted={self.attempted} "
             f"processed={self.processed} "
             f"skipped={self.skipped} "
-            f"failed={self.failed} "
-            f"(success={success_pct:.1f}%, duration={duration_sec:.2f}s)"
-        )
+            f"failed={self.failed}",
+        ]
+        if self.variant_errors > 0:
+            parts.append(f" variant_errors={self.variant_errors}")
+        parts.append(f" (success={success_pct:.1f}%, duration={duration_sec:.2f}s)")
+        return "".join(parts)
 
     def as_dict(self) -> dict[str, Any]:
         """Export summary as dictionary with computed fields.
@@ -870,6 +878,7 @@ class ProcessingSummary(BaseModel):
             "processed": self.processed,
             "skipped": self.skipped,
             "failed": self.failed,
+            "variant_errors": self.variant_errors,
             "start_time": self.start_time,
             "duration_ms": self.duration_ms(),
             "success_rate": self.success_rate(),
