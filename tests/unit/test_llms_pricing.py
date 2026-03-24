@@ -240,6 +240,7 @@ class TestLiteLLMIntegration:
             # Some models may not be in litellm's pricing database yet - that's OK
             pytest.skip(f"Model {resolved_name} not in litellm pricing: {e}")
 
+    @pytest.mark.slow
     def test_bad_model_names_should_fail(self):
         """Test that malformed model names properly fail with litellm."""
         from litellm.cost_calculator import cost_per_token

@@ -7,6 +7,7 @@ from buttermilk.utils.media import download_and_convert
 pytestmark = pytest.mark.anyio
 
 
+@pytest.mark.slow
 @pytest.mark.anyio
 async def test_record_remote_load(multimodal_record):
     assert multimodal_record

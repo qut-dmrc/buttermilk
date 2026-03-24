@@ -9,6 +9,7 @@ import pytest
 from buttermilk._core.types import Record
 
 
+@pytest.mark.slow
 @pytest.mark.anyio
 async def test_no_pdf_download_when_fulltext_exists():
     """Test that PDF is NOT downloaded when Zotero provides fulltext."""
