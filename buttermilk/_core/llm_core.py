@@ -339,6 +339,15 @@ class LLMCore(ObservabilityMixin):
         result.metadata["hashes"] = {
             "template_hash": self._template_metadata.get("template_hash"),
         }
+        # Add per-message hashes (computed before LLM call in process_with_llm)
+        if "_message_hashes" in result.metadata:
+            from buttermilk._core.hashing import extract_system_hash
+
+            msg_hashes = result.metadata.pop("_message_hashes")
+            result.metadata["hashes"]["message_hashes"] = msg_hashes
+            system_hash = extract_system_hash(msg_hashes)
+            if system_hash:
+                result.metadata["hashes"]["system_hash"] = system_hash
         if record is not None:
             result.metadata["hashes"]["record_hash"] = record.record_hash
             if hasattr(record, "ground_truth_hash") and record.ground_truth_hash:
@@ -448,6 +457,11 @@ class LLMCore(ObservabilityMixin):
                 # Fill template and call LLM
                 llm_messages = await self._fill_template(template_vars, record=record, context=context)
                 result.messages = llm_messages.copy()
+
+                # Compute per-message hashes before LLM call (only input messages)
+                from buttermilk._core.hashing import compute_message_hashes
+
+                result.metadata["_message_hashes"] = compute_message_hashes(llm_messages)
 
                 llm_result = await self._call_llm_with_trace(
                     messages=llm_messages,
