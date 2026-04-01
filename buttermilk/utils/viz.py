@@ -22,7 +22,13 @@ from typing import Literal
 
 import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
+
+try:
+    import seaborn as sns
+
+    SEABORN_AVAILABLE = True
+except ImportError:
+    SEABORN_AVAILABLE = False
 
 try:
     import plotly.graph_objects as go
@@ -218,7 +224,8 @@ def init_viz(
 
     if set_style:
         _apply_matplotlib_style(profile_config, palette)
-        _apply_seaborn_style(profile_config, palette, theme)
+        if SEABORN_AVAILABLE:
+            _apply_seaborn_style(profile_config, palette, theme)
 
     if set_plotly and PLOTLY_AVAILABLE:
         _apply_plotly_style(profile_config, palette, theme)

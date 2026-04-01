@@ -100,7 +100,6 @@ dependencies = [
   "langdetect>=1.0.9",
   "replicate>=0.34.2",
   "matplotlib>=3.10.8",
-  "seaborn>=0.13.2,<1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -159,6 +158,7 @@ dev = [
   "openpyxl>=3.1.5,<4.0.0",
   # Visualization
   "matplotlib>=3.9.2,<4.0.0",
+  "seaborn>=0.13.2,<1.0.0",
   "plotly>=5.24.1,<6.0.0",
   "altair>=5.0.0",
   "tqdm>=4.66.5,<5.0.0",
