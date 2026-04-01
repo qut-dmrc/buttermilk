@@ -68,10 +68,10 @@ jobs:
       head_ref: ${{ needs.setup.outputs.head_ref }}
     secrets: inherit
 
-  custodiet:
-    name: Custodiet
+  enforcer:
+    name: Enforcer
     needs: [setup]
-    uses: ./.github/workflows/agent-custodiet.yml
+    uses: ./.github/workflows/agent-enforcer.yml
     with:
       pr_number: ${{ needs.setup.outputs.pr_number }}
       head_ref: ${{ needs.setup.outputs.head_ref }}
@@ -91,7 +91,7 @@ jobs:
   # ──────────────────────────────────────────────
   notify-ready:
     name: Ready for Review
-    needs: [setup, strategic-review, custodiet, qa]
+    needs: [setup, strategic-review, enforcer, qa]
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -115,7 +115,7 @@ jobs:
           | Type check | Passed |
           | Unit tests | Passed |
           | Strategic review | Passed |
-          | Custodiet | Passed |
+          | Enforcer | Passed |
           | QA | Passed |
 
           **Ready for human review.**
