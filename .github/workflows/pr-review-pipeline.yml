@@ -71,10 +71,10 @@ jobs:
   enforcer:
     name: Enforcer
     needs: [setup]
-    uses: ./.github/workflows/agent-enforcer.yml
+    uses: nicsuzor/academicOps/.github/workflows/agent-enforcer.yml@main
     with:
       pr_number: ${{ needs.setup.outputs.pr_number }}
-      head_ref: ${{ needs.setup.outputs.head_ref }}
+      ref: ${{ needs.setup.outputs.head_ref }}
     secrets: inherit
 
   qa:
