@@ -15,7 +15,6 @@ from .utils import (
     remove_punctuation,
     scrub_serializable,
 )
-from .viz import init_viz
 
 __all__ = [
     "col_mapping_hydra_to_local",
@@ -39,9 +38,13 @@ __all__ = [
 
 
 def __getattr__(name: str):
-    """Lazy import for heavy BigQuery utilities."""
+    """Lazy import for heavy BigQuery utilities and optional viz dependencies."""
     if name == "construct_dict_from_schema":
         from .bq import construct_dict_from_schema
 
         return construct_dict_from_schema
+    if name == "init_viz":
+        from .viz import init_viz
+
+        return init_viz
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
