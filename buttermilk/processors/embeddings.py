@@ -17,6 +17,7 @@ from vertexai.language_models import (
 )
 
 from buttermilk import bm, logger
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord
 from buttermilk.utils.utils import scrub_serializable
 
@@ -97,16 +98,17 @@ class EmbeddingGenerator(BaseModel):
             batch_size=self.embedding_batch_size,
         )
 
-    async def process(self, record: BaseRecord, *, processor_stage: str = "embed", **kwargs) -> AsyncGenerator[BaseRecord, None]:
+    async def process(self, context: ProcessingContext) -> AsyncGenerator[BaseRecord, None]:
         """Process a record by generating embeddings for its chunks.
 
         Args:
-            record: BaseRecord with chunks field containing chunk dicts
-            processor_stage: Stage name for metadata tracking
+            context: Unified processing context
 
         Yields:
             BaseRecord with embeddings added to chunks
         """
+        record = context.record
+        processor_stage = context.session_id
         # Check if record has chunks
         chunks_count = len(getattr(record, "chunks", []))
         logger.debug(

@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from buttermilk import logger
 from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import Record
 
 
@@ -61,16 +62,9 @@ class BashProcessor(BaseModel):
     timeout_seconds: int = Field(default=300, description="Command timeout in seconds")
     shell: bool = Field(default=True, description="Execute command through shell")
 
-    async def process(
-        self,
-        record: Record,
-        *,
-        processor_stage: str,
-        parent_trace_id: str | None = None,
-        component_name: str = "BashProcessor",
-        cancellation_token: Any | None = None,
-        **kwargs: Any,
-    ) -> AsyncGenerator[Record, None]:
+    async def process(self, context: ProcessingContext) -> AsyncGenerator[Record, None]:
+        record = context.record
+        processor_stage = context.session_id
         """Execute bash command on record's file.
 
         Args:
@@ -197,16 +191,9 @@ class PDFToTextProcessor(BashProcessor):
 
         super().__init__(**config)
 
-    async def process(
-        self,
-        record: Record,
-        *,
-        processor_stage: str,
-        parent_trace_id: str | None = None,
-        component_name: str = "PDFToTextProcessor",
-        cancellation_token: Any | None = None,
-        **kwargs: Any,
-    ) -> AsyncGenerator[Record, None]:
+    async def process(self, context: ProcessingContext) -> AsyncGenerator[Record, None]:
+        record = context.record
+        processor_stage = context.session_id
         """Extract text from PDF using pdftotext.
 
         Skips extraction if content doesn't look like PDF metadata placeholder

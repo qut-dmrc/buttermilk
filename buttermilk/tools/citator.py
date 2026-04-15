@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from buttermilk._core.contract import AgentInput
 from buttermilk._core.log import logger
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import Record
 from buttermilk.agents.llm import LLMAgent
 
@@ -47,18 +48,18 @@ class Citator(LLMAgent):
         # Initialize parent class - kwargs are passed through to AgentConfig
         super().__init__(output_model=output_model, **kwargs)
 
-    async def process(self, item: Record, *, processor_stage: str = "cite", **kwargs) -> AsyncGenerator[Record, None]:
+    async def process(self, context: ProcessingContext) -> AsyncGenerator[Record, None]:
         """
         Process a Record to generate a citation using the LLM.
 
         Args:
-            item (Record): The Record containing the text to cite.
-            processor_stage: Stage name for metadata tracking (default: "cite")
-            **kwargs: Additional keyword arguments (ignored, for compatibility)
+            context: Unified processing context
 
         Yields:
             Record: The updated Record with the generated citation (or with error metadata if processing failed).
         """
+        item = context.record
+        processor_stage = context.session_id
 
         # Take the first N characters for citation generation
         citation_text = item.content[:CITATION_TEXT_CHAR_LIMIT]

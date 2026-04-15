@@ -24,6 +24,7 @@ from buttermilk._core.constants import cache
 from buttermilk._core.exceptions import RateLimit  # Import RateLimit exception
 from buttermilk._core.retry import RetryWrapper  # Add retry functionality
 from buttermilk._core.storage_config import VectorStorageConfig
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BatchProcessingResult, ProcessingResult, Record
 from buttermilk.utils.utils import ensure_chromadb_cache, scrub_serializable
 
@@ -198,7 +199,9 @@ class SemanticSplitter(BaseModel):
 
         return chunks, offsets
 
-    async def process(self, doc: Record, *, processor_stage: str = "chunk", **kwargs: Any) -> AsyncGenerator[Record, None]:
+    async def process(self, context: ProcessingContext) -> AsyncGenerator[Record, None]:
+        doc = context.record
+        processor_stage = context.session_id
         """Chunks documents and adds the chunks list to the Record."""
         # Extract text content from Record
         if hasattr(doc, "content"):
@@ -736,7 +739,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             logger.error(f"❌ Finalization failed: {e}")
             return False
 
-    async def process(self, record: Record, *, processor_stage: str = "embed", **kwargs: Any) -> AsyncGenerator[Record, None]:
+    async def process(self, context: ProcessingContext) -> AsyncGenerator[Record, None]:
+        record = context.record
+        processor_stage = context.session_id
         """Process method for pipeline integration.
 
         Takes a chunked record and creates embeddings for it.
