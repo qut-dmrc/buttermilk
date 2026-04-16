@@ -450,16 +450,9 @@ class ZoteroDownloadProcessor(BaseModel):
 
         return bm.session_info.get_cache_subdir(cache.ZOTERO)
 
-    async def process(  # noqa: PLR0912 - Reduced from 24 to 14 branches via refactor, authorized by NS 20251024
-        self,
-        record: BaseRecord,
-        *,
-        processor_stage: str,
-        parent_trace_id: str | None = None,
-        component_name: str = "ZoteroDownloadProcessor",
-        cancellation_token: Any | None = None,
-        **kwargs: Any,
-    ) -> AsyncGenerator[Record, None]:
+    async def process(self, context: ProcessingContext) -> AsyncGenerator[Record, None]:
+        record = context.record
+        processor_stage = context.session_id
         """Process a Zotero item: download and extract full text.
 
         Pipeline caching: The pipeline's RecordCache handles caching of Records.
