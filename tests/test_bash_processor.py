@@ -11,6 +11,11 @@ from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import Record
 
 
+def make_context(record: Record) -> ProcessingContext:
+    """Helper to wrap a Record in a ProcessingContext for tests."""
+    return ProcessingContext(session_id="test", record=record)
+
+
 class TestBashProcessorBasics:
     """Test basic BashProcessor functionality."""
 
@@ -45,7 +50,7 @@ class TestBashProcessorBasics:
         )
 
         # Process the record
-        results = [r async for r in processor.process(record, processor_stage="test")]
+        results = [r async for r in processor.process(make_context(record))]
 
         # Verify output
         assert len(results) == 1
@@ -80,7 +85,7 @@ class TestBashProcessorBasics:
             read_output_file=True,
         )
 
-        results = [r async for r in processor.process(record, processor_stage="test")]
+        results = [r async for r in processor.process(make_context(record))]
 
         assert len(results) == 1
         assert results[0].content == "test content"
@@ -108,7 +113,7 @@ class TestBashProcessorBasics:
         )
 
         with pytest.raises(ProcessingError) as exc_info:
-            async for _ in processor.process(record, processor_stage="test"):
+            async for _ in processor.process(make_context(record)):
                 pass
 
         assert "command failed" in str(exc_info.value).lower()
@@ -133,7 +138,7 @@ class TestBashProcessorBasics:
             output_field="content",
         )
 
-        results = [r async for r in processor.process(record, processor_stage="test")]
+        results = [r async for r in processor.process(make_context(record))]
 
         assert len(results) == 1
         assert "Hello from command" in results[0].content
@@ -167,7 +172,7 @@ class TestPDFToTextProcessor:
 
         processor = PDFToTextProcessor()
 
-        results = [r async for r in processor.process(record, processor_stage="test")]
+        results = [r async for r in processor.process(make_context(record))]
 
         assert len(results) == 1
         result = results[0]
@@ -201,7 +206,7 @@ class TestPDFToTextProcessor:
         processor = PDFToTextProcessor()
 
         with pytest.raises(ProcessingError) as exc_info:
-            async for _ in processor.process(record, processor_stage="test"):
+            async for _ in processor.process(make_context(record)):
                 pass
 
         error_msg = str(exc_info.value).lower()
@@ -294,7 +299,7 @@ class TestBashProcessorCaching:
             update_file_path=True,  # Update file_path to point to output
         )
 
-        results = [r async for r in processor.process(record, processor_stage="test")]
+        results = [r async for r in processor.process(make_context(record))]
 
         assert len(results) == 1
         result = results[0]
@@ -323,7 +328,7 @@ class TestBashProcessorEdgeCases:
         )
 
         with pytest.raises((FileNotFoundError, ProcessingError)):
-            async for _ in processor.process(record, processor_stage="test"):
+            async for _ in processor.process(make_context(record)):
                 pass
 
     @pytest.mark.anyio
@@ -347,7 +352,7 @@ class TestBashProcessorEdgeCases:
             output_field="content",
         )
 
-        results = [r async for r in processor.process(record, processor_stage="test")]
+        results = [r async for r in processor.process(make_context(record))]
 
         assert len(results) == 1
         # Content should be empty or remain unchanged depending on implementation
