@@ -17,6 +17,7 @@ import pytest
 
 pytest.importorskip("pyzotero", reason="pyzotero is optional (install with: uv sync --extra research)")
 
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord, Record
 from buttermilk.libs.zotero import ZoteroDownloadProcessor, ZoteroSource
 
@@ -206,7 +207,7 @@ class TestZoteroDownloadProcessorCitationKeys:
 
         # Process the record through ZoteroDownloadProcessor
         processed_records = []
-        async for processed in processor.process(test_record, processor_stage="test"):
+        async for processed in processor.process(ProcessingContext(session_id="test", record=test_record)):
             processed_records.append(processed)
 
         # Verify citation_key propagated
@@ -497,7 +498,7 @@ class TestZoteroDownloadProcessorBehavior:
         processor = ZoteroDownloadProcessor(library_id=library_id)
 
         results = []
-        async for result in processor.process(test_record, processor_stage="test"):
+        async for result in processor.process(ProcessingContext(session_id="test", record=test_record)):
             results.append(result)
 
         # Should yield exactly one Record
@@ -557,7 +558,7 @@ class TestMetadataUpdateBehavior:
         # First: Process the item to ensure it's in cache and ChromaDB
         processor = ZoteroDownloadProcessor(library_id=library_id)
         results = []
-        async for result in processor.process(test_record, processor_stage="test"):
+        async for result in processor.process(ProcessingContext(session_id="test", record=test_record)):
             results.append(result)
 
         assert len(results) == 1
@@ -595,7 +596,7 @@ class TestMetadataUpdateBehavior:
         # Second: Process with updated metadata
         # The processor should detect version change and reprocess
         results2 = []
-        async for result in processor.process(updated_record, processor_stage="test"):
+        async for result in processor.process(ProcessingContext(session_id="test", record=updated_record)):
             results2.append(result)
 
         assert len(results2) == 1
@@ -799,7 +800,7 @@ class TestMetadataUpdateBehavior:
         # First: Process to ensure cache exists
         processor = ZoteroDownloadProcessor(library_id=library_id)
         results = []
-        async for result in processor.process(test_record, processor_stage="test"):
+        async for result in processor.process(ProcessingContext(session_id="test", record=test_record)):
             results.append(result)
 
         assert len(results) == 1
@@ -840,7 +841,7 @@ class TestMetadataUpdateBehavior:
 
         # Second: Process with updated metadata
         results2 = []
-        async for result in processor.process(updated_record, processor_stage="test"):
+        async for result in processor.process(ProcessingContext(session_id="test", record=updated_record)):
             results2.append(result)
 
         assert len(results2) == 1
@@ -904,7 +905,7 @@ class TestMetadataUpdateBehavior:
         # First: Process to create initial cache
         processor = ZoteroDownloadProcessor(library_id=library_id)
         results = []
-        async for result in processor.process(test_record, processor_stage="test"):
+        async for result in processor.process(ProcessingContext(session_id="test", record=test_record)):
             results.append(result)
 
         assert len(results) == 1
@@ -970,7 +971,7 @@ class TestMetadataUpdateBehavior:
 
         # Second: Process with updated parent metadata but same attachment version
         results2 = []
-        async for result in processor.process(updated_record, processor_stage="test"):
+        async for result in processor.process(ProcessingContext(session_id="test", record=updated_record)):
             results2.append(result)
 
         assert len(results2) == 1

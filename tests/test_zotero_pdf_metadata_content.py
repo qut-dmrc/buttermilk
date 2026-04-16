@@ -23,15 +23,14 @@ async def test_zotero_sets_pdf_metadata_as_content_when_no_fulltext(real_bm):
     2. PDF metadata provides meaningful information
     3. Content indicates that text extraction is needed
     """
-    from buttermilk._core.types import Record
+    from buttermilk._core.processing_context import ProcessingContext
+    from buttermilk._core.types import BaseRecord
     from buttermilk.libs.zotero import ZoteroDownloadProcessor
 
     # Create a test record
-    test_record = Record(
+    test_record = BaseRecord(
         record_id="TEST_KEY",
-        content="[Placeholder from fetch]",
         metadata={
-            "title": "Test Document",
             "zotero_item": {"key": "TEST_KEY", "title": "Test Document"},
             "zotero_links": {
                 "attachment": {
@@ -39,8 +38,10 @@ async def test_zotero_sets_pdf_metadata_as_content_when_no_fulltext(real_bm):
                     "href": "https://api.zotero.org/users/123/items/ATTACH_KEY/file",
                 }
             },
+            "citation_key": None,
         },
     )
+    context = ProcessingContext(session_id="download", record=test_record)
 
     # Mock the Zotero API client at module level
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -52,9 +53,9 @@ async def test_zotero_sets_pdf_metadata_as_content_when_no_fulltext(real_bm):
 
             downloader = ZoteroDownloadProcessor(library_id="test_library")
 
-            # Process the record
+            # Process the record using the new ProcessingContext API
             results = []
-            async for result in downloader.process(test_record, processor_stage="download"):
+            async for result in downloader.process(context):
                 results.append(result)
 
             # Verify we got a result
@@ -85,14 +86,13 @@ async def test_zotero_uses_fulltext_when_available(real_bm):
     This ensures backward compatibility - if Zotero provides fulltext,
     we use it instead of PDF metadata.
     """
-    from buttermilk._core.types import Record
+    from buttermilk._core.processing_context import ProcessingContext
+    from buttermilk._core.types import BaseRecord
     from buttermilk.libs.zotero import ZoteroDownloadProcessor
 
-    test_record = Record(
+    test_record = BaseRecord(
         record_id="TEST_KEY",
-        content="[Placeholder from fetch]",
         metadata={
-            "title": "Test Document",
             "zotero_item": {"key": "TEST_KEY", "title": "Test Document"},
             "zotero_links": {
                 "attachment": {
@@ -100,8 +100,10 @@ async def test_zotero_uses_fulltext_when_available(real_bm):
                     "href": "https://api.zotero.org/users/123/items/ATTACH_KEY/file",
                 }
             },
+            "citation_key": None,
         },
     )
+    context = ProcessingContext(session_id="download", record=test_record)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         with patch("pyzotero.zotero.Zotero") as MockZotero:
@@ -115,9 +117,9 @@ async def test_zotero_uses_fulltext_when_available(real_bm):
 
             downloader = ZoteroDownloadProcessor(library_id="test_library")
 
-            # Process the record
+            # Process the record using the new ProcessingContext API
             results = []
-            async for result in downloader.process(test_record, processor_stage="download"):
+            async for result in downloader.process(context):
                 results.append(result)
 
             assert len(results) == 1
@@ -138,6 +140,7 @@ async def test_pdftotext_processor_replaces_metadata_content():
     1. ZoteroDownloadProcessor sets PDF metadata as content
     2. PDFToTextProcessor replaces it with actual extracted text
     """
+    from buttermilk._core.processing_context import ProcessingContext
     from buttermilk._core.types import Record
     from buttermilk.processors.bash import PDFToTextProcessor
 
@@ -160,6 +163,8 @@ async def test_pdftotext_processor_replaces_metadata_content():
         # Verify initial content is PDF metadata
         assert "[PDF Document:" in record.content
 
+        context = ProcessingContext(session_id="pdftotext", record=record)
+
         # Mock pdftotext command to return extracted text
         processor = PDFToTextProcessor()
 
@@ -172,9 +177,9 @@ async def test_pdftotext_processor_replaces_metadata_content():
             # AsyncMock will properly await and return the mock_process
             mock_subprocess.return_value = mock_process
 
-            # Process with PDFToTextProcessor
+            # Process with PDFToTextProcessor using new ProcessingContext API
             results = []
-            async for result in processor.process(record, processor_stage="pdftotext"):
+            async for result in processor.process(context):
                 results.append(result)
 
             assert len(results) == 1

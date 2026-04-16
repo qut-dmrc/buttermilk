@@ -17,6 +17,7 @@ from pyzotero import zotero, zotero_errors
 
 from buttermilk import bm, logger
 from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.retry import RetryWrapper
 from buttermilk._core.types import BaseRecord, Record
 from buttermilk.storage.base import RecordFilter
@@ -451,15 +452,13 @@ class ZoteroDownloadProcessor(BaseModel):
         return bm.session_info.get_cache_subdir(cache.ZOTERO)
 
     async def process(self, context: ProcessingContext) -> AsyncGenerator[Record, None]:
-        record = context.record
-        processor_stage = context.session_id
         """Process a Zotero item: download and extract full text.
 
         Pipeline caching: The pipeline's RecordCache handles caching of Records.
         This processor is only invoked when no cached Record exists.
 
         Args:
-            record: BaseRecord with Zotero item metadata
+            context: ProcessingContext with record containing Zotero item metadata
 
         Yields:
             Record: Full Record with extracted text content
@@ -467,6 +466,7 @@ class ZoteroDownloadProcessor(BaseModel):
         Raises:
             Exception: If download or extraction fails
         """
+        record = context.record
         # Extract Zotero metadata from record
         zotero_item = record.metadata.get("zotero_item", {})
         zotero_links = record.metadata.get("zotero_links", {})
