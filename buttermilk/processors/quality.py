@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 from buttermilk import logger
 from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import Record
 from buttermilk.utils.text_quality import is_document_corrupt
 
@@ -43,7 +44,8 @@ class QualityFilterProcessor(BaseModel):
         >>> processor = QualityFilterProcessor(
         ...     corruption_threshold=66.0,  # Fail if >=66% of chunks are corrupt
         ... )
-        >>> async for record in processor.process(record, processor_stage="quality"):
+        >>> context = ProcessingContext(session_id="quality", record=record)
+        >>> async for record in processor.process(context):
         ...     # Only clean documents are yielded
         ...     # Corrupt documents raise ProcessingError
         ...     print(f"Processing {record.record_id}")
@@ -59,7 +61,7 @@ class QualityFilterProcessor(BaseModel):
         description="Minimum repetitive pattern rate (%) to consider corrupt. Currently used by verification logic, reserved for future use.",
     )
 
-    async def process(self, record: Record, *, processor_stage: str, **kwargs) -> AsyncGenerator[Record, None]:
+    async def process(self, context: ProcessingContext) -> AsyncGenerator[Record, None]:
         """Process a record by analyzing document quality and filtering if corrupt.
 
         This processor expects the record to have a `chunks` attribute from a prior
@@ -67,9 +69,7 @@ class QualityFilterProcessor(BaseModel):
         document-level corruption rate and filters documents exceeding the threshold.
 
         Args:
-            record: Record with chunks attached
-            processor_stage: Stage name for metadata tracking
-            **kwargs: Additional keyword arguments (ignored)
+            context: ProcessingContext with record containing chunks from prior stage
 
         Yields:
             Record if document passes quality check (corruption < threshold)
@@ -78,6 +78,8 @@ class QualityFilterProcessor(BaseModel):
             ValueError: If record has no chunks attribute (fail-fast)
             ProcessingError: If document corruption exceeds threshold (fail-fast)
         """
+        record = context.record
+        processor_stage = context.session_id
         # Fail-fast: Require chunks attribute from prior stage
         if not hasattr(record, "chunks") or record.chunks is None:
             raise ValueError(f"Record {record.record_id} has no chunks. QualityFilterProcessor requires chunks from prior chunking stage.")

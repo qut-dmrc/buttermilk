@@ -6,6 +6,7 @@ doc.title, but now uses getattr with a fallback to record_id.
 
 import pytest
 
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord
 from buttermilk.data.vector import SemanticSplitter
 
@@ -28,7 +29,8 @@ async def test_semantic_splitter_with_record_without_title():
 
     # Process the record - returns record with chunks attached
     processed_records = []
-    async for processed_record in splitter.process(record):
+    context = ProcessingContext(session_id="chunk", record=record)
+    async for processed_record in splitter.process(context):
         processed_records.append(processed_record)
 
     # Should have one processed record
@@ -60,7 +62,8 @@ async def test_semantic_splitter_with_title_in_metadata():
 
     # Process the record
     processed_records = []
-    async for processed_record in splitter.process(record):
+    context = ProcessingContext(session_id="chunk", record=record)
+    async for processed_record in splitter.process(context):
         processed_records.append(processed_record)
 
     assert len(processed_records) == 1
@@ -95,7 +98,8 @@ async def test_semantic_splitter_mixed_records():
 
     all_processed = []
     for record in records:
-        async for processed_record in splitter.process(record):
+        context = ProcessingContext(session_id="chunk", record=record)
+        async for processed_record in splitter.process(context):
             all_processed.append(processed_record)
 
     # Should have processed both records

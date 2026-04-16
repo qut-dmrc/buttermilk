@@ -2,6 +2,7 @@
 
 import pytest
 
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord
 from buttermilk.agents.imagegen import VertexImagen3Fast, VertexImagen4Fast
 from buttermilk.processors.batch_expansion import BatchExpansionProcessor
@@ -18,7 +19,8 @@ async def test_batch_expansion_multiplies_by_reps_and_models():
         metadata={"session_id": "sess123"},
     )
 
-    results = [r async for r in processor.process(record, processor_stage="expand")]
+    context = ProcessingContext(session_id="expand", record=record)
+    results = [r async for r in processor.process(context)]
 
     assert len(results) == 6  # 3 reps × 2 models
     assert all(r.content == "test prompt" for r in results)
@@ -42,7 +44,8 @@ async def test_batch_expansion_preserves_metadata():
         metadata={"session_id": "s1", "scenario": "office", "custom": "value"},
     )
 
-    results = [r async for r in processor.process(record, processor_stage="expand")]
+    context = ProcessingContext(session_id="expand", record=record)
+    results = [r async for r in processor.process(context)]
 
     assert results[0].metadata["session_id"] == "s1"
     assert results[0].metadata["scenario"] == "office"
@@ -56,7 +59,8 @@ async def test_batch_expansion_adds_model_metadata():
 
     record = BaseRecord(record_id="test", content="prompt", metadata={"session_id": "s1"})
 
-    results = [r async for r in processor.process(record, processor_stage="expand")]
+    context = ProcessingContext(session_id="expand", record=record)
+    results = [r async for r in processor.process(context)]
 
     # Check that we have the right model classes (as class objects, not strings)
     model_classes = [r.metadata["model_class"] for r in results]
@@ -76,7 +80,8 @@ async def test_batch_expansion_repetition_indices():
 
     record = BaseRecord(record_id="test", content="prompt", metadata={"session_id": "s1"})
 
-    results = [r async for r in processor.process(record, processor_stage="expand")]
+    context = ProcessingContext(session_id="expand", record=record)
+    results = [r async for r in processor.process(context)]
 
     repetitions = [r.metadata["repetition"] for r in results]
     assert repetitions == [0, 1, 2]

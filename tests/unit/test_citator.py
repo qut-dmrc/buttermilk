@@ -59,14 +59,15 @@ def test_citator_process_signature():
 
     citator = Citator(parameters={"model": "gemini-1.5-flash-latest"})
 
-    # Check that process method has the expected signature for Processor protocol
+    # Check that process method has the expected ProcessingContext API signature
     sig = inspect.signature(citator.process)
     params = list(sig.parameters.keys())
 
     # Note: 'self' is not included when inspecting bound methods
-    assert "item" in params
-    assert "processor_stage" in params
-    assert "kwargs" in params
+    # New API: process(context: ProcessingContext)
+    assert "context" in params
+    assert "item" not in params
+    assert "processor_stage" not in params
 
     # Check return type is AsyncGenerator
     return_annotation = sig.return_annotation

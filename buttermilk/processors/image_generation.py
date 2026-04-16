@@ -4,11 +4,12 @@ This processor adapts TextToImageClient for use in data pipelines by converting
 between BaseRecord and ImageRecord formats.
 """
 
-from typing import Any, AsyncGenerator, Optional, Type
+from typing import AsyncGenerator, Optional, Type
 
 from pydantic import BaseModel, Field
 
 from buttermilk import logger
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord
 from buttermilk.agents.imagegen import ALL_IMAGE_CLIENTS, TextToImageClient
 
@@ -60,17 +61,13 @@ class ImageGenerationProcessor(BaseModel):
 
     async def process(
         self,
-        record: BaseRecord,
-        *,
-        processor_stage: str,
-        **kwargs: Any,
+        context: ProcessingContext,
     ) -> AsyncGenerator[BaseRecord, None]:
         """Process a record by generating an image from its content.
 
         Args:
-            record: BaseRecord with prompt in content field. Should have model_class in metadata if client_class not set.
-            processor_stage: Pipeline stage identifier (e.g., "generate")
-            **kwargs: Additional arguments (unused)
+            context: ProcessingContext with record containing prompt in content field.
+                     Record should have model_class in metadata if client_class not set.
 
         Yields:
             BaseRecord with original data plus image_uri and model in metadata
@@ -78,6 +75,7 @@ class ImageGenerationProcessor(BaseModel):
         Raises:
             ValueError: If record.content is empty, None, or model_class cannot be determined
         """
+        record = context.record
         if not record.content:
             raise ValueError(f"Record {record.record_id} has empty content - cannot generate image")
 
@@ -100,7 +98,7 @@ class ImageGenerationProcessor(BaseModel):
             extra={
                 "record_id": record.record_id,
                 "model": client.model,
-                "stage": processor_stage,
+                "stage": context.session_id,
             },
         )
 

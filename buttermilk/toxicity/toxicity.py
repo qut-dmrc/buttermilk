@@ -41,6 +41,7 @@ from buttermilk._core.contract import (
     AgentInput,
     ExecutionTrace,
 )  # Import AgentInput and ExecutionTrace
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.processor_core import ProcessorCore, TraceParams
 from buttermilk._core.types import BaseRecord
 from buttermilk.utils.utils import read_text, read_yaml, scrub_serializable
@@ -309,13 +310,9 @@ class ToxicityClassifierCore(ProcessorCore):
 
         return record
 
-    async def process(
+    async def _process_record(
         self,
-        record: BaseRecord,
-        *,
-        processor_stage: str,
-        parent_trace_id: str | None = None,
-        **kwargs: Any,
+        context: ProcessingContext,
     ) -> AsyncGenerator[BaseRecord, None]:
         """Processor protocol implementation for pipeline use.
 
@@ -328,9 +325,7 @@ class ToxicityClassifierCore(ProcessorCore):
         - Stores results in record.metadata[processor_stage]
 
         Args:
-            record: Input record to analyze for toxicity
-            processor_stage: Pipeline stage name for metadata namespacing
-            parent_trace_id: Optional parent trace ID for distributed tracing
+            context: ProcessingContext with record to analyze for toxicity
 
         Yields:
             Record with toxicity results in metadata[processor_stage]
@@ -338,6 +333,9 @@ class ToxicityClassifierCore(ProcessorCore):
         Raises:
             ValueError: If record has no content
         """
+        record = context.record
+        processor_stage = context.session_id
+        parent_trace_id = None
         start_time = time.time()
         trace_id = str(uuid.uuid4())
 

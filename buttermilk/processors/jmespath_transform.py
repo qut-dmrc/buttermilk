@@ -11,6 +11,7 @@ from jmespath.exceptions import JMESPathError
 from pydantic import BaseModel, Field
 
 from buttermilk import logger
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord
 
 
@@ -32,7 +33,8 @@ class JMESPathTransform(BaseModel):
         >>> processor = JMESPathTransform(
         ...     mappings={"answer": "metadata.outputs.result"}
         ... )
-        >>> async for record in processor.process(record, processor_stage="transform"):
+        >>> context = ProcessingContext(session_id="transform", record=record)
+        >>> async for record in processor.process(context):
         ...     print(record.answer)  # Extracted field
     """
 
@@ -60,13 +62,11 @@ class JMESPathTransform(BaseModel):
                 )
                 raise ValueError(f"Invalid JMESPath expression for field '{field_name}': {expression}") from e
 
-    async def process(self, record: BaseRecord, *, processor_stage: str, **kwargs) -> AsyncGenerator[BaseRecord, None]:
+    async def process(self, context: ProcessingContext) -> AsyncGenerator[BaseRecord, None]:
         """Process a record by applying JMESPath transformations.
 
         Args:
-            record: BaseRecord to transform
-            processor_stage: Stage name for metadata tracking
-            **kwargs: Additional keyword arguments (ignored)
+            context: ProcessingContext with record to transform
 
         Yields:
             BaseRecord with additional fields from JMESPath transformations
@@ -74,6 +74,8 @@ class JMESPathTransform(BaseModel):
         Raises:
             ValueError: If JMESPath expression is invalid (fail-fast)
         """
+        record = context.record
+        processor_stage = context.session_id
         logger.debug(
             "JMESPathTransform processing record",
             record_id=record.record_id,

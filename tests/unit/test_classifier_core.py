@@ -4,6 +4,7 @@ import pytest
 from pydantic import BaseModel, ValidationError
 
 from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord
 from buttermilk.agents.classifier import ClassifierCore
 
@@ -71,5 +72,5 @@ class TestClassifierCoreValidation:
         # Either ProcessingError (if BM initialized) or RuntimeError (if not)
         # Both indicate the template loading failed as expected
         with pytest.raises((ProcessingError, RuntimeError)):
-            async for _ in classifier.process(record, processor_stage="test"):
+            async for _ in classifier.process(ProcessingContext(session_id="test", record=record)):
                 pass

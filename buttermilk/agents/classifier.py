@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_valid
 
 from buttermilk import logger
 from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.processor_core import ProcessorCore, TraceParams
 from buttermilk._core.types import BaseRecord
 from buttermilk.utils.templating import render_template
@@ -73,7 +74,8 @@ class ClassifierCore(ProcessorCore):
             output_model=HateSpeechClassification,
         )
 
-        async for record in classifier.process(input_record, processor_stage="classify"):
+        context = ProcessingContext(session_id="classify", record=input_record)
+        async for record in classifier.process(context):
             print(record.output)
         ```
     """
@@ -130,25 +132,21 @@ class ClassifierCore(ProcessorCore):
             self._resolved_output_model = self.output_model
         return self
 
-    async def process(
+    async def _process_record(
         self,
-        record: BaseRecord,
-        *,
-        processor_stage: str,
-        parent_trace_id: str | None = None,
-        **kwargs: Any,
+        context: ProcessingContext,
     ) -> AsyncGenerator[BaseRecord, None]:
         """Process a BaseRecord through classification.
 
         Args:
-            record: Input BaseRecord to classify
-            processor_stage: Unique stage identifier for tracing
-            parent_trace_id: Optional trace ID for distributed tracing
-            **kwargs: Additional arguments passed to template rendering
+            context: ProcessingContext with record to classify
 
         Yields:
             Any: The classification output directly (typed object or dict)
         """
+        record = context.record
+        processor_stage = context.session_id
+        parent_trace_id = None
         tracer = trace.get_tracer("buttermilk.classifier")
         start_time = time.time()
         record_id = getattr(record, "record_id", "unknown")
@@ -162,7 +160,7 @@ class ClassifierCore(ProcessorCore):
 
         with tracer.start_as_current_span(f"classifier.{self.__class__.__name__}", attributes=span_attributes) as span:
             try:
-                result = await self._classify_record(record, **kwargs)
+                result = await self._classify_record(record)
 
                 # Build processing metadata
                 processing_time_ms = int((time.time() - start_time) * 1000)
@@ -174,11 +172,6 @@ class ClassifierCore(ProcessorCore):
                     "processing_time_ms": processing_time_ms,
                     "api_response": result.metadata.get("api_response"),
                 }
-
-                # Extract structured output
-                output_content = result.content
-                if hasattr(output_content, "model_dump"):
-                    output_content = output_content.model_dump()
 
                 # Extract structured output
                 output_content = result.content
@@ -205,7 +198,7 @@ class ClassifierCore(ProcessorCore):
                         parent_trace_id=parent_trace_id,
                         duration_ms=processing_time_ms,
                         messages=trace_messages,
-                        inputs=kwargs if kwargs else None,
+                        inputs=None,
                         extra_metadata=stage_metadata,
                         execution_type="classification",
                         trace_id=result.trace_id,
@@ -223,7 +216,7 @@ class ClassifierCore(ProcessorCore):
                         processor_stage=processor_stage,
                         parent_trace_id=parent_trace_id,
                         duration_ms=int((time.time() - start_time) * 1000),
-                        inputs=kwargs if kwargs else None,
+                        inputs=None,
                         execution_type="classification",
                     ),
                 )

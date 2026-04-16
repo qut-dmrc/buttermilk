@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 
 from buttermilk._core.llm_core import LLMCore
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord
 from buttermilk.utils.templating import load_template
 
@@ -132,7 +133,7 @@ async def test_jmespath_transform_preserves_expected_field():
 
     # Run the transform
     output_records = []
-    async for record in transform.process(input_record, processor_stage="test"):
+    async for record in transform.process(ProcessingContext(session_id="test", record=input_record)):
         output_records.append(record)
 
     # Verify output
@@ -184,7 +185,7 @@ async def test_full_rescore_pipeline_preserves_expected():
     )
 
     transformed_records = []
-    async for record in jmespath_transform.process(sql_record, processor_stage="jmespath"):
+    async for record in jmespath_transform.process(ProcessingContext(session_id="jmespath", record=sql_record)):
         transformed_records.append(record)
 
     assert len(transformed_records) == 1

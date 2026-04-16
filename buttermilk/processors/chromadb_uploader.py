@@ -15,6 +15,7 @@ from chromadb.api import ClientAPI
 from pydantic import BaseModel, Field, PrivateAttr
 
 from buttermilk import bm, logger
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord
 from buttermilk.data.vector import _sanitize_metadata_for_chroma
 from buttermilk.utils.utils import scrub_serializable, upload_chromadb_cache
@@ -69,16 +70,17 @@ class ChromaDBUploader(BaseModel):
         )
         self._last_sync_time = time.time()
 
-    async def process(self, record: BaseRecord, *, processor_stage: str = "chromadb_upload", **kwargs) -> AsyncGenerator[BaseRecord, None]:
+    async def process(self, context: ProcessingContext) -> AsyncGenerator[BaseRecord, None]:
         """Process a record by uploading its embedded chunks to ChromaDB.
 
         Args:
-            record: BaseRecord with embedded chunks
-            processor_stage: Stage name for metadata tracking
+            context: ProcessingContext with record containing embedded chunks
 
         Yields:
             BaseRecord unchanged (passthrough after upload)
         """
+        record = context.record
+        processor_stage = context.session_id
         # Ensure cache is initialized for remote storage
         if not self._cache_initialized:
             await self._ensure_cache_initialized()

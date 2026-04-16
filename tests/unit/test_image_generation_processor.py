@@ -2,6 +2,7 @@
 
 import pytest
 
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord
 from buttermilk.agents.imagegen import VertexImagen3Fast
 from buttermilk.processors.image_generation import ImageGenerationProcessor
@@ -27,7 +28,7 @@ async def test_image_generation_processor_with_empty_content():
 
     # Should fail-fast with empty prompt
     with pytest.raises(ValueError, match="empty content"):
-        async for _ in processor.process(record, processor_stage="generate"):
+        async for _ in processor.process(ProcessingContext(session_id="generate", record=record)):
             pass
 
 
@@ -44,5 +45,5 @@ async def test_image_generation_processor_with_none_content():
 
     # Should fail-fast with None prompt
     with pytest.raises(ValueError, match="empty content"):
-        async for _ in processor.process(record, processor_stage="generate"):
+        async for _ in processor.process(ProcessingContext(session_id="generate", record=record)):
             pass

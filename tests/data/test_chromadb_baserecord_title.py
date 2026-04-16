@@ -97,9 +97,12 @@ class TestChromaDBBaseRecordTitle:
             },
         )
 
+        from buttermilk._core.processing_context import ProcessingContext
+
         processor = ZoteroDownloadProcessor(library_id="12345")
 
         # Should raise ValueError with clear message
+        context = ProcessingContext(session_id="download", record=record)
         with pytest.raises(ValueError, match="has no title.*incomplete/invalid Zotero data"):
-            async for _ in processor.process(record, processor_stage="download"):
+            async for _ in processor.process(context):
                 pass

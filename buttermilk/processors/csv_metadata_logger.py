@@ -2,13 +2,14 @@
 
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, AsyncGenerator
+from typing import AsyncGenerator
 
 import pandas as pd
 from cloudpathlib import GSPath
 from pydantic import BaseModel, PrivateAttr
 
 from buttermilk import logger
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord
 
 
@@ -25,8 +26,9 @@ class CSVMetadataLogger(BaseModel):
     _accumulated_records: list[dict] = PrivateAttr(default_factory=list)
     _session_id: str | None = PrivateAttr(default=None)
 
-    async def process(self, record: BaseRecord, *, processor_stage: str, **kwargs: Any) -> AsyncGenerator[BaseRecord, None]:
+    async def process(self, context: ProcessingContext) -> AsyncGenerator[BaseRecord, None]:
         """Accumulate metadata and pass record through unchanged."""
+        record = context.record
         # Extract metadata into dict for CSV row
         storage_uri = record.metadata.get("storage_uri", "")
         filename = Path(storage_uri).name if storage_uri else ""

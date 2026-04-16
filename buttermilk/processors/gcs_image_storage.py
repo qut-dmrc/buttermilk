@@ -9,13 +9,13 @@ import re
 import shutil
 from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import Any
 from urllib.parse import urlparse
 
 from cloudpathlib import GSPath
 from pydantic import BaseModel
 
 from buttermilk import logger
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord
 
 
@@ -101,17 +101,12 @@ class GCSImageStorageProcessor(BaseModel):
 
     async def process(
         self,
-        record: BaseRecord,
-        *,
-        processor_stage: str,
-        **kwargs: Any,
+        context: ProcessingContext,
     ) -> AsyncGenerator[BaseRecord, None]:
         """Process a record by uploading its image to GCS.
 
         Args:
-            record: BaseRecord with image_uri in metadata
-            processor_stage: Pipeline stage identifier (e.g., "store")
-            **kwargs: Additional arguments (unused)
+            context: ProcessingContext with record containing image_uri in metadata
 
         Yields:
             BaseRecord with original data plus storage_uri in metadata
@@ -120,6 +115,7 @@ class GCSImageStorageProcessor(BaseModel):
             KeyError: If required metadata fields are missing
             ValueError: If image_uri is not set or file doesn't exist
         """
+        record = context.record
         # Fail-fast: Check for required metadata
         if "image_uri" not in record.metadata:
             raise ValueError(f"Record {record.record_id} missing 'image_uri' in metadata")
@@ -145,7 +141,7 @@ class GCSImageStorageProcessor(BaseModel):
                 "record_id": record.record_id,
                 "source": str(source_path),
                 "destination": dest_path_str,
-                "stage": processor_stage,
+                "stage": context.session_id,
             },
         )
 

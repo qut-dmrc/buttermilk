@@ -3,6 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord
 from buttermilk.processors.jmespath_transform import JMESPathTransform
 
@@ -21,7 +22,7 @@ class TestJMESPathTransform:
 
         # Process the record
         results = []
-        async for result in processor.process(record, processor_stage="transform"):
+        async for result in processor.process(ProcessingContext(session_id="transform", record=record)):
             results.append(result)
 
         # Should yield one result
@@ -55,7 +56,7 @@ class TestJMESPathTransform:
 
         # Process the record
         results = []
-        async for result in processor.process(record, processor_stage="transform"):
+        async for result in processor.process(ProcessingContext(session_id="transform", record=record)):
             results.append(result)
 
         assert len(results) == 1
@@ -79,7 +80,7 @@ class TestJMESPathTransform:
 
         # Process the record
         results = []
-        async for result in processor.process(record, processor_stage="transform"):
+        async for result in processor.process(ProcessingContext(session_id="transform", record=record)):
             results.append(result)
 
         assert len(results) == 1
@@ -117,7 +118,7 @@ class TestJMESPathTransform:
 
         # Process the record
         results = []
-        async for result in processor.process(record, processor_stage="transform"):
+        async for result in processor.process(ProcessingContext(session_id="transform", record=record)):
             results.append(result)
 
         assert len(results) == 1
@@ -149,7 +150,7 @@ class TestJMESPathTransform:
 
         # Process the record
         results = []
-        async for result in processor.process(record, processor_stage="transform"):
+        async for result in processor.process(ProcessingContext(session_id="transform", record=record)):
             results.append(result)
 
         assert len(results) == 1

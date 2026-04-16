@@ -1,5 +1,6 @@
 import pytest
 
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord
 from buttermilk.processors.csv_metadata_logger import CSVMetadataLogger
 
@@ -22,7 +23,8 @@ async def test_csv_logger_accumulates_records():
     )
 
     # Process should yield record unchanged
-    results = [r async for r in logger.process(record, processor_stage="log")]
+    context = ProcessingContext(session_id="log", record=record)
+    results = [r async for r in logger.process(context)]
 
     assert len(results) == 1
     assert results[0].record_id == "r1"
@@ -66,7 +68,8 @@ async def test_csv_logger_captures_session_id():
     ]
 
     for rec in records:
-        async for _ in logger.process(rec, processor_stage="log"):
+        context = ProcessingContext(session_id="log", record=rec)
+        async for _ in logger.process(context):
             pass
 
     # Verify accumulation

@@ -2,6 +2,7 @@
 
 import pytest
 
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord
 from buttermilk.processors.gcs_image_storage import GCSImageStorageProcessor
 
@@ -32,7 +33,7 @@ async def test_gcs_storage_constructs_structured_path(tmp_path):
         },
     )
 
-    results = [r async for r in processor.process(record, processor_stage="store")]
+    results = [r async for r in processor.process(ProcessingContext(session_id="store", record=record))]
 
     assert len(results) == 1
     result = results[0]
@@ -67,7 +68,7 @@ async def test_gcs_storage_sanitizes_scenario_names(tmp_path):
         },
     )
 
-    results = [r async for r in processor.process(record, processor_stage="store")]
+    results = [r async for r in processor.process(ProcessingContext(session_id="store", record=record))]
 
     # Scenario should be sanitized (spaces replaced, special chars removed)
     assert "working_in_an_office" in results[0].metadata["storage_uri"]
@@ -99,7 +100,7 @@ async def test_gcs_storage_preserves_original_metadata(tmp_path):
         },
     )
 
-    results = [r async for r in processor.process(record, processor_stage="store")]
+    results = [r async for r in processor.process(ProcessingContext(session_id="store", record=record))]
 
     result = results[0]
     assert result.metadata["session_id"] == "s1"
@@ -137,7 +138,7 @@ async def test_gcs_storage_local_file_written(tmp_path):
     )
 
     # Process the record (triggers file write)
-    _ = [r async for r in processor.process(record, processor_stage="store")]
+    _ = [r async for r in processor.process(ProcessingContext(session_id="store", record=record))]
 
     # Check that a file was written in the local directory
     written_files = list(local_dir.rglob("*.png"))
@@ -166,5 +167,5 @@ async def test_gcs_storage_fails_fast_without_image_uri(tmp_path):
 
     # Should fail fast with clear error
     with pytest.raises((ValueError, KeyError)):
-        async for _ in processor.process(record, processor_stage="store"):
+        async for _ in processor.process(ProcessingContext(session_id="store", record=record)):
             pass

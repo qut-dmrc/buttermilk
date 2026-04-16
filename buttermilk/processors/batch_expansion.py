@@ -5,10 +5,11 @@ into multiple copies for batch generation across different models and repetition
 """
 
 from collections.abc import AsyncGenerator
-from typing import Any, Type
+from typing import Type
 
 from pydantic import BaseModel, Field
 
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord
 from buttermilk.agents.imagegen import CHEAP_IMAGE_CLIENTS, TextToImageClient
 
@@ -29,10 +30,7 @@ class BatchExpansionProcessor(BaseModel):
 
     async def process(
         self,
-        record: BaseRecord,
-        *,
-        processor_stage: str,
-        **kwargs: Any,
+        context: ProcessingContext,
     ) -> AsyncGenerator[BaseRecord, None]:
         """Yield one record per (repetition, model) combination.
 
@@ -41,9 +39,7 @@ class BatchExpansionProcessor(BaseModel):
         and model class to use.
 
         Args:
-            record: Input BaseRecord to expand
-            processor_stage: Pipeline stage identifier (e.g., "expand")
-            **kwargs: Additional arguments (unused)
+            context: ProcessingContext with record to expand
 
         Yields:
             BaseRecord for each (repetition, model) combination with metadata:
@@ -52,6 +48,7 @@ class BatchExpansionProcessor(BaseModel):
             - model_prefix: Prefix string from the model instance
             - All original metadata preserved
         """
+        record = context.record
         for rep in range(self.repetitions):
             for model in self.models:
                 # Handle both class types and instances
