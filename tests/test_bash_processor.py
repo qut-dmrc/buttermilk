@@ -7,6 +7,7 @@ in the data processing pipeline.
 import pytest
 
 from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import Record
 
 
@@ -206,6 +207,63 @@ class TestPDFToTextProcessor:
         error_msg = str(exc_info.value).lower()
         assert "pdftotext" in error_msg
         assert "not found" in error_msg or "not installed" in error_msg or "install poppler" in error_msg
+
+    @pytest.mark.anyio
+    async def test_pdftotext_processor_uses_processing_context(self, tmp_path, monkeypatch):
+        """PDFToTextProcessor.process() must accept ProcessingContext and forward it to super().
+
+        Regression test for partial migration bug: the method signature was updated to accept
+        context: ProcessingContext, but the super().process() call still referenced old positional
+        params (parent_trace_id, component_name, cancellation_token, kwargs) that are not in scope,
+        causing NameError at runtime for every record whose content is a PDF placeholder.
+
+        This test will FAIL with NameError before the fix and PASS after.
+        """
+        import asyncio
+
+        from buttermilk.processors.bash import PDFToTextProcessor
+
+        # Mock subprocess so we never touch the filesystem for pdftotext execution —
+        # we only need to reach (and survive) the super().process(context) call.
+        async def mock_proc_communicate():
+            return b"extracted text from pdf", b""
+
+        class MockProcess:
+            returncode = 0
+
+            async def communicate(self):
+                return b"extracted text from pdf", b""
+
+        async def mock_create_subprocess(*args, **kwargs):
+            return MockProcess()
+
+        monkeypatch.setattr(asyncio, "create_subprocess_shell", mock_create_subprocess)
+
+        # Create a real PDF-like file so BashProcessor's file-existence check passes
+        pdf_file = tmp_path / "test.pdf"
+        pdf_file.write_bytes(b"%PDF-1.4\ntest content")
+
+        record = Record(
+            record_id="pdf_context_001",
+            # Content is a PDF placeholder — triggers the super().process() branch
+            content="[PDF Document: test.pdf, Size: 21 bytes, Path: /tmp/test.pdf]",
+            file_path=str(pdf_file),
+            metadata={"title": "Context API test"},
+        )
+
+        context = ProcessingContext(
+            session_id="test-session-001",
+            record=record,
+        )
+
+        processor = PDFToTextProcessor()
+
+        # Before the fix this raises: NameError: name 'parent_trace_id' is not defined
+        # After the fix it should yield one updated record.
+        results = [r async for r in processor.process(context)]
+
+        assert len(results) == 1
+        assert results[0].content == "extracted text from pdf"
 
 
 class TestBashProcessorCaching:

@@ -235,14 +235,7 @@ class PDFToTextProcessor(BashProcessor):
             return
 
         try:
-            async for result in super().process(
-                record,
-                processor_stage=processor_stage,
-                parent_trace_id=parent_trace_id,
-                component_name=component_name,
-                cancellation_token=cancellation_token,
-                **kwargs,
-            ):
+            async for result in super().process(context):
                 yield result
         except ProcessingError as e:
             # Add helpful context for pdftotext-specific errors
