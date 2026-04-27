@@ -1,5 +1,20 @@
 # Buttermilk Agent Instructions
 
+## Path Discovery (CRITICAL)
+
+To discover project locations, read `.agents/context-map.json` in the relevant repo. If the map is missing or stale, HALT.
+
+## Fail-Fast / Halt Rule (ENFORCED)
+
+If you cannot do what was asked, **STOP and report** — do NOT search broadly, do NOT invent workarounds.
+
+- **Missing Paths**: If a documented path does not exist, HALT.
+- **No Broad Grep**: Never grep `$HOME` or `/` to find source repos or documents. Use `context-map.json` for discovery.
+- **Tool Failures**: If a tool doesn't work as documented, report the failure — do not invent alternatives.
+- **Ambiguity**: If instructions conflict or are ambiguous, ask for clarification.
+
+## Philosophy
+
 Buttermilk aims to make it easy for HASS scholars to use AI tools in a way that is understandable, traceable, and reproducible.
 
 - Use "uv" to manage dependencies. Install with  `uv sync --extra dev --upgrade`
