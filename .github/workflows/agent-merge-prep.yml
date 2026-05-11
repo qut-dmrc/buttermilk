@@ -1,0 +1,56 @@
+# Agent: Merge Prep (shim → nicsuzor/academicOps@pipeline-v1)
+#
+# Reads ALL review comments (our agents + bazaar bots: Gemini, Copilot, etc.),
+# triages them, fixes genuine issues, dismisses false positives, approves the
+# PR, sets the `merge-prep-status` commit status, and enables auto-merge.
+#
+# Triggered by `merge-prep-cron.yml` (scheduled / after PR Pipeline completes)
+# or manually via workflow_dispatch.
+#
+# Requires repository secrets:
+#   - CLAUDE_CODE_OAUTH_TOKEN  (already present)
+#   - AOPS_BOT_GH_TOKEN        (PAT for gh API operations; must be added)
+#
+# See https://github.com/nicsuzor/academicOps/blob/pipeline-v1/specs/pr-pipeline.md
+name: "Agent: Merge Prep"
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to prepare'
+        type: string
+        required: true
+      force:
+        description: 'Skip self-loop detection (for explicit re-invocation)'
+        type: boolean
+        default: false
+      bot_identity:
+        description: 'Identity of the bot for failure counting and dismissal'
+        type: string
+        default: 'github-actions[bot]'
+  workflow_call:
+    inputs:
+      pr_number:
+        description: 'PR number to prepare'
+        type: string
+        required: true
+      force:
+        description: 'Skip self-loop detection'
+        type: boolean
+        default: false
+      bot_identity:
+        description: 'Identity of the bot'
+        type: string
+        default: 'github-actions[bot]'
+
+jobs:
+  merge-prep:
+    uses: nicsuzor/academicOps/.github/workflows/agent-merge-prep.yml@pipeline-v1
+    with:
+      pr_number: ${{ inputs.pr_number }}
+      force: ${{ inputs.force }}
+      bot_identity: ${{ inputs.bot_identity || 'github-actions[bot]' }}
+    secrets:
+      AOPS_BOT_GH_TOKEN: ${{ secrets.AOPS_BOT_GH_TOKEN }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
