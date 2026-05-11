@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import Record
 
 
@@ -62,11 +63,12 @@ async def test_no_pdf_download_when_fulltext_exists():
                 # Import after patching to use mocked BM
                 from buttermilk.libs.zotero import ZoteroDownloadProcessor
 
-                downloader = ZoteroDownloadProcessor(library_id="test_library", save_dir=tmpdir)
+                downloader = ZoteroDownloadProcessor(library_id="test_library")
 
                 # Process the record
+                context = ProcessingContext(session_id="test", record=test_record)
                 results = []
-                async for result in downloader.process(test_record, processor_stage="download"):
+                async for result in downloader.process(context):
                     results.append(result)
 
                 assert len(results) == 1
@@ -137,11 +139,12 @@ async def test_pdf_downloads_when_no_fulltext():
 
                 from buttermilk.libs.zotero import ZoteroDownloadProcessor
 
-                downloader = ZoteroDownloadProcessor(library_id="test_library", save_dir=tmpdir)
+                downloader = ZoteroDownloadProcessor(library_id="test_library")
 
                 # Process the record
+                context = ProcessingContext(session_id="test", record=test_record)
                 results = []
-                async for result in downloader.process(test_record, processor_stage="download"):
+                async for result in downloader.process(context):
                     results.append(result)
 
                 assert len(results) == 1
