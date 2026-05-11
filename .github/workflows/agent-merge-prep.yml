@@ -44,6 +44,16 @@ on:
         type: string
         default: 'github-actions[bot]'
 
+# The called reusable workflow's `fix` job requests these scopes; GHA refuses
+# to elevate beyond what the caller grants, so they must be declared here.
+permissions:
+  contents: write
+  pull-requests: write
+  statuses: write
+  id-token: write
+  issues: write
+  actions: read
+
 jobs:
   merge-prep:
     uses: nicsuzor/academicOps/.github/workflows/agent-merge-prep.yml@pipeline-v1
