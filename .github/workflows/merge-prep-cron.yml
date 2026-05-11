@@ -1,0 +1,42 @@
+# Merge Prep Dispatcher (shim → nicsuzor/academicOps@pipeline-v1)
+#
+# Finds open PRs that qualify for merge-prep and dispatches the agent
+# (`agent-merge-prep.yml`). Qualification is label-free:
+#   - Last commit >= 15 min ago (bazaar window for external bot reviews)
+#   - No in-progress merge-prep run
+#   - merge-prep-status commit status is not success/failure
+#
+# Triggers:
+#   - schedule:     every 30 min
+#   - workflow_run: after buttermilk's "PR Pipeline" completes on a PR branch
+#   - dispatch:     manual override for a specific PR
+#
+# See https://github.com/nicsuzor/academicOps/blob/pipeline-v1/specs/pr-pipeline.md
+name: "Merge Prep Dispatcher"
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_run:
+    # Name of buttermilk's PR review pipeline (pr-review-pipeline.yml).
+    workflows:
+      - "PR Pipeline"
+    types: [completed]
+    branches-ignore:
+      - main
+      - dev
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'Override: process specific PR immediately (skip qualification)'
+        type: string
+        required: false
+
+jobs:
+  dispatch:
+    uses: nicsuzor/academicOps/.github/workflows/merge-prep-cron.yml@pipeline-v1
+    with:
+      pr_number: ${{ inputs.pr_number }}
+      workflow_ref: 'agent-merge-prep.yml'
+      bot_identity: 'github-actions[bot]'
+    secrets: inherit
