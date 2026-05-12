@@ -348,35 +348,28 @@ class ChromaDBEmbeddings(VectorStorageConfig):
         self._sync_batch_size = self.sync_batch_size
         self._sync_interval_seconds = self.sync_interval_minutes * 60
 
-        # Skip embedding infrastructure initialization in read_only mode
-        if not self.read_only:
-            from buttermilk.processors.embeddings import GeminiEmbeddingFunction
+        # Initialize embedding infrastructure (needed even in read-only mode for queries)
+        from buttermilk.processors.embeddings import GeminiEmbeddingFunction
 
-            logger.info(f"Loading embedding model: {self.embedding_model}")
-            self._embedding_model = self.embedding_model  # Store the model name
+        logger.info(f"Loading embedding model: {self.embedding_model}")
+        self._embedding_model = self.embedding_model  # Store the model name
 
-            self._embedding_function = GeminiEmbeddingFunction(
-                embedding_model=self.embedding_model,
-                dimensionality=self.dimensionality,
-            )
-            # Wrap embedding model with retry logic
-            self._retry_wrapper = RetryWrapper(
-                client=self._embedding_function,
-                max_retries=self.embedding_max_retries,
-                min_wait_seconds=self.embedding_min_wait_seconds,
-                max_wait_seconds=self.embedding_max_wait_seconds,
-                cooldown_seconds=self.embedding_cooldown_seconds,
-                jitter_seconds=2.0,  # Add some jitter for quota management
-            )
-            logger.info(
-                f"🔄 Embedding retry configured: {self.embedding_max_retries} retries, {self.embedding_min_wait_seconds}-{self.embedding_max_wait_seconds}s backoff"
-            )
-        else:
-            # In read_only mode, set minimal placeholders
-            self._embedding_model = self.embedding_model
-            self._embedding_function = None
-            self._retry_wrapper = None
-            logger.info("⏩ Skipping embedding infrastructure initialization (read-only mode)")
+        self._embedding_function = GeminiEmbeddingFunction(
+            embedding_model=self.embedding_model,
+            dimensionality=self.dimensionality,
+        )
+        # Wrap embedding model with retry logic
+        self._retry_wrapper = RetryWrapper(
+            client=self._embedding_function,
+            max_retries=self.embedding_max_retries,
+            min_wait_seconds=self.embedding_min_wait_seconds,
+            max_wait_seconds=self.embedding_max_wait_seconds,
+            cooldown_seconds=self.embedding_cooldown_seconds,
+            jitter_seconds=2.0,  # Add some jitter for quota management
+        )
+        logger.info(
+            f"🔄 Embedding retry configured: {self.embedding_max_retries} retries, {self.embedding_min_wait_seconds}-{self.embedding_max_wait_seconds}s backoff"
+        )
 
         # Handle remote persist_directory by caching locally
         logger.info(f"Initializing ChromaDB client at: {self.persist_directory}")
@@ -915,7 +908,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             try:
                 self._client.create_collection(
                     name=self.collection_name,
-                    embedding_function=self._embedding_function if not self.read_only else None,
+                    embedding_function=self._embedding_function,
                     metadata={
                         "embedding_model": self.embedding_model,
                         "dimensionality": self.dimensionality,
