@@ -804,7 +804,7 @@ class BatchJobManager(BaseModel):
             return claude_map.get(resolved_model, f"publishers/anthropic/models/{resolved_model}")
         elif resolved_model.startswith("google/"):
             # Gemini models - strip google/ prefix (Batch API expects bare names)
-            return resolved_model[len("google/"):]
+            return resolved_model[len("google/") :]
         else:
             # DeepSeek, Llama, and other MaaS models on Vertex use their
             # model path as-is (e.g., "deepseek-ai/deepseek-v3.2-maas")

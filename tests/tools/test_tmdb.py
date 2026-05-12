@@ -161,7 +161,6 @@ class TestTMDBGetAvailability:
             # Mock watch providers response - needs to be an object with .results attribute
             # region_data must be a dataclass, so we'll use dataclasses.make_dataclass
             from dataclasses import make_dataclass
-            from unittest.mock import Mock
 
             # Create a simple dataclass for region data
             RegionData = make_dataclass(
@@ -170,6 +169,7 @@ class TestTMDBGetAvailability:
             )
 
             from types import SimpleNamespace
+
             mock_providers = SimpleNamespace()
             mock_providers.results = {
                 "US": RegionData(
@@ -812,7 +812,6 @@ class TestTMDBGetAvailabilityById:
         """
         from dataclasses import make_dataclass
         from pathlib import Path
-        from unittest.mock import Mock
 
         fixture_path = Path(__file__).parent / "fixtures" / fixture_filename
         with open(fixture_path, encoding="utf-8") as f:
@@ -834,6 +833,7 @@ class TestTMDBGetAvailabilityById:
         # Convert each region dict to a dataclass instance
         # Use SimpleNamespace (not Mock) so hasattr() returns False for absent fields
         from types import SimpleNamespace
+
         mock_response = SimpleNamespace()
         mock_response.results = {}
         for region_code, region_data in raw_data["results"].items():
@@ -939,7 +939,6 @@ class TestTMDBGetAvailabilityById:
         """Test that empty provider types yield null observations."""
         from dataclasses import make_dataclass
         from types import SimpleNamespace
-        from unittest.mock import Mock
 
         RegionData = make_dataclass(
             "RegionData",
@@ -1007,7 +1006,6 @@ class TestTMDBGetAvailabilityById:
         2. No error is raised (since JSON parsed successfully)
         """
         from dataclasses import make_dataclass
-        from unittest.mock import Mock
 
         RegionData = make_dataclass(
             "RegionData",
@@ -1024,6 +1022,7 @@ class TestTMDBGetAvailabilityById:
         # Simulate truncated response - only AE region present
         # Use SimpleNamespace (not Mock) so hasattr() returns False for absent fields
         from types import SimpleNamespace
+
         mock_response = SimpleNamespace()
         mock_response.results = {
             "AE": RegionData(
@@ -1082,7 +1081,6 @@ class TestTMDBGetAvailabilityById:
         or none are yielded (only an error record).
         """
         from dataclasses import make_dataclass
-        from unittest.mock import Mock
 
         RegionData = make_dataclass(
             "RegionData",
@@ -1100,6 +1098,7 @@ class TestTMDBGetAvailabilityById:
         # by having a provider dict that's missing required keys
         # Use SimpleNamespace (not Mock) so hasattr() returns False for absent fields
         from types import SimpleNamespace
+
         mock_response = SimpleNamespace()
 
         # Create a custom class that raises during iteration for AU

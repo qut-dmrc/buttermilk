@@ -856,11 +856,7 @@ class ProcessingSummary(BaseModel):
         success_pct = self.success_rate() * 100
 
         parts = [
-            f"✅ Processing complete: "
-            f"attempted={self.attempted} "
-            f"processed={self.processed} "
-            f"skipped={self.skipped} "
-            f"failed={self.failed}",
+            f"✅ Processing complete: attempted={self.attempted} processed={self.processed} skipped={self.skipped} failed={self.failed}",
         ]
         if self.variant_errors > 0:
             parts.append(f" variant_errors={self.variant_errors}")

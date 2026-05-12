@@ -1484,7 +1484,7 @@ class LLMs(BaseModel):
         # For mistral_vertex, strip the mistralai/ prefix - LiteLLM adds it as the publisher
         if client_type == "mistral_vertex":
             if model_name.startswith("mistralai/"):
-                return model_name[len("mistralai/"):]
+                return model_name[len("mistralai/") :]
             return model_name
 
         # For anthropic_vertex clients with provider-specific models, preserve format
@@ -1594,7 +1594,13 @@ class LLMs(BaseModel):
 
         # Determine if token_provider is needed for this provider
         token_provider = None
-        if config.client_type in (ClientType.VERTEX_OPENAI, ClientType.GEMINI_VERTEX, ClientType.LLAMA_VERTEX, ClientType.DEEPSEEK_VERTEX, ClientType.MISTRAL_VERTEX):
+        if config.client_type in (
+            ClientType.VERTEX_OPENAI,
+            ClientType.GEMINI_VERTEX,
+            ClientType.LLAMA_VERTEX,
+            ClientType.DEEPSEEK_VERTEX,
+            ClientType.MISTRAL_VERTEX,
+        ):
             # Vertex models need GCP token refresh
             def get_vertex_token() -> str:
                 return bm.get_gcp_access_token()
