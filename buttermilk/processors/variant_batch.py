@@ -95,8 +95,7 @@ class VariantBatchProcessor(BatchProcessorCore):
         """Log the expansion plan."""
         total = len(self.models) * len(self.templates)
         logger.info(
-            f"VariantBatchProcessor initialized: {len(self.models)} models x "
-            f"{len(self.templates)} templates = {total} variants",
+            f"VariantBatchProcessor initialized: {len(self.models)} models x {len(self.templates)} templates = {total} variants",
             models=self.models,
             templates=self.templates,
         )
@@ -134,8 +133,7 @@ class VariantBatchProcessor(BatchProcessorCore):
 
         for idx, (model, template) in enumerate(variants):
             logger.info(
-                f"VariantBatchProcessor [{idx + 1}/{total}] "
-                f"model={model}, template={template}",
+                f"VariantBatchProcessor [{idx + 1}/{total}] model={model}, template={template}",
             )
 
             # Instantiate inner processor with shared config
@@ -158,20 +156,17 @@ class VariantBatchProcessor(BatchProcessorCore):
                 outputs = await inner._process_batch(records)
                 all_outputs.extend(outputs)
                 logger.info(
-                    f"VariantBatchProcessor [{idx + 1}/{total}] complete: "
-                    f"{len(outputs)} output records",
+                    f"VariantBatchProcessor [{idx + 1}/{total}] complete: {len(outputs)} output records",
                 )
             except Exception as e:
                 logger.error(
-                    f"VariantBatchProcessor [{idx + 1}/{total}] failed: "
-                    f"model={model}, template={template}, error={e}",
+                    f"VariantBatchProcessor [{idx + 1}/{total}] failed: model={model}, template={template}, error={e}",
                 )
                 # Continue with other variants rather than failing the whole batch
                 continue
 
         logger.info(
-            f"VariantBatchProcessor complete: {len(all_outputs)} total output records "
-            f"from {total} variants",
+            f"VariantBatchProcessor complete: {len(all_outputs)} total output records from {total} variants",
         )
 
         return all_outputs

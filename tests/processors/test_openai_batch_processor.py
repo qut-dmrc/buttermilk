@@ -1,8 +1,6 @@
 """Unit tests for OpenAIBatchProcessor."""
 
-import json
-import uuid
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pydantic import BaseModel
@@ -76,8 +74,9 @@ class TestOpenAIBatchProcessor:
             processor = OpenAIBatchProcessor(model="gpt-azure", template="test")
             # Trigger client initialization
             client = processor._ensure_openai_client()
-            
+
             from openai import AzureOpenAI
+
             assert isinstance(client, AzureOpenAI)
             assert client.api_key == "test-key"
             assert str(client.base_url).startswith("https://test.openai.azure.com/")
@@ -89,8 +88,9 @@ class TestOpenAIBatchProcessor:
         with patch("buttermilk.bm", mock_bm):
             processor = OpenAIBatchProcessor(model="gpt-direct", template="test")
             client = processor._ensure_openai_client()
-            
+
             from openai import OpenAI
+
             assert isinstance(client, OpenAI)
             assert client.api_key == "test-key"
 
@@ -116,31 +116,32 @@ class TestOpenAIBatchProcessor:
     async def test_process_batch_dry_run(self, mock_bm, openai_config):
         """Test dry_run mode returns correct metadata."""
         mock_bm.llms.connections = {"gpt": openai_config}
-        
+
         # Mock the manager and its build_jsonl method
         mock_manager = MagicMock()
         mock_manager.build_jsonl.return_value = '{"test": "jsonl"}'
         mock_manager._resolve_batch_dir.return_value = "gs://test/batch"
 
-        with patch("buttermilk.bm", mock_bm), \
-             patch("buttermilk.processors.vertex_batch.OpenAIBatchProcessor._ensure_manager", return_value=mock_manager), \
-             patch("buttermilk.processors.vertex_batch.uuid") as mock_uuid, \
-             patch("buttermilk.utils.save.upload_text") as mock_upload:
-            
+        with (
+            patch("buttermilk.bm", mock_bm),
+            patch("buttermilk.processors.vertex_batch.OpenAIBatchProcessor._ensure_manager", return_value=mock_manager),
+            patch("buttermilk.processors.vertex_batch.uuid") as mock_uuid,
+            patch("buttermilk.utils.save.upload_text") as mock_upload,
+        ):
             mock_uuid.uuid4().hex = "1234567890abcdef"
             mock_upload.return_value = "gs://test/batch/input.jsonl"
-            
+
             processor = OpenAIBatchProcessor(model="gpt", template="test", dry_run=True)
-            
+
             record = BaseRecord(record_id="rec1", content="hello", metadata={})
             context = ProcessingContext(record=record, session_id="test-session")
-            
+
             # We need to mock render_template as well or provide a real template
             with patch("buttermilk.processors.vertex_batch.render_template") as mock_render:
                 mock_render.return_value = MagicMock(rendered="System: hi\nUser: hello")
-                
+
                 results = await processor._process_batch([context])
-            
+
             assert len(results) == 1
             assert results[0].metadata["dry_run"] is True
             assert results[0].metadata["batch_status"] == "dry_run"
@@ -150,23 +151,24 @@ class TestOpenAIBatchProcessor:
     async def test_process_batch_non_blocking(self, mock_bm, openai_config):
         """Test non-blocking mode returns pending records."""
         mock_bm.llms.connections = {"gpt": openai_config}
-        
+
         mock_manager = MagicMock()
         mock_manager.submit_batch = AsyncMock(return_value={"openai_batch_id": "batch_123"})
 
-        with patch("buttermilk.bm", mock_bm), \
-             patch("buttermilk.processors.vertex_batch.OpenAIBatchProcessor._ensure_manager", return_value=mock_manager), \
-             patch("buttermilk.processors.vertex_batch.render_template") as mock_render:
-            
+        with (
+            patch("buttermilk.bm", mock_bm),
+            patch("buttermilk.processors.vertex_batch.OpenAIBatchProcessor._ensure_manager", return_value=mock_manager),
+            patch("buttermilk.processors.vertex_batch.render_template") as mock_render,
+        ):
             mock_render.return_value = MagicMock(rendered="System: hi\nUser: hello")
-            
+
             processor = OpenAIBatchProcessor(model="gpt", template="test", wait_for_completion=False)
-            
+
             record = BaseRecord(record_id="rec1", content="hello", metadata={})
             context = ProcessingContext(record=record, session_id="test-session")
-            
+
             results = await processor._process_batch([context])
-            
+
             assert len(results) == 1
             assert results[0].metadata["batch_job_id"] == "batch_123"
             assert results[0].metadata["batch_status"] == "pending"
@@ -176,36 +178,29 @@ class TestOpenAIBatchProcessor:
     async def test_process_batch_blocking(self, mock_bm, openai_config):
         """Test blocking mode maps results back to records."""
         mock_bm.llms.connections = {"gpt": openai_config}
-        
+
         from buttermilk._core.vertex_batch import BatchResult
-        
+
         mock_manager = MagicMock()
-        mock_results = [
-            BatchResult(
-                custom_id="id1",
-                record_id="rec1",
-                response="LLM says hello",
-                usage={"total_tokens": 10},
-                cost_usd=0.001
-            )
-        ]
+        mock_results = [BatchResult(custom_id="id1", record_id="rec1", response="LLM says hello", usage={"total_tokens": 10}, cost_usd=0.001)]
         mock_manager.run_batch_and_wait = AsyncMock(return_value=mock_results)
 
-        with patch("buttermilk.bm", mock_bm), \
-             patch("buttermilk.processors.vertex_batch.OpenAIBatchProcessor._ensure_manager", return_value=mock_manager), \
-             patch("buttermilk.processors.vertex_batch.render_template") as mock_render, \
-             patch("buttermilk.processors.vertex_batch.uuid") as mock_uuid:
-            
+        with (
+            patch("buttermilk.bm", mock_bm),
+            patch("buttermilk.processors.vertex_batch.OpenAIBatchProcessor._ensure_manager", return_value=mock_manager),
+            patch("buttermilk.processors.vertex_batch.render_template") as mock_render,
+            patch("buttermilk.processors.vertex_batch.uuid") as mock_uuid,
+        ):
             mock_uuid.uuid4.return_value = MagicMock(hex="id1")
             mock_render.return_value = MagicMock(rendered="System: hi\nUser: hello")
-            
+
             processor = OpenAIBatchProcessor(model="gpt", template="test", wait_for_completion=True)
-            
+
             record = BaseRecord(record_id="rec1", content="hello", metadata={})
             context = ProcessingContext(record=record, session_id="test-session")
-            
+
             results = await processor._process_batch([context])
-            
+
             assert len(results) == 1
             assert results[0].metadata["llm_output"] == "LLM says hello"
             assert results[0].metadata["cost_usd"] == 0.001

@@ -47,6 +47,10 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Run Gatekeeper Agent
+        # Advisory: don't fail the PR Checks workflow when gatekeeper rejects.
+        # (Caller-level `continue-on-error` is illegal on reusable-workflow
+        #  caller jobs, so we soften here at the step level.)
+        continue-on-error: true
         uses: anthropics/claude-code-action@v1
         with:
           allowed_bots: "claude[bot]"

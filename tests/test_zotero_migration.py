@@ -87,10 +87,11 @@ class TestZoteroDownloadProcessorNewAPI:
     @pytest.mark.anyio
     async def test_process_uses_context_record(self):
         """process() must extract record from context.record, not from positional args."""
+        from pyzotero import zotero_errors
+
         from buttermilk._core.processing_context import ProcessingContext
         from buttermilk._core.types import BaseRecord, Record
         from buttermilk.libs.zotero import ZoteroDownloadProcessor
-        from pyzotero import zotero_errors
 
         record = BaseRecord(
             record_id="PDF_KEY",
@@ -114,9 +115,7 @@ class TestZoteroDownloadProcessorNewAPI:
         with tempfile.TemporaryDirectory() as tmpdir:
             mock_zot = MagicMock()
             mock_zot.fulltext_item.side_effect = zotero_errors.ResourceNotFoundError
-            mock_zot.dump = MagicMock(
-                side_effect=lambda key, path: Path(path).write_bytes(b"%PDF-1.4\n" + b"x" * 60000)
-            )
+            mock_zot.dump = MagicMock(side_effect=lambda key, path: Path(path).write_bytes(b"%PDF-1.4\n" + b"x" * 60000))
 
             processor = ZoteroDownloadProcessor(library_id="test_library")
             # Inject mock directly to avoid bm singleton
@@ -222,9 +221,7 @@ class TestZoteroOldAPITests:
         with tempfile.TemporaryDirectory() as tmpdir:
             mock_zot = MagicMock()
             mock_zot.fulltext_item.side_effect = Exception("No fulltext available")
-            mock_zot.dump = MagicMock(
-                side_effect=lambda key, path: Path(path).write_bytes(b"%PDF-1.4\n" + b"x" * 100000)
-            )
+            mock_zot.dump = MagicMock(side_effect=lambda key, path: Path(path).write_bytes(b"%PDF-1.4\n" + b"x" * 100000))
 
             processor = ZoteroDownloadProcessor(library_id="test_library")
             processor._zot = mock_zot

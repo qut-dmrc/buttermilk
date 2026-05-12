@@ -502,12 +502,9 @@ class PipelineOrchestrator(BaseModel):
                         if not next_queue and buffered_count == 0 and len(processing_queue) > 0:
                             if local_variant_errors == 0:
                                 # All records were filtered (not errored) — this is a skip, not a failure
-                                raise RecordSkippedException(
-                                    f"All {local_filtered_count} records filtered in {processor_stage_name}"
-                                )
+                                raise RecordSkippedException(f"All {local_filtered_count} records filtered in {processor_stage_name}")
                             raise RuntimeError(
-                                f"All {len(processing_queue)} records failed in {processor_stage_name} "
-                                f"({local_variant_errors} variant errors)"
+                                f"All {len(processing_queue)} records failed in {processor_stage_name} ({local_variant_errors} variant errors)"
                             )
 
                         # Set processor span attributes for outputs

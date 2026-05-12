@@ -9,10 +9,10 @@ import pytest
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord, Record
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def make_context(record: BaseRecord, session_id: str = "test-session") -> ProcessingContext:
     """Build a minimal ProcessingContext for testing."""
@@ -22,6 +22,7 @@ def make_context(record: BaseRecord, session_id: str = "test-session") -> Proces
 # ---------------------------------------------------------------------------
 # QualityFilterProcessor
 # ---------------------------------------------------------------------------
+
 
 class TestQualityFilterProcessorContextAPI:
     """QualityFilterProcessor must accept ProcessingContext."""
@@ -77,6 +78,7 @@ class TestQualityFilterProcessorContextAPI:
 # CSVMetadataLogger
 # ---------------------------------------------------------------------------
 
+
 class TestCSVMetadataLoggerContextAPI:
     """CSVMetadataLogger must accept ProcessingContext."""
 
@@ -111,6 +113,7 @@ class TestCSVMetadataLoggerContextAPI:
 # JMESPathTransform
 # ---------------------------------------------------------------------------
 
+
 class TestJMESPathTransformContextAPI:
     """JMESPathTransform must accept ProcessingContext."""
 
@@ -137,6 +140,7 @@ class TestJMESPathTransformContextAPI:
 # ---------------------------------------------------------------------------
 # ChromaDBUploader
 # ---------------------------------------------------------------------------
+
 
 class TestChromaDBUploaderContextAPI:
     """ChromaDBUploader must accept ProcessingContext."""
@@ -166,6 +170,7 @@ class TestChromaDBUploaderContextAPI:
 # ---------------------------------------------------------------------------
 # BatchExpansionProcessor
 # ---------------------------------------------------------------------------
+
 
 class TestBatchExpansionProcessorContextAPI:
     """BatchExpansionProcessor must accept ProcessingContext."""
@@ -200,6 +205,7 @@ class TestBatchExpansionProcessorContextAPI:
 # ImageGenerationProcessor
 # ---------------------------------------------------------------------------
 
+
 class TestImageGenerationProcessorContextAPI:
     """ImageGenerationProcessor must accept ProcessingContext."""
 
@@ -226,6 +232,7 @@ class TestImageGenerationProcessorContextAPI:
 # ---------------------------------------------------------------------------
 # GCSImageStorageProcessor
 # ---------------------------------------------------------------------------
+
 
 class TestGCSImageStorageProcessorContextAPI:
     """GCSImageStorageProcessor must accept ProcessingContext."""

@@ -90,7 +90,9 @@ jobs:
   # Runs in parallel with lint — no dependencies.
   # ──────────────────────────────────────────────
   gatekeeper:
-    continue-on-error: true
+    # Note: `continue-on-error` is invalid on a reusable-workflow caller job
+    # (GHA rejects the whole file). The advisory behaviour is enforced inside
+    # `agent-gatekeeper.yml` instead, on the Claude step itself.
     name: Gatekeeper
     uses: ./.github/workflows/agent-gatekeeper.yml
     with:

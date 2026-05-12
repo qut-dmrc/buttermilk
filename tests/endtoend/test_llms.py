@@ -83,6 +83,7 @@ class TestPromptStyles:
         parsed_response = TestPromptStyles.StructuredTestAgentOutput.model_validate_json(response.content)
         assert isinstance(parsed_response, TestPromptStyles.StructuredTestAgentOutput)
 
+
 class TestAzureStructuredOutput:
     """Tests for Azure-hosted models with structured output."""
 

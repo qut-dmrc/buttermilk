@@ -22,9 +22,9 @@ from vertexai.language_models import (
 from buttermilk import bm, logger
 from buttermilk._core.constants import cache
 from buttermilk._core.exceptions import RateLimit  # Import RateLimit exception
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.retry import RetryWrapper  # Add retry functionality
 from buttermilk._core.storage_config import VectorStorageConfig
-from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BatchProcessingResult, ProcessingResult, Record
 from buttermilk.utils.utils import ensure_chromadb_cache, scrub_serializable
 

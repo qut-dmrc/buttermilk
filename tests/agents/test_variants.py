@@ -348,6 +348,6 @@ def test_step_config_get_configs_structure_and_ids(
         all_config_ids.append(agent_config.agent_id)
 
     # Check the core requirement: IDs must be unique across all returned configs
-    assert len(all_config_ids) == len(
-        set(all_config_ids)
-    ), f"AgentConfig.agent_id values are not unique across returned configs. Found IDs: {all_config_ids}"
+    assert len(all_config_ids) == len(set(all_config_ids)), (
+        f"AgentConfig.agent_id values are not unique across returned configs. Found IDs: {all_config_ids}"
+    )
