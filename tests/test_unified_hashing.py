@@ -5,13 +5,17 @@ from pathlib import Path
 
 import pytest
 
+from autogen_core.models import SystemMessage, UserMessage
+
 from buttermilk._core.hashing import (
     compute_flow_hash,
     compute_ground_truth_hash,
+    compute_message_hashes,
     compute_record_hash,
     compute_sha256_hash,
     compute_template_hash,
     compute_template_hash_from_file,
+    extract_system_hash,
     normalize_flow_config,
 )
 
@@ -331,3 +335,73 @@ class TestHashFormatConsistency:
             assert not hash_value.startswith("hash:")
             # Should be pure hex
             assert all(c in "0123456789abcdef" for c in hash_value)
+
+
+class TestMessageHashing:
+    """Test per-message hashing for experiment identity."""
+
+    def test_basic_message_hashing(self):
+        """Test hashing SystemMessage and UserMessage produces correct structure."""
+        messages = [
+            SystemMessage(content="You are a judge. Criteria: fairness"),
+            UserMessage(content="Evaluate this article.", source="test"),
+        ]
+        hashes = compute_message_hashes(messages)
+
+        assert len(hashes) == 2
+        assert hashes[0]["role"] == "system"
+        assert hashes[0]["index"] == 0
+        assert len(hashes[0]["hash"]) == 64
+        assert hashes[1]["role"] == "user"
+        assert hashes[1]["index"] == 1
+        assert len(hashes[1]["hash"]) == 64
+
+    def test_message_hash_determinism(self):
+        """Same message content produces the same hash."""
+        content = "You are a judge evaluating toxicity."
+        messages = [SystemMessage(content=content)]
+
+        hash1 = compute_message_hashes(messages)[0]["hash"]
+        hash2 = compute_message_hashes(messages)[0]["hash"]
+
+        assert hash1 == hash2
+
+    def test_different_criteria_different_system_hash(self):
+        """Different criteria content produces different system_hash — the core use case."""
+        tja_messages = [SystemMessage(content="Criteria: TJA guidelines for trans coverage")]
+        glaad_messages = [SystemMessage(content="Criteria: GLAAD media reference guide")]
+
+        tja_hashes = compute_message_hashes(tja_messages)
+        glaad_hashes = compute_message_hashes(glaad_messages)
+
+        tja_system = extract_system_hash(tja_hashes)
+        glaad_system = extract_system_hash(glaad_hashes)
+
+        assert tja_system != glaad_system
+
+    def test_extract_system_hash_present(self):
+        """extract_system_hash returns hash of first system message."""
+        messages = [
+            SystemMessage(content="system prompt"),
+            UserMessage(content="user input", source="test"),
+        ]
+        hashes = compute_message_hashes(messages)
+        system_hash = extract_system_hash(hashes)
+
+        assert system_hash is not None
+        assert system_hash == hashes[0]["hash"]
+
+    def test_extract_system_hash_missing(self):
+        """extract_system_hash returns None when no system message exists."""
+        messages = [UserMessage(content="just a user message", source="test")]
+        hashes = compute_message_hashes(messages)
+
+        assert extract_system_hash(hashes) is None
+
+    def test_extract_system_hash_empty_list(self):
+        """extract_system_hash handles empty list."""
+        assert extract_system_hash([]) is None
+
+    def test_message_hashes_empty_messages(self):
+        """compute_message_hashes handles empty message list."""
+        assert compute_message_hashes([]) == []

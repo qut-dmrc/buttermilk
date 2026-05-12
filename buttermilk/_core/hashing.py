@@ -279,6 +279,72 @@ def hash_content(content: str | bytes) -> str:
     return hashlib.sha256(content).hexdigest()
 
 
+# Role map for LLM message types → trace role strings
+_ROLE_MAP: dict[type, str] | None = None
+
+
+def _get_role_map() -> dict[type, str]:
+    """Lazy-load role map to avoid import-time dependency on autogen_core."""
+    global _ROLE_MAP
+    if _ROLE_MAP is None:
+        from autogen_core.models import AssistantMessage, SystemMessage, UserMessage
+
+        _ROLE_MAP = {
+            SystemMessage: "system",
+            UserMessage: "user",
+            AssistantMessage: "assistant",
+        }
+    return _ROLE_MAP
+
+
+def compute_message_hashes(messages: list) -> list[dict[str, str | int]]:
+    """Hash each LLM message's rendered content for experiment identity.
+
+    Computes a SHA-256 hash of each message's content string. This captures
+    the fully-rendered message (template + criteria + variables), enabling
+    differentiation of experiment configurations that share the same template
+    file but differ in rendered content.
+
+    Args:
+        messages: List of LLMMessage objects (SystemMessage, UserMessage, etc.)
+
+    Returns:
+        List of dicts with keys: role (str), index (int), hash (str)
+    """
+    role_map = _get_role_map()
+    result = []
+    for i, msg in enumerate(messages):
+        role = role_map.get(type(msg), type(msg).__name__.lower())
+        content = getattr(msg, "content", "")
+        if not isinstance(content, str):
+            content = str(content)
+        result.append({
+            "role": role,
+            "index": i,
+            "hash": compute_sha256_hash(content),
+        })
+    return result
+
+
+def extract_system_hash(message_hashes: list[dict[str, str | int]]) -> str | None:
+    """Extract hash of first system-role message for experiment identity.
+
+    The system_hash uniquely identifies the rendered instructions/criteria,
+    enabling A/B testing comparison when the same template file is used
+    with different criteria content.
+
+    Args:
+        message_hashes: Output from compute_message_hashes()
+
+    Returns:
+        SHA-256 hash of first system message, or None if no system message exists
+    """
+    for entry in message_hashes:
+        if entry["role"] == "system":
+            return entry["hash"]
+    return None
+
+
 class HashCollector:
     """Collects all hashes for a trace.
 
