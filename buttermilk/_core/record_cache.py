@@ -139,7 +139,7 @@ class RecordCache:
         )
         return exists
 
-    def load(self, record_id: str, stage: str) -> Record | None:
+    def load(self, record_id: str, stage: str) -> BaseRecord | None:
         if not self.has(record_id, stage):
             logger.debug("❌ Cache miss", record_id=record_id, stage=stage)
             return None

@@ -170,6 +170,6 @@ __all__ = [
 
 # Replace the placeholder BM with the real class now that all imports are complete
 if not TYPE_CHECKING:
-    from ._core.bm_init import BM as _RealBM
+    from ._core.bm_init import BM as _BM  # noqa: N811, E402
 
-    BM = _RealBM
+    BM = _BM
