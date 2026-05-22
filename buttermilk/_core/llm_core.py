@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field, PrivateAttr, model_validator
 from buttermilk import bm, logger
 from buttermilk._core.contract import ErrorEvent
 from buttermilk._core.exceptions import FatalError, ProcessingError
+from buttermilk._core.hashing import compute_sha256_hash
 from buttermilk._core.processor_core import ObservabilityMixin, TraceParams
 
 if TYPE_CHECKING:
@@ -326,6 +327,27 @@ class LLMCore(ObservabilityMixin):
             "context": context,
         }
 
+    def _compute_criteria_hash(self, criteria_val: Any, resolved_inputs: dict[str, Any]) -> str:
+        """Hash rendered criteria content; falls back to str() if render fails."""
+        try:
+            cr_result = render_template(criteria_val, template_vars=resolved_inputs)
+            criteria_content = cr_result.rendered
+        except Exception:
+            criteria_content = str(criteria_val)
+        return compute_sha256_hash(criteria_content.strip())
+
+    def _collect_record_hashes(self, record: BaseRecord) -> dict[str, Any]:
+        """Collect all per-record hash entries, including deprecated monolithic hash."""
+        hashes: dict[str, Any] = {
+            "record_hash": record.record_hash,
+            "record_hash_deprecated": True,
+        }
+        if hasattr(record, "record_hashes"):
+            hashes["record_hashes"] = record.record_hashes
+        if hasattr(record, "ground_truth_hash") and record.ground_truth_hash:
+            hashes["ground_truth_hash"] = record.ground_truth_hash
+        return hashes
+
     def _collect_result_metadata(self, result: LLMResult, llm_result: Any, record: BaseRecord | None) -> None:
         """Populate result with template metadata, hashes, and LLM response metadata."""
         from buttermilk._core.llms import ModelOutput
@@ -339,24 +361,12 @@ class LLMCore(ObservabilityMixin):
         # Hashes
         result.metadata["hashes"] = {
             "template_hash": self._template_metadata.get("template_hash"),
-            "system_prompt_hash": self._template_metadata.get("template_hash"), # Template itself is the instruction block
+            "system_prompt_hash": self._template_metadata.get("template_hash"),  # Template itself is the instruction block
         }
 
         # Calculate criteria hash if criteria is in resolved inputs
-        if result.resolved_inputs and "criteria" in result.resolved_inputs:
-            criteria_val = result.resolved_inputs["criteria"]
-            if criteria_val:
-                try:
-                    from buttermilk._core.hashing import compute_sha256_hash
-                    from buttermilk.utils.templating import render_template
-                    try:
-                        cr_result = render_template(criteria_val, template_vars=result.resolved_inputs)
-                        criteria_content = cr_result.rendered
-                    except Exception:
-                        criteria_content = str(criteria_val)
-                    result.metadata["hashes"]["criteria_hash"] = compute_sha256_hash(criteria_content.strip())
-                except Exception:
-                    pass
+        if result.resolved_inputs and (criteria_val := result.resolved_inputs.get("criteria")):
+            result.metadata["hashes"]["criteria_hash"] = self._compute_criteria_hash(criteria_val, result.resolved_inputs)
 
         # Add per-message hashes (computed before LLM call in process_with_llm)
         if "_message_hashes" in result.metadata:
@@ -369,16 +379,7 @@ class LLMCore(ObservabilityMixin):
                 result.metadata["hashes"]["system_hash"] = system_hash
 
         if record is not None:
-            # Deprecated monolithic record_hash for back-compat
-            result.metadata["hashes"]["record_hash"] = record.record_hash
-            result.metadata["hashes"]["record_hash_deprecated"] = True
-
-            # New per-part logical content hashes
-            if hasattr(record, "record_hashes"):
-                result.metadata["hashes"]["record_hashes"] = record.record_hashes
-
-            if hasattr(record, "ground_truth_hash") and record.ground_truth_hash:
-                result.metadata["hashes"]["ground_truth_hash"] = record.ground_truth_hash
+            result.metadata["hashes"].update(self._collect_record_hashes(record))
             result.metadata["record_id"] = record.record_id
 
         # Extract content

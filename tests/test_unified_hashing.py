@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from autogen_core.models import SystemMessage, UserMessage
+from PIL import Image as PILImage
 
 from buttermilk._core.hashing import (
     compute_flow_hash,
@@ -17,6 +18,7 @@ from buttermilk._core.hashing import (
     extract_system_hash,
     normalize_flow_config,
 )
+from buttermilk._core.types import Record
 
 
 class TestCoreHashFunction:
@@ -75,7 +77,6 @@ class TestRecordHashing:
 
     def test_record_hashes_determinism(self):
         """Test that record_hashes is deterministic for text records."""
-        from buttermilk._core.types import Record
         record1 = Record(record_id="rec1", content="Hello World", metadata={"criteria": "A", "model": "GPT-4"})
         record2 = Record(record_id="rec1", content="Hello World", metadata={"criteria": "B", "model": "Claude"})
 
@@ -86,10 +87,7 @@ class TestRecordHashing:
 
     def test_record_hashes_multimodal(self):
         """Test that record_hashes produces N hashes for N parts."""
-        from buttermilk._core.types import Record
-        from PIL import Image
-
-        img = Image.new('RGB', (10, 10))
+        img = PILImage.new("RGB", (10, 10))
         record = Record(record_id="rec1", content=["Hello", img, "World"])
 
         hashes = record.record_hashes

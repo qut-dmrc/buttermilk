@@ -7,6 +7,7 @@ different components of Buttermilk.
 """
 
 import datetime
+import hashlib
 import json  # For JSON parsing in validators
 import time  # For timestamp tracking
 from collections.abc import Sequence  # For type hinting sequences
@@ -24,6 +25,8 @@ from pydantic import (
     field_validator,  # For custom field validation
     model_validator,  # For model-level validation
 )
+
+from buttermilk._core.hashing import hash_content
 
 from .log import logger
 
@@ -240,34 +243,16 @@ class BaseRecord(BaseModel):
         Returns:
             list[dict[str, Any]]: List of per-part hashes.
         """
-        from buttermilk._core.hashing import hash_content
-        import hashlib
-        from collections.abc import Sequence
-        from PIL.Image import Image
-
         hashes = []
         if isinstance(self.content, str):
-            hashes.append({
-                "part_index": 0,
-                "content_type": "text",
-                "hash": hash_content(self.content)
-            })
+            hashes.append({"part_index": 0, "content_type": "text", "hash": hash_content(self.content)})
         elif isinstance(self.content, Sequence):
             for i, item in enumerate(self.content):
                 if isinstance(item, str):
-                    hashes.append({
-                        "part_index": i,
-                        "content_type": "text",
-                        "hash": hash_content(item)
-                    })
+                    hashes.append({"part_index": i, "content_type": "text", "hash": hash_content(item)})
                 elif isinstance(item, Image):
-                    hashes.append({
-                        "part_index": i,
-                        "content_type": "image",
-                        "hash": hashlib.sha256(item.tobytes()).hexdigest()
-                    })
+                    hashes.append({"part_index": i, "content_type": "image", "hash": hashlib.sha256(item.tobytes()).hexdigest()})
         return hashes
-
 
     @computed_field
     @property
