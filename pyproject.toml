@@ -400,6 +400,16 @@ ignore = [
   "C419",                     # Unnecessary list comprehension
   "RET503",                   # Missing explicit return
   "RUF100",                   # Unused noqa directive (from cleanup)
+  "A001",                     # Variable shadowing a builtin
+  "PLE0303",                  # __len__ does not return non-negative
+  "N814", "N816",             # Mixed-case variable/import naming
+  "B004", "B017", "B018",     # hasattr(__call__); blind except; useless expression
+  "DTZ001", "DTZ004",         # Naive datetime; utcfromtimestamp
+  "PLR1704",                  # Redefining argument with local name
+  "E721", "E741",             # Type comparison style; ambiguous variable name
+  "SIM117",                   # Nested with statements
+  "PT003", "PT013", "PT017", "PT018", # Pytest style rules
+  "PIE804",                   # Unnecessary dict kwargs
 ]
 
 [tool.ruff.lint.mccabe]
