@@ -339,7 +339,25 @@ class LLMCore(ObservabilityMixin):
         # Hashes
         result.metadata["hashes"] = {
             "template_hash": self._template_metadata.get("template_hash"),
+            "system_prompt_hash": self._template_metadata.get("template_hash"), # Template itself is the instruction block
         }
+
+        # Calculate criteria hash if criteria is in resolved inputs
+        if result.resolved_inputs and "criteria" in result.resolved_inputs:
+            criteria_val = result.resolved_inputs["criteria"]
+            if criteria_val:
+                try:
+                    from buttermilk._core.hashing import compute_sha256_hash
+                    from buttermilk.utils.templating import render_template
+                    try:
+                        cr_result = render_template(criteria_val, template_vars=result.resolved_inputs)
+                        criteria_content = cr_result.rendered
+                    except Exception:
+                        criteria_content = str(criteria_val)
+                    result.metadata["hashes"]["criteria_hash"] = compute_sha256_hash(criteria_content.strip())
+                except Exception:
+                    pass
+
         # Add per-message hashes (computed before LLM call in process_with_llm)
         if "_message_hashes" in result.metadata:
             from buttermilk._core.hashing import extract_system_hash
@@ -349,8 +367,16 @@ class LLMCore(ObservabilityMixin):
             system_hash = extract_system_hash(msg_hashes)
             if system_hash:
                 result.metadata["hashes"]["system_hash"] = system_hash
+
         if record is not None:
+            # Deprecated monolithic record_hash for back-compat
             result.metadata["hashes"]["record_hash"] = record.record_hash
+            result.metadata["hashes"]["record_hash_deprecated"] = True
+
+            # New per-part logical content hashes
+            if hasattr(record, "record_hashes"):
+                result.metadata["hashes"]["record_hashes"] = record.record_hashes
+
             if hasattr(record, "ground_truth_hash") and record.ground_truth_hash:
                 result.metadata["hashes"]["ground_truth_hash"] = record.ground_truth_hash
             result.metadata["record_id"] = record.record_id

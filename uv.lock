@@ -514,7 +514,7 @@ azure = [
 ]
 gemini = [
     { name = "google-genai", version = "1.75.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.13'" },
-    { name = "google-genai", version = "2.5.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13'" },
+    { name = "google-genai", version = "2.6.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13'" },
 ]
 openai = [
     { name = "aiofiles" },
@@ -1275,7 +1275,7 @@ dependencies = [
     { name = "google-cloud-storage", version = "3.5.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.14'" },
     { name = "google-crc32c" },
     { name = "google-genai", version = "1.75.0", source = { registry = "https://pypi.org/simple" }, extra = ["aiohttp"], marker = "python_full_version >= '3.13'" },
-    { name = "google-genai", version = "2.5.0", source = { registry = "https://pypi.org/simple" }, extra = ["aiohttp"], marker = "python_full_version < '3.13'" },
+    { name = "google-genai", version = "2.6.0", source = { registry = "https://pypi.org/simple" }, extra = ["aiohttp"], marker = "python_full_version < '3.13'" },
     { name = "google-generativeai" },
     { name = "gql" },
     { name = "gspread" },
@@ -3018,7 +3018,7 @@ dependencies = [
     { name = "google-cloud-bigquery", marker = "python_full_version < '3.13'" },
     { name = "google-cloud-resource-manager", marker = "python_full_version < '3.13'" },
     { name = "google-cloud-storage", version = "3.5.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13'" },
-    { name = "google-genai", version = "2.5.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13'" },
+    { name = "google-genai", version = "2.6.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13'" },
     { name = "packaging", marker = "python_full_version < '3.13'" },
     { name = "proto-plus", marker = "python_full_version < '3.13'" },
     { name = "protobuf", marker = "python_full_version < '3.13'" },
@@ -3368,7 +3368,7 @@ aiohttp = [
 
 [[package]]
 name = "google-genai"
-version = "2.5.0"
+version = "2.6.0"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
     "python_full_version < '3.11'",
@@ -3387,9 +3387,9 @@ dependencies = [
     { name = "typing-extensions", marker = "python_full_version < '3.13'" },
     { name = "websockets", marker = "python_full_version < '3.13'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5e/08/c7f3a6f49bb6674891ce6fb9e9eeeb7a7522cb51f3422afff5d5a59bf347/google_genai-2.5.0.tar.gz", hash = "sha256:643d8158a718eecb8d14d4155ed973f43034f8ae757ac922fb6b093dd374e2af", size = 552293, upload-time = "2026-05-20T18:59:00.473Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/dd/ec/6e49f50f5c70588d97c6ed25e0b8c18828bf4d58895f397b53a7522168a1/google_genai-2.6.0.tar.gz", hash = "sha256:7d4f777234002f2e94be499dbdfb43b506a6aca9dbbec13e61d3dc6ce640ffa7", size = 554809, upload-time = "2026-05-22T01:34:33.581Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/52/a7/b90fcd62461d74e08ded24e8265af5d2e53c0fd2dcc309a14687fdf2077a/google_genai-2.5.0-py3-none-any.whl", hash = "sha256:bba50cdb3a14cb3dea7b3e43a8f23b50191fd77bd19097df98b051ce1a619352", size = 818214, upload-time = "2026-05-20T18:58:58.435Z" },
+    { url = "https://files.pythonhosted.org/packages/b3/9e/e8ba4e58a9d5daf42343f3ea1cb0efb721eba36a1d6624e9873d039a5c1e/google_genai-2.6.0-py3-none-any.whl", hash = "sha256:272b6f6320f5d355735241ad441f972af095ec80dc10cb075cb430d96721648a", size = 821003, upload-time = "2026-05-22T01:34:31.55Z" },
 ]
 
 [package.optional-dependencies]
@@ -3943,11 +3943,11 @@ wheels = [
 
 [[package]]
 name = "idna"
-version = "3.15"
+version = "3.16"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/82/77/7b3966d0b9d1d31a36ddf1746926a11dface89a83409bf1483f0237aa758/idna-3.15.tar.gz", hash = "sha256:ca962446ea538f7092a95e057da437618e886f4d349216d2b1e294abfdb65fdc", size = 199245, upload-time = "2026-05-12T22:45:57.011Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/1a/88/bcf9709822fe69d02c2a6a77956c98ce6ea8ca8767a9aadcedc7eb6a2390/idna-3.16.tar.gz", hash = "sha256:d7a6da03db833450fca25d2358ac9ff06cd624577a4aea3a596d5c0f77b8e03d", size = 203770, upload-time = "2026-05-22T00:16:18.781Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d2/23/408243171aa9aaba178d3e2559159c24c1171a641aa83b67bdd3394ead8e/idna-3.15-py3-none-any.whl", hash = "sha256:048adeaf8c2d788c40fee287673ccaa74c24ffd8dcf09ffa555a2fbb59f10ac8", size = 72340, upload-time = "2026-05-12T22:45:55.733Z" },
+    { url = "https://files.pythonhosted.org/packages/94/16/70255075a9859a0e3adb789b68ceb0e210dec03934245fd98d248226572f/idna-3.16-py3-none-any.whl", hash = "sha256:cc246e3a3f89580c3a951b5ad298ca4638078b2cdd4f115654332b5c26daded5", size = 74165, upload-time = "2026-05-22T00:16:16.698Z" },
 ]
 
 [[package]]
