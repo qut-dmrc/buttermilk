@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from autogen_core.models import SystemMessage, UserMessage
+from PIL import Image as PILImage
 
 from buttermilk._core.hashing import (
     compute_flow_hash,
@@ -17,6 +18,7 @@ from buttermilk._core.hashing import (
     extract_system_hash,
     normalize_flow_config,
 )
+from buttermilk._core.types import Record
 
 
 class TestCoreHashFunction:
@@ -72,6 +74,31 @@ class TestRecordHashing:
         hash2 = compute_record_hash("# Record B")
 
         assert hash1 != hash2
+
+    def test_record_hashes_determinism(self):
+        """Test that record_hashes is deterministic for text records."""
+        record1 = Record(record_id="rec1", content="Hello World", metadata={"criteria": "A", "model": "GPT-4"})
+        record2 = Record(record_id="rec1", content="Hello World", metadata={"criteria": "B", "model": "Claude"})
+
+        assert record1.record_hashes == record2.record_hashes
+        assert len(record1.record_hashes) == 1
+        assert record1.record_hashes[0]["content_type"] == "text"
+        assert len(record1.record_hashes[0]["hash"]) == 64
+
+    def test_record_hashes_multimodal(self):
+        """Test that record_hashes produces N hashes for N parts."""
+        img = PILImage.new("RGB", (10, 10))
+        record = Record(record_id="rec1", content=["Hello", img, "World"])
+
+        hashes = record.record_hashes
+        assert len(hashes) == 3
+        assert hashes[0]["content_type"] == "text"
+        assert hashes[1]["content_type"] == "image"
+        assert hashes[2]["content_type"] == "text"
+        assert hashes[0]["part_index"] == 0
+        assert hashes[1]["part_index"] == 1
+        assert hashes[2]["part_index"] == 2
+        assert len(hashes[1]["hash"]) == 64
 
 
 class TestGroundTruthHashing:

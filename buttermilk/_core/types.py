@@ -7,6 +7,7 @@ different components of Buttermilk.
 """
 
 import datetime
+import hashlib
 import json  # For JSON parsing in validators
 import time  # For timestamp tracking
 from collections.abc import Sequence  # For type hinting sequences
@@ -24,6 +25,8 @@ from pydantic import (
     field_validator,  # For custom field validation
     model_validator,  # For model-level validation
 )
+
+from buttermilk._core.hashing import hash_content
 
 from .log import logger
 
@@ -228,6 +231,28 @@ class BaseRecord(BaseModel):
         markdown_content = self.as_markdown()
         hash_value = compute_record_hash(markdown_content)
         return hash_value
+
+    @computed_field
+    @property
+    def record_hashes(self) -> list[dict[str, Any]]:
+        """Computes hashes for each logical content unit of the record.
+
+        For text-only records, returns a single-entry list with the content hash.
+        For multimodal records, returns one hash per part, tagged with part_index and content_type.
+
+        Returns:
+            list[dict[str, Any]]: List of per-part hashes.
+        """
+        hashes = []
+        if isinstance(self.content, str):
+            hashes.append({"part_index": 0, "content_type": "text", "hash": hash_content(self.content)})
+        elif isinstance(self.content, Sequence):
+            for i, item in enumerate(self.content):
+                if isinstance(item, str):
+                    hashes.append({"part_index": i, "content_type": "text", "hash": hash_content(item)})
+                elif isinstance(item, Image):
+                    hashes.append({"part_index": i, "content_type": "image", "hash": hashlib.sha256(item.tobytes()).hexdigest()})
+        return hashes
 
     @computed_field
     @property
