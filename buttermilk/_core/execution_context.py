@@ -272,20 +272,19 @@ class ExecutionContext(BaseModel):
             self.project_name = project
             logger.debug("Set project name for execution context", project=project)
             return project
-        else:
-            # Subsequent sessions - validate consistency
-            if project is not None and project != self.project_name:
-                raise RuntimeError(
-                    f"Project name mismatch: execution context is using project '{self.project_name}', "
-                    f"but session specified project '{project}'. All sessions in the same execution "
-                    f"context must use the same project. Either omit the project parameter to use "
-                    f"'{self.project_name}', or start a new process for project '{project}'."
-                )
-            # Return the existing project (whether user specified it or not)
-            return self.project_name
+        # Subsequent sessions - validate consistency
+        if project is not None and project != self.project_name:
+            raise RuntimeError(
+                f"Project name mismatch: execution context is using project '{self.project_name}', "
+                f"but session specified project '{project}'. All sessions in the same execution "
+                f"context must use the same project. Either omit the project parameter to use "
+                f"'{self.project_name}', or start a new process for project '{project}'."
+            )
+        # Return the existing project (whether user specified it or not)
+        return self.project_name
 
     @property
-    def cloud_manager(self) -> "CloudManager":
+    def cloud_manager(self) -> CloudManager:
         """Provides access to the CloudManager instance."""
         if self._cloud_manager is None:
             from buttermilk._core.cloud import CloudManager
@@ -320,7 +319,7 @@ class ExecutionContext(BaseModel):
         return None
 
     @property
-    def secret_manager(self) -> "SecretsManager":
+    def secret_manager(self) -> SecretsManager:
         """Provides access to the SecretsManager instance."""
         if self._secret_manager is None:
             # Use service-aware cloud provider pattern
@@ -337,7 +336,7 @@ class ExecutionContext(BaseModel):
         return self._secret_manager
 
     @property
-    def llms(self) -> "LLMs":
+    def llms(self) -> LLMs:
         """Provides access to the LLMs manager instance."""
         if self._llms_instance is None:
             from buttermilk._core.llms import LLMs
@@ -414,7 +413,7 @@ class ExecutionContext(BaseModel):
         cache_path.write_text(json.dumps(connections_data), encoding="utf-8")
 
     @property
-    def query_runner(self) -> "QueryRunner":
+    def query_runner(self) -> QueryRunner:
         """Provides access to the QueryRunner instance."""
         if self._query_runner is None:
             from buttermilk._core.query import QueryRunner

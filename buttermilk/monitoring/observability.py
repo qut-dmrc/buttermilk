@@ -12,7 +12,7 @@ External tools handle resource monitoring and process restarting.
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any
 
 from buttermilk import logger
 
@@ -35,8 +35,8 @@ class SystemStatus:
 
     overall_status: HealthStatus
     timestamp: datetime
-    components: Dict[str, Any]
-    error_message: Optional[str] = None
+    components: dict[str, Any]
+    error_message: str | None = None
 
 
 class SimpleHealthMonitor:
@@ -44,17 +44,17 @@ class SimpleHealthMonitor:
 
     def __init__(
         self,
-        metrics_collector: Optional[MetricsCollector] = None,
-        health_monitor: Optional[HealthMonitor] = None,
+        metrics_collector: MetricsCollector | None = None,
+        health_monitor: HealthMonitor | None = None,
     ):
         """Initialize simplified health monitor."""
         self.metrics_collector = metrics_collector or get_metrics_collector()
         self.health_monitor = health_monitor or HealthMonitor()
 
         # Simple state tracking
-        self.last_check: Optional[datetime] = None
+        self.last_check: datetime | None = None
         self.fatal_error_detected = False
-        self.fatal_error_message: Optional[str] = None
+        self.fatal_error_message: str | None = None
 
     def report_fatal_error(self, error_message: str):
         """Report a fatal error that should cause system exit."""
@@ -66,7 +66,7 @@ class SimpleHealthMonitor:
         """Check if any fatal errors have been detected."""
         return self.fatal_error_detected
 
-    def get_fatal_error_message(self) -> Optional[str]:
+    def get_fatal_error_message(self) -> str | None:
         """Get the fatal error message if any."""
         return self.fatal_error_message
 
@@ -184,7 +184,7 @@ class SimpleHealthMonitor:
 
 
 # Global health monitor instance
-_global_health_monitor: Optional[SimpleHealthMonitor] = None
+_global_health_monitor: SimpleHealthMonitor | None = None
 
 
 def get_observability_manager() -> SimpleHealthMonitor:

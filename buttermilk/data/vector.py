@@ -1210,7 +1210,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 metadata={"error": str(e)},
             )
 
-    async def _store_chunks_for_record(self, record: Record) -> None:  # noqa: PLR0912
+    async def _store_chunks_for_record(self, record: Record) -> None:
         """Store record chunks with metadata in ChromaDB.
 
         Args:
@@ -1577,12 +1577,11 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             if loaded_count == len(record.chunks):
                 logger.info(f"✅ Loaded {loaded_count} embeddings from cache for record {record.record_id}")
                 return True
-            else:
-                logger.warning(f"Only loaded {loaded_count}/{len(record.chunks)} embeddings from cache")
-                # Clear partial embeddings
-                for chunk in record.chunks:
-                    _set_chunk_embedding(chunk, None)
-                return False
+            logger.warning(f"Only loaded {loaded_count}/{len(record.chunks)} embeddings from cache")
+            # Clear partial embeddings
+            for chunk in record.chunks:
+                _set_chunk_embedding(chunk, None)
+            return False
 
         except Exception as e:
             logger.error(f"Failed to load embeddings cache for {record.record_id}: {e}")
@@ -1738,7 +1737,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
     ) -> dict[str, Any]:
         """Synchronous helper to query collection safely."""
 
-        def _normalize_where(w: dict[str, Any]) -> dict[str, Any]:  # noqa: PLR0911, PLR0912
+        def _normalize_where(w: dict[str, Any]) -> dict[str, Any]:  # noqa: PLR0911
             if not w:
                 return w
             # If already operator-based at top level, ensure it is valid
@@ -1750,10 +1749,9 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                     if isinstance(val, list):
                         if len(val) == 1 and isinstance(val[0], dict):
                             return _normalize_where(val[0])
-                        elif len(val) >= 2:
+                        if len(val) >= 2:
                             return w  # already valid
-                        else:
-                            return {}  # invalid empty, return match-all or empty
+                        return {}  # invalid empty, return match-all or empty
                     # Non-list value; attempt to recover by returning empty
                     return {}
                 # Other top-level operator: assume valid and pass through

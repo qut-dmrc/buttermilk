@@ -318,11 +318,13 @@ def compute_message_hashes(messages: list) -> list[dict[str, str | int]]:
         content = getattr(msg, "content", "")
         if not isinstance(content, str):
             content = str(content)
-        result.append({
-            "role": role,
-            "index": i,
-            "hash": compute_sha256_hash(content),
-        })
+        result.append(
+            {
+                "role": role,
+                "index": i,
+                "hash": compute_sha256_hash(content),
+            }
+        )
     return result
 
 

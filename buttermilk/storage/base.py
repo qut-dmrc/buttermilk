@@ -1,16 +1,12 @@
 """Base storage classes for unified storage operations."""
 
 from abc import ABC, abstractmethod
+from collections.abc import AsyncGenerator, AsyncIterator, Iterator
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
     Any,
-    AsyncGenerator,
-    AsyncIterator,
-    Iterator,
-    Optional,
     Protocol,
-    Type,
     TypeVar,
 )
 
@@ -62,8 +58,8 @@ class Storage(ABC):
             config: Storage configuration
         """
         self.config = config
-        self._record_class: Type[BaseRecord] | None = None
-        self._async_iterator: Optional[AsyncGenerator[dict[str, Any], None]] = None
+        self._record_class: type[BaseRecord] | None = None
+        self._async_iterator: AsyncGenerator[dict[str, Any], None] | None = None
 
     @abstractmethod
     def __iter__(self) -> Iterator[BaseRecord]:
@@ -72,7 +68,6 @@ class Storage(ABC):
         Returns:
             Iterator yielding BaseRecord objects (or subclasses like Record, Title, etc.)
         """
-        pass
 
     @abstractmethod
     def save(
@@ -89,7 +84,6 @@ class Storage(ABC):
             records: Single BaseRecord or list of BaseRecord objects. Dict (or list of dict)
                 is tolerated for safety but not encouraged.
         """
-        pass
 
     def load_from_uri(self, source_uri: str) -> None:
         """Load data from a URI (e.g., GCS path) into storage.
@@ -123,7 +117,6 @@ class Storage(ABC):
         Returns:
             Number of records, or -1 if unknown
         """
-        pass
 
     def exists(self) -> bool:
         """Check if storage location exists.
@@ -139,7 +132,6 @@ class Storage(ABC):
         This is a no-op by default. Subclasses should override
         if they support creating storage locations.
         """
-        pass
 
     def __len__(self) -> int:
         """Return number of records if known, 0 if streaming/unknown."""
@@ -150,7 +142,7 @@ class Storage(ABC):
         except Exception:
             return 0
 
-    async def iterate_async(self, batch_size: Optional[int] = None, filter: Optional[RecordFilter] = None) -> AsyncGenerator[dict[str, Any], None]:
+    async def iterate_async(self, batch_size: int | None = None, filter: RecordFilter | None = None) -> AsyncGenerator[dict[str, Any], None]:
         """Async generator that yields record dictionaries from storage with optional filtering.
 
         This method enables Storage objects to be used directly as DataSource
@@ -176,7 +168,7 @@ class Storage(ABC):
             yield record
             count += 1
 
-    def __call__(self, batch_size: Optional[int] = None, filter: Optional[RecordFilter] = None) -> AsyncGenerator[BaseRecord, None]:
+    def __call__(self, batch_size: int | None = None, filter: RecordFilter | None = None) -> AsyncGenerator[BaseRecord, None]:
         """Make Storage objects callable as DataSource for pipelines.
 
         This allows Storage objects to be used directly in simple pipelines:
@@ -229,7 +221,7 @@ class Storage(ABC):
             self._async_iterator = None
             raise
 
-    def _get_record_class(self) -> Type[BaseRecord]:
+    def _get_record_class(self) -> type[BaseRecord]:
         """Get the record class to use for instantiation.
 
         Resolves the class from the config's record_class field, with caching.

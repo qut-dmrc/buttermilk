@@ -7,7 +7,7 @@ This test suite verifies that:
 4. Cache paths include both project name and parameter hash
 """
 
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 from unittest.mock import MagicMock, patch
 
 import pytest

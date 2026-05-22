@@ -1,8 +1,8 @@
 """CSV Metadata Logger for tracking image generation metadata."""
 
+from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import AsyncGenerator
 
 import pandas as pd
 from cloudpathlib import GSPath

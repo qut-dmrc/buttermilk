@@ -240,7 +240,7 @@ def main() -> int:
             print("✅ Baseline saved successfully")
         return exit_code
 
-    elif args.compare:
+    if args.compare:
         # Run tests
         exit_code = monitor.run_tests(save_baseline=False)
         if exit_code != 0:
@@ -259,9 +259,8 @@ def main() -> int:
         print("\n✅ No performance regressions detected")
         return 0
 
-    else:
-        # Just run tests
-        return monitor.run_tests(save_baseline=False)
+    # Just run tests
+    return monitor.run_tests(save_baseline=False)
 
 
 if __name__ == "__main__":

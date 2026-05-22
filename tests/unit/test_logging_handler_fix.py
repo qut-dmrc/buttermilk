@@ -68,7 +68,7 @@ class TestStructlogRichHandlerFix:
                     test_entry = entry
                     break
             except json.JSONDecodeError:
-                pytest.fail(f"Invalid JSON in log file: {repr(line)}")
+                pytest.fail(f"Invalid JSON in log file: {line!r}")
 
         assert test_entry is not None, f"Test message not found in log. Content: {log_content}"
 
@@ -119,7 +119,7 @@ class TestStructlogRichHandlerFix:
                     test_entry = entry
                     break
             except json.JSONDecodeError:
-                pytest.fail(f"Invalid JSON in log file: {repr(line)}")
+                pytest.fail(f"Invalid JSON in log file: {line!r}")
 
         assert test_entry is not None, f"Test message not found in log. Content: {log_content}"
 
@@ -171,7 +171,7 @@ class TestStructlogRichHandlerFix:
                 elif entry.get("event") == debug_message:
                     debug_entry = entry
             except json.JSONDecodeError:
-                pytest.fail(f"Invalid JSON in log file: {repr(line)}")
+                pytest.fail(f"Invalid JSON in log file: {line!r}")
 
         # Verify both entries were found
         assert info_entry is not None, f"Info message not found in log. Content: {log_content}"

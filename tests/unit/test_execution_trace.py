@@ -760,7 +760,7 @@ class TestExecutionTraceRecordSchema:
         dumped = trace.model_dump()
 
         # inputs should NOT contain 'record' key
-        if "inputs" in dumped and dumped["inputs"]:
+        if dumped.get("inputs"):
             assert "record" not in dumped["inputs"], "Record should NOT be in inputs['record'] - use trace.record instead"
 
     def test_record_not_in_inputs_template_vars_record(self, real_bm):
@@ -790,7 +790,7 @@ class TestExecutionTraceRecordSchema:
         dumped = trace.model_dump()
 
         # template_vars should NOT contain 'record' key
-        if "inputs" in dumped and dumped["inputs"]:
+        if dumped.get("inputs"):
             template_vars = dumped["inputs"].get("template_vars", {})
             if template_vars:
                 assert "record" not in template_vars, "Record should NOT be in inputs['template_vars']['record'] - use trace.record instead"

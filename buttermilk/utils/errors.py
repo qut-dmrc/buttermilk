@@ -2,7 +2,8 @@ from typing import Any
 from urllib.error import HTTPError
 
 import openai
-from google.genai.errors import APIError as GenaiAPIError, ClientError as GenaiClientError
+from google.genai.errors import APIError as GenaiAPIError
+from google.genai.errors import ClientError as GenaiClientError
 from vertexai.generative_models._generative_models import (
     ResponseBlockedError,
     ResponseValidationError,

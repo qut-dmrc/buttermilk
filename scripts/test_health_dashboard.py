@@ -8,7 +8,6 @@ import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List
 
 
 @dataclass
@@ -32,9 +31,9 @@ class HealthRecord:
     failed: int = 0
     errors: int = 0
     skipped: int = 0
-    collection_errors: List[FailureRecord] = field(default_factory=list)
-    failures_by_type: Dict[str, List[FailureRecord]] = field(default_factory=lambda: defaultdict(list))
-    failures_by_category: Dict[str, List[FailureRecord]] = field(default_factory=lambda: defaultdict(list))
+    collection_errors: list[FailureRecord] = field(default_factory=list)
+    failures_by_type: dict[str, list[FailureRecord]] = field(default_factory=lambda: defaultdict(list))
+    failures_by_category: dict[str, list[FailureRecord]] = field(default_factory=lambda: defaultdict(list))
 
 
 def categorize_error(error_msg: str) -> str:
@@ -66,31 +65,31 @@ def get_test_category(file_path: str) -> str:
     path_parts = Path(file_path).parts
     if "unit" in path_parts:
         return "unit"
-    elif "integration" in path_parts:
+    if "integration" in path_parts:
         return "integration"
-    elif "endtoend" in path_parts:
+    if "endtoend" in path_parts:
         return "endtoend"
-    elif "initial" in str(file_path):
+    if "initial" in str(file_path):
         return "initial"
-    elif "agents" in path_parts:
+    if "agents" in path_parts:
         return "agents"
-    elif "api" in path_parts:
+    if "api" in path_parts:
         return "api"
-    elif "data" in path_parts:
+    if "data" in path_parts:
         return "data"
-    elif "groupchat" in path_parts:
+    if "groupchat" in path_parts:
         return "groupchat"
-    elif "tools" in path_parts:
+    if "tools" in path_parts:
         return "tools"
-    elif "validation" in path_parts:
+    if "validation" in path_parts:
         return "validation"
-    elif "examples" in path_parts:
+    if "examples" in path_parts:
         return "examples"
-    elif "runner" in path_parts:
+    if "runner" in path_parts:
         return "runner"
-    elif "storage" in path_parts:
+    if "storage" in path_parts:
         return "storage"
-    elif "utils" in path_parts:
+    if "utils" in path_parts:
         return "utils"
     return "root"
 

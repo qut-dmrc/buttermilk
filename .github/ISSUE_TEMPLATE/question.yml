@@ -1,0 +1,38 @@
+name: Question / discussion
+description: Ask a question or open a design discussion.
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Questions and design discussions are very welcome — especially for research methodology, configuration patterns, and "is this the right shape?" conversations.
+
+        For quick how-do-I questions, also check the [README](https://github.com/qut-dmrc/buttermilk#readme) and `examples/`.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: What's your question?
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What are you trying to accomplish? What have you already tried?
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of question
+      options:
+        - Usage / how-do-I
+        - Research methodology / design
+        - Configuration (Hydra / YAML)
+        - Agents / flows / pipelines
+        - Vector RAG / ChromaDB
+        - Cloud / deployment
+        - Other
+    validations:
+      required: true

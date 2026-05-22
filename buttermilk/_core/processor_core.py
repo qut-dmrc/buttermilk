@@ -10,8 +10,9 @@ The design enables consistent observability across all processor types.
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass
-from typing import Any, AsyncGenerator, Optional
+from typing import Any
 
 import jmespath
 from opentelemetry import trace
@@ -33,14 +34,14 @@ class TraceParams:
     """
 
     processor_stage: str
-    parent_trace_id: Optional[str]
+    parent_trace_id: str | None
     duration_ms: float
     execution_type: str = "processing"
-    component_name: Optional[str] = None
-    messages: Optional[list] = None
-    inputs: Optional[dict[str, Any]] = None
-    extra_metadata: Optional[dict[str, Any]] = None
-    trace_id: Optional[str] = None
+    component_name: str | None = None
+    messages: list | None = None
+    inputs: dict[str, Any] | None = None
+    extra_metadata: dict[str, Any] | None = None
+    trace_id: str | None = None
 
 
 class ObservabilityMixin(BaseModel):
@@ -110,9 +111,9 @@ class ObservabilityMixin(BaseModel):
 
     def _build_trace_metadata(
         self,
-        record: Optional[BaseRecord],
+        record: BaseRecord | None,
         duration_ms: float,
-        extra_metadata: Optional[dict[str, Any]] = None,
+        extra_metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Build standardized metadata dict."""
         metadata: dict[str, Any] = {"duration_ms": duration_ms}
@@ -159,7 +160,7 @@ class ObservabilityMixin(BaseModel):
 
     async def _emit_error_trace(
         self,
-        record: Optional[BaseRecord],
+        record: BaseRecord | None,
         error: Exception,
         tp: TraceParams,
     ) -> None:

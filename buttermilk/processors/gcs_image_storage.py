@@ -94,10 +94,9 @@ class GCSImageStorageProcessor(BaseModel):
             for part in path_parts:
                 base = base / part
             return str(base / filename)
-        else:
-            # GCS path
-            path_str = "/".join(path_parts + [filename])
-            return f"gs://{self.bucket}/{path_str}"
+        # GCS path
+        path_str = "/".join(path_parts + [filename])
+        return f"gs://{self.bucket}/{path_str}"
 
     async def process(
         self,

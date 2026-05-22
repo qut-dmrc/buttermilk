@@ -152,18 +152,17 @@ class TestBigQueryExplicitSchema:
             }
         )
 
-        with patch("buttermilk.storage.bigquery.bigquery.Client"):
-            with patch.object(BigQueryStorage, "get_schema") as mock_get_schema:
-                mock_get_schema.return_value = [
-                    bigquery.SchemaField("id", "STRING"),
-                    bigquery.SchemaField("data", "JSON"),
-                ]
+        with patch("buttermilk.storage.bigquery.bigquery.Client"), patch.object(BigQueryStorage, "get_schema") as mock_get_schema:
+            mock_get_schema.return_value = [
+                bigquery.SchemaField("id", "STRING"),
+                bigquery.SchemaField("data", "JSON"),
+            ]
 
-                BigQueryStorage(config)
+            BigQueryStorage(config)
 
-                # Should not raise type errors
-                CustomModel(id="test", data={"key": "value"})
+            # Should not raise type errors
+            CustomModel(id="test", data={"key": "value"})
 
-                # This should work without type errors
-                # (actual implementation will be updated to support this)
-                # For now, this test documents the intended behavior
+            # This should work without type errors
+            # (actual implementation will be updated to support this)
+            # For now, this test documents the intended behavior

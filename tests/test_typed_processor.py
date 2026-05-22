@@ -7,7 +7,7 @@ Contract:
     async def process(input: T, ctx: ProcessingContext) -> AsyncGenerator[U, None]
 """
 
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import pytest
 from pydantic import BaseModel, Field

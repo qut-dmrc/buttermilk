@@ -12,8 +12,6 @@ else:
     class BM:
         """Placeholder for BM type - actual class is in _core.bm_init"""
 
-        pass
-
 
 from ._core.constants import (
     _LOGGER_NAME,
@@ -132,7 +130,6 @@ __all__ = [
     "BM",  # Export the BM class for type hints
     "logger",
     "create_session_bm_async",
-    "initialize_session_bm",  # Initialize session-scoped BM as singleton
     # New session-scoped API
     "ExecutionContext",  # Execution context class
     "create_execution_context",  # Factory for execution context

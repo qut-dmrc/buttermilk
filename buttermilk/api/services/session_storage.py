@@ -3,7 +3,6 @@
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import List, Optional
 
 from buttermilk import bm, logger
 from buttermilk.api.services.message_service import ChatMessage
@@ -39,7 +38,7 @@ class SessionStorageService:
     - Managing session file lifecycle
     """
 
-    def __init__(self, sessions_dir: Optional[Path] = None):
+    def __init__(self, sessions_dir: Path | None = None):
         """Initialize the session storage service.
 
         Args:
@@ -76,7 +75,7 @@ class SessionStorageService:
             with open(session_file, "a", encoding="utf-8") as f:
                 json.dump(entry, f)
                 f.write("\n")
-        except IOError as e:
+        except OSError as e:
             logger.error(
                 "Failed to append entry to session file",
                 session_id=session_id,
@@ -110,7 +109,7 @@ class SessionStorageService:
         messages = []
 
         try:
-            with open(session_file, "r", encoding="utf-8") as f:
+            with open(session_file, encoding="utf-8") as f:
                 for line_num, line in enumerate(f, 1):
                     line = line.strip()
                     if not line:
@@ -271,7 +270,7 @@ class SessionStorageService:
             return "idle"
 
         try:
-            with open(session_file, "r", encoding="utf-8") as f:
+            with open(session_file, encoding="utf-8") as f:
                 session_data = json.load(f)
 
             return session_data.get("flow_status", "idle")
@@ -295,7 +294,7 @@ class SessionStorageService:
             return {}
 
         try:
-            with open(session_file, "r", encoding="utf-8") as f:
+            with open(session_file, encoding="utf-8") as f:
                 session_data = json.load(f)
 
             return session_data.get("parameters", {})
@@ -320,7 +319,7 @@ class SessionStorageService:
             return True
 
         try:
-            with open(session_file, "r", encoding="utf-8") as f:
+            with open(session_file, encoding="utf-8") as f:
                 session_data = json.load(f)
 
             last_activity_str = session_data.get("last_activity")
@@ -336,7 +335,7 @@ class SessionStorageService:
             logger.error("Failed to check staleness for session", session_id=session_id, error=e)
             return True
 
-    def get_session_messages(self, session_id: str) -> List[ChatMessage]:
+    def get_session_messages(self, session_id: str) -> list[ChatMessage]:
         """Retrieve all messages for a session from JSONL file.
 
         Args:
@@ -355,7 +354,7 @@ class SessionStorageService:
         messages = []
 
         try:
-            with open(session_file, "r", encoding="utf-8") as f:
+            with open(session_file, encoding="utf-8") as f:
                 for line_num, line in enumerate(f, 1):
                     line = line.strip()
                     if not line:
@@ -473,7 +472,7 @@ class SessionStorageService:
             logger.error("Failed to delete session", session_id=session_id, error=e)
             return False
 
-    def get_session_metadata(self, session_id: str) -> Optional[dict]:
+    def get_session_metadata(self, session_id: str) -> dict | None:
         """Get session metadata without loading all messages.
 
         Args:
@@ -489,7 +488,7 @@ class SessionStorageService:
             return None
 
         try:
-            with open(session_file, "r", encoding="utf-8") as f:
+            with open(session_file, encoding="utf-8") as f:
                 session_data = json.load(f)
 
             return {
@@ -504,7 +503,7 @@ class SessionStorageService:
             logger.error("Failed to read session metadata", session_id=session_id, error=e)
             return None
 
-    def list_sessions(self) -> List[dict]:
+    def list_sessions(self) -> list[dict]:
         """List all available sessions with metadata.
 
         Returns:
@@ -580,9 +579,8 @@ class SessionStorageService:
                     saved_path=saved_path,
                 )
                 return True
-            else:
-                logger.error("Failed to archive session to GCS", session_id=session_id)
-                return False
+            logger.error("Failed to archive session to GCS", session_id=session_id)
+            return False
 
         except Exception as e:
             logger.error("Error archiving session to GCS", session_id=session_id, error=e)

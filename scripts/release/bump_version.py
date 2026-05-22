@@ -2,7 +2,6 @@ import argparse
 import os
 import subprocess
 import sys
-from typing import Optional
 
 try:
     from packaging.version import InvalidVersion, Version
@@ -11,7 +10,7 @@ except ImportError:
     sys.exit(1)
 
 
-def run_git(args: list[str]) -> Optional[str]:
+def run_git(args: list[str]) -> str | None:
     """Run a git command and return the output."""
     try:
         return subprocess.check_output(["git"] + args, stderr=subprocess.PIPE).decode().strip()
@@ -23,7 +22,7 @@ def run_git(args: list[str]) -> Optional[str]:
         return None
 
 
-def get_latest_tag() -> Optional[str]:
+def get_latest_tag() -> str | None:
     """Get the latest tag from git."""
     try:
         return run_git(["describe", "--tags", "--abbrev=0"])
@@ -31,7 +30,7 @@ def get_latest_tag() -> Optional[str]:
         return None
 
 
-def is_current_commit_tagged() -> Optional[str]:
+def is_current_commit_tagged() -> str | None:
     """Check if the current commit is already tagged."""
     try:
         return run_git(["describe", "--tags", "--exact-match"])
@@ -44,11 +43,10 @@ def bump_version(current_ver: Version, branch: str) -> str:
     if branch == "stable":
         # Bump minor: 0.6.1 -> 0.7.0
         return f"{current_ver.major}.{current_ver.minor + 1}.0"
-    elif branch == "dev":
+    if branch == "dev":
         # Bump patch: 0.6.1 -> 0.6.2
         return f"{current_ver.major}.{current_ver.minor}.{current_ver.micro + 1}"
-    else:
-        raise ValueError(f"Branch '{branch}' not configured for auto-bump.")
+    raise ValueError(f"Branch '{branch}' not configured for auto-bump.")
 
 
 def main():

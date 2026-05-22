@@ -12,7 +12,7 @@ Complex analytics, time-series data, and P95/P99 calculations are handled extern
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
 
 from buttermilk import logger
 
@@ -27,7 +27,7 @@ class FlowMetrics:
     failed_executions: int = 0
     avg_execution_time: float = 0.0
     error_rate: float = 0.0
-    last_execution: Optional[datetime] = None
+    last_execution: datetime | None = None
 
     def update_execution(self, execution_time: float, success: bool):
         """Update metrics with new execution data."""
@@ -58,7 +58,7 @@ class AgentMetrics:
     successful_invocations: int = 0
     failed_invocations: int = 0
     avg_response_time: float = 0.0
-    last_invocation: Optional[datetime] = None
+    last_invocation: datetime | None = None
 
     def update_invocation(self, response_time: float, success: bool):
         """Update agent metrics with new invocation data."""
@@ -106,13 +106,13 @@ class MetricsCollector:
     def __init__(self):
         """Initialize simplified metrics collector."""
         # Flow-level metrics
-        self.flow_metrics: Dict[str, FlowMetrics] = {}
+        self.flow_metrics: dict[str, FlowMetrics] = {}
 
         # Agent-level metrics
-        self.agent_metrics: Dict[str, AgentMetrics] = {}
+        self.agent_metrics: dict[str, AgentMetrics] = {}
 
         # Session-level metrics
-        self.session_metrics: Dict[str, SessionMetrics] = {}
+        self.session_metrics: dict[str, SessionMetrics] = {}
 
         # Basic system-level metrics
         self.system_metrics = {
@@ -179,36 +179,36 @@ class MetricsCollector:
     def update_system_metrics(
         self,
         memory_mb: float,
-        cpu_percent: Optional[float] = None,
-        websocket_connections: Optional[int] = None,
+        cpu_percent: float | None = None,
+        websocket_connections: int | None = None,
     ):
         """Update basic system-level metrics. Extra parameters ignored for compatibility."""
         self.system_metrics["total_memory_mb"] = memory_mb
         # Ignore cpu_percent and websocket_connections for simplified version
 
-    def get_flow_metrics(self, flow_name: Optional[str] = None) -> Dict[str, FlowMetrics]:
+    def get_flow_metrics(self, flow_name: str | None = None) -> dict[str, FlowMetrics]:
         """Get flow metrics for specific flow or all flows."""
         if flow_name:
             return {flow_name: self.flow_metrics.get(flow_name, FlowMetrics(flow_name=flow_name))}
         return dict(self.flow_metrics)
 
-    def get_agent_metrics(self, flow_name: Optional[str] = None) -> Dict[str, AgentMetrics]:
+    def get_agent_metrics(self, flow_name: str | None = None) -> dict[str, AgentMetrics]:
         """Get agent metrics for specific flow or all agents."""
         if flow_name:
             return {k: v for k, v in self.agent_metrics.items() if v.flow_name == flow_name}
         return dict(self.agent_metrics)
 
-    def get_session_metrics(self, active_only: bool = False) -> Dict[str, SessionMetrics]:
+    def get_session_metrics(self, active_only: bool = False) -> dict[str, SessionMetrics]:
         """Get session metrics, optionally filtered to active sessions only."""
         if active_only:
             return {k: v for k, v in self.session_metrics.items() if v.is_active}
         return dict(self.session_metrics)
 
-    def get_system_metrics(self) -> Dict[str, Any]:
+    def get_system_metrics(self) -> dict[str, Any]:
         """Get current basic system metrics."""
         return dict(self.system_metrics)
 
-    def get_summary_report(self) -> Dict[str, Any]:
+    def get_summary_report(self) -> dict[str, Any]:
         """Generate basic metrics summary report."""
         uptime = datetime.now() - self.system_metrics["start_time"]
 
@@ -256,7 +256,7 @@ class MetricsCollector:
 
 
 # Global metrics collector instance
-_global_metrics_collector: Optional[MetricsCollector] = None
+_global_metrics_collector: MetricsCollector | None = None
 
 
 def get_metrics_collector() -> MetricsCollector:

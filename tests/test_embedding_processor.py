@@ -218,7 +218,6 @@ class TestEmbeddingProcessorBatchProcessing:
     @pytest.mark.anyio
     async def test_embedding_processor_enriches_context_metadata(self):
         """Verify processor adds embedding metadata to context."""
-        pass
 
 
 class TestEmbeddingProcessorErrorHandling:
@@ -299,4 +298,3 @@ class TestEmbeddingProcessorFinalization:
     @pytest.mark.anyio
     async def test_embedding_processor_finalize_method_exists(self):
         """Verify finalize method exists and can be called."""
-        pass

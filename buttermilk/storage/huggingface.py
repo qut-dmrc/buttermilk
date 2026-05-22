@@ -1,6 +1,6 @@
 """HuggingFace dataset storage implementation for Buttermilk."""
 
-from typing import Iterator
+from collections.abc import Iterator
 
 from buttermilk._core.exceptions import StorageError
 from buttermilk._core.log import logger

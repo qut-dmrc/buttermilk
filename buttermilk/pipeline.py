@@ -56,7 +56,8 @@ NON-GOALS
 
 import asyncio
 import time
-from typing import Any, AsyncGenerator, AsyncIterator, Literal, Mapping, Optional
+from collections.abc import AsyncGenerator, AsyncIterator, Mapping
+from typing import Any, Literal
 
 import hydra
 import pydantic
@@ -75,8 +76,6 @@ from buttermilk._core.types import BaseRecord
 class RecordSkippedException(Exception):
     """Exception raised when a record is intentionally skipped/filtered."""
 
-    pass
-
 
 class RecordBufferedException(Exception):
     """Exception raised when a record is buffered for later batch processing.
@@ -85,8 +84,6 @@ class RecordBufferedException(Exception):
     batch is complete or flushed. This allows the pipeline to distinguish between
     records that are intentionally filtered vs records that are waiting in a buffer.
     """
-
-    pass
 
 
 class PipelineOrchestrator(BaseModel):
@@ -106,11 +103,11 @@ class PipelineOrchestrator(BaseModel):
         default=10,
         description="Max concurrent API calls across all processors (limits nested parallelism)",
     )
-    limit: Optional[int] | None = Field(default=None, description="Maximum records to process")
+    limit: int | None | None = Field(default=None, description="Maximum records to process")
     pipeline_name: str = Field(..., description="Name for this processing pipeline")
     force_reprocess: bool = Field(default=False, description="Ignore cache and reprocess")
     enable_record_cache: bool = Field(default=True, description="Enable per-processor Record caching")
-    cache_dir: Optional[str] = Field(
+    cache_dir: str | None = Field(
         default=None,
         description="Base directory for record cache (defaults to ~/.cache/buttermilk)",
     )
@@ -127,7 +124,7 @@ class PipelineOrchestrator(BaseModel):
     )
 
     # Inputs configured after instantiation
-    source: Optional[Any] = Field(default=None, exclude=True, description="Source config or AsyncIterator")
+    source: Any | None = Field(default=None, exclude=True, description="Source config or AsyncIterator")
     processors: list[Any] = Field(default_factory=list, exclude=True)  # List of processors to chain
 
     # Internal state
@@ -1075,27 +1072,26 @@ class PipelineOrchestrator(BaseModel):
                 # No need to add cache_key metadata for 1:1 (lookup uses record_id)
                 self._record_cache.save(outputs[0], processor_stage_name, cache_key=base_key)
                 return outputs  # Return unchanged for 1:1
-            else:
-                # 1:N transformation - use indexed cache keys based on base_key
-                # IMPORTANT: record_id is immutable - use cache_key for cache indexing only
-                updated_outputs = []
-                for output_index, output_record in enumerate(outputs):
-                    cache_key = f"{base_key}_output_{output_index}"
+            # 1:N transformation - use indexed cache keys based on base_key
+            # IMPORTANT: record_id is immutable - use cache_key for cache indexing only
+            updated_outputs = []
+            for output_index, output_record in enumerate(outputs):
+                cache_key = f"{base_key}_output_{output_index}"
 
-                    # Support typed data flow: only add metadata to records that support it
-                    if hasattr(output_record, "metadata") and hasattr(output_record, "model_copy"):
-                        # Store cache key in metadata for cache lookup, but preserve original record_id
-                        updated_metadata = output_record.metadata.copy() if output_record.metadata else {}
-                        updated_metadata["cache_key"] = cache_key
-                        updated_metadata["output_index"] = output_index
-                        cache_record = output_record.model_copy(update={"metadata": updated_metadata})
-                    else:
-                        # Typed data flow: cache without metadata enrichment
-                        cache_record = output_record
+                # Support typed data flow: only add metadata to records that support it
+                if hasattr(output_record, "metadata") and hasattr(output_record, "model_copy"):
+                    # Store cache key in metadata for cache lookup, but preserve original record_id
+                    updated_metadata = output_record.metadata.copy() if output_record.metadata else {}
+                    updated_metadata["cache_key"] = cache_key
+                    updated_metadata["output_index"] = output_index
+                    cache_record = output_record.model_copy(update={"metadata": updated_metadata})
+                else:
+                    # Typed data flow: cache without metadata enrichment
+                    cache_record = output_record
 
-                    self._record_cache.save(cache_record, processor_stage_name, cache_key=cache_key)
-                    updated_outputs.append(cache_record)  # Return record WITH cache metadata (if applicable)
-                return updated_outputs
+                self._record_cache.save(cache_record, processor_stage_name, cache_key=cache_key)
+                updated_outputs.append(cache_record)  # Return record WITH cache metadata (if applicable)
+            return updated_outputs
         except Exception as e:
             logger.debug(
                 "💥 Failed to save processor cache",

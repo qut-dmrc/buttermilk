@@ -10,11 +10,12 @@ import json
 import logging
 import re
 import time
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import AsyncGenerator, Optional, Pattern
+from re import Pattern
 
 import aiohttp
 from aiohttp import ClientWebSocketResponse
@@ -57,15 +58,13 @@ class CollectedMessage:
                     # For complex objects, try to extract meaningful content
                     if "content" in outputs:
                         return str(outputs["content"])
-                    elif "source" in outputs:
+                    if "source" in outputs:
                         return f"[{outputs['source']}]"
-                    elif "record_id" in outputs:
+                    if "record_id" in outputs:
                         return f"Record: {outputs['record_id']}"
-                    else:
-                        # Return a summary of the object
-                        return f"{type(outputs).__name__}: {str(outputs)[:100]}..."
-                else:
-                    return str(outputs)
+                    # Return a summary of the object
+                    return f"{type(outputs).__name__}: {str(outputs)[:100]}..."
+                return str(outputs)
 
             # Try preview field (summary from MessageService)
             if "preview" in self.data:
@@ -80,12 +79,12 @@ class CollectedMessage:
         return ""
 
     @property
-    def agent_role(self) -> Optional[str]:
+    def agent_role(self) -> str | None:
         """Extract agent role if this is an agent message."""
         if self.type == MessageType.AGENT_ANNOUNCEMENT:
             agent_config = self.data.get("data", {}).get("agent_config", {})
             return agent_config.get("role")
-        elif self.type == MessageType.AGENT_TRACE:
+        if self.type == MessageType.AGENT_TRACE:
             agent_info = self.data.get("data", {}).get("agent_info", {})
             return agent_info.get("role")
         return None
@@ -124,7 +123,7 @@ class MessageCollector:
         """Get list of agent roles that have announced themselves."""
         return [msg.agent_role for msg in self.agent_announcements if msg.agent_role]
 
-    def get_agent_results(self, agent_role: Optional[str] = None) -> list[CollectedMessage]:
+    def get_agent_results(self, agent_role: str | None = None) -> list[CollectedMessage]:
         """Get agent trace messages, optionally filtered by role."""
         if agent_role:
             return [msg for msg in self.agent_traces if msg.agent_role == agent_role]
@@ -139,7 +138,7 @@ class FlowEventWaiter:
 
     async def wait_for_ui_message(
         self,
-        pattern: Optional[str | Pattern] = None,
+        pattern: str | Pattern | None = None,
         timeout: float = 30.0,
         poll_interval: float = 0.1,
     ) -> CollectedMessage:
@@ -197,11 +196,11 @@ class FlowEventWaiter:
         while time.time() - start_time < timeout:
             # Check for completion message or flow_completed event
             for msg in self.collector.all_messages:
-                if msg.type == MessageType.FLOW_COMPLETE:
-                    return self.collector.all_messages
-                elif msg.type == MessageType.TASK_PROCESSING_COMPLETE:
-                    return self.collector.all_messages
-                elif msg.type == MessageType.FLOW_EVENT and msg.content == "flow_completed":
+                if (
+                    msg.type == MessageType.FLOW_COMPLETE
+                    or msg.type == MessageType.TASK_PROCESSING_COMPLETE
+                    or (msg.type == MessageType.FLOW_EVENT and msg.content == "flow_completed")
+                ):
                     return self.collector.all_messages
 
             # Check for errors
@@ -221,17 +220,17 @@ class FlowTestClient:
         self,
         base_url: str = "http://localhost:8000",
         ws_url: str = "ws://localhost:8000/ws",
-        direct_ws_url: Optional[str] = None,
+        direct_ws_url: str | None = None,
     ):
         self.base_url = base_url
         self.ws_url = ws_url
         self.direct_ws_url = direct_ws_url  # For direct WebSocket connection without session
-        self.session: Optional[aiohttp.ClientSession] = None
-        self.ws: Optional[ClientWebSocketResponse] = None
-        self.session_id: Optional[str] = None
+        self.session: aiohttp.ClientSession | None = None
+        self.ws: ClientWebSocketResponse | None = None
+        self.session_id: str | None = None
         self.collector = MessageCollector()
         self.waiter = FlowEventWaiter(self.collector)
-        self._listener_task: Optional[asyncio.Task] = None
+        self._listener_task: asyncio.Task | None = None
 
     @classmethod
     @asynccontextmanager
@@ -368,7 +367,7 @@ class FlowTestClient:
         logger.info(f"Sending response: {content}")
         await self.ws.send_json(message)
 
-    async def wait_for_ui_message(self, pattern: Optional[str] = None, timeout: float = 30.0) -> str:
+    async def wait_for_ui_message(self, pattern: str | None = None, timeout: float = 30.0) -> str:
         """Wait for a UI message and return its content."""
         msg = await self.waiter.wait_for_ui_message(pattern, timeout)
         return msg.content

@@ -46,10 +46,9 @@ class RecoveryRunner(BaseModel):
             # This is a simplified version - in practice you'd use the cloud client
             logger.warning("Cloud storage scanning not fully implemented")
             return
-        else:
-            # Local directory scanning
-            for pattern in ["data_*.json", "data_*.pkl", "backup_*.json"]:
-                failed_files.extend(backup_path.glob(pattern))
+        # Local directory scanning
+        for pattern in ["data_*.json", "data_*.pkl", "backup_*.json"]:
+            failed_files.extend(backup_path.glob(pattern))
 
         if not failed_files:
             logger.info("No failed upload files found")
@@ -65,7 +64,7 @@ class RecoveryRunner(BaseModel):
                 logger.info(f"Attempting to recover: {file_path}")
 
                 # Load the failed data
-                with open(file_path, "r") as f:
+                with open(file_path) as f:
                     data = json.load(f)
 
                 # Attempt BigQuery upload

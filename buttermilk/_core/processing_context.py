@@ -11,8 +11,9 @@ The ProcessingContext replaces fragmented state management (global vars, dispara
 config objects) with a single, type-safe context object.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any
 
 from opentelemetry.trace import Span
 
@@ -44,23 +45,23 @@ class ProcessingContext:
     # Identity
     session_id: str
     record: BaseRecord
-    batch_id: Optional[str] = None
+    batch_id: str | None = None
 
     # State
     metadata: dict[str, Any] = field(default_factory=dict)
     variant_params: dict[str, Any] = field(default_factory=dict)
 
     # Observability
-    span: Optional[Span] = None
+    span: Span | None = None
 
     # Interaction
-    ui_callback: Optional[Callable[[Any], None]] = None
+    ui_callback: Callable[[Any], None] | None = None
 
     # Shared Resources (injected by Executor)
     resources: dict[str, Any] = field(default_factory=dict)
 
     # I/O Capture for Tracing (typed data flow)
-    input: Optional[Any] = None
+    input: Any | None = None
     outputs: list[Any] = field(default_factory=list)
 
     def update_metadata(self, key: str, value: Any) -> None:

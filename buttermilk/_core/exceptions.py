@@ -17,8 +17,6 @@ class ProcessingFinished(Exception):
     an error condition but rather a control flow mechanism.
     """
 
-    pass
-
 
 class FatalError(Exception):
     """Indicates a critical error that prevents further processing.
@@ -27,8 +25,6 @@ class FatalError(Exception):
     encountered an unrecoverable situation, and the current operation or
     the entire process should terminate.
     """
-
-    pass
 
 
 class ProcessingError(Exception):
@@ -39,8 +35,6 @@ class ProcessingError(Exception):
     It signifies that something went wrong, but the system might be able to
     recover, retry, or continue with other tasks.
     """
-
-    pass
 
 
 class ContentBlockedError(ProcessingError):
@@ -70,19 +64,13 @@ class ContentBlockedError(ProcessingError):
 class StorageError(Exception):
     """Base exception for storage operations."""
 
-    pass
-
 
 class StorageConfigError(StorageError):
     """Exception raised for storage configuration errors."""
 
-    pass
-
 
 class StorageConnectionError(StorageError):
     """Exception raised for storage connection errors."""
-
-    pass
 
 
 class RateLimit(Exception):
@@ -94,8 +82,6 @@ class RateLimit(Exception):
     for a period and then retrying the request.
     """
 
-    pass
-
 
 class NoMoreResults(Exception):
     """Signal exception indicating that no more results are available or expected.
@@ -106,8 +92,6 @@ class NoMoreResults(Exception):
     of results) has been reached.
     """
 
-    pass
-
 
 class Delay(Exception):
     """Signal exception indicating that a delay is required before proceeding.
@@ -117,5 +101,3 @@ class Delay(Exception):
     The component catching this exception should pause for a specified duration
     before attempting to run the operation again.
     """
-
-    pass

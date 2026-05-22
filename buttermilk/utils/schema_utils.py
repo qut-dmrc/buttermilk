@@ -1,7 +1,7 @@
 """Utilities for converting Pydantic models to BigQuery schemas."""
 
 import datetime
-from typing import Dict, List, Union
+from typing import Union
 
 from google.cloud import bigquery
 from PIL.Image import Image
@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 
 
-def pydantic_to_bigquery_schema(model_class: type[BaseModel], extra_fields: List[Dict[str, str]] = None) -> List[bigquery.SchemaField]:
+def pydantic_to_bigquery_schema(model_class: type[BaseModel], extra_fields: list[dict[str, str]] = None) -> list[bigquery.SchemaField]:
     """Convert a Pydantic model to BigQuery schema fields.
 
     Args:
@@ -59,12 +59,7 @@ def _convert_pydantic_field_to_bq(field_name: str, field_info: FieldInfo) -> big
     is_optional = False
 
     # Handle both Union[str, None] and str | None syntax
-    if hasattr(field_type, "__args__") and field_type.__args__:
-        args = field_type.__args__
-        if len(args) == 2 and type(None) in args:
-            is_optional = True
-            field_type = args[0] if args[1] is type(None) else args[1]
-    elif hasattr(field_type, "__origin__") and field_type.__origin__ is type(Union):
+    if (hasattr(field_type, "__args__") and field_type.__args__) or (hasattr(field_type, "__origin__") and field_type.__origin__ is type(Union)):
         args = field_type.__args__
         if len(args) == 2 and type(None) in args:
             is_optional = True
@@ -114,7 +109,7 @@ def _convert_pydantic_field_to_bq(field_name: str, field_info: FieldInfo) -> big
     )
 
 
-def get_record_bigquery_schema() -> List[bigquery.SchemaField]:
+def get_record_bigquery_schema() -> list[bigquery.SchemaField]:
     """Get the complete BigQuery schema for Record objects including metadata fields."""
     from buttermilk._core.types import Record
 

@@ -7,7 +7,8 @@ LLM-based and API-based classifiers.
 """
 
 import asyncio
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from typing import Any
 
 from opentelemetry import trace
 from pydantic import Field

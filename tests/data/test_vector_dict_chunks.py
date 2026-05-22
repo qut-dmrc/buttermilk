@@ -120,8 +120,7 @@ class TestVectorDictChunks:
             """Get field from chunk whether it's dict or object."""
             if isinstance(chunk, dict):
                 return chunk.get(field_name, default)
-            else:
-                return getattr(chunk, field_name, default)
+            return getattr(chunk, field_name, default)
 
         # Test that it works for both
         assert _get_chunk_field(dict_chunk, "chunk_text") == "Test content"

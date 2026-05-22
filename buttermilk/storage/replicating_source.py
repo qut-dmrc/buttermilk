@@ -15,7 +15,8 @@ Architecture:
     - This prevents exponential API call growth from nested processors
 """
 
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 
 from buttermilk._core.log import logger
 from buttermilk._core.types import BaseRecord

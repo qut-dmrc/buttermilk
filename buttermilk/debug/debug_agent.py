@@ -7,7 +7,7 @@ including log reading and WebSocket flow control.
 import glob
 import os
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from buttermilk import AgentInput, logger
 from buttermilk._core.agent import Agent
@@ -23,7 +23,7 @@ class DebugAgent(Agent):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._active_clients: dict[str, FlowTestClient] = {}
-        self._puppet_client: Optional[FlowTestClient] = None
+        self._puppet_client: FlowTestClient | None = None
         self._puppet_listening: bool = False
 
     async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentOutput | None:
@@ -72,11 +72,11 @@ class DebugAgent(Agent):
         latest_log = max(log_files, key=os.path.getmtime)
 
         try:
-            with open(latest_log, "r") as f:
+            with open(latest_log) as f:
                 all_lines = f.readlines()
                 return "".join(all_lines[-lines:])
         except Exception as e:
-            return f"Error reading log file {latest_log}: {str(e)}"
+            return f"Error reading log file {latest_log}: {e!s}"
 
     def list_log_files(self) -> list[dict[str, Any]]:
         """List all buttermilk log files with their metadata.
@@ -145,14 +145,14 @@ class DebugAgent(Agent):
             }
 
         except Exception as e:
-            return {"status": "error", "message": f"Failed to start client: {str(e)}"}
+            return {"status": "error", "message": f"Failed to start client: {e!s}"}
 
     async def send_websocket_message(
         self,
         flow_id: str,
         message_type: str,
-        content: Optional[str] = None,
-        flow_name: Optional[str] = None,
+        content: str | None = None,
+        flow_name: str | None = None,
     ) -> dict[str, str]:
         """Send a message to an active WebSocket client.
 
@@ -183,7 +183,7 @@ class DebugAgent(Agent):
                 await client.start_flow(flow_name, content or "")
                 return {"status": "success", "message": f"Started flow {flow_name}"}
 
-            elif message_type == "manager_response":
+            if message_type == "manager_response":
                 if content is None:
                     return {
                         "status": "error",
@@ -192,20 +192,19 @@ class DebugAgent(Agent):
                 await client.send_manager_response(content)
                 return {"status": "success", "message": f"Sent response: {content}"}
 
-            else:
-                return {
-                    "status": "error",
-                    "message": f"Unknown message type: {message_type}",
-                }
+            return {
+                "status": "error",
+                "message": f"Unknown message type: {message_type}",
+            }
 
         except Exception as e:
-            return {"status": "error", "message": f"Failed to send message: {str(e)}"}
+            return {"status": "error", "message": f"Failed to send message: {e!s}"}
 
     def get_websocket_messages(
         self,
         flow_id: str,
-        last_n: Optional[int] = None,
-        message_type: Optional[str] = None,
+        last_n: int | None = None,
+        message_type: str | None = None,
     ) -> list[dict[str, Any]]:
         """Get messages from a WebSocket client.
 
@@ -317,7 +316,7 @@ class DebugAgent(Agent):
             return {"status": "success", "message": f"Stopped client for {flow_id}"}
 
         except Exception as e:
-            return {"status": "error", "message": f"Error stopping client: {str(e)}"}
+            return {"status": "error", "message": f"Error stopping client: {e!s}"}
 
     def list_active_clients(self) -> list[str]:
         """List all active WebSocket client IDs.
@@ -365,7 +364,7 @@ class DebugAgent(Agent):
             self._puppet_listening = False
             return {
                 "status": "error",
-                "message": f"Failed to start puppet mode: {str(e)}",
+                "message": f"Failed to start puppet mode: {e!s}",
             }
 
     async def puppet_start_flow(self, flow_name: str, prompt: str = "", record: str = "", criteria: str = "") -> dict[str, str]:
@@ -410,7 +409,7 @@ class DebugAgent(Agent):
             }
 
         except Exception as e:
-            return {"status": "error", "message": f"Failed to start flow: {str(e)}"}
+            return {"status": "error", "message": f"Failed to start flow: {e!s}"}
 
     async def puppet_send_response(self, content: str) -> dict[str, str]:
         """Send a manager response in puppet mode.
@@ -438,9 +437,9 @@ class DebugAgent(Agent):
             }
 
         except Exception as e:
-            return {"status": "error", "message": f"Failed to send response: {str(e)}"}
+            return {"status": "error", "message": f"Failed to send response: {e!s}"}
 
-    def puppet_get_messages(self, last_n: Optional[int] = 10, message_type: Optional[str] = None) -> list[dict[str, Any]]:
+    def puppet_get_messages(self, last_n: int | None = 10, message_type: str | None = None) -> list[dict[str, Any]]:
         """Get recent messages from puppet mode client.
 
         Args:
@@ -529,5 +528,5 @@ class DebugAgent(Agent):
             self._puppet_listening = False
             return {
                 "status": "error",
-                "message": f"Error stopping puppet mode: {str(e)}",
+                "message": f"Error stopping puppet mode: {e!s}",
             }

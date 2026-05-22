@@ -44,39 +44,38 @@ async def test_zotero_sets_pdf_metadata_as_content_when_no_fulltext(real_bm):
     context = ProcessingContext(session_id="download", record=test_record)
 
     # Mock the Zotero API client at module level
-    with tempfile.TemporaryDirectory() as tmpdir:
-        with patch("pyzotero.zotero.Zotero") as MockZotero:
-            mock_zot = MagicMock()
-            mock_zot.fulltext_item.side_effect = Exception("No fulltext available")
-            mock_zot.dump = MagicMock(side_effect=lambda key, path: Path(path).write_bytes(b"%PDF-1.4\n" + b"x" * 100000))
-            MockZotero.return_value = mock_zot
+    with tempfile.TemporaryDirectory() as tmpdir, patch("pyzotero.zotero.Zotero") as MockZotero:
+        mock_zot = MagicMock()
+        mock_zot.fulltext_item.side_effect = Exception("No fulltext available")
+        mock_zot.dump = MagicMock(side_effect=lambda key, path: Path(path).write_bytes(b"%PDF-1.4\n" + b"x" * 100000))
+        MockZotero.return_value = mock_zot
 
-            downloader = ZoteroDownloadProcessor(library_id="test_library")
+        downloader = ZoteroDownloadProcessor(library_id="test_library")
 
-            # Process the record using the new ProcessingContext API
-            results = []
-            async for result in downloader.process(context):
-                results.append(result)
+        # Process the record using the new ProcessingContext API
+        results = []
+        async for result in downloader.process(context):
+            results.append(result)
 
-            # Verify we got a result
-            assert len(results) == 1
-            result = results[0]
+        # Verify we got a result
+        assert len(results) == 1
+        result = results[0]
 
-            # Verify content is not None/empty
-            assert result.content is not None
-            assert result.content != ""
+        # Verify content is not None/empty
+        assert result.content is not None
+        assert result.content != ""
 
-            # Verify content contains meaningful PDF metadata
-            assert "[PDF Document:" in result.content
-            assert "TEST_KEY.pdf" in result.content
-            assert "Size:" in result.content
-            assert "bytes" in result.content
-            assert "Path:" in result.content
+        # Verify content contains meaningful PDF metadata
+        assert "[PDF Document:" in result.content
+        assert "TEST_KEY.pdf" in result.content
+        assert "Size:" in result.content
+        assert "bytes" in result.content
+        assert "Path:" in result.content
 
-            # Verify file_path is set correctly
-            assert result.file_path.endswith("TEST_KEY.pdf")
+        # Verify file_path is set correctly
+        assert result.file_path.endswith("TEST_KEY.pdf")
 
-            print(f"\n✅ Content set correctly: {result.content}")
+        print(f"\n✅ Content set correctly: {result.content}")
 
 
 @pytest.mark.anyio
@@ -105,31 +104,30 @@ async def test_zotero_uses_fulltext_when_available(real_bm):
     )
     context = ProcessingContext(session_id="download", record=test_record)
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        with patch("pyzotero.zotero.Zotero") as MockZotero:
-            mock_zot = MagicMock()
-            mock_zot.fulltext_item.return_value = {
-                "content": "This is the extracted text from Zotero fulltext API",
-                "indexedPages": 10,
-                "totalPages": 10,
-            }
-            MockZotero.return_value = mock_zot
+    with tempfile.TemporaryDirectory() as tmpdir, patch("pyzotero.zotero.Zotero") as MockZotero:
+        mock_zot = MagicMock()
+        mock_zot.fulltext_item.return_value = {
+            "content": "This is the extracted text from Zotero fulltext API",
+            "indexedPages": 10,
+            "totalPages": 10,
+        }
+        MockZotero.return_value = mock_zot
 
-            downloader = ZoteroDownloadProcessor(library_id="test_library")
+        downloader = ZoteroDownloadProcessor(library_id="test_library")
 
-            # Process the record using the new ProcessingContext API
-            results = []
-            async for result in downloader.process(context):
-                results.append(result)
+        # Process the record using the new ProcessingContext API
+        results = []
+        async for result in downloader.process(context):
+            results.append(result)
 
-            assert len(results) == 1
-            result = results[0]
+        assert len(results) == 1
+        result = results[0]
 
-            # Verify Zotero fulltext was used
-            assert result.content == "This is the extracted text from Zotero fulltext API"
-            assert "[PDF Document:" not in result.content
+        # Verify Zotero fulltext was used
+        assert result.content == "This is the extracted text from Zotero fulltext API"
+        assert "[PDF Document:" not in result.content
 
-            print(f"\n✅ Zotero fulltext used: {result.content[:50]}...")
+        print(f"\n✅ Zotero fulltext used: {result.content[:50]}...")
 
 
 @pytest.mark.anyio

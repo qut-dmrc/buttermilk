@@ -58,7 +58,8 @@ T = TypeVar("T")
 def load_dotenv() -> None:
     """Load environment variables from a .env file into os.environ."""
     try:
-        from dotenv import dotenv_values as _dotenv_values, load_dotenv as _load_dotenv
+        from dotenv import dotenv_values as _dotenv_values
+        from dotenv import load_dotenv as _load_dotenv
     except ImportError:
         logger.warning("python-dotenv not installed, cannot load .env files")
         return
@@ -145,7 +146,7 @@ session_headers = {
 
 
 async def download_limited_async(
-    url: str | httpx.URL | pydantic.AnyUrl | "AnyPath",
+    url: str | httpx.URL | pydantic.AnyUrl | AnyPath,
     *,
     allow_arbitrarily_large_downloads: bool = False,
     max_size: int = 1024 * 1024 * 10,
@@ -1186,7 +1187,7 @@ def image_to_content_part(image, model_type: str = "openai", mime_type: str = "i
             "type": "image_url",
             "image_url": {"url": f"data:{mime_type};base64,{b64_data}"},
         }
-    elif model_type == "anthropic":
+    if model_type == "anthropic":
         return {
             "type": "image",
             "source": {

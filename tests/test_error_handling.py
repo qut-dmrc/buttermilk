@@ -156,9 +156,8 @@ if __name__ == "__main__":
             if not high_error_result and low_error_result:
                 print("\n🎉 ALL TESTS PASSED: Error handling works correctly!")
                 return True
-            else:
-                print("\n❌ SOME TESTS FAILED")
-                return False
+            print("\n❌ SOME TESTS FAILED")
+            return False
         except Exception as e:
             print(f"Test failed with exception: {e}")
             import traceback

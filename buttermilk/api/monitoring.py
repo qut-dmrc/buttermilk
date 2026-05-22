@@ -10,7 +10,6 @@ External monitoring tools handle detailed metrics and alerting.
 """
 
 from datetime import UTC, datetime
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -35,7 +34,7 @@ class SimpleHealthCheckResponse(BaseModel):
     timestamp: str
     overall_status: str
     fatal_error_detected: bool
-    fatal_error_message: Optional[str] = None
+    fatal_error_message: str | None = None
 
 
 class BasicMetricsResponse(BaseModel):

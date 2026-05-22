@@ -59,4 +59,3 @@ class GCPLogAnalyzer:
         Args:
             filter_expression: Optional log filter
         """
-        pass

@@ -1,4 +1,3 @@
-# ruff: noqa: PLR6301
 import json
 import os
 from unittest.mock import AsyncMock, call, patch
@@ -307,8 +306,7 @@ class TestTMDBDiscoverMovies:
                 # Only return movies on page 1, simulate month-based fetching
                 if page == 1 and "primary_release_date__gte" in kwargs:
                     return mock_movies
-                else:
-                    return []  # No more results
+                return []  # No more results
 
             mock_discover = AsyncMock()
             mock_discover.movie = mock_movie_func
@@ -355,8 +353,7 @@ class TestTMDBDiscoverMovies:
                 page = kwargs.get("page", 1)
                 if page == 1 and "primary_release_date__gte" in kwargs:
                     return [mock_movie]
-                else:
-                    return []  # No more results
+                return []  # No more results
 
             mock_discover = AsyncMock()
             mock_discover.movie = mock_movie_func
@@ -376,7 +373,7 @@ class TestTMDBDiscoverMovies:
 
             # Verify period backup content contains our movie
             if period_files:
-                with open(period_files[0], "r") as f:
+                with open(period_files[0]) as f:
                     saved_data = json.load(f)
                 assert len(saved_data) >= 1
                 # Each period file contains a list of Title objects
@@ -439,12 +436,11 @@ class TestTMDBDiscoverMovies:
                 gte_date = kwargs.get("primary_release_date__gte", "")
                 if "2020-01" in gte_date:
                     return period_responses["2020-01"]
-                elif "2020-02" in gte_date:
+                if "2020-02" in gte_date:
                     return period_responses["2020-02"]
-                elif "2020-03" in gte_date:
+                if "2020-03" in gte_date:
                     return period_responses["2020-03"]
-                else:
-                    return []
+                return []
 
             mock_discover = AsyncMock()
             mock_discover.movie = mock_movie_func
@@ -480,8 +476,7 @@ class TestTMDBDiscoverMovies:
                 page = kwargs.get("page", 1)
                 if page == 1 and "primary_release_date__gte" in kwargs:
                     return mock_movies
-                else:
-                    return []  # No more results
+                return []  # No more results
 
             mock_discover = AsyncMock()
             mock_discover.movie = mock_movie_func
@@ -504,8 +499,7 @@ class TestTMDBDiscoverMovies:
                 page = kwargs.get("page", 1)
                 if page == 1 and "primary_release_date__gte" in kwargs:
                     return mock_movies
-                else:
-                    return []
+                return []
 
             mock_discover = AsyncMock()
             mock_discover.movie = mock_movie_func

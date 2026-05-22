@@ -17,8 +17,9 @@ OSB functionality with comprehensive validation and monitoring capabilities.
 import asyncio
 import json
 import time
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from typing import Any
 
 import websockets
 
@@ -91,7 +92,7 @@ class WebSocketTestSession:
                     error=e,
                 )
 
-    async def send_message(self, message: Dict[str, Any], track_latency: bool = True) -> bool:
+    async def send_message(self, message: dict[str, Any], track_latency: bool = True) -> bool:
         """Send message with optional latency tracking."""
         if not self.is_connected or not self.websocket:
             return False
@@ -118,7 +119,7 @@ class WebSocketTestSession:
             logger.error("Failed to send message in session", session_id=self.session_id, error=e)
             return False
 
-    async def receive_message(self, timeout: float = 5.0) -> Optional[Dict[str, Any]]:
+    async def receive_message(self, timeout: float = 5.0) -> dict[str, Any] | None:
         """Receive message with timeout."""
         if not self.is_connected or not self.websocket:
             return None
@@ -176,7 +177,7 @@ class WebSocketTestSession:
         }
         return await self.send_message(osb_message)
 
-    def get_performance_metrics(self) -> Dict[str, Any]:
+    def get_performance_metrics(self) -> dict[str, Any]:
         """Get comprehensive performance metrics for this session."""
         return {
             "session_id": self.session_id,
@@ -208,10 +209,10 @@ class WebSocketStressTestRunner:
     def __init__(self, base_uri: str, max_concurrent_sessions: int = 10):
         self.base_uri = base_uri
         self.max_concurrent_sessions = max_concurrent_sessions
-        self.sessions: List[WebSocketTestSession] = []
+        self.sessions: list[WebSocketTestSession] = []
         self.results = {}
 
-    async def run_concurrent_connection_test(self, num_sessions: int = 5, duration_seconds: int = 30) -> Dict[str, Any]:
+    async def run_concurrent_connection_test(self, num_sessions: int = 5, duration_seconds: int = 30) -> dict[str, Any]:
         """Test concurrent WebSocket connections under load."""
         logger.info(
             "Starting concurrent connection test",
@@ -286,7 +287,7 @@ class WebSocketStressTestRunner:
                 logger.error("Error in message loop", session_id=session.session_id, error=e)
                 break
 
-    def _calculate_aggregate_metrics(self) -> Dict[str, Any]:
+    def _calculate_aggregate_metrics(self) -> dict[str, Any]:
         """Calculate aggregate metrics across all test sessions."""
         if not self.sessions:
             return {}
@@ -314,7 +315,7 @@ class WebSocketMessageValidator:
     """Validator for OSB WebSocket message formats and flows."""
 
     @staticmethod
-    def validate_osb_message(message: Dict[str, Any]) -> tuple[bool, str]:
+    def validate_osb_message(message: dict[str, Any]) -> tuple[bool, str]:
         """Validate OSB message format."""
         if not isinstance(message, dict):
             return False, "Message must be a dictionary"
@@ -326,19 +327,18 @@ class WebSocketMessageValidator:
         # Validate based on message type
         if message_type == "run_flow":
             return WebSocketMessageValidator._validate_run_flow_message(message)
-        elif message_type == "osb_status":
+        if message_type == "osb_status":
             return WebSocketMessageValidator._validate_osb_status_message(message)
-        elif message_type == "osb_partial":
+        if message_type == "osb_partial":
             return WebSocketMessageValidator._validate_osb_partial_message(message)
-        elif message_type == "osb_complete":
+        if message_type == "osb_complete":
             return WebSocketMessageValidator._validate_osb_complete_message(message)
-        elif message_type == "osb_error":
+        if message_type == "osb_error":
             return WebSocketMessageValidator._validate_osb_error_message(message)
-        else:
-            return True, ""  # Allow unknown message types for extensibility
+        return True, ""  # Allow unknown message types for extensibility
 
     @staticmethod
-    def _validate_run_flow_message(message: Dict[str, Any]) -> tuple[bool, str]:
+    def _validate_run_flow_message(message: dict[str, Any]) -> tuple[bool, str]:
         """Validate run_flow message format."""
         required_fields = ["flow", "query"]
 
@@ -359,7 +359,7 @@ class WebSocketMessageValidator:
         return True, ""
 
     @staticmethod
-    def _validate_osb_status_message(message: Dict[str, Any]) -> tuple[bool, str]:
+    def _validate_osb_status_message(message: dict[str, Any]) -> tuple[bool, str]:
         """Validate OSB status message format."""
         required_fields = ["session_id", "status"]
 
@@ -374,7 +374,7 @@ class WebSocketMessageValidator:
         return True, ""
 
     @staticmethod
-    def _validate_osb_partial_message(message: Dict[str, Any]) -> tuple[bool, str]:
+    def _validate_osb_partial_message(message: dict[str, Any]) -> tuple[bool, str]:
         """Validate OSB partial response message format."""
         required_fields = ["session_id", "agent", "partial_response"]
 
@@ -389,7 +389,7 @@ class WebSocketMessageValidator:
         return True, ""
 
     @staticmethod
-    def _validate_osb_complete_message(message: Dict[str, Any]) -> tuple[bool, str]:
+    def _validate_osb_complete_message(message: dict[str, Any]) -> tuple[bool, str]:
         """Validate OSB complete response message format."""
         required_fields = ["session_id", "synthesis_summary", "agent_responses"]
 
@@ -404,7 +404,7 @@ class WebSocketMessageValidator:
         return True, ""
 
     @staticmethod
-    def _validate_osb_error_message(message: Dict[str, Any]) -> tuple[bool, str]:
+    def _validate_osb_error_message(message: dict[str, Any]) -> tuple[bool, str]:
         """Validate OSB error message format."""
         required_fields = ["session_id", "error_type", "error_message"]
 
@@ -416,7 +416,7 @@ class WebSocketMessageValidator:
 
 
 @asynccontextmanager
-async def websocket_test_context(session_ids: List[str], base_uri: str) -> AsyncGenerator[List[WebSocketTestSession], None]:
+async def websocket_test_context(session_ids: list[str], base_uri: str) -> AsyncGenerator[list[WebSocketTestSession], None]:
     """Context manager for WebSocket test sessions with automatic cleanup."""
     sessions = []
 
@@ -435,7 +435,7 @@ async def websocket_test_context(session_ids: List[str], base_uri: str) -> Async
         await asyncio.gather(*disconnect_tasks, return_exceptions=True)
 
 
-async def simulate_osb_workflow(session: WebSocketTestSession, query: str, expected_agents: List[str] = None) -> Dict[str, Any]:
+async def simulate_osb_workflow(session: WebSocketTestSession, query: str, expected_agents: list[str] = None) -> dict[str, Any]:
     """Simulate complete OSB workflow and validate responses."""
     if expected_agents is None:
         expected_agents = ["researcher", "policy_analyst", "fact_checker", "explorer"]
@@ -496,7 +496,7 @@ async def simulate_osb_workflow(session: WebSocketTestSession, query: str, expec
 # Utility functions for test setup and teardown
 
 
-def validate_websocket_test_results(results: Dict[str, Any], expected_criteria: Dict[str, Any]) -> tuple[bool, List[str]]:
+def validate_websocket_test_results(results: dict[str, Any], expected_criteria: dict[str, Any]) -> tuple[bool, list[str]]:
     """Validate WebSocket test results against expected criteria."""
     validation_errors = []
 

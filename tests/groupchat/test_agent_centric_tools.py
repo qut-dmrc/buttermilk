@@ -75,7 +75,6 @@ class MockStructuredHost(StructuredLLMHostAgent):
 
     async def callback_to_groupchat(self, *args, **kwargs):
         """Mock callback method."""
-        pass
 
 
 async def test_agent_tool_definition():

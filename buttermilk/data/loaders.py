@@ -9,8 +9,9 @@ that yields Records in an iterator pattern.
 import csv
 import json
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Iterator, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import cloudpathlib
 
@@ -89,7 +90,6 @@ class DataLoader(ABC):
     @abstractmethod
     def __iter__(self) -> Iterator[Record]:
         """Yield Record objects from the data source."""
-        pass
 
     def __len__(self) -> int:
         """Return number of records if known, 0 if streaming/unknown."""
@@ -186,7 +186,7 @@ class JSONLDataLoader(DataLoader):
             path = cloudpathlib.CloudPath(self.config.path)
             file_obj = path.open("r", encoding="utf-8")
         else:
-            file_obj = open(self.config.path, "r", encoding="utf-8")
+            file_obj = open(self.config.path, encoding="utf-8")
 
         try:
             for line_num, line in enumerate(file_obj):
@@ -264,7 +264,7 @@ class CSVDataLoader(DataLoader):
             path = cloudpathlib.CloudPath(self.config.path)
             file_obj = path.open("r", encoding="utf-8")
         else:
-            file_obj = open(self.config.path, "r", encoding="utf-8")
+            file_obj = open(self.config.path, encoding="utf-8")
 
         try:
             reader = csv.DictReader(file_obj)
@@ -439,9 +439,8 @@ def create_data_loader(config: "DataSourceConfig") -> DataLoader:
         # Ensure storage implements DataLoader interface
         if hasattr(storage, "__iter__") and hasattr(storage, "__len__"):
             return storage
-        else:
-            # Wrap storage to provide DataLoader interface
-            return DataLoaderWrapper(storage)
+        # Wrap storage to provide DataLoader interface
+        return DataLoaderWrapper(storage)
 
     except Exception as e:
         # Fallback to old implementation if new system fails
@@ -450,19 +449,18 @@ def create_data_loader(config: "DataSourceConfig") -> DataLoader:
     # Legacy implementation (fallback)
     if config.type == "huggingface":
         return HuggingFaceDataLoader(config)
-    elif config.type == "file":
+    if config.type == "file":
         # Determine file type from extension or explicit format
         path_lower = config.path.lower()
         if path_lower.endswith(".jsonl") or path_lower.endswith(".ndjson"):
             return JSONLDataLoader(config)
-        elif path_lower.endswith(".csv"):
+        if path_lower.endswith(".csv"):
             return CSVDataLoader(config)
-        else:
-            # Default to JSONL for file type
-            return JSONLDataLoader(config)
-    elif config.type == "plaintext":
+        # Default to JSONL for file type
+        return JSONLDataLoader(config)
+    if config.type == "plaintext":
         return PlaintextDataLoader(config)
-    elif config.type in ["bigquery", "bq"]:
+    if config.type in ["bigquery", "bq"]:
         # Use new unified storage system
         from buttermilk._core.storage_config import StorageConfig
 
@@ -471,5 +469,4 @@ def create_data_loader(config: "DataSourceConfig") -> DataLoader:
 
         storage = bm.get_storage(storage_config)
         return DataLoaderWrapper(storage)
-    else:
-        raise ValueError(f"Unsupported data source type: {config.type}")
+    raise ValueError(f"Unsupported data source type: {config.type}")

@@ -287,7 +287,7 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
                                         await session.websocket.send_json(
                                             {
                                                 "type": "error",
-                                                "message": f"Flow execution failed: {str(exc)}",
+                                                "message": f"Flow execution failed: {exc!s}",
                                                 "fatal": True,
                                             }
                                         )
@@ -323,7 +323,7 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
                     await websocket.send_json(
                         {
                             "type": "error",
-                            "message": f"Fatal error: {str(e)}",
+                            "message": f"Fatal error: {e!s}",
                             "fatal": True,
                         }
                     )
@@ -391,8 +391,7 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
                 "last_activity": session.last_activity.isoformat(),
                 "is_expired": session.is_expired(),
             }
-        else:
-            raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail="Session not found")
 
     @app.delete("/api/session/{session_id}")
     async def cleanup_session(session_id: str, request: Request):
@@ -409,8 +408,7 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
         success = await flow_runner.session_manager.cleanup_session(session_id)
         if success:
             return {"message": f"Session {session_id} cleaned up successfully"}
-        else:
-            raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail="Session not found")
 
     @app.get("/api/sessions")
     async def list_sessions(request: Request):

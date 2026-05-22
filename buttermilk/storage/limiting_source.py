@@ -4,7 +4,8 @@ This module provides a source wrapper that limits iteration to the first N recor
 applied BEFORE any replication to ensure consistent sampling.
 """
 
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 
 from buttermilk._core.log import logger
 from buttermilk._core.types import BaseRecord

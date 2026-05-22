@@ -914,7 +914,7 @@ class BM(BaseModel):
             logger.error(f"Failed to save data to '{effective_save_dir_str}' with extension '{effective_extension}': {e!s}")
             return None  # Indicate save failure
 
-    def run_query(  # noqa: PLR0913
+    def run_query(
         self,
         sql: str,
         destination: str | None = None,
@@ -1117,7 +1117,7 @@ class BM(BaseModel):
 # Factory functions for creating session-scoped BM instances
 
 
-async def create_session_bm_async(  # noqa: PLR0913
+async def create_session_bm_async(
     project_name: str,
     job: str,
     batch_id: str | None = None,

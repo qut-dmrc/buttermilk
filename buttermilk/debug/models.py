@@ -82,10 +82,9 @@ class FlowHealthReport(BaseModel):
 
         if failure_rate == 0:
             return "healthy"
-        elif failure_rate < 0.5:
+        if failure_rate < 0.5:
             return "degraded"
-        else:
-            return "unhealthy"
+        return "unhealthy"
 
 
 class StartupTestResult(BaseModel):

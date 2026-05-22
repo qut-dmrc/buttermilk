@@ -19,8 +19,6 @@ except ImportError:
     class WebSocketDisconnect(Exception):  # type: ignore[no-redef]
         """Placeholder for starlette.websockets.WebSocketDisconnect when starlette is not installed."""
 
-        pass
-
 
 from buttermilk._core.context import set_logging_context
 from buttermilk._core.contract import (
@@ -1056,10 +1054,9 @@ class FlowRunner(BaseModel):
         """
         if self.bm is not None:
             return self.bm
-        else:
-            from buttermilk._core.dmrc import get_bm
+        from buttermilk._core.dmrc import get_bm
 
-            return get_bm()
+        return get_bm()
 
     async def get_websocket_session_async(self, session_id: str, websocket: Any | None = None) -> FlowRunContext | None:
         """Get or create a session for the given session ID, handling reconnection scenarios.
@@ -1237,7 +1234,7 @@ class FlowRunner(BaseModel):
                     raise ValueError("No flows found in reloaded configuration")
 
         except Exception as e:
-            error_msg = f"Configuration reload failed: {str(e)}"
+            error_msg = f"Configuration reload failed: {e!s}"
             logger.error(error_msg, exc_info=True)
             result["errors"].append(error_msg)
             result["errors"].append(traceback.format_exc())

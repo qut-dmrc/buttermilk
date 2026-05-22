@@ -43,7 +43,7 @@ class QueryRunner(BaseModel):
 
     bq_client: bigquery.Client = Field(..., description="Authenticated BigQuery client instance.")
 
-    def run_query(  # noqa: PLR0913, PLR0911
+    def run_query(  # noqa: PLR0911
         self,
         sql: str,
         destination: str | None = None,

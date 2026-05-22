@@ -1,4 +1,3 @@
-# ruff: noqa: PLR6301
 """Integration tests for TMDB tool with autogen agents.
 
 These tests verify that the TMDBTool works correctly when integrated with
@@ -214,7 +213,7 @@ class TestTMDBAgentIntegration:
             mock_tmdb.search.return_value = mock_search
 
             # Execute multiple concurrent calls
-            import asyncio  # noqa: F401
+            import asyncio
 
             tasks = [run_function_tool(function_tool, title=f"Movie {i}") for i in range(3)]
 

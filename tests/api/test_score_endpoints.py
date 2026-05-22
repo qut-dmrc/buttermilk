@@ -23,7 +23,7 @@ class TestDataService:
 
         mock_runner.flows = {"test_flow": mock_flow}
 
-        yield mock_runner
+        return mock_runner
 
     @pytest.mark.anyio
     async def test_get_record_by_id_found(self, real_flow_runner, real_bm):

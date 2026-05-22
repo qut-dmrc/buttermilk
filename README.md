@@ -1,128 +1,141 @@
-# buttermilk: opinionated data tools for HASS scholars
+# buttermilk
 
-**AI and data tools for HASS researchers, putting culture first.**
+[![Tests](https://github.com/qut-dmrc/buttermilk/actions/workflows/tests.yml/badge.svg)](https://github.com/qut-dmrc/buttermilk/actions/workflows/tests.yml)
+[![License: GPL v3+](https://img.shields.io/badge/License-GPLv3+-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![PyPI version](https://img.shields.io/pypi/v/buttermilk.svg)](https://pypi.org/project/buttermilk/)
 
-Developed by and for @QUT-DMRC scholars, this repo provides standard **flows** and **pipelines** that help humanities scholars develop rigorous, traceable systems to collect data and use machine learning, generative AI, and computational techniques as part of analysis and experimentation driven by theory and cultural context. We aim to:
+**Opinionated AI and data tools for HASS scholars — putting culture first.**
 
-- Provide a set of research-backed analysis tools that help scholars bring cultural expertise to computational methods.
-- Help HASS scholars with easy, well-documented, and proven tools for data collection and analysis.
-- Make ScholarOps™ easier with opinionated defaults that take care of logging and archiving in standard formats.
-- Create a space for collaboration, experimentation, and evaluation of computational methods for HASS scholars.
+Developed by and for [@QUT-DMRC](https://research.qut.edu.au/dmrc/) researchers, buttermilk provides standard *flows*, *agents*, and *pipelines* that help humanities and social-science scholars use machine learning, generative AI, and computational techniques in a way that is **understandable, traceable, and reproducible**.
+
+We aim to:
+
+- Bring cultural and theoretical expertise to computational methods.
+- Provide easy, well-documented, and proven tools for data collection and analysis.
+- Make ScholarOps easier with opinionated defaults for logging, tracing, and archiving.
+- Create space for collaboration, experimentation, and evaluation of computational methods for HASS research.
 
 ```md
-Q: Why 'buttermilk'?? A: It's cultured and flows...
+Q: Why "buttermilk"?  A: It's cultured and flows...
 ```
 
-```md
-Q: What's MLOps? A: A general term for standardised approaches to machine learning workflows that helps you organize your project, collaborate, iteratively improve your analysis and track versioned changes, monitor onging performance, reproduce experiments, and verify and compare results.
-```
+## Core concepts
 
-The tools are tested, documented, and versioned. We use our own research projects as development guides, test cases, tutorials, and ongoing measures of reliability. We're aiming to make it easy for HASS scholars to use AI tools in a way that is understandable, traceable, and reproducible.
-
-## Core Concepts
-
-Buttermilk is built around a few core concepts that help structure your research and data processing:
-
-- **Flows**: Complete research or data processing pipelines
-- **Records**: Immutable data structures with rich metadata
-- **Pipelines**: Composeable, extensible chains of **processors** with **full caching** at each step.
-- **Processors**: asynchronous iterators that consume a BaseRecord and yield zero or more BaseRecords.
-- **Orchestrators**: Coordinate and manage flow execution within a composable and programmable groupchat paradigm involving agents and potentially humans
-- **Agents**: Specialized components for specific tasks (AI models, data collection)
-- **Configuration (Hydra)**: Flexible, hierarchical configuration management
-
-For detailed explanations, see **[Core Concepts](docs/reference/concepts.md)**.
+- **Flows** — complete research or data-processing pipelines.
+- **Records** — immutable data structures with rich metadata.
+- **Pipelines** — composable, extensible chains of *processors* with full caching at each step.
+- **Processors** — async iterators that consume a `Record` and yield zero or more `Record`s.
+- **Orchestrators** — coordinate flow execution in a composable groupchat paradigm involving agents and humans.
+- **Agents** — specialised components for specific tasks (LLMs, scrapers, classifiers, data collection).
+- **Configuration (Hydra)** — flexible, hierarchical YAML config.
 
 ## Features
 
-Buttermilk provides several components and features to facilitate HASS research:
-
-- Multimodal support for current-generation foundation models (Gemini, Claude, Llama, GPT) and plug-in support for other analysis tool APIs.
-- A prompt templating system for evaluating, improving, and reusing prompt components.
-- Standard cloud logging, flexible data storage options, secure credential management (e.g., Azure KeyVault, Google Secrets), built-in database storage (e.g., BigQuery), and tracing capabilities (e.g., Promptflow, Langchain).
-- An API and CLI for integrating components and orchestrating complex workflows.
-- Support for running code locally, on remote GPUs, or in cloud compute environments (Azure/Google Compute, with AWS Lambda planned).
-- Batch processing capabilities for managing large-scale data processing tasks.
-
-## Contributing
-
-Buttermilk is actively under development. We welcome contributions and feedback. If you're interested in getting involved, please contact [nic](mailto:n.suzor@qut.edu.au).
-
-## Versioning
-
-Bump the version with `uv run bump-my-version bump patch` (or `minor`/`major`).
+- Multimodal support for current-generation foundation models (Gemini, Claude, GPT, Llama) and pluggable APIs.
+- Prompt templating system for evaluating, improving, and reusing prompt components.
+- Standard cloud logging, flexible storage, secure credential management (Azure KeyVault, Google Secret Manager), BigQuery-backed storage, and tracing (OpenTelemetry, Traceloop).
+- API and CLI for orchestrating complex multi-agent workflows.
+- Run locally, on remote GPUs, or in cloud compute (GCP / Azure; AWS planned).
+- Batch processing for large-scale data work.
 
 ## Installation
 
-Create a new environment and install using uv:
+> **Note.** Buttermilk's default Hydra config targets Google Cloud (Vertex AI, BigQuery). Running the full quickstart with default config requires a configured GCP project. The core library is provider-agnostic; you can configure other backends by editing `conf/`.
 
-```shell
-pip install uv
-uv install
+```bash
+pip install buttermilk
+# or, for development:
+git clone https://github.com/qut-dmrc/buttermilk.git
+cd buttermilk
+uv sync --extra dev --upgrade
 ```
 
-Authenticate to cloud providers, where your relevant secrets are stored.
+For the default GCP setup, authenticate before first run:
 
-```shell
-GOOGLE_CLOUD_PROJECT=<project>
-gcloud auth login --update-adc --enable-gdrive-access --project ${GOOGLE_CLOUD_PROJECT} --billing-project ${GOOGLE_CLOUD_PROJECT}
-gcloud auth application-default set-quota-project ${GOOGLE_CLOUD_PROJECT}
+```bash
+export GOOGLE_CLOUD_PROJECT=<your-project>
+gcloud auth application-default login --project ${GOOGLE_CLOUD_PROJECT}
 gcloud config set project ${GOOGLE_CLOUD_PROJECT}
 ```
 
-Configurations are stored as YAML files in `conf/`. You can select options at runtime using [hydra](https://hydra.cc).
+Configs live as YAML under [`conf/`](conf/) and are composed with [Hydra](https://hydra.cc).
 
-## Usage
+## Quickstart
 
-### Command Line Interface
+The minimal async initialisation, using buttermilk's public Python API:
 
-Run flows using the `bm` command with Hydra configuration:
+```python
+import asyncio
+from pathlib import Path
+from buttermilk import init_async
 
-```shell
+async def main():
+    # Point at a directory of YAML configs (here, the buttermilk default conf/)
+    bm = await init_async(
+        config_dir=str(Path(__file__).parent / "conf"),
+        job="my-first-job",
+    )
+    bm.logger.info("buttermilk initialised", job=bm.cfg.job, version=bm.__version__)
+
+asyncio.run(main())
+```
+
+For a worked example, see [`examples/typed_config_example.py`](examples/typed_config_example.py).
+
+### Command-line interface
+
+```bash
 # Run a single flow interactively
 bm run.mode=console run.flow=trans
 
-# Use different LLM configurations
+# Use different LLM profiles
 bm run.mode=console llms=debug      # Fast, cheap models for testing
 bm run.mode=console llms=full       # Production-quality models
 
 # Batch processing
-bm run.mode=batch run.flow=trans run.limit=100        # Process in batch mode
+bm run.mode=batch run.flow=trans run.limit=100
 
-# Start API server
+# Start the API server
 bm run.mode=api
-
-# Run data pipeline
-bm run.mode=pipeline run.limit=100
 ```
 
-Available modes: `console`, `batch`, `api`, `pipeline`, `streamlit`, `slackbot`
+Available modes: `console`, `batch`, `api`, `pipeline`, `streamlit`, `slackbot`.
+Available LLM profiles: `debug`, `lite`, `full`, `expensive` (see [`conf/llms/`](conf/llms/)).
 
-Available LLM configurations: `debug`, `lite`, `full`, `expensive` (see `conf/llms/` for details)
+### Using from a third-party project
 
-#### Using from Third-Party Projects
+Install buttermilk as a dependency and point at your project's config:
 
-Install buttermilk as a dependency and point to your project's config directory:
-
-```shell
-# Use bm with custom config path
+```bash
+pip install buttermilk
 bm --config-path=./conf run.mode=console run.flow=your_flow
-
-# Or use Python module
-uv run python -m buttermilk.runner.cli --config-path=./conf run.mode=batch run.flow=your_flow
 ```
 
-Create a `conf/` directory in your project with `config.yaml` and your flow definitions in `conf/flows/`
+Create a `conf/` directory in your project with `config.yaml` and your flow definitions under `conf/flows/`.
 
-### Python API
+## Documentation
 
-```python
-from pathlib import Path
-from buttermilk import init, init_async
+The full documentation site is on the roadmap. For now:
 
-script_dir = Path(__file__).parent
-bm = await init_async(config_dir=str(script_dir / "../conf"), job="my job")
-logger = bm.logger
-config = bm.cfg
-logger.info("structured logging available", job=bm.cfg.job)
-```
+- **[`examples/`](examples/)** — runnable examples and notebooks.
+- **[`conf/`](conf/)** — every flow, LLM profile, and pipeline mode is configurable from here.
+- **[`docs/`](docs/)** — placeholder index; will fill in over time.
+
+## Contributing
+
+Buttermilk is actively under development. We welcome contributions and feedback — including bug reports, design discussions, and code.
+
+- Read [**CONTRIBUTING.md**](CONTRIBUTING.md) for development setup, tests, and the PR process.
+- Read the [**Code of Conduct**](CODE_OF_CONDUCT.md).
+- Report security issues privately — see [**SECURITY.md**](SECURITY.md).
+
+## How to cite
+
+If you use buttermilk in academic work, please cite it as described in [`CITATION.cff`](CITATION.cff). GitHub renders a "Cite this repository" button in the repo sidebar.
+
+## License
+
+Buttermilk is released under **GPL-3.0-or-later** — see [`LICENSE`](LICENSE).
+
+GPL-3.0 covers *distribution* of buttermilk and its derivatives. Running buttermilk as part of a hosted service does **not** by itself trigger copyleft obligations — see the License FAQ in [`CONTRIBUTING.md`](CONTRIBUTING.md#license-faq).

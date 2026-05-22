@@ -222,7 +222,7 @@ async def test_full_pipeline_with_pdftotext(real_bm):
     print(f"{'=' * 60}")
     print(f"Records processed: {results.get('records_processed', 'unknown')}")
     print(f"Status: {results.get('status', 'unknown')}")
-    if "errors" in results and results["errors"]:
+    if results.get("errors"):
         print(f"Errors: {results['errors']}")
     print(f"{'=' * 60}\n")
 

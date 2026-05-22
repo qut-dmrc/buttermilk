@@ -9,15 +9,25 @@ import requests  # type: ignore[import-untyped]
 import urllib3
 from anthropic._exceptions import (
     APIConnectionError as AnthropicAPIConnectionError,
+)
+from anthropic._exceptions import (
     InternalServerError as AnthropicInternalServerError,
+)
+from anthropic._exceptions import (
     OverloadedError as AnthropicOverloadedError,
+)
+from anthropic._exceptions import (
     RateLimitError as AnthropicRateLimitError,
+)
+from anthropic._exceptions import (
     ServiceUnavailableError as AnthropicServiceUnavailableError,
 )
 from google.api_core.exceptions import ResourceExhausted, TooManyRequests
 from google.auth.exceptions import TransportError as GoogleAuthTransportError
 from openai import (
     APIConnectionError as OpenAIAPIConnectionError,
+)
+from openai import (
     RateLimitError as OpenAIRateLimitError,
 )
 from pydantic import BaseModel

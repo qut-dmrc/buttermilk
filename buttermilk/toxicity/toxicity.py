@@ -19,11 +19,11 @@ import asyncio
 import os
 import time
 import uuid
+from collections.abc import AsyncGenerator
 from io import StringIO
 from pathlib import Path
 from typing import (
     Any,
-    AsyncGenerator,
     ClassVar,
     Literal,
 )

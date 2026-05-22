@@ -10,8 +10,8 @@ from .bigquery import BigQueryStorage
 from .file import FileStorage
 
 __all__ = [
-    "StorageConfig",
-    "Storage",
     "BigQueryStorage",
     "FileStorage",
+    "Storage",
+    "StorageConfig",
 ]

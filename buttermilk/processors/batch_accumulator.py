@@ -27,7 +27,8 @@ The BatchAccumulator:
 from __future__ import annotations
 
 import asyncio
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from typing import Any
 
 from pydantic import Field, PrivateAttr
 

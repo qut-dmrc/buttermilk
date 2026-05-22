@@ -84,7 +84,7 @@ async def session_runner():
     they all share the same event loop, preventing 'Event loop is closed'
     errors from httpx clients in session-scoped LLM fixtures.
     """
-    yield
+    return
 
 
 @pytest.fixture(scope="session")
@@ -103,7 +103,7 @@ def real_conf(real_bm):
 
 
 @pytest.fixture(scope="session")
-def real_llms(real_bm: "BM") -> "LLMs":
+def real_llms(real_bm: BM) -> LLMs:
     """Real LLMs instance from testing configuration."""
     return real_bm.llms
 
@@ -115,7 +115,7 @@ def real_model_name(request) -> str:
 
 
 @pytest.fixture(params=CHAT_MODELS)
-async def real_model_name_expensive(request, real_bm: "BM", session_runner):
+async def real_model_name_expensive(request, real_bm: BM, session_runner):
     """Real expensive LLM instance for testing.
 
     Depends on session_runner to ensure single event loop for session.
@@ -124,7 +124,7 @@ async def real_model_name_expensive(request, real_bm: "BM", session_runner):
 
 
 @pytest.fixture(params=CHAT_MODELS)
-async def real_llm_multimodal(request, real_bm: "BM", session_runner):
+async def real_llm_multimodal(request, real_bm: BM, session_runner):
     """Real LLM instance for testing (all chat models).
 
     Depends on session_runner to ensure single event loop for session.
@@ -133,7 +133,7 @@ async def real_llm_multimodal(request, real_bm: "BM", session_runner):
 
 
 @pytest.fixture(params=CHEAP_CHAT_MODELS)
-async def real_llm(request, real_bm: "BM", session_runner):
+async def real_llm(request, real_bm: BM, session_runner):
     """Real LLM instance for testing.
 
     Depends on session_runner to ensure single event loop for session.
@@ -142,7 +142,7 @@ async def real_llm(request, real_bm: "BM", session_runner):
 
 
 @pytest.fixture(params=["litellm"])
-def llm_wrapper_type(request, real_bm: "BM") -> str:
+def llm_wrapper_type(request, real_bm: BM) -> str:
     """Fixture that provides the LLM wrapper type.
 
     After removing autogen wrapper support, this is always "litellm".
@@ -155,11 +155,11 @@ def llm_wrapper_type(request, real_bm: "BM") -> str:
     Yields:
         str: The wrapper type ("litellm")
     """
-    yield request.param
+    return request.param
 
 
 @pytest.fixture(params=CHAT_MODELS)
-async def real_llm_expensive(request, real_bm: "BM", session_runner):
+async def real_llm_expensive(request, real_bm: BM, session_runner):
     """Real expensive LLM instance for testing.
 
     Depends on session_runner to ensure single event loop for session.
@@ -406,7 +406,7 @@ Perhaps they could just shut up and get on with it.""",
     params=MEDIA_RECORDS,
     ids=[x[0] for x in MEDIA_RECORDS],
 )
-async def multimodal_record(request) -> "Record":
+async def multimodal_record(request) -> Record:
     from buttermilk.utils.media import download_and_convert
     from buttermilk.utils.utils import is_filepath, is_uri
 
@@ -444,7 +444,7 @@ async def multimodal_record(request) -> "Record":
     params=NEWS_RECORDS,
     ids=[x[0] for x in NEWS_RECORDS],
 )
-async def news_record(request) -> "Record":
+async def news_record(request) -> Record:
     from buttermilk.utils.media import download_and_convert
 
     record = await download_and_convert(
@@ -456,7 +456,7 @@ async def news_record(request) -> "Record":
 
 
 @pytest.fixture
-def fight_no_more_forever() -> "Record":
+def fight_no_more_forever() -> Record:
     from buttermilk._core.types import Record
 
     return Record(
@@ -471,7 +471,7 @@ def fight_no_more_forever() -> "Record":
     params=TEXT_RECORDS,
     ids=[x[0] for x in TEXT_RECORDS],
 )
-async def text_record(request) -> "Record":
+async def text_record(request) -> Record:
     from buttermilk.utils.media import download_and_convert
 
     record = await download_and_convert(

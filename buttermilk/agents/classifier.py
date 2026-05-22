@@ -16,7 +16,8 @@ import json
 import time
 import uuid
 from abc import abstractmethod
-from typing import Any, AsyncGenerator, Self
+from collections.abc import AsyncGenerator
+from typing import Any, Self
 
 import pydantic
 from autogen_core.models import AssistantMessage, SystemMessage, UserMessage
@@ -421,8 +422,7 @@ class HuggingFaceClassifier(ClassifierCore):
 
                 logger.debug(f"HuggingFace response (manual parse): {response}")
                 return response
-            else:
-                raise ProcessingError(f"Empty response from HuggingFace: {result}")
+            raise ProcessingError(f"Empty response from HuggingFace: {result}")
 
         except ProcessingError:
             raise
@@ -624,20 +624,22 @@ class ZentropiClassifier(ClassifierCore):
                 "criteria_text": text,
             }
 
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
+            async with (
+                aiohttp.ClientSession() as session,
+                session.post(
                     self._client["base_url"],
                     headers={"Authorization": f"Bearer {self._client['api_key']}"},
                     json=payload,
                     timeout=aiohttp.ClientTimeout(total=30),
-                ) as response:
-                    response.raise_for_status()
-                    result = await response.json()
+                ) as response,
+            ):
+                response.raise_for_status()
+                result = await response.json()
 
-                    if "label" not in result:
-                        raise ValueError(f"Zentropi response missing 'label' field: {result.keys()}")
+                if "label" not in result:
+                    raise ValueError(f"Zentropi response missing 'label' field: {result.keys()}")
 
-                    return result
+                return result
 
         # Use RetryWrapper for consistent retry logic across the codebase
         retry_wrapper = RetryWrapper(

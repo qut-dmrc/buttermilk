@@ -257,7 +257,7 @@ class TestChromaDBBlockingProfile:
 
             # Validate that wrapped operations don't block excessively
             # Note: We expect DIRECT calls to block, so we only check wrapped ones
-            wrapped_ops = [op for op in results.keys() if "[SYNC]" in op]
+            wrapped_ops = [op for op in results if "[SYNC]" in op]
             for op in wrapped_ops:
                 metrics = results[op]
                 assert metrics["max_heartbeat_gap_ms"] < 200, (
@@ -408,8 +408,8 @@ class TestChromaDBBlockingProfile:
             print("Results: Direct vs Wrapped ChromaDB Operations")
             print("=" * 80)
 
-            direct_ops = [op for op in results.keys() if "DIRECT" in op]
-            wrapped_ops = [op for op in results.keys() if "WRAPPED" in op]
+            direct_ops = [op for op in results if "DIRECT" in op]
+            wrapped_ops = [op for op in results if "WRAPPED" in op]
 
             print("\nDirect calls (BLOCKING - demonstrates the problem):")
             for op in direct_ops:

@@ -27,7 +27,9 @@ import google.auth.transport.grpc
 import google.auth.transport.requests
 import grpc
 from google.auth.transport.grpc import AuthMetadataPlugin
-from opentelemetry import baggage as otel_baggage, context as otel_context, trace
+from opentelemetry import baggage as otel_baggage
+from opentelemetry import context as otel_context
+from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
     OTLPSpanExporter as OTLPHttpSpanExporter,
@@ -40,10 +42,13 @@ from opentelemetry.instrumentation.google_generativeai import (
 from opentelemetry.instrumentation.logging import LoggingInstrumentor
 from opentelemetry.instrumentation.openai import OpenAIInstrumentor
 from opentelemetry.instrumentation.vertexai import VertexAIInstrumentor
-from opentelemetry.sdk.trace import SpanProcessor as _SpanProcessor, TracerProvider
+from opentelemetry.sdk.trace import SpanProcessor as _SpanProcessor
+from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.trace import (
     SpanKind as _SpanKind,
+)
+from opentelemetry.trace import (
     set_span_in_context as _set_span_in_context,
 )
 

@@ -1,4 +1,5 @@
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from typing import Any
 
 import pydantic
 from pydantic import BaseModel
@@ -92,5 +93,5 @@ class Citator(LLMAgent):
             )
             # Yield record with error metadata rather than filtering it out
             updated_metadata = item.metadata.copy() if item.metadata else {}
-            updated_metadata["citation"] = f"Error generating citation: {str(e)}"
+            updated_metadata["citation"] = f"Error generating citation: {e!s}"
             yield item.model_copy(update={"metadata": updated_metadata})

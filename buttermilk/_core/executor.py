@@ -10,7 +10,7 @@ Processors are expected to be already instantiated as Pydantic models before bei
 passed to the PipelineConfig.
 """
 
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from buttermilk._core.pipeline_config import PipelineConfig
 from buttermilk._core.processing_context import ProcessingContext

@@ -14,8 +14,9 @@ This module contains concrete implementations of standard processors:
 
 import asyncio
 import time
+from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import Any, AsyncGenerator
+from typing import Any
 
 import chromadb
 import jmespath
@@ -632,7 +633,7 @@ class TransformProcessor(ProcessorCore):
                 expression=self.expression,
                 error=str(e),
             )
-            raise ValueError(f"Error applying JMESPath expression '{self.expression}': {str(e)}") from e
+            raise ValueError(f"Error applying JMESPath expression '{self.expression}': {e!s}") from e
 
         # Yield the original record (metadata is stored in context)
         yield context.record
@@ -826,7 +827,7 @@ class FilterProcessor(ProcessorCore):
                 criteria=self.criteria,
                 error=str(e),
             )
-            raise ValueError(f"Error evaluating filter criteria '{self.criteria}': {str(e)}") from e
+            raise ValueError(f"Error evaluating filter criteria '{self.criteria}': {e!s}") from e
 
 
 class EmbeddingProcessor(ProcessorCore):
@@ -1473,9 +1474,8 @@ class ChromaDBProcessor(ProcessorCore):
                         processed_count=self._processed_count,
                     )
                     return True
-                else:
-                    logger.warning("Could not determine local cache path for final sync")
-                    return False
+                logger.warning("Could not determine local cache path for final sync")
+                return False
             except Exception as e:
                 logger.error(
                     "Failed final sync to remote storage",
@@ -1500,6 +1500,5 @@ class ChromaDBProcessor(ProcessorCore):
 
         if local_cache_path.exists():
             return local_cache_path
-        else:
-            logger.warning("Local cache path does not exist", cache_path=str(local_cache_path))
-            return None
+        logger.warning("Local cache path does not exist", cache_path=str(local_cache_path))
+        return None

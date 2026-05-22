@@ -227,9 +227,9 @@ class CompositeFilter(RecordFilter):
                 if not await filter.should_include(record):
                     return False
             return True
-        else:  # mode == "or"
-            # At least one filter must pass
-            for filter in self.filters:
-                if await filter.should_include(record):
-                    return True
-            return False
+        # mode == "or"
+        # At least one filter must pass
+        for filter in self.filters:
+            if await filter.should_include(record):
+                return True
+        return False

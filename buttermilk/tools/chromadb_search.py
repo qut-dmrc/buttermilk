@@ -5,7 +5,7 @@ It can be configured with any ChromaDB instance and used by any agent.
 """
 
 import asyncio
-from typing import Any, Optional
+from typing import Any
 
 from autogen_core.tools import FunctionTool
 from pydantic import BaseModel, ConfigDict, Field
@@ -21,9 +21,9 @@ class SearchResult(BaseModel):
     id: str = Field(..., description="Unique ID of the retrieved chunk")
     content: str = Field(..., description="The actual text content")
     document_id: str = Field(..., description="ID of the parent document")
-    document_title: Optional[str] = Field(None, description="Title of the parent document")
+    document_title: str | None = Field(None, description="Title of the parent document")
     metadata: dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
-    score: Optional[float] = Field(None, description="Similarity score")
+    score: float | None = Field(None, description="Similarity score")
 
 
 class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):

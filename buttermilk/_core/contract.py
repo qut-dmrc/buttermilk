@@ -667,16 +667,15 @@ class ExecutionTrace(BaseModel):
         if self.outputs and hasattr(self.outputs, "as_markdown"):
             # Pass agent context to the output's as_markdown method
             return self.outputs.as_markdown(agent_id, self.call_id)
-        elif self.outputs:
+        if self.outputs:
             # Fallback: create simple formatted output
             short_call_id = self.call_id[-8:] if len(self.call_id) > 8 else self.call_id
             header = f"**{agent_id} #{short_call_id}**\n"
-            return f"{header}{str(self.outputs)}"
-        else:
-            # No outputs, return error or empty message
-            if self.error:
-                return f"**{agent_id}**\nERROR: {self.error}"
-            return f"**{agent_id}**\n(No output)"
+            return f"{header}{self.outputs!s}"
+        # No outputs, return error or empty message
+        if self.error:
+            return f"**{agent_id}**\nERROR: {self.error}"
+        return f"**{agent_id}**\n(No output)"
 
     def __str__(self) -> str:
         """Returns the `content` (string representation of `outputs`) of the agent trace."""

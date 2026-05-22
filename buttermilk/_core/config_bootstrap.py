@@ -55,7 +55,7 @@ def register_library_configs_in_store(library_config_dir: Path) -> None:
 
         try:
             # Load YAML config
-            with open(config_file, "r") as f:
+            with open(config_file) as f:
                 config_dict = yaml.safe_load(f)
 
             # Skip configs with defaults lists - these are main configs meant to be
