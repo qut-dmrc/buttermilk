@@ -448,7 +448,7 @@ class PipelineOrchestrator(BaseModel):
                                 )
                                 self._summary.increment_variant_errors()
                                 local_variant_errors += 1
-                                
+
                                 if hasattr(current_record, "metadata") and hasattr(current_record, "model_copy"):
                                     updated_metadata = current_record.metadata.copy() if current_record.metadata else {}
                                     updated_metadata[self.pipeline_name] = {
@@ -462,7 +462,7 @@ class PipelineOrchestrator(BaseModel):
                                     failed_queue.append(failed_record)
                                 else:
                                     failed_queue.append(current_record)
-                                    
+
                                 continue
 
                             if not outputs:
@@ -581,7 +581,7 @@ class PipelineOrchestrator(BaseModel):
                 # Yield any accumulated failed records before bubbling up the error
                 for failed_record in failed_queue:
                     yield failed_record
-                    
+
                 chain_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                 # Let exception bubble up - task wrapper will handle error logging
                 raise

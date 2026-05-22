@@ -1051,6 +1051,6 @@ async def test_continue_on_error_noop_single_record():
     # Single record fails → source record failed, but failed record is yielded
     assert len(results) == 1
     assert orchestrator._summary.failed == 1
-    
+
     failed_records = [r for r in results if r.metadata and r.metadata.get("test_noop", {}).get("status") == "failed"]
     assert len(failed_records) == 1
