@@ -215,7 +215,6 @@ failed_upsert_batches
 *.bak
 data/sessions
 .playwright-mcp/*png
-uv.lock
 test_health_data.json
 
 # messed up cloud storage reference

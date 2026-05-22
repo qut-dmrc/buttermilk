@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+title: "buttermilk: opinionated AI/data tools for HASS scholars"
+message: "If you use buttermilk in academic work, please cite it as below."
+type: software
+authors:
+  - given-names: Nicolas
+    family-names: Suzor
+    email: n.suzor@qut.edu.au
+    affiliation: "Queensland University of Technology, Digital Media Research Centre"
+repository-code: "https://github.com/qut-dmrc/buttermilk"
+url: "https://github.com/qut-dmrc/buttermilk"
+abstract: >-
+  Buttermilk is a Python framework that helps humanities and social
+  sciences (HASS) scholars use generative AI, machine learning, and
+  computational methods in a way that is understandable, traceable,
+  and reproducible. It provides opinionated flows, agents, pipelines,
+  and observability infrastructure for culture-first computational
+  research.
+keywords:
+  - research
+  - humanities
+  - HASS
+  - artificial-intelligence
+  - large-language-models
+  - reproducibility
+  - computational-social-science
+license: GPL-3.0-or-later
+version: 0.0.27
