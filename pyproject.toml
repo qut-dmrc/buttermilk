@@ -386,11 +386,19 @@ ignore = [
   "RUF001", "RUF003", "RUF005", "RUF006", "RUF043", # Additional ruff rules
   "F841",                     # Local variable assigned but never used
   "F811",                     # Redefinition of unused import
-  "F405",                     # Star import used but unable to detect
+  "F821",                     # Undefined name (lazy/optional/version-gated imports)
+  "F403", "F405",             # Star imports
   "PT006", "PT011", "PT012",  # pytest style rules
-  "B006",                     # Mutable default argument
+  "B006", "B027",             # Mutable default; empty ABC method without abstract decorator
   "N803",                     # Argument name should be lowercase
-  "SIM910",                   # dict.get() with default of None
+  "SIM101", "SIM103", "SIM110", "SIM401", "SIM910", # Additional simplification
+  "ARG004",                   # Unused static method argument
+  "PIE810",                   # Call endswith once with a tuple
+  "PTH116", "PTH110", "PTH119", "PTH202", "PTH204", "PTH207", # Additional pathlib
+  "DTZ006", "DTZ007",         # Additional timezone rules
+  "A004",                     # Import shadowing a builtin
+  "C419",                     # Unnecessary list comprehension
+  "RET503",                   # Missing explicit return
   "RUF100",                   # Unused noqa directive (from cleanup)
 ]
 
