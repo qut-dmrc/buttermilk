@@ -37,30 +37,31 @@ class BMAccessor:
     @property
     def __class__(self):
         """Make isinstance(bm, BM) work correctly."""
-        from ._core.bm_init import BM
+        from ._core.bm_init import BM  # noqa: PLC0415
 
         return BM
 
     def __class_getitem__(cls, item):
         """Support type hints like bm: BM."""
-        from ._core.bm_init import BM
+        from ._core.bm_init import BM  # noqa: PLC0415
 
         return BM
 
     def __getattr__(self, name):  # -> Any:
-        from ._core.dmrc import get_bm
+        from ._core.dmrc import get_bm  # noqa: PLC0415
 
         return getattr(get_bm(), name)
 
     def __get__(self, obj, objtype=None) -> "BM":
-        from ._core.dmrc import get_bm
+        from ._core.dmrc import get_bm  # noqa: PLC0415
 
         if get_bm() is None:
-            raise RuntimeError("BM singleton not initialized. Make sure CLI has been run.")
+            msg = "BM singleton not initialized. Make sure CLI has been run."
+            raise RuntimeError(msg)
         return get_bm()
 
     def __set__(self, obj, value: "BM") -> None:
-        from ._core.dmrc import set_bm
+        from ._core.dmrc import set_bm  # noqa: PLC0415
 
         set_bm(value)
 
@@ -76,18 +77,19 @@ def __getattr__(name):
     without causing circular dependencies during module initialization.
     """
     if name == "BM":
-        from ._core.bm_init import BM
+        from ._core.bm_init import BM  # noqa: PLC0415
 
         return BM
     if name == "bm":
         return BMAccessor()
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    msg = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(msg)
 
 
-from ._core.bm_init import create_session_bm_async
-from ._core.config import AgentConfig, AgentVariants
-from ._core.config_bootstrap import init, init_async
-from ._core.contract import (
+from ._core.bm_init import create_session_bm_async  # noqa: E402
+from ._core.config import AgentConfig, AgentVariants  # noqa: E402
+from ._core.config_bootstrap import init, init_async  # noqa: E402
+from ._core.contract import (  # noqa: E402
     AgentInput,
     AllMessages,
     ConductorRequest,
@@ -102,16 +104,16 @@ from ._core.contract import (
     ToolOutput,
     UserResponseMessage,
 )
-from ._core.exceptions import FatalError, ProcessingError
-from ._core.execution_context import (
+from ._core.exceptions import FatalError, ProcessingError  # noqa: E402
+from ._core.execution_context import (  # noqa: E402
     ExecutionContext,
     create_execution_context,
     get_or_create_execution_context,
 )
-from ._core.llm_core import LLMCore
+from ._core.llm_core import LLMCore  # noqa: E402
 
 # MCP server utilities - import these FIRST in MCP servers
-from .utils.suppress_stdout import (
+from .utils.suppress_stdout import (  # noqa: E402
     configure_for_mcp,
     redirect_stdout_to_stderr,
     stdout_redirected_to_stderr,
