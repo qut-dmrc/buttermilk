@@ -30,7 +30,7 @@ class TestChromaDBSyncFix:
     def test_manual_sync_method_exists(self):
         """Test that manual sync method was added."""
         assert hasattr(ChromaDBEmbeddings, "sync_to_remote")
-        assert callable(getattr(ChromaDBEmbeddings, "sync_to_remote"))
+        assert callable(ChromaDBEmbeddings.sync_to_remote)
 
     def test_ensure_cache_saves_original_path(self):
         """Test that ensure_cache_initialized saves original remote path."""

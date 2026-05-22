@@ -16,7 +16,8 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import TYPE_CHECKING, Any, AsyncGenerator, Optional, Self
+from collections.abc import AsyncGenerator
+from typing import TYPE_CHECKING, Any, Self
 
 import pydantic
 from autogen_core import CancellationToken
@@ -142,9 +143,9 @@ class LLMCore(ObservabilityMixin):
         record: Any = BaseRecord,
         *,
         processor_stage: str,
-        parent_trace_id: Optional[str] = None,
+        parent_trace_id: str | None = None,
         component_name: str = "LLMCore",
-        cancellation_token: Optional[CancellationToken] = None,
+        cancellation_token: CancellationToken | None = None,
         **kwargs: Any,
     ) -> AsyncGenerator[BaseRecord, None]:
         """Unified LLM processing method for Pipeline operations.
@@ -282,8 +283,8 @@ class LLMCore(ObservabilityMixin):
     def _normalize_inputs(
         self,
         template_vars: dict[str, Any] | None,
-        record: Optional[BaseRecord],
-        context: Optional[list[LLMMessage]],
+        record: BaseRecord | None,
+        context: list[LLMMessage] | None,
         _template_vars_derived_from_record: bool,
     ) -> tuple[dict[str, Any], list[LLMMessage]]:
         """Normalize template_vars and context, returning (template_vars, context)."""
@@ -309,7 +310,7 @@ class LLMCore(ObservabilityMixin):
         self,
         template_vars: dict[str, Any],
         context: list[LLMMessage],
-        record: Optional[BaseRecord],
+        record: BaseRecord | None,
         _template_vars_derived_from_record: bool,
     ) -> dict[str, Any]:
         """Build resolved inputs dict for traceability."""
@@ -325,7 +326,7 @@ class LLMCore(ObservabilityMixin):
             "context": context,
         }
 
-    def _collect_result_metadata(self, result: LLMResult, llm_result: Any, record: Optional[BaseRecord]) -> None:
+    def _collect_result_metadata(self, result: LLMResult, llm_result: Any, record: BaseRecord | None) -> None:
         """Populate result with template metadata, hashes, and LLM response metadata."""
         from buttermilk._core.llms import ModelOutput
 
@@ -396,10 +397,10 @@ class LLMCore(ObservabilityMixin):
         self,
         template_vars: dict[str, Any] | None = None,
         *,
-        record: Optional[BaseRecord] = None,
-        context: Optional[list[LLMMessage]] = None,
-        parent_trace_id: Optional[str] = None,
-        cancellation_token: Optional[CancellationToken] = None,
+        record: BaseRecord | None = None,
+        context: list[LLMMessage] | None = None,
+        parent_trace_id: str | None = None,
+        cancellation_token: CancellationToken | None = None,
         _template_vars_derived_from_record: bool = False,
     ) -> LLMResult:
         """Process through template rendering and LLM calling.
@@ -553,8 +554,8 @@ class LLMCore(ObservabilityMixin):
     async def _call_llm_with_trace(
         self,
         messages: list[LLMMessage],
-        cancellation_token: Optional[CancellationToken],
-        parent_trace_id: Optional[str],
+        cancellation_token: CancellationToken | None,
+        parent_trace_id: str | None,
     ) -> CreateResult | ModelOutput:
         """Call the LLM with lightweight tracing.
 

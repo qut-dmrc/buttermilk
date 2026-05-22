@@ -160,7 +160,7 @@ def convert_enum_values_to_strings(obj: Any) -> Any:
                 new_obj["type"] = "string"
 
         return new_obj
-    elif isinstance(obj, list):
+    if isinstance(obj, list):
         return [convert_enum_values_to_strings(item) for item in obj]
     return obj
 

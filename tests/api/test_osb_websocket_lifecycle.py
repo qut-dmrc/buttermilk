@@ -94,51 +94,48 @@ class TestOSBWebSocketConnection:
         session_id = "test-osb-session-001"
 
         # Use TestClient for WebSocket testing
-        with TestClient(test_app) as client:
-            with client.websocket_connect(f"/ws/{session_id}") as websocket:
-                # Connection should be established successfully
-                assert websocket is not None
+        with TestClient(test_app) as client, client.websocket_connect(f"/ws/{session_id}") as websocket:
+            # Connection should be established successfully
+            assert websocket is not None
 
-                # Send a test message
-                test_message = {"type": "test", "content": "connection test"}
-                websocket.send_json(test_message)
+            # Send a test message
+            test_message = {"type": "test", "content": "connection test"}
+            websocket.send_json(test_message)
 
-                # Connection should remain stable
-                assert True  # If we get here, connection was stable
+            # Connection should remain stable
+            assert True  # If we get here, connection was stable
 
     @pytest.mark.anyio
     async def test_osb_session_initialization(self, test_app, real_flow_runner):
         """Test OSB session initialization via WebSocket."""
         session_id = "test-osb-init-session"
 
-        with TestClient(test_app) as client:
-            with client.websocket_connect(f"/ws/{session_id}"):
-                # Verify session was created - check most recent call
-                assert real_flow_runner.get_websocket_session_async.called
-                call_args = real_flow_runner.get_websocket_session_async.call_args
-                assert call_args[1]["session_id"] == session_id
-                assert call_args[1]["websocket"] is not None
+        with TestClient(test_app) as client, client.websocket_connect(f"/ws/{session_id}"):
+            # Verify session was created - check most recent call
+            assert real_flow_runner.get_websocket_session_async.called
+            call_args = real_flow_runner.get_websocket_session_async.call_args
+            assert call_args[1]["session_id"] == session_id
+            assert call_args[1]["websocket"] is not None
 
     @pytest.mark.anyio
     async def test_websocket_osb_message_routing(self, test_app):
         """Test OSB message routing through WebSocket."""
         session_id = "test-osb-routing-session"
 
-        with TestClient(test_app) as client:
-            with client.websocket_connect(f"/ws/{session_id}") as websocket:
-                # Send OSB query message
-                osb_query = {
-                    "type": "run_flow",
-                    "flow": "osb",
-                    "query": "What are the policy implications of this content?",
-                    "case_number": "OSB-2025-001",
-                    "case_priority": "high",
-                }
+        with TestClient(test_app) as client, client.websocket_connect(f"/ws/{session_id}") as websocket:
+            # Send OSB query message
+            osb_query = {
+                "type": "run_flow",
+                "flow": "osb",
+                "query": "What are the policy implications of this content?",
+                "case_number": "OSB-2025-001",
+                "case_priority": "high",
+            }
 
-                websocket.send_json(osb_query)
+            websocket.send_json(osb_query)
 
-                # Should not raise exceptions - message routing works
-                assert True
+            # Should not raise exceptions - message routing works
+            assert True
 
     @pytest.mark.anyio
     async def test_websocket_connection_state_management(self, test_app):
@@ -166,26 +163,25 @@ class TestOSBWebSocketConnection:
         """Test WebSocket message validation for OSB flows."""
         session_id = "test-validation-session"
 
-        with TestClient(test_app) as client:
-            with client.websocket_connect(f"/ws/{session_id}") as websocket:
-                # Test valid OSB message
-                valid_message = {
-                    "type": "run_flow",
-                    "flow": "osb",
-                    "query": "Valid OSB query",
-                }
-                websocket.send_json(valid_message)
+        with TestClient(test_app) as client, client.websocket_connect(f"/ws/{session_id}") as websocket:
+            # Test valid OSB message
+            valid_message = {
+                "type": "run_flow",
+                "flow": "osb",
+                "query": "Valid OSB query",
+            }
+            websocket.send_json(valid_message)
 
-                # Test invalid message structure
-                invalid_message = {
-                    "type": "run_flow",
-                    "flow": "osb",
-                    # Missing required query field
-                }
-                websocket.send_json(invalid_message)
+            # Test invalid message structure
+            invalid_message = {
+                "type": "run_flow",
+                "flow": "osb",
+                # Missing required query field
+            }
+            websocket.send_json(invalid_message)
 
-                # Both should be processed without connection issues
-                assert True
+            # Both should be processed without connection issues
+            assert True
 
 
 class TestOSBWebSocketSessionIsolation:
@@ -292,65 +288,62 @@ class TestOSBWebSocketErrorHandling:
         """Test WebSocket handling of malformed messages."""
         session_id = "osb-error-handling-session"
 
-        with TestClient(test_app) as client:
-            with client.websocket_connect(f"/ws/{session_id}") as websocket:
-                # Send malformed JSON
-                try:
-                    websocket.send_text("invalid json {")
-                    # Connection should remain stable despite malformed message
-                    assert True
-                except Exception:
-                    # Some test clients may reject malformed JSON at send level
-                    pass
+        with TestClient(test_app) as client, client.websocket_connect(f"/ws/{session_id}") as websocket:
+            # Send malformed JSON
+            try:
+                websocket.send_text("invalid json {")
+                # Connection should remain stable despite malformed message
+                assert True
+            except Exception:
+                # Some test clients may reject malformed JSON at send level
+                pass
 
-                # Send valid message after error to test recovery
-                valid_message = {
-                    "type": "run_flow",
-                    "flow": "osb",
-                    "query": "Recovery test query",
-                }
-                websocket.send_json(valid_message)
+            # Send valid message after error to test recovery
+            valid_message = {
+                "type": "run_flow",
+                "flow": "osb",
+                "query": "Recovery test query",
+            }
+            websocket.send_json(valid_message)
 
     @pytest.mark.anyio
     async def test_websocket_large_message_handling(self, test_app):
         """Test WebSocket handling of large OSB messages."""
         session_id = "osb-large-message-session"
 
-        with TestClient(test_app) as client:
-            with client.websocket_connect(f"/ws/{session_id}") as websocket:
-                # Send large query (within OSB limits)
-                large_query = "x" * 1500  # Within 2000 char limit
-                large_message = {
-                    "type": "run_flow",
-                    "flow": "osb",
-                    "query": large_query,
-                    "case_number": "OSB-LARGE-MSG-001",
-                }
+        with TestClient(test_app) as client, client.websocket_connect(f"/ws/{session_id}") as websocket:
+            # Send large query (within OSB limits)
+            large_query = "x" * 1500  # Within 2000 char limit
+            large_message = {
+                "type": "run_flow",
+                "flow": "osb",
+                "query": large_query,
+                "case_number": "OSB-LARGE-MSG-001",
+            }
 
-                websocket.send_json(large_message)
+            websocket.send_json(large_message)
 
-                # Should handle large message without issues
-                assert True
+            # Should handle large message without issues
+            assert True
 
     @pytest.mark.anyio
     async def test_websocket_rapid_message_sending(self, test_app):
         """Test WebSocket handling of rapid message sequences."""
         session_id = "osb-rapid-message-session"
 
-        with TestClient(test_app) as client:
-            with client.websocket_connect(f"/ws/{session_id}") as websocket:
-                # Send multiple messages rapidly
-                for i in range(5):
-                    rapid_message = {
-                        "type": "run_flow",
-                        "flow": "osb",
-                        "query": f"Rapid query {i + 1}",
-                        "case_number": f"OSB-RAPID-{i + 1:03d}",
-                    }
-                    websocket.send_json(rapid_message)
+        with TestClient(test_app) as client, client.websocket_connect(f"/ws/{session_id}") as websocket:
+            # Send multiple messages rapidly
+            for i in range(5):
+                rapid_message = {
+                    "type": "run_flow",
+                    "flow": "osb",
+                    "query": f"Rapid query {i + 1}",
+                    "case_number": f"OSB-RAPID-{i + 1:03d}",
+                }
+                websocket.send_json(rapid_message)
 
-                # Connection should remain stable under rapid messaging
-                assert True
+            # Connection should remain stable under rapid messaging
+            assert True
 
     @pytest.mark.anyio
     async def test_websocket_session_not_found_handling(self, test_app, real_flow_runner):
@@ -407,24 +400,23 @@ class TestOSBWebSocketPerformance:
         session_id = "osb-throughput-session"
         message_count = 10
 
-        with TestClient(test_app) as client:
-            with client.websocket_connect(f"/ws/{session_id}") as websocket:
-                start_time = time.time()
+        with TestClient(test_app) as client, client.websocket_connect(f"/ws/{session_id}") as websocket:
+            start_time = time.time()
 
-                for i in range(message_count):
-                    message = {
-                        "type": "run_flow",
-                        "flow": "osb",
-                        "query": f"Throughput test message {i + 1}",
-                        "case_number": f"OSB-THRU-{i + 1:03d}",
-                    }
-                    websocket.send_json(message)
+            for i in range(message_count):
+                message = {
+                    "type": "run_flow",
+                    "flow": "osb",
+                    "query": f"Throughput test message {i + 1}",
+                    "case_number": f"OSB-THRU-{i + 1:03d}",
+                }
+                websocket.send_json(message)
 
-                total_time = time.time() - start_time
+            total_time = time.time() - start_time
 
-                # Basic throughput validation
-                messages_per_second = message_count / total_time
-                assert messages_per_second > 50  # Should handle >50 messages/second
+            # Basic throughput validation
+            messages_per_second = message_count / total_time
+            assert messages_per_second > 50  # Should handle >50 messages/second
 
     @pytest.mark.anyio
     async def test_websocket_concurrent_connection_limits(self, test_app):
@@ -470,50 +462,48 @@ class TestOSBWebSocketMessageFlow:
         """Test complete OSB query message flow."""
         session_id = "osb-message-flow-session"
 
-        with TestClient(test_app) as client:
-            with client.websocket_connect(f"/ws/{session_id}") as websocket:
-                # Send complete OSB query
-                osb_query = {
-                    "type": "run_flow",
-                    "flow": "osb",
-                    "query": "Comprehensive policy analysis request",
-                    "case_number": "OSB-2025-FLOW-001",
-                    "case_priority": "high",
-                    "content_type": "social_media_post",
-                    "platform": "twitter",
-                    "enable_multi_agent_synthesis": True,
-                    "enable_cross_validation": True,
-                    "enable_precedent_analysis": True,
-                }
+        with TestClient(test_app) as client, client.websocket_connect(f"/ws/{session_id}") as websocket:
+            # Send complete OSB query
+            osb_query = {
+                "type": "run_flow",
+                "flow": "osb",
+                "query": "Comprehensive policy analysis request",
+                "case_number": "OSB-2025-FLOW-001",
+                "case_priority": "high",
+                "content_type": "social_media_post",
+                "platform": "twitter",
+                "enable_multi_agent_synthesis": True,
+                "enable_cross_validation": True,
+                "enable_precedent_analysis": True,
+            }
 
-                websocket.send_json(osb_query)
+            websocket.send_json(osb_query)
 
-                # Verify session was created for the message flow
-                assert real_flow_runner.get_websocket_session_async.called
+            # Verify session was created for the message flow
+            assert real_flow_runner.get_websocket_session_async.called
 
     @pytest.mark.anyio
     async def test_osb_status_message_flow(self, test_app):
         """Test OSB status message flow patterns."""
         session_id = "osb-status-flow-session"
 
-        with TestClient(test_app) as client:
-            with client.websocket_connect(f"/ws/{session_id}") as websocket:
-                # Send OSB query to trigger status flow
-                osb_query = {
-                    "type": "run_flow",
-                    "flow": "osb",
-                    "query": "Status flow test query",
-                }
+        with TestClient(test_app) as client, client.websocket_connect(f"/ws/{session_id}") as websocket:
+            # Send OSB query to trigger status flow
+            osb_query = {
+                "type": "run_flow",
+                "flow": "osb",
+                "query": "Status flow test query",
+            }
 
-                websocket.send_json(osb_query)
+            websocket.send_json(osb_query)
 
-                # In real implementation, we would expect to receive:
-                # - osb_status messages with processing updates
-                # - osb_partial messages with agent responses
-                # - osb_complete message with final results
+            # In real implementation, we would expect to receive:
+            # - osb_status messages with processing updates
+            # - osb_partial messages with agent responses
+            # - osb_complete message with final results
 
-                # For now, just verify message was sent successfully
-                assert True
+            # For now, just verify message was sent successfully
+            assert True
 
     @pytest.mark.anyio
     async def test_osb_error_message_flow(self, test_app, real_flow_runner):
@@ -523,19 +513,18 @@ class TestOSBWebSocketMessageFlow:
         # Mock flow execution to raise error
         real_flow_runner.run_flow.side_effect = Exception("Test OSB error")
 
-        with TestClient(test_app) as client:
-            with client.websocket_connect(f"/ws/{session_id}") as websocket:
-                # Send OSB query that will trigger error
-                osb_query = {
-                    "type": "run_flow",
-                    "flow": "osb",
-                    "query": "Error test query",
-                }
+        with TestClient(test_app) as client, client.websocket_connect(f"/ws/{session_id}") as websocket:
+            # Send OSB query that will trigger error
+            osb_query = {
+                "type": "run_flow",
+                "flow": "osb",
+                "query": "Error test query",
+            }
 
-                websocket.send_json(osb_query)
+            websocket.send_json(osb_query)
 
-                # Error should be handled gracefully without breaking connection
-                assert True
+            # Error should be handled gracefully without breaking connection
+            assert True
 
 
 @pytest.mark.anyio
@@ -543,21 +532,20 @@ async def test_websocket_integration_with_flow_runner(test_app, real_flow_runner
     """Integration test for WebSocket and FlowRunner interaction."""
     session_id = "osb-integration-session"
 
-    with TestClient(test_app) as client:
-        with client.websocket_connect(f"/ws/{session_id}") as websocket:
-            # Verify session creation integration
-            assert real_flow_runner.get_websocket_session_async.called
+    with TestClient(test_app) as client, client.websocket_connect(f"/ws/{session_id}") as websocket:
+        # Verify session creation integration
+        assert real_flow_runner.get_websocket_session_async.called
 
-            # Send OSB flow request
-            osb_request = {
-                "type": "run_flow",
-                "flow": "osb",
-                "query": "Integration test query",
-                "case_number": "OSB-INTEGRATION-001",
-            }
+        # Send OSB flow request
+        osb_request = {
+            "type": "run_flow",
+            "flow": "osb",
+            "query": "Integration test query",
+            "case_number": "OSB-INTEGRATION-001",
+        }
 
-            websocket.send_json(osb_request)
+        websocket.send_json(osb_request)
 
-            # Verify session was created for the integration test
-            call_args = real_flow_runner.get_websocket_session_async.call_args
-            assert call_args[1]["session_id"] == session_id
+        # Verify session was created for the integration test
+        call_args = real_flow_runner.get_websocket_session_async.call_args
+        assert call_args[1]["session_id"] == session_id

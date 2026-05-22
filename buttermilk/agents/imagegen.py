@@ -26,7 +26,7 @@ from collections.abc import (
 from io import BytesIO  # For handling image data in memory
 from pathlib import Path  # For local path manipulation
 from tempfile import mkdtemp
-from typing import Any, Literal, Type  # For type hinting
+from typing import Any, Literal  # For type hinting
 
 import aiohttp  # Asynchronous HTTP client (used by SD3, SDXLReplicate, SD)
 import httpx  # Asynchronous HTTP client (used by SD35Large, DALLE, FLUX)
@@ -580,17 +580,19 @@ class SD3(TextToImageClient):
                 form.add_field(key, str(value))  # Ensure value is string for form data
 
         timeout = aiohttp.ClientTimeout(total=600.0)  # Increased timeout
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.post(
+        async with (
+            aiohttp.ClientSession(timeout=timeout) as session,
+            session.post(
                 "https://api.stability.ai/v2beta/stable-image/generate/sd3",
                 headers={
                     "authorization": f"Bearer {stability_api_key}",
                     "accept": "image/*",  # Accepts any image format
                 },
                 data=form,
-            ) as response:
-                response.raise_for_status()  # Raise HTTPError for bad responses
-                image_data = await response.read()
+            ) as response,
+        ):
+            response.raise_for_status()  # Raise HTTPError for bad responses
+            image_data = await response.read()
 
         pil_image = Image.open(BytesIO(image_data))
 
@@ -802,10 +804,9 @@ class SDXLReplicate(TextToImageClient):
 
         # Fetch the image from the URL
         timeout = aiohttp.ClientTimeout(total=300.0)  # Timeout for fetching image
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(output_image_url) as image_response:
-                image_response.raise_for_status()  # Ensure download was successful
-                image_data = await image_response.read()
+        async with aiohttp.ClientSession(timeout=timeout) as session, session.get(output_image_url) as image_response:
+            image_response.raise_for_status()  # Ensure download was successful
+            image_data = await image_response.read()
 
         pil_image = Image.open(BytesIO(image_data))
 
@@ -881,10 +882,9 @@ class SD(TextToImageClient):
         output_image_url = replicate_output[0]
 
         timeout = aiohttp.ClientTimeout(total=300.0)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(output_image_url) as image_response:
-                image_response.raise_for_status()
-                image_data = await image_response.read()
+        async with aiohttp.ClientSession(timeout=timeout) as session, session.get(output_image_url) as image_response:
+            image_response.raise_for_status()
+            image_data = await image_response.read()
 
         pil_image = Image.open(BytesIO(image_data))
 
@@ -1039,7 +1039,7 @@ class DALLE(TextToImageClient):
 # EXPENSIVE MODELS: High-quality, high-cost models - use sparingly
 
 # Cheap/Fast Models
-CHEAP_IMAGE_CLIENTS: list[Type[TextToImageClient]] = [
+CHEAP_IMAGE_CLIENTS: list[type[TextToImageClient]] = [
     VertexImagen3Fast,  # Imagen 3.0 Fast (GCP Vertex AI)
     VertexImagen4Fast,  # Imagen 4.0 Fast (GCP Vertex AI)
     SD35Large,  # Stable Diffusion 3.5 Large (Azure)
@@ -1047,7 +1047,7 @@ CHEAP_IMAGE_CLIENTS: list[Type[TextToImageClient]] = [
 ]
 
 # Expensive/High-Quality Models
-EXPENSIVE_IMAGE_CLIENTS: list[Type[TextToImageClient]] = [
+EXPENSIVE_IMAGE_CLIENTS: list[type[TextToImageClient]] = [
     VertexImagen3,  # Imagen 3.0 Standard (GCP Vertex AI)
     VertexImagen4,  # Imagen 4.0 Standard (GCP Vertex AI)
     VertexImagen4Ultra,  # Imagen 4.0 Ultra (GCP Vertex AI)
@@ -1059,11 +1059,11 @@ EXPENSIVE_IMAGE_CLIENTS: list[Type[TextToImageClient]] = [
 ]
 
 # Complete registry
-ALL_IMAGE_CLIENTS: list[Type[TextToImageClient]] = CHEAP_IMAGE_CLIENTS + EXPENSIVE_IMAGE_CLIENTS
+ALL_IMAGE_CLIENTS: list[type[TextToImageClient]] = CHEAP_IMAGE_CLIENTS + EXPENSIVE_IMAGE_CLIENTS
 
 # Backward compatibility - ImageClients now references the full registry
 # NOTE: Tests and new code should use CHEAP_IMAGE_CLIENTS or ALL_IMAGE_CLIENTS directly
-ImageClients: list[Type[TextToImageClient]] = ALL_IMAGE_CLIENTS
+ImageClients: list[type[TextToImageClient]] = ALL_IMAGE_CLIENTS
 """A list of available `TextToImageClient` classes that can be used by `BatchImageGenerator`.
 This list now references ALL_IMAGE_CLIENTS from the model registry above.
 For cost-aware selection, use CHEAP_IMAGE_CLIENTS or EXPENSIVE_IMAGE_CLIENTS instead.
@@ -1092,7 +1092,7 @@ class BatchImageGenerator(BaseModel):
             concurrent image generation. Corrected type hint for task list.
     """
 
-    generators: Sequence[Type[TextToImageClient]] = Field(  # Type hint for list of classes
+    generators: Sequence[type[TextToImageClient]] = Field(  # Type hint for list of classes
         default_factory=lambda: ImageClients,  # Use factory for mutable default
         description="A sequence of TextToImageClient classes to use for generation.",
     )
@@ -1128,12 +1128,11 @@ class BatchImageGenerator(BaseModel):
                     if isinstance(bm.session_info.save_dir, str) and bm.session_info.save_dir.startswith(("gs://", "s3://", "az://"))
                     else Path(bm.session_info.save_dir)
                 )  # type: ignore
-            else:
-                # Fallback to a temporary directory if bm.session_info.save_dir is also None
-                # This ensures save_path is always set.
-                temp_dir = Path(mkdtemp(prefix="buttermilk_imagegen_batch_"))
-                logger.warning(f"No save_path provided and bm.session_info.save_dir not set. Defaulting to temporary directory: {temp_dir}")
-                return temp_dir
+            # Fallback to a temporary directory if bm.session_info.save_dir is also None
+            # This ensures save_path is always set.
+            temp_dir = Path(mkdtemp(prefix="buttermilk_imagegen_batch_"))
+            logger.warning(f"No save_path provided and bm.session_info.save_dir not set. Defaulting to temporary directory: {temp_dir}")
+            return temp_dir
         if isinstance(v, str):
             return CloudPath(v) if v.startswith(("gs://", "s3://", "az://")) else Path(v)
         if isinstance(v, (CloudPath, Path)):

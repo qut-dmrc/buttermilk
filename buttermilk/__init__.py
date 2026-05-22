@@ -12,8 +12,6 @@ else:
     class BM:
         """Placeholder for BM type - actual class is in _core.bm_init"""
 
-        pass
-
 
 from ._core.constants import (
     _LOGGER_NAME,

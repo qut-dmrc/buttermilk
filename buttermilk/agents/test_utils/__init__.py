@@ -9,9 +9,9 @@ from .flow_test_client import (
 )
 
 __all__ = [
-    "FlowTestClient",
-    "MessageType",
     "CollectedMessage",
-    "MessageCollector",
     "FlowEventWaiter",
+    "FlowTestClient",
+    "MessageCollector",
+    "MessageType",
 ]

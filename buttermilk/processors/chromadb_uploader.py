@@ -6,8 +6,9 @@ separated from the embedding generation logic.
 
 import asyncio
 import time
+from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import Any, AsyncGenerator
+from typing import Any
 
 import chromadb
 import pydantic
@@ -356,9 +357,8 @@ class ChromaDBUploader(BaseModel):
                         processed_count=self._processed_count,
                     )
                     return True
-                else:
-                    logger.warning("Could not determine local cache path for final sync")
-                    return False
+                logger.warning("Could not determine local cache path for final sync")
+                return False
             except Exception as e:
                 logger.error(
                     "Failed final sync to remote storage",
@@ -379,6 +379,5 @@ class ChromaDBUploader(BaseModel):
 
         if local_cache_path.exists():
             return local_cache_path
-        else:
-            logger.warning("Local cache path does not exist", cache_path=str(local_cache_path))
-            return None
+        logger.warning("Local cache path does not exist", cache_path=str(local_cache_path))
+        return None

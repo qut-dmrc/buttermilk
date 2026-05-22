@@ -164,7 +164,7 @@ def _coerce_value(schema: dict[str, Any], value: Any) -> Any:
     if schema_type == "string":
         return str(value) if value is not None else None
 
-    elif schema_type == "integer":
+    if schema_type == "integer":
         if isinstance(value, str):
             try:
                 # Try converting to float first, then to int (handles "123.45")
@@ -278,29 +278,29 @@ def generate_example_from_schema(schema: dict[str, Any]) -> Any:
     if schema_type == "string":
         if "enum" in schema:
             return schema["enum"][0]
-        elif "pattern" in schema:
+        if "pattern" in schema:
             return f"string matching {schema['pattern']}"
         return "example string"
 
-    elif schema_type == "integer":
+    if schema_type == "integer":
         if "minimum" in schema:
             return schema["minimum"]
         return 42
 
-    elif schema_type == "number":
+    if schema_type == "number":
         if "minimum" in schema:
             return float(schema["minimum"])
         return 3.14
 
-    elif schema_type == "boolean":
+    if schema_type == "boolean":
         return True
 
-    elif schema_type == "array":
+    if schema_type == "array":
         items_schema = schema.get("items", {"type": "string"})
         min_items = schema.get("minItems", 1)
         return [generate_example_from_schema(items_schema) for _ in range(min_items)]
 
-    elif schema_type == "object":
+    if schema_type == "object":
         example = {}
         properties = schema.get("properties", {})
         required = schema.get("required", [])
@@ -317,7 +317,7 @@ def generate_example_from_schema(schema: dict[str, Any]) -> Any:
 
         return example
 
-    elif schema_type == "null":
+    if schema_type == "null":
         return None
 
     # Handle anyOf by using first option

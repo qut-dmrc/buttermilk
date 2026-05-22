@@ -166,9 +166,8 @@ def run_multiple_tests(num_tests=3):
         print(f"   All times: {[f'{t:.2f}s' for t in times]}")
 
         return stats
-    else:
-        print("❌ No successful runs to analyze")
-        return None
+    print("❌ No successful runs to analyze")
+    return None
 
 
 def compare_with_baseline():
@@ -260,18 +259,18 @@ def main():
             print(f"Single test result: {startup_time:.2f} seconds")
         return 0 if success else 1
 
-    elif mode == "multiple":
+    if mode == "multiple":
         num_tests = int(sys.argv[2]) if len(sys.argv) > 2 else 5
         stats = run_multiple_tests(num_tests)
         return 0 if stats else 1
 
-    elif mode == "endpoints":
+    if mode == "endpoints":
         success = test_specific_endpoints()
         return 0 if success else 1
 
-    else:  # "compare" mode (default)
-        stats = compare_with_baseline()
-        return 0 if stats else 1
+    # "compare" mode (default)
+    stats = compare_with_baseline()
+    return 0 if stats else 1
 
 
 if __name__ == "__main__":

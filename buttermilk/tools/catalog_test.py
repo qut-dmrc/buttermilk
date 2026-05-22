@@ -3,10 +3,11 @@ import calendar
 import datetime
 import json
 import os
+from collections.abc import AsyncGenerator, Iterable
 from dataclasses import asdict, dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, AsyncGenerator, Iterable, Optional
+from typing import Any
 
 import shortuuid
 from autogen_core.tools import FunctionTool
@@ -145,7 +146,7 @@ class FetchProgress:
             return
 
         try:
-            with open(self.progress_file, "r", encoding="utf-8") as f:
+            with open(self.progress_file, encoding="utf-8") as f:
                 data = json.load(f)
                 self.completed_periods = set(data.get("completed_periods", []))
                 self.in_progress_periods = data.get("in_progress_periods", {})
@@ -376,7 +377,7 @@ class TMDBTool:
     # Internal helpers
     # -------------------------
     @staticmethod
-    def _normalize_region(region: Optional[str]) -> str:
+    def _normalize_region(region: str | None) -> str:
         r = (region or "").strip().upper()
         return r if r else "US"
 
@@ -440,7 +441,7 @@ class TMDBTool:
             return "Temporary TMDB throttling encountered; retry budget exceeded"
         return msg
 
-    async def search_movie(self, title: str, year: Optional[int] = None) -> Optional[Title]:
+    async def search_movie(self, title: str, year: int | None = None) -> Title | None:
         """Search for a movie and return Title object with metadata.
 
         Args:
@@ -534,8 +535,8 @@ class TMDBTool:
         self,
         record_id: int,
         *,
-        title: Optional[str] = None,
-        year: Optional[int] = None,
+        title: str | None = None,
+        year: int | None = None,
     ) -> AsyncGenerator[Observation, None]:
         """Get availability observations for a TMDB record_id across all regions.
 
@@ -831,7 +832,7 @@ class TMDBTool:
                 backup_file = progress.get_period_backup_file(period)
                 if backup_file.exists():
                     try:
-                        with open(backup_file, "r", encoding="utf-8") as f:
+                        with open(backup_file, encoding="utf-8") as f:
                             movie_data = json.load(f)
                             return [Title(**movie) for movie in movie_data]
                     except (json.JSONDecodeError, OSError):
@@ -841,7 +842,7 @@ class TMDBTool:
         # Load any partial results from checkpoint
         if checkpoint_file and checkpoint_file.exists():
             try:
-                with open(checkpoint_file, "r", encoding="utf-8") as f:
+                with open(checkpoint_file, encoding="utf-8") as f:
                     checkpoint_data = json.load(f)
                     period_movies = [Title(**movie) for movie in checkpoint_data]
             except (json.JSONDecodeError, OSError):
@@ -951,7 +952,7 @@ class TMDBTool:
                         backup_file = progress.get_period_backup_file(period)
                         if backup_file.exists():
                             try:
-                                with open(backup_file, "r", encoding="utf-8") as f:
+                                with open(backup_file, encoding="utf-8") as f:
                                     movie_data = json.load(f)
                                     return [Title(**movie) for movie in movie_data]
                             except (json.JSONDecodeError, OSError):
@@ -1000,7 +1001,7 @@ class TMDBTool:
         start_year: int = 1900,
         end_year: int = 2025,
         max_concurrent: int = 10,
-        backup_dir: Optional[Path] = None,
+        backup_dir: Path | None = None,
         include_adult: bool = True,
         include_video: bool = False,
         resume: bool = True,
@@ -1063,7 +1064,7 @@ class TMDBTool:
                     backup_file = progress.get_period_backup_file(period)
                     if backup_file.exists():
                         try:
-                            with open(backup_file, "r", encoding="utf-8") as f:
+                            with open(backup_file, encoding="utf-8") as f:
                                 movie_data = json.load(f)
                                 completed_movies = [Title(**movie) for movie in movie_data]
                                 all_movies.extend(completed_movies)

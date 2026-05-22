@@ -188,9 +188,7 @@ class MessageService:
                 message_type = "system_update"
             elif isinstance(message, ErrorEvent):
                 message_type = "system_error"
-            elif isinstance(message, FlowEvent):
-                message_type = "system_update"
-            elif isinstance(message, TaskProcessingComplete) or isinstance(message, TaskProcessingStarted):
+            elif isinstance(message, FlowEvent) or isinstance(message, TaskProcessingComplete) or isinstance(message, TaskProcessingStarted):
                 message_type = "system_update"
             elif isinstance(message, str):
                 # Handle string messages (like StructuredLLMHost summaries) as chat messages

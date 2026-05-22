@@ -26,6 +26,7 @@ __all__ = [
     "find_key_string_pairs",
     "get_ip",
     "get_pdf_text",
+    "init_viz",
     "make_serialisable",
     "read_file",
     "read_json",
@@ -33,7 +34,6 @@ __all__ = [
     "read_yaml",
     "remove_punctuation",
     "scrub_serializable",
-    "init_viz",
 ]
 
 

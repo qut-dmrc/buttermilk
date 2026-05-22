@@ -6,7 +6,8 @@ It can be swapped out for different embedding models or strategies.
 
 import asyncio
 import time
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from typing import Any
 
 import pydantic
 from chromadb import Documents, EmbeddingFunction, Embeddings

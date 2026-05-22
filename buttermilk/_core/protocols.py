@@ -14,7 +14,8 @@ Typed Data Flow:
     adding metadata only to records that support it.
 """
 
-from typing import Any, AsyncGenerator, Protocol, runtime_checkable
+from collections.abc import AsyncGenerator
+from typing import Any, Protocol, runtime_checkable
 
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord

@@ -802,20 +802,19 @@ class BatchJobManager(BaseModel):
                 "claude-haiku": "publishers/anthropic/models/claude-3-5-haiku",
             }
             return claude_map.get(resolved_model, f"publishers/anthropic/models/{resolved_model}")
-        elif resolved_model.startswith("google/"):
+        if resolved_model.startswith("google/"):
             # Gemini models - strip google/ prefix (Batch API expects bare names)
             return resolved_model[len("google/") :]
-        else:
-            # DeepSeek, Llama, and other MaaS models on Vertex use their
-            # model path as-is (e.g., "deepseek-ai/deepseek-v3.2-maas")
-            return resolved_model
+        # DeepSeek, Llama, and other MaaS models on Vertex use their
+        # model path as-is (e.g., "deepseek-ai/deepseek-v3.2-maas")
+        return resolved_model
 
     async def submit_batch(
         self,
         model: str,
         requests: list[BatchRequest],
         client_type: str | None = None,
-    ) -> "BatchJob":
+    ) -> BatchJob:
         """Submit a batch prediction job.
 
         Args:
@@ -878,7 +877,7 @@ class BatchJobManager(BaseModel):
         except Exception as e:
             raise RuntimeError(f"Failed to submit batch job: {e}") from e
 
-    async def wait_for_completion(self, job: "BatchJob") -> "BatchJob":
+    async def wait_for_completion(self, job: BatchJob) -> BatchJob:
         """Wait for a batch job to complete.
 
         Args:
@@ -919,12 +918,11 @@ class BatchJobManager(BaseModel):
                 if job.state == JobState.JOB_STATE_SUCCEEDED:
                     logger.info(f"Batch job {job.name} completed successfully")
                     return job
-                elif job.state == JobState.JOB_STATE_FAILED:
+                if job.state == JobState.JOB_STATE_FAILED:
                     raise RuntimeError(f"Batch job {job.name} failed")
-                elif job.state == JobState.JOB_STATE_CANCELLED:
+                if job.state == JobState.JOB_STATE_CANCELLED:
                     raise RuntimeError(f"Batch job {job.name} was cancelled")
-                else:
-                    raise RuntimeError(f"Batch job {job.name} in unexpected state: {job.state}")
+                raise RuntimeError(f"Batch job {job.name} in unexpected state: {job.state}")
 
         raise TimeoutError(f"Batch job {job.name} did not complete within {self.max_wait_hours} hours")
 
@@ -1278,12 +1276,11 @@ class BatchJobManager(BaseModel):
         if not manifest_path:
             if search:
                 raise FileNotFoundError(f"Manifest not found for job_id: {job_id} (searched all locations)")
-            else:
-                raise FileNotFoundError(
-                    f"Manifest not found for job_id: {job_id}. "
-                    f"Try using --search to search across all sessions, or "
-                    f"--save-dir to specify the original session directory."
-                )
+            raise FileNotFoundError(
+                f"Manifest not found for job_id: {job_id}. "
+                f"Try using --search to search across all sessions, or "
+                f"--save-dir to specify the original session directory."
+            )
 
         content = manifest_path.read_text()
         return BatchJobManifest.model_validate_json(content)
@@ -1494,7 +1491,7 @@ class BatchJobManager(BaseModel):
             logger.info(f"Job {job_id} completed, processing results")
             return self.process_job_results(job_id, search=search)
 
-        elif job.state == JobState.JOB_STATE_FAILED:
+        if job.state == JobState.JOB_STATE_FAILED:
             return {
                 "job_id": job_id,
                 "status": "failed",
@@ -1502,7 +1499,7 @@ class BatchJobManager(BaseModel):
                 "error": "Batch job failed",
             }
 
-        elif job.state == JobState.JOB_STATE_CANCELLED:
+        if job.state == JobState.JOB_STATE_CANCELLED:
             return {
                 "job_id": job_id,
                 "status": "cancelled",
@@ -1510,15 +1507,14 @@ class BatchJobManager(BaseModel):
                 "error": "Batch job was cancelled",
             }
 
-        else:
-            # Job still running
-            return {
-                "job_id": job_id,
-                "status": "running",
-                "state": str(job.state),
-                "vertex_job_name": manifest.vertex_job_name,
-                "request_count": manifest.request_count,
-            }
+        # Job still running
+        return {
+            "job_id": job_id,
+            "status": "running",
+            "state": str(job.state),
+            "vertex_job_name": manifest.vertex_job_name,
+            "request_count": manifest.request_count,
+        }
 
 
 # =============================================================================
@@ -1798,11 +1794,11 @@ class OpenAIBatchJobManager(BaseModel):
                 if batch.status == "completed":
                     logger.info(f"OpenAI batch {openai_batch_id} completed successfully")
                     return batch
-                elif batch.status == "failed":
+                if batch.status == "failed":
                     raise RuntimeError(f"OpenAI batch {openai_batch_id} failed")
-                elif batch.status == "expired":
+                if batch.status == "expired":
                     raise RuntimeError(f"OpenAI batch {openai_batch_id} expired (did not complete within completion window)")
-                elif batch.status == "cancelled":
+                if batch.status == "cancelled":
                     raise RuntimeError(f"OpenAI batch {openai_batch_id} was cancelled")
 
         raise TimeoutError(f"OpenAI batch {openai_batch_id} did not complete within {self.max_wait_hours} hours")

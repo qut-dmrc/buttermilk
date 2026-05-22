@@ -158,8 +158,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         def get_tool_name(tool):
             if hasattr(tool, "name"):
                 return tool.name  # Tool object
-            else:
-                return tool["name"]  # ToolSchema dict
+            return tool["name"]  # ToolSchema dict
 
         tools_list = list({get_tool_name(tool): tool for tool in tools}.values())
 

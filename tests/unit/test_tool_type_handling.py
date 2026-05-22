@@ -126,8 +126,7 @@ class TestToolTypeHandling:
             """Replicate the deduplication logic from structured_llmhost.py."""
             if hasattr(tool, "name"):
                 return tool.name  # Tool object
-            else:
-                return tool["name"]  # ToolSchema dict
+            return tool["name"]  # ToolSchema dict
 
         # Test the logic with mixed tools
         tools = mixed_tools_list

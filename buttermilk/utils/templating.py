@@ -403,15 +403,14 @@ def _parse_prompty(string_template: str) -> str:
 
         return body_content.strip()
 
-    else:
-        # No frontmatter - check entire template for horizontal rules
-        if re.search(horizontal_rule_pattern, string_template, re.MULTILINE):
-            raise ProcessingError(
-                "Template contains ambiguous --- horizontal rule markers in body content. "
-                "These could be confused with Prompty frontmatter delimiters. "
-                "Please remove horizontal rules or use alternative formatting."
-            )
-        return string_template
+    # No frontmatter - check entire template for horizontal rules
+    if re.search(horizontal_rule_pattern, string_template, re.MULTILINE):
+        raise ProcessingError(
+            "Template contains ambiguous --- horizontal rule markers in body content. "
+            "These could be confused with Prompty frontmatter delimiters. "
+            "Please remove horizontal rules or use alternative formatting."
+        )
+    return string_template
 
 
 def load_template(

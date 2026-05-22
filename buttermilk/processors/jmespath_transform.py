@@ -4,7 +4,7 @@ This processor applies JMESPath expressions to BaseRecord objects to extract and
 transform data declaratively without writing custom Python code.
 """
 
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import jmespath
 from jmespath.exceptions import JMESPathError
@@ -116,7 +116,7 @@ class JMESPathTransform(BaseModel):
                     error=str(e),
                     processor_stage=processor_stage,
                 )
-                raise ValueError(f"Error applying JMESPath for field '{field_name}': {str(e)}") from e
+                raise ValueError(f"Error applying JMESPath for field '{field_name}': {e!s}") from e
 
         # Create new record with additional fields
         # BaseRecord has extra="allow" and frozen=True, so we need to reconstruct it

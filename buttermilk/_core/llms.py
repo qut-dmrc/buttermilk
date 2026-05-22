@@ -17,9 +17,9 @@ import json
 import logging
 import random
 import socket
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from enum import Enum
-from typing import Any, Callable
+from typing import Any
 
 import urllib3.exceptions
 
@@ -190,7 +190,7 @@ class ModelParameters(BaseModel):
     stop_sequences: list[str] | None = None
     seed: int | None = None
 
-    def merge_with(self, other: "ModelParameters | dict | None") -> "ModelParameters":
+    def merge_with(self, other: ModelParameters | dict | None) -> ModelParameters:
         """Merge with another ModelParameters instance or dict.
 
         Non-None values from 'other' take precedence over self's values.
@@ -513,8 +513,8 @@ async def _parse_structured_output(  # noqa: PLR0912
     if isinstance(content, str):
         # Local dynamic import to avoid cycles and linter complaints about import location
         _mod = importlib.import_module("buttermilk.utils.json_parser")
-        ChatParser = getattr(_mod, "ChatParser")
-        simple_clean_llm_json_text = getattr(_mod, "simple_clean_llm_json_text")
+        ChatParser = _mod.ChatParser
+        simple_clean_llm_json_text = _mod.simple_clean_llm_json_text
 
         # Try to parse as strict JSON first to preserve types (avoid coercion)
         logger.debug(f"Attempting to parse string response into {schema.__name__}")
@@ -932,7 +932,7 @@ class LiteLLMWrapper(BaseModel):
                         obj["enum"] = [str(v) for v in obj["enum"]]
                     # Recursively process nested objects
                     return {k: convert_enum_values_to_strings(v) for k, v in obj.items()}
-                elif isinstance(obj, list):
+                if isinstance(obj, list):
                     return [convert_enum_values_to_strings(item) for item in obj]
                 return obj
 

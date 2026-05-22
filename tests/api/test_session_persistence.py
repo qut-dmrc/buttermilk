@@ -263,10 +263,9 @@ class TestSessionRestoration:
                         }
                     ]
                 }
-            else:
-                from fastapi import HTTPException
+            from fastapi import HTTPException
 
-                raise HTTPException(status_code=404, detail="Session not found")
+            raise HTTPException(status_code=404, detail="Session not found")
 
         client = TestClient(app)
 

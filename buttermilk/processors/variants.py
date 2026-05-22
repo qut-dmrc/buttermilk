@@ -6,7 +6,8 @@ them in parallel on each input record, yielding results as they complete.
 """
 
 import asyncio
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from typing import Any
 
 from opentelemetry import trace
 from pydantic import Field, PrivateAttr

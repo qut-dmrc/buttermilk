@@ -652,7 +652,7 @@ async def reload_configuration_endpoint(
         return JSONResponse(
             content={
                 "success": False,
-                "errors": [f"Unexpected error: {str(e)}"],
+                "errors": [f"Unexpected error: {e!s}"],
                 "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
             },
             status_code=500,
@@ -698,7 +698,7 @@ async def get_configuration_status_endpoint(
         logger.error(f"Error getting configuration status: {e}", exc_info=True)
         return JSONResponse(
             content={
-                "error": f"Failed to get configuration status: {str(e)}",
+                "error": f"Failed to get configuration status: {e!s}",
                 "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
             },
             status_code=500,

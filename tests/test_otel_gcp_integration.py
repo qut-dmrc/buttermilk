@@ -21,4 +21,3 @@ class TestOtelGCPIntegration(unittest.TestCase):
     def test_placeholder(self):
         """Placeholder test to prevent empty test suite errors."""
         # These tests have been removed - see module docstring
-        pass

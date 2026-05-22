@@ -11,7 +11,7 @@ it raises ProcessingError (fail-fast pattern) rather than silently filtering.
 This ensures corrupt documents are tracked as failures in the pipeline, not silently dropped.
 """
 
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from pydantic import BaseModel, Field
 

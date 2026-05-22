@@ -3,7 +3,8 @@
 import csv
 import json
 import random
-from typing import TYPE_CHECKING, Any, Iterator
+from collections.abc import Iterator
+from typing import TYPE_CHECKING, Any
 
 from cloudpathlib import AnyPath  # For handling local and cloud paths
 
@@ -53,11 +54,10 @@ class FileStorage(Storage):
         suffix = self.path.suffix.lower()
         if suffix == ".csv":
             return "csv"
-        elif suffix in {".jsonl", ".ndjson"}:
+        if suffix in {".jsonl", ".ndjson"}:
             return "jsonl"
-        else:
-            # Default to json
-            return "json"
+        # Default to json
+        return "json"
 
     def _load_records(self) -> list[BaseRecord]:
         """Load all records from file into a list.
@@ -79,7 +79,7 @@ class FileStorage(Storage):
             file_obj = self.path.open("r", encoding="utf-8")
         else:
             # Use regular open for local files
-            file_obj = open(self.path, "r", encoding="utf-8")
+            file_obj = open(self.path, encoding="utf-8")
 
         try:
             if file_format == "csv":
@@ -470,7 +470,7 @@ class FileStorage(Storage):
                 # Ultimate fallback
                 return Record(
                     record_id=f"error_{index}",
-                    content=f"Failed to parse record: {str(e2)}",
+                    content=f"Failed to parse record: {e2!s}",
                     metadata={"critical_error": True},
                 )
 

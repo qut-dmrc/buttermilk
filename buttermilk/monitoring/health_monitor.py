@@ -12,7 +12,7 @@ Complex thresholds, threading, and detailed monitoring are handled externally.
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any
 
 from buttermilk import logger
 
@@ -32,11 +32,11 @@ class ComponentHealth:
 
     component_name: str
     status: HealthStatus = HealthStatus.UNKNOWN
-    last_check: Optional[datetime] = None
-    error_message: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    last_check: datetime | None = None
+    error_message: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def update_health(self, status: HealthStatus, error_message: Optional[str] = None, **metadata):
+    def update_health(self, status: HealthStatus, error_message: str | None = None, **metadata):
         """Update component health status."""
         self.status = status
         self.last_check = datetime.now()
@@ -49,16 +49,16 @@ class HealthMonitor:
 
     def __init__(self):
         """Initialize simplified health monitor."""
-        self.component_health: Dict[str, ComponentHealth] = {}
+        self.component_health: dict[str, ComponentHealth] = {}
 
         # Initialize basic system health check
         self._register_basic_system_check()
 
-    def get_component_health(self, component_name: str) -> Optional[ComponentHealth]:
+    def get_component_health(self, component_name: str) -> ComponentHealth | None:
         """Get health status for specific component."""
         return self.component_health.get(component_name)
 
-    def get_all_health_status(self) -> Dict[str, ComponentHealth]:
+    def get_all_health_status(self) -> dict[str, ComponentHealth]:
         """Get health status for all components."""
         return dict(self.component_health)
 
@@ -71,14 +71,13 @@ class HealthMonitor:
 
         if any(status == HealthStatus.UNHEALTHY for status in statuses):
             return HealthStatus.UNHEALTHY
-        elif any(status == HealthStatus.DEGRADED for status in statuses):
+        if any(status == HealthStatus.DEGRADED for status in statuses):
             return HealthStatus.DEGRADED
-        elif all(status == HealthStatus.HEALTHY for status in statuses):
+        if all(status == HealthStatus.HEALTHY for status in statuses):
             return HealthStatus.HEALTHY
-        else:
-            return HealthStatus.UNKNOWN
+        return HealthStatus.UNKNOWN
 
-    def get_health_summary(self) -> Dict[str, Any]:
+    def get_health_summary(self) -> dict[str, Any]:
         """Get basic health summary."""
         overall_status = self.get_overall_health_status()
 

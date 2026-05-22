@@ -7,7 +7,7 @@ configuration patterns.
 
 import os
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Literal, Optional, Union
+from typing import Any, Literal, Union
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -19,9 +19,9 @@ class CloudProviderConfig(BaseModel, ABC):
     """
 
     type: str = Field(description="Cloud provider type")
-    project_id: Optional[str] = Field(default=None, description="Primary project/account identifier")
-    region: Optional[str] = Field(default=None, description="Default region for resources")
-    credentials: Dict[str, Any] = Field(default_factory=dict, description="Provider-specific credential configuration")
+    project_id: str | None = Field(default=None, description="Primary project/account identifier")
+    region: str | None = Field(default=None, description="Default region for resources")
+    credentials: dict[str, Any] = Field(default_factory=dict, description="Provider-specific credential configuration")
 
     model_config = {
         "extra": "allow",  # Allow provider-specific fields
@@ -30,7 +30,7 @@ class CloudProviderConfig(BaseModel, ABC):
     }
 
     @abstractmethod
-    def get_client_config(self, service: str) -> Dict[str, Any]:
+    def get_client_config(self, service: str) -> dict[str, Any]:
         """Get configuration for specific service client.
 
         Args:
@@ -39,7 +39,6 @@ class CloudProviderConfig(BaseModel, ABC):
         Returns:
             Configuration dict for the service client
         """
-        pass
 
 
 class SecretsServiceConfig(BaseModel):
@@ -74,23 +73,23 @@ class GCPConfig(CloudProviderConfig):
     """Google Cloud Platform configuration with integrated services."""
 
     type: Literal["gcp"] = "gcp"
-    project_id: Optional[str] = Field(
+    project_id: str | None = Field(
         default=None,
         description="GCP Project ID (auto-detected from GOOGLE_CLOUD_PROJECT)",
     )
-    quota_project_id: Optional[str] = Field(default=None, description="Quota project for billing (defaults to project_id)")
+    quota_project_id: str | None = Field(default=None, description="Quota project for billing (defaults to project_id)")
     region: str = Field(default="us-central1", description="Default GCP region")
-    location: Optional[str] = Field(default=None, description="Default location (defaults to region)")
+    location: str | None = Field(default=None, description="Default location (defaults to region)")
 
     # Core storage configurations
-    storage_bucket: Optional[str] = Field(default=None, description="Default GCS bucket for storage operations")
+    storage_bucket: str | None = Field(default=None, description="Default GCS bucket for storage operations")
     bigquery_dataset: str = Field(default="buttermilk", description="Default BigQuery dataset")
 
     # Integrated service configurations
-    secrets: Optional[SecretsServiceConfig] = Field(default=None, description="Secrets management configuration")
-    logging: Optional[LoggingServiceConfig] = Field(default=None, description="Cloud logging configuration")
-    tracing: Optional[TracingServiceConfig] = Field(default=None, description="OpenTelemetry tracing configuration")
-    vertex: Optional[VertexServiceConfig] = Field(default=None, description="Vertex AI service configuration")
+    secrets: SecretsServiceConfig | None = Field(default=None, description="Secrets management configuration")
+    logging: LoggingServiceConfig | None = Field(default=None, description="Cloud logging configuration")
+    tracing: TracingServiceConfig | None = Field(default=None, description="OpenTelemetry tracing configuration")
+    vertex: VertexServiceConfig | None = Field(default=None, description="Vertex AI service configuration")
 
     @model_validator(mode="after")
     def set_defaults_from_env(self) -> "GCPConfig":
@@ -106,7 +105,7 @@ class GCPConfig(CloudProviderConfig):
 
         return self
 
-    def get_client_config(self, service: str) -> Dict[str, Any]:
+    def get_client_config(self, service: str) -> dict[str, Any]:
         """Get GCP service client configuration."""
         base_config = {
             "project_id": self.project_id,
@@ -165,14 +164,14 @@ class AWSConfig(CloudProviderConfig):
     """Amazon Web Services configuration."""
 
     type: Literal["aws"] = "aws"
-    account_id: Optional[str] = Field(
+    account_id: str | None = Field(
         default=None,
         alias="project_id",  # Map to common field
         description="AWS Account ID",
     )
     region: str = Field(default="us-east-1", description="Default AWS region")
 
-    def get_client_config(self, service: str) -> Dict[str, Any]:
+    def get_client_config(self, service: str) -> dict[str, Any]:
         """Get AWS service client configuration."""
         base_config = {
             "region_name": self.region,
@@ -191,15 +190,15 @@ class AzureConfig(CloudProviderConfig):
     """Microsoft Azure configuration."""
 
     type: Literal["azure"] = "azure"
-    subscription_id: Optional[str] = Field(
+    subscription_id: str | None = Field(
         default=None,
         alias="project_id",  # Map to common field
         description="Azure Subscription ID",
     )
-    resource_group: Optional[str] = Field(default=None, description="Default resource group")
+    resource_group: str | None = Field(default=None, description="Default resource group")
     region: str = Field(default="eastus", description="Default Azure region")
 
-    def get_client_config(self, service: str) -> Dict[str, Any]:
+    def get_client_config(self, service: str) -> dict[str, Any]:
         """Get Azure service client configuration."""
         return {
             "subscription_id": self.subscription_id,
@@ -212,8 +211,8 @@ class LoggerConfig(BaseModel):
     """Configuration for cloud logging providers."""
 
     type: Literal["gcp", "aws", "azure", "local"] = Field(description="Logging provider type")
-    project_id: Optional[str] = Field(default=None, description="Cloud project ID for logging")
-    location: Optional[str] = Field(default=None, description="Logging location/region")
+    project_id: str | None = Field(default=None, description="Cloud project ID for logging")
+    location: str | None = Field(default=None, description="Logging location/region")
     verbose: bool = Field(default=False, description="Enable verbose logging")
     console: bool = Field(
         default=True,
@@ -232,8 +231,8 @@ class RunInfoConfig(BaseModel):
     """Configuration for run execution information."""
 
     platform: Literal["local", "cloud", "batch"] = Field(default="local", description="Execution platform")
-    flow_api: Optional[str] = Field(default=None, description="Base URL for flow API")
-    save_dir_base: Optional[str] = Field(default=None, description="Base directory/URI for saving results")
+    flow_api: str | None = Field(default=None, description="Base URL for flow API")
+    save_dir_base: str | None = Field(default=None, description="Base directory/URI for saving results")
 
 
 class TracingConfig(BaseModel):

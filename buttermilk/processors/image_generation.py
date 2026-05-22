@@ -4,7 +4,7 @@ This processor adapts TextToImageClient for use in data pipelines by converting
 between BaseRecord and ImageRecord formats.
 """
 
-from typing import AsyncGenerator, Optional, Type
+from collections.abc import AsyncGenerator
 
 from pydantic import BaseModel, Field
 
@@ -29,12 +29,12 @@ class ImageGenerationProcessor(BaseModel):
         client_class: Optional default client class. If not specified, reads from record.metadata['model_class']
     """
 
-    client_class: Optional[Type[TextToImageClient]] = Field(
+    client_class: type[TextToImageClient] | None = Field(
         default=None,
         description="Optional default TextToImageClient class. If None, reads from record.metadata['model_class']",
     )
 
-    def _resolve_client_class(self, model_class: Type[TextToImageClient] | str) -> Type[TextToImageClient]:
+    def _resolve_client_class(self, model_class: type[TextToImageClient] | str) -> type[TextToImageClient]:
         """Resolve model_class to actual class object.
 
         Args:

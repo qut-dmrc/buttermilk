@@ -118,7 +118,7 @@ class BashProcessor(BaseModel):
             raise ProcessingError(f"Bash command timed out after {self.timeout_seconds}s for {record.record_id}\nCommand: {command}")
         except FileNotFoundError as e:
             # Command not found (e.g., pdftotext not installed)
-            raise ProcessingError(f"Command not found: {str(e)}\nCommand: {command}\nMake sure the required tool is installed.")
+            raise ProcessingError(f"Command not found: {e!s}\nCommand: {command}\nMake sure the required tool is installed.")
         except Exception as e:
             raise ProcessingError(f"Error executing bash command for {record.record_id}: {e}\nCommand: {command}")
 

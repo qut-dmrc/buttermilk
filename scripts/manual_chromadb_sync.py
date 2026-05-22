@@ -94,11 +94,10 @@ def sync_to_remote(local_path: Path, remote_path: str, dry_run: bool = False) ->
             if result.stdout:
                 print("Output:", result.stdout)
             return True
-        else:
-            print(f"\n❌ Sync failed with code: {result.returncode}")
-            if result.stderr:
-                print("Error:", result.stderr)
-            return False
+        print(f"\n❌ Sync failed with code: {result.returncode}")
+        if result.stderr:
+            print("Error:", result.stderr)
+        return False
 
     except Exception as e:
         print(f"\n❌ Sync failed: {e}")

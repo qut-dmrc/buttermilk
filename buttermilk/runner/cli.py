@@ -258,7 +258,7 @@ def main(conf: DictConfig) -> None:  # noqa: PLR0912
                 source = bm.get_storage(source)
             pipeline_conf["source"] = source
 
-            if output_cfg := pipeline_conf.get("output", None):
+            if output_cfg := pipeline_conf.get("output"):
                 # Instantiate output (either via _target_ or as storage config)
                 logger.info("Initializing output...")
                 output = hydra.utils.instantiate(output_cfg)

@@ -141,7 +141,7 @@ def create_agent_trace_info(
 # --- Base Agent Class ---
 
 
-class Agent(RoutedAgent):  # noqa: PLR0904
+class Agent(RoutedAgent):
     """Base class for all Buttermilk agents, integrating with autogen_core's RoutedAgent.
 
     This class serves as the foundation for all specialized agents within the
@@ -253,11 +253,10 @@ class Agent(RoutedAgent):  # noqa: PLR0904
         # Check if BM was injected via config
         if hasattr(self._config, "bm") and self._config.bm is not None:
             return self._config.bm
-        else:
-            # Fall back to global singleton
-            from buttermilk._core.dmrc import get_bm
+        # Fall back to global singleton
+        from buttermilk._core.dmrc import get_bm
 
-            return get_bm()
+        return get_bm()
 
     def __init__(self, topic_id: TopicId | None = None, **data: Any) -> None:
         """Initialize the Agent with configuration data and setup RoutedAgent."""

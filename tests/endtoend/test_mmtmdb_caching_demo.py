@@ -51,7 +51,6 @@ class ObservationCapture:
 
     def shutdown(self):
         """No-op for compatibility."""
-        pass
 
     async def finalize_processing(self) -> bool:
         """No-op for compatibility."""

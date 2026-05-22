@@ -6,8 +6,6 @@ frame elements at the statement level, including speakers, problem definitions,
 causal attributions, moral evaluations, and treatment recommendations.
 """
 
-from typing import Optional  # For type hinting
-
 from pydantic import BaseModel, Field  # Pydantic components
 
 # Buttermilk core imports
@@ -47,11 +45,11 @@ class FramedStatement(BaseModel):
         ...,
         description="Organization, role, or institutional affiliation of the speaker",
     )
-    solution_addressee: Optional[str] = Field(None, description="Person or entity to whom the solution/action is directed")
+    solution_addressee: str | None = Field(None, description="Person or entity to whom the solution/action is directed")
     problem_definition: str = Field(..., description="What is presented as the core issue or problem")
-    blame_attribution: Optional[str] = Field(None, description="Who or what is held responsible for causing the problem")
-    moral_evaluation: Optional[str] = Field(None, description="Moral judgment or evaluative stance toward the issue")
-    recommendation: Optional[str] = Field(None, description="Proposed solution or course of action")
+    blame_attribution: str | None = Field(None, description="Who or what is held responsible for causing the problem")
+    moral_evaluation: str | None = Field(None, description="Moral judgment or evaluative stance toward the issue")
+    recommendation: str | None = Field(None, description="Proposed solution or course of action")
     confidence_score: float = Field(
         default=1.0,
         ge=0.0,
@@ -108,7 +106,7 @@ class FrameAnalysisResults(BaseModel):
 
     statements: list[FramedStatement] = Field(..., description="List of all framed statements identified in the article")
     article_summary: str = Field(..., description="Brief summary of the article being analyzed")
-    dominant_frame: Optional[str] = Field(None, description="The predominant framing pattern identified in the article")
+    dominant_frame: str | None = Field(None, description="The predominant framing pattern identified in the article")
 
     def as_markdown(self, agent_id: str = None, call_id: str = None) -> str:
         """Returns a Markdown formatted string for insertion into templates.

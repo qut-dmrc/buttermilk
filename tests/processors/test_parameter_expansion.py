@@ -26,7 +26,7 @@ class TestParameterExpansionProcessorProtocol:
         """Test that processor implements required async _process_record method."""
         processor = ParameterExpansionProcessor(variants={"criteria": ["A"]})
         assert hasattr(processor, "_process_record")
-        assert callable(getattr(processor, "_process_record"))
+        assert callable(processor._process_record)
 
 
 class TestParameterExpansionProcessorLogic:

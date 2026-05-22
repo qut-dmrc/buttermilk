@@ -78,7 +78,7 @@ def configure_structlog(min_level) -> None:
             event_dict.setdefault("pid", os.getpid())
             event_dict.setdefault(
                 "process_name",
-                getattr(os, "getppid", lambda: None)() and logging.getLogger().name or "python",
+                (getattr(os, "getppid", lambda: None)() and logging.getLogger().name) or "python",
             )
             event_dict.setdefault("thread_name", threading.current_thread().name)
             # Async task name/id if available

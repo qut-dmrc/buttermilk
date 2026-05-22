@@ -8,7 +8,6 @@ across the codebase, particularly for Zotero fulltext processing.
 """
 
 import re
-from typing import List
 
 from langdetect import DetectorFactory, LangDetectException, detect
 
@@ -118,7 +117,7 @@ def detect_text_corruption(text: str) -> dict:
     }
 
 
-def is_document_corrupt(chunks: List[str], threshold: float = 66.0) -> dict:
+def is_document_corrupt(chunks: list[str], threshold: float = 66.0) -> dict:
     """Determine if a document is corrupt based on chunk corruption rate.
 
     Analyzes each chunk for corruption patterns and calculates the percentage
@@ -177,7 +176,7 @@ def is_document_corrupt(chunks: List[str], threshold: float = 66.0) -> dict:
     }
 
 
-def analyze_document_quality(chunks: List[str]) -> dict:
+def analyze_document_quality(chunks: list[str]) -> dict:
     """Analyze document quality by aggregating corruption across all chunks.
 
     This performs document-level analysis by checking each chunk and calculating

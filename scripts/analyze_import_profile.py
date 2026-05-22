@@ -44,8 +44,7 @@ def format_time(us: int) -> str:
     ms = us / 1000
     if ms < 1000:
         return f"{ms:.1f}ms"
-    else:
-        return f"{ms / 1000:.2f}s"
+    return f"{ms / 1000:.2f}s"
 
 
 def analyze_profile(profile_file: str, title: str):

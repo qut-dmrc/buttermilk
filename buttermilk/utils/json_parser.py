@@ -123,7 +123,7 @@ class ChatParser(BaseModel):
         except JSONDecodeError as e:
             if self.on_error == "raise":
                 raise
-            elif self.on_error == "warn":
+            if self.on_error == "warn":
                 logger.warning(f"Failed to parse JSON: {e}")
             # For both "warn" and "ignore", return error dict
             return {"error": "Unable to decode JSON in result", "response": text}
@@ -135,7 +135,7 @@ class ChatParser(BaseModel):
                     doc=text,
                     pos=0,
                 )
-            elif self.on_error == "warn":
+            if self.on_error == "warn":
                 logger.warning(f"Parsed output is not a dict, got {type(parsed_output)}")
             # For both "warn" and "ignore", return error dict
             return {"error": "Unable to decode JSON in result", "response": text}

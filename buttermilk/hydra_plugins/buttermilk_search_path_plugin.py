@@ -7,7 +7,6 @@ without modifying the buttermilk source code.
 
 import os
 from pathlib import Path
-from typing import List
 
 from hydra.core.config_search_path import ConfigSearchPath
 from hydra.plugins.search_path_plugin import SearchPathPlugin
@@ -52,7 +51,7 @@ class ButtermilkSearchPathPlugin(SearchPathPlugin):
         for pkg_name, pkg_path in external_packages:
             search_path.append(f"external_{pkg_name}", pkg_path)
 
-    def _discover_external_packages(self) -> List[tuple[str, str]]:
+    def _discover_external_packages(self) -> list[tuple[str, str]]:
         """Discover external packages that provide Buttermilk configurations.
 
         Looks for packages with naming patterns like:

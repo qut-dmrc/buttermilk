@@ -282,7 +282,7 @@ class TestHostAgentErrorHandling:
 
         # Mock _sequence to raise KeyboardInterrupt
         async def interrupted_sequence():
-            raise KeyboardInterrupt()
+            raise KeyboardInterrupt
             yield  # Never reached
 
         with patch.object(host_agent, "_sequence", return_value=interrupted_sequence()):

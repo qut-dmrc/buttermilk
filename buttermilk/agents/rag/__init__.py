@@ -5,9 +5,9 @@ from .simple_rag_agent import RagAgent, Reference, ResearchResult
 
 __all__ = [
     "RagAgent",
+    "RagZotero",
     "Reference",
     "ResearchResult",
-    "RagZotero",
     "ZoteroReference",
     "ZoteroResearchResult",
 ]

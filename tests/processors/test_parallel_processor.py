@@ -1,7 +1,8 @@
 """Tests for ParallelProcessor."""
 
 import asyncio
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from typing import Any
 
 import pytest
 

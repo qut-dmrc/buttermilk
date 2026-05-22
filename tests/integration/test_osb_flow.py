@@ -70,17 +70,16 @@ class FlowTestServer:
         start_time = time.time()
         while time.time() - start_time < timeout:
             try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get("http://localhost:8000/api/session") as resp:
-                        if resp.status == 200:
-                            logger.info("Test server is ready")
-                            return
+                async with aiohttp.ClientSession() as session, session.get("http://localhost:8000/api/session") as resp:
+                    if resp.status == 200:
+                        logger.info("Test server is ready")
+                        return
             except Exception:
                 pass
 
             # Check if process died
             if self.process.poll() is not None:
-                with open(self.log_file, "r") as f:
+                with open(self.log_file) as f:
                     logs = f.read()
                 logger.error("Server process died", logs=logs[-1000:])
                 raise RuntimeError(f"Server process died. Logs:\n{logs[-1000:]}")
@@ -102,7 +101,7 @@ class FlowTestServer:
 
             # Print last few lines of log on failure
             if self.process.returncode != 0 and self.log_file and self.log_file.exists():
-                with open(self.log_file, "r") as f:
+                with open(self.log_file) as f:
                     logs = f.read()
                 logger.error("Server logs", logs=logs[-500:])
 

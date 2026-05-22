@@ -73,7 +73,7 @@ async def test_huggingface_classifier_e2e(real_bm, session_runner, text_record: 
 
     # Check output structure
     assert hasattr(result, "output"), "Result should have output field"
-    output = getattr(result, "output")
+    output = result.output
     assert "label" in output, "Output should contain label"
     assert "confidence" in output, "Output should contain confidence"
     assert isinstance(output["label"], int), "Label should be integer"
@@ -132,7 +132,7 @@ async def test_zentropi_classifier_e2e(real_bm, session_runner, text_record: Bas
 
     # Check output structure
     assert hasattr(result, "output"), "Result should have output field"
-    output = getattr(result, "output")
+    output = result.output
     assert "label" in output, "Output should contain label"
     assert "confidence" in output, "Output should contain confidence"
     assert "categories" in output, "Output should contain categories"

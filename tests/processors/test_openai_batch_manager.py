@@ -201,12 +201,11 @@ class TestOpenAIBatchJobManagerSubmit:
 
         requests = _make_requests(2)
 
-        with patch.object(manager, "_resolve_batch_dir", return_value="/tmp/test_batch"):
-            with patch.object(manager, "_save_text"):
-                result = await manager.submit_batch(
-                    model="gpt-4o",
-                    requests=requests,
-                )
+        with patch.object(manager, "_resolve_batch_dir", return_value="/tmp/test_batch"), patch.object(manager, "_save_text"):
+            result = await manager.submit_batch(
+                model="gpt-4o",
+                requests=requests,
+            )
 
         assert result["job_id"].startswith("oai_batch_")
         assert result["openai_batch_id"] == "batch_xyz789"
@@ -243,13 +242,12 @@ class TestOpenAIBatchJobManagerSubmit:
         requests = _make_requests(1)
         metadata = {"description": "nightly eval", "project": "osb"}
 
-        with patch.object(manager, "_resolve_batch_dir", return_value="/tmp/test"):
-            with patch.object(manager, "_save_text"):
-                await manager.submit_batch(
-                    model="gpt-4o",
-                    requests=requests,
-                    metadata=metadata,
-                )
+        with patch.object(manager, "_resolve_batch_dir", return_value="/tmp/test"), patch.object(manager, "_save_text"):
+            await manager.submit_batch(
+                model="gpt-4o",
+                requests=requests,
+                metadata=metadata,
+            )
 
         mock_openai_client.batches.create.assert_called_once_with(
             input_file_id="file-abc123",
@@ -504,9 +502,8 @@ class TestOpenAIBatchJobManagerWait:
 
         manager.poll_interval = 1
 
-        with patch("asyncio.sleep", return_value=None):
-            with pytest.raises(RuntimeError, match="failed"):
-                await manager.wait_for_completion("batch_xyz789")
+        with patch("asyncio.sleep", return_value=None), pytest.raises(RuntimeError, match="failed"):
+            await manager.wait_for_completion("batch_xyz789")
 
     @pytest.mark.anyio
     async def test_wait_for_completion_raises_on_expired(self, manager, mock_openai_client):
@@ -518,9 +515,8 @@ class TestOpenAIBatchJobManagerWait:
 
         manager.poll_interval = 1
 
-        with patch("asyncio.sleep", return_value=None):
-            with pytest.raises(RuntimeError, match="expired"):
-                await manager.wait_for_completion("batch_xyz789")
+        with patch("asyncio.sleep", return_value=None), pytest.raises(RuntimeError, match="expired"):
+            await manager.wait_for_completion("batch_xyz789")
 
 
 # =============================================================================
@@ -618,13 +614,12 @@ class TestOpenAIBatchJobManagerIntegration:
         requests = _make_requests(2)
         manager.poll_interval = 1
 
-        with patch("asyncio.sleep", return_value=None):
-            with patch.object(manager, "_resolve_batch_dir", return_value="/tmp/test"):
-                with patch.object(manager, "_save_text"):
-                    results = await manager.run_batch_and_wait(
-                        model="gpt-4o",
-                        requests=requests,
-                    )
+        with patch("asyncio.sleep", return_value=None), patch.object(manager, "_resolve_batch_dir", return_value="/tmp/test"):
+            with patch.object(manager, "_save_text"):
+                results = await manager.run_batch_and_wait(
+                    model="gpt-4o",
+                    requests=requests,
+                )
 
         assert len(results) == 2
         assert results[0].response == "Answer 0"

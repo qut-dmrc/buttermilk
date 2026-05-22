@@ -425,7 +425,7 @@ class TestTMDBLiveAPI:
             assert backup_file.exists()
 
             # Verify we can load it back
-            with open(backup_file, "r") as f:
+            with open(backup_file) as f:
                 loaded_data = json.load(f)
                 assert isinstance(loaded_data, list)
 

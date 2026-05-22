@@ -9,7 +9,7 @@ This module tests the core components of the new unified processor system:
 Tests use REAL data patterns (no mocking internal code) and follow fail-fast philosophy.
 """
 
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import pytest
 from pydantic import Field
@@ -1090,7 +1090,6 @@ class TestBatchProcessor:
     @pytest.mark.anyio
     async def test_executor_handles_batch_accumulator(self):
         """Verify PipelineExecutor works with BatchAccumulator."""
-        pass
 
     @pytest.mark.anyio
     async def test_batch_accumulator_accepts_live_processor(self):
@@ -1188,7 +1187,7 @@ class TestBatchProcessor:
         class FailingProcessor(ProcessorCore):
             async def _process_record(self, context: ProcessingContext) -> AsyncGenerator[BaseRecord, None]:
                 raise ValueError("Intentional failure")
-                yield  # noqa: RET506
+                yield
 
         # This batch processor succeeds
         class SucceedingBatchProcessor(ObservabilityMixin):

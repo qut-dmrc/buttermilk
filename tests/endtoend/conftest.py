@@ -74,5 +74,4 @@ def image_clients(request):
 
     if request.config.getoption("--run-expensive"):
         return ALL_IMAGE_CLIENTS
-    else:
-        return CHEAP_IMAGE_CLIENTS
+    return CHEAP_IMAGE_CLIENTS

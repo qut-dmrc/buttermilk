@@ -451,7 +451,7 @@ class AgentConfig(BaseModel):
             self._unique_identifier = str(uuid()[:6]).upper()
             generated_id = f"{self.role}-{self._unique_identifier}"
             # Use object.__setattr__ to bypass Pydantic validation cycle here
-            object.__setattr__(self, "agent_id", generated_id)  # noqa: PLC2801
+            object.__setattr__(self, "agent_id", generated_id)
 
         # Part 2: Generate agent_name
         name_parts = []

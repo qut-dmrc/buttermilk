@@ -169,7 +169,7 @@ class ButtermilkConfig(BaseModel):
         if project_name is not None:
             values["session"]["project_name"] = project_name
         # Migrate flows from root to run.flows for backward compatibility
-        if "flows" in values and values["flows"]:
+        if values.get("flows"):
             if "run" not in values:
                 values["run"] = {}
             if isinstance(values["run"], dict) and "flows" not in values["run"]:

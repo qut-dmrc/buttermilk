@@ -47,7 +47,6 @@ class TraceWriter:
     def __init__(self):
         """Initialize the trace writer (actual config loading is deferred)."""
         # Don't initialize storage immediately - do it lazily when first needed
-        pass
 
     def _ensure_initialized(self):
         """Lazy initialization - only initialize when first trace is added.

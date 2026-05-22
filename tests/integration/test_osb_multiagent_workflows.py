@@ -17,7 +17,7 @@ through final synthesis and recommendation generation.
 
 import asyncio
 import time
-from typing import Any, Dict, List
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -135,7 +135,7 @@ class TestOSBMultiAgentCoordination:
         # Validate confidence scores
         assert workflow_results["overall_confidence"] >= 0.5
 
-    async def _run_complete_osb_workflow(self, query: str, case_number: str, flow_runner: FlowRunner) -> Dict[str, Any]:
+    async def _run_complete_osb_workflow(self, query: str, case_number: str, flow_runner: FlowRunner) -> dict[str, Any]:
         """Execute complete OSB workflow simulation."""
         start_time = time.time()
 
@@ -176,7 +176,7 @@ class TestOSBMultiAgentCoordination:
         workflow_results["total_duration"] = time.time() - start_time
         return workflow_results
 
-    async def _simulate_vector_query(self, query: str, flow_runner: FlowRunner) -> Dict[str, Any]:
+    async def _simulate_vector_query(self, query: str, flow_runner: FlowRunner) -> dict[str, Any]:
         """Simulate vector store query for OSB context."""
         return {
             "results": [
@@ -193,9 +193,9 @@ class TestOSBMultiAgentCoordination:
         self,
         agent_name: str,
         query: str,
-        vector_results: Dict[str, Any],
+        vector_results: dict[str, Any],
         case_number: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Simulate individual agent execution."""
         # Mock agent-specific responses
         agent_responses = {
@@ -244,7 +244,7 @@ class TestOSBMultiAgentCoordination:
 
         return agent_responses.get(agent_name, {"error": f"Unknown agent: {agent_name}", "confidence": 0.0})
 
-    async def _simulate_synthesis(self, query: str, agent_responses: Dict[str, Any]) -> Dict[str, Any]:
+    async def _simulate_synthesis(self, query: str, agent_responses: dict[str, Any]) -> dict[str, Any]:
         """Simulate multi-agent response synthesis."""
         return {
             "synthesis_summary": "Multi-agent analysis confirms policy violation with high confidence",
@@ -373,7 +373,7 @@ class TestOSBMultiAgentCoordination:
         timestamp_range = max(timestamps) - min(timestamps)
         assert timestamp_range < 5.0  # All processed within 5 seconds
 
-    async def _simulate_agent_with_context(self, agent_name: str, context: Dict[str, Any]) -> Dict[str, Any]:
+    async def _simulate_agent_with_context(self, agent_name: str, context: dict[str, Any]) -> dict[str, Any]:
         """Simulate agent execution with shared context."""
         return {
             "agent_name": agent_name,
@@ -423,7 +423,7 @@ class TestOSBWorkflowIntegration:
         if decision == "policy_violation":
             assert len(workflow_result["enforcement_actions"]) > 0
 
-    async def _execute_end_to_end_workflow(self, content: str, metadata: Dict[str, Any], flow_runner: FlowRunner) -> Dict[str, Any]:
+    async def _execute_end_to_end_workflow(self, content: str, metadata: dict[str, Any], flow_runner: FlowRunner) -> dict[str, Any]:
         """Execute complete end-to-end OSB workflow."""
         workflow_result = {
             "content": content,
@@ -484,7 +484,7 @@ class TestOSBWorkflowIntegration:
 
         return workflow_result
 
-    async def _get_policy_context(self, content: str) -> Dict[str, Any]:
+    async def _get_policy_context(self, content: str) -> dict[str, Any]:
         """Get policy context from vector store."""
         return {
             "results": [
@@ -499,9 +499,9 @@ class TestOSBWorkflowIntegration:
         self,
         agent: str,
         content: str,
-        context: Dict[str, Any],
-        metadata: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        context: dict[str, Any],
+        metadata: dict[str, Any],
+    ) -> dict[str, Any]:
         """Execute individual agent analysis."""
         return {
             "agent": agent,
@@ -511,7 +511,7 @@ class TestOSBWorkflowIntegration:
             "processing_time": 1.5,
         }
 
-    async def _synthesize_agent_outputs(self, content: str, agent_outputs: Dict[str, Any], metadata: Dict[str, Any]) -> Dict[str, Any]:
+    async def _synthesize_agent_outputs(self, content: str, agent_outputs: dict[str, Any], metadata: dict[str, Any]) -> dict[str, Any]:
         """Synthesize agent outputs into final decision."""
         avg_confidence = sum(output.get("confidence", 0) for output in agent_outputs.values()) / len(agent_outputs)
 
@@ -621,11 +621,11 @@ class TestOSBWorkflowErrorRecovery:
     async def _execute_workflow_with_agent_failures(
         self,
         content: str,
-        metadata: Dict[str, Any],
-        successful_agents: List[str],
-        failed_agents: List[str],
+        metadata: dict[str, Any],
+        successful_agents: list[str],
+        failed_agents: list[str],
         flow_runner: FlowRunner,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Execute workflow with simulated agent failures."""
         workflow_result = {
             "content": content,
@@ -666,9 +666,9 @@ class TestOSBWorkflowErrorRecovery:
         self,
         agent: str,
         content: str,
-        context: Dict[str, Any],
-        metadata: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        context: dict[str, Any],
+        metadata: dict[str, Any],
+    ) -> dict[str, Any]:
         """Execute individual agent analysis (reused from above)."""
         return {
             "agent": agent,
@@ -678,7 +678,7 @@ class TestOSBWorkflowErrorRecovery:
             "processing_time": 1.5,
         }
 
-    async def _synthesize_partial_results(self, content: str, agent_outputs: Dict[str, Any], metadata: Dict[str, Any]) -> Dict[str, Any]:
+    async def _synthesize_partial_results(self, content: str, agent_outputs: dict[str, Any], metadata: dict[str, Any]) -> dict[str, Any]:
         """Synthesize partial agent results with reduced confidence."""
         if not agent_outputs:
             return {"decision": "insufficient_data", "confidence": 0.0}

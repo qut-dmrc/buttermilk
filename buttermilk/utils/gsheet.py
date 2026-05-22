@@ -9,7 +9,7 @@ long text cells.
 """
 
 from functools import cached_property  # For lazy-loading properties
-from typing import Any, Optional  # For type hinting
+from typing import Any  # For type hinting
 
 import google.auth  # For Google Cloud authentication
 import googleapiclient.discovery  # For Google API client discovery (though less used with gspread directly)
@@ -112,11 +112,11 @@ class GSheet(BaseModel):
         self,
         df: pd.DataFrame,
         *,  # Force subsequent arguments to be keyword-only
-        sheet_name: Optional[str] = None,
-        title: Optional[str] = None,  # Title for a new spreadsheet
-        sheet_id: Optional[str] = None,  # Google Spreadsheet ID (key)
-        uri: Optional[str] = None,  # Full URL to the Google Spreadsheet
-        header_format: Optional[dict[str, Any]] = None,  # gspread cell format for header
+        sheet_name: str | None = None,
+        title: str | None = None,  # Title for a new spreadsheet
+        sheet_id: str | None = None,  # Google Spreadsheet ID (key)
+        uri: str | None = None,  # Full URL to the Google Spreadsheet
+        header_format: dict[str, Any] | None = None,  # gspread cell format for header
         **kwargs: Any,  # Catch-all for future gspread options
     ) -> gspread.spreadsheet.Spreadsheet:
         """Saves a Pandas DataFrame to a specified Google Sheet.

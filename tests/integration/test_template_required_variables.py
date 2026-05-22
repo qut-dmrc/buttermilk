@@ -584,7 +584,7 @@ def test_template_detects_empty_values_as_unfilled(template_name, var_name, empt
     # OR template should have raised an error (which would prevent us reaching here)
     assert var_name in unfilled_vars, (
         f"Template '{template_name}' FAILED to detect empty value for '{var_name}'!\n"
-        f"Empty value type: {type(empty_value).__name__} = {repr(empty_value)}\n"
+        f"Empty value type: {type(empty_value).__name__} = {empty_value!r}\n"
         f"unfilled_vars = {unfilled_vars}\n"
         f"This violates fail-fast principles - empty values should be detected as invalid.\n"
         f"Rendered output:\n{rendered[:500]}..."

@@ -220,11 +220,9 @@ class ConcreteOrchestrator(Orchestrator):
 
     async def _setup(self) -> None:
         """Setup implementation."""
-        pass
 
     async def _cleanup(self) -> None:
         """Cleanup implementation."""
-        pass
 
     async def _run(self, run_request: Any) -> Any:
         """Run implementation."""
