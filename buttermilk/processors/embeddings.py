@@ -131,7 +131,7 @@ class EmbeddingGenerator(BaseModel):
 
         # Generate embeddings
         start_time = time.time()
-        success = await self._embed_chunks(record.chunks)
+        success = await self._embed_chunks(record.chunks, record.record_id)
         processing_time_ms = (time.time() - start_time) * 1000
 
         if success:
@@ -168,7 +168,7 @@ class EmbeddingGenerator(BaseModel):
             # Don't yield the record if embedding failed
             return
 
-    async def _embed_chunks(self, chunks: list[Any]) -> bool:
+    async def _embed_chunks(self, chunks: list[Any], record_id: str) -> bool:
         """Generate embeddings for a list of chunks in place.
 
         Returns:
@@ -226,7 +226,7 @@ class EmbeddingGenerator(BaseModel):
                     success_count += 1
 
         if success_count == 0:
-            logger.error("All embeddings failed for this record")
+            logger.error(f"All embeddings failed for record {record_id} after {self.embedding_max_retries} retries")
             return False
 
         if success_count < len(chunks):

@@ -1062,7 +1062,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 else:
                     # --- Embeddings (now with robust retry) ---
                     logger.debug(f"🧬 [VECTORIZER-{record.record_id}] Generating embeddings for {len(record.chunks)} chunks...")
-                    embedding_ok = await self._embed_chunks(record.chunks)
+                    embedding_ok = await self._embed_chunks(record.chunks, record.record_id)
 
                     # Save embeddings to cache if successful
                     if embedding_ok:
@@ -1587,7 +1587,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
             logger.error(f"Failed to load embeddings cache for {record.record_id}: {e}")
             return False
 
-    async def _embed_chunks(self, chunks: list[ChunkedDocument]) -> bool:
+    async def _embed_chunks(self, chunks: list[ChunkedDocument], record_id: str) -> bool:
         """Generate embeddings for a list of chunks in place.
 
         Returns:
@@ -1619,7 +1619,7 @@ class ChromaDBEmbeddings(VectorStorageConfig):
                 success_count += 1
 
         if success_count == 0:
-            logger.error("All embeddings failed for this record")
+            logger.error(f"All embeddings failed for record {record_id} after {self.embedding_max_retries} retries")
             return False
 
         if success_count < len(chunks):
