@@ -245,7 +245,7 @@ async def test_huggingface_classifier_input_tracing(real_bm, session_runner, tex
     assert "template_hash" in metadata, "Metadata should contain template_hash"
 
     # Recompute template hash and verify it matches
-    _, _, expected_template_hash = load_template(
+    _, _, expected_template_hash, _ = load_template(
         template="test/classify",
         template_vars={},
     )
@@ -345,7 +345,7 @@ async def test_zentropi_classifier_input_tracing(real_bm, session_runner, text_r
     assert "template_hash" in metadata, "Metadata should contain template_hash"
 
     # Recompute template hash and verify it matches
-    _, _, expected_template_hash = load_template(
+    _, _, expected_template_hash, _ = load_template(
         template="test/classify",
         template_vars={},
     )

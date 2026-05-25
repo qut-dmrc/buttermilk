@@ -112,7 +112,7 @@ class TestOSBTemplate:
             "formatting": "Please respond in JSON format",
         }
 
-        rendered, undefined_vars, template_hash = load_template(
+        rendered, undefined_vars, template_hash, _ = load_template(
             template="osb",
             template_vars=parameters,
         )
@@ -132,7 +132,7 @@ class TestOSBTemplate:
             "prompt": "What is the main issue in these cases?",
         }
 
-        rendered, _, _ = load_template(
+        rendered, _, _, _ = load_template(
             template="osb",
             template_vars=parameters,
         )
@@ -148,7 +148,7 @@ class TestOSBTemplate:
             "prompt": "Analyze this case",
         }
 
-        rendered, _, _ = load_template(
+        rendered, _, _, _ = load_template(
             template="osb",
             template_vars=parameters,
         )
@@ -170,7 +170,7 @@ class TestAnalystTemplate:
         """Test that analyst template loads correctly."""
         parameters = {}
 
-        rendered, undefined_vars, _ = load_template(
+        rendered, undefined_vars, _, _ = load_template(
             template="analyst",
             template_vars=parameters,
         )
@@ -189,7 +189,7 @@ class TestAnalystTemplate:
             "criteria": "Use the following criteria: ...",
         }
 
-        rendered, _, _ = load_template(
+        rendered, _, _, _ = load_template(
             template="analyst",
             template_vars=parameters,
         )
@@ -215,7 +215,7 @@ class TestAnalystTemplate:
         # Don't pass record to load_template - it's a placeholder
         parameters = {}
 
-        rendered, _, _ = load_template(
+        rendered, _, _, _ = load_template(
             template="analyst",
             template_vars=parameters,
         )
@@ -241,7 +241,7 @@ class TestRAGTemplate:
             "prompt": "What does the research say about this topic?",
         }
 
-        rendered, _, _ = load_template(
+        rendered, _, _, _ = load_template(
             template="rag",
             template_vars=parameters,
         )
@@ -257,7 +257,7 @@ class TestRAGTemplate:
             "prompt": "Summarize the findings",
         }
 
-        rendered, _, _ = load_template(
+        rendered, _, _, _ = load_template(
             template="rag",
             template_vars=parameters,
         )
@@ -283,7 +283,7 @@ class TestRAGTemplate:
             "prompt": "Just a prompt",
         }
 
-        rendered, _, _ = load_template(
+        rendered, _, _, _ = load_template(
             template="rag",
             template_vars=parameters,
         )
@@ -401,7 +401,7 @@ class TestTemplateIntegration:
             "prompt": "What are the key differences?",
         }
 
-        rendered, undefined, hash_val = load_template("osb", parameters)
+        rendered, undefined, hash_val, _ = load_template("osb", parameters)
 
         # Step 2: Create messages
         messages, _ = make_messages(rendered)
@@ -430,7 +430,7 @@ class TestTemplateIntegration:
             "criteria": "Apply these rules...",
         }
 
-        rendered, _, _ = load_template("analyst", parameters)
+        rendered, _, _, _ = load_template("analyst", parameters)
 
         # Pass record to make_messages instead
         messages, placeholders = make_messages(rendered, record=record)
@@ -453,7 +453,7 @@ class TestTemplateIntegration:
             # Missing 'record' and 'context' parameters
         }
 
-        rendered, undefined, _ = load_template("analyst", parameters)
+        rendered, undefined, _, _ = load_template("analyst", parameters)
 
         # Should track undefined variables
         assert "record" in undefined or "{{record}}" in rendered

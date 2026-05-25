@@ -117,7 +117,7 @@ async def test_scorer_structured_output_with_real_data(
     # Load and render the scorer template
     from buttermilk.utils.templating import load_template
 
-    rendered_prompt, _, _ = load_template(
+    rendered_prompt, _, _, _ = load_template(
         template="score",
         template_vars=REAL_TEMPLATE_VARS,
     )

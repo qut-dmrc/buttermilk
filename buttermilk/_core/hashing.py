@@ -328,23 +328,58 @@ def compute_message_hashes(messages: list) -> list[dict[str, str | int]]:
     return result
 
 
-def extract_system_hash(message_hashes: list[dict[str, str | int]]) -> str | None:
-    """Extract hash of first system-role message for experiment identity.
+def compute_input_hashes(
+    template_name: str,
+    template_hash: str,
+    included_files: list | None = None,
+    template_vars: dict[str, Any] | None = None,
+) -> list[dict[str, str]]:
+    """Compute per-input-component hashes for template rendering provenance.
 
-    The system_hash uniquely identifies the rendered instructions/criteria,
-    enabling A/B testing comparison when the same template file is used
-    with different criteria content.
+    Produces one entry per logical input to the rendering step: the top-level
+    template, any included files, and each variable passed to rendering.
 
     Args:
-        message_hashes: Output from compute_message_hashes()
+        template_name: Name of the top-level template file (e.g. "judge.jinja2")
+        template_hash: SHA-256 hash of the top-level template file content
+        included_files: List of IncludedFile objects from the tracking loader
+        template_vars: Variables passed to template rendering
 
     Returns:
-        SHA-256 hash of first system message, or None if no system message exists
+        List of dicts with keys: name, type, hash, and optionally value
     """
-    for entry in message_hashes:
-        if entry["role"] == "system":
-            return entry["hash"]
-    return None
+    inputs: list[dict[str, str]] = []
+
+    inputs.append({
+        "name": template_name,
+        "type": "template",
+        "hash": template_hash,
+    })
+
+    if included_files:
+        for inc in included_files:
+            inputs.append({
+                "name": inc.name,
+                "type": "include",
+                "hash": inc.content_hash,
+            })
+
+    if template_vars:
+        placeholder_keys = {"record", "context", "fail_on_unfilled_parameters"}
+        for var_name, var_value in sorted(template_vars.items()):
+            if var_name in placeholder_keys:
+                continue
+            serialized = json.dumps(var_value, sort_keys=True, default=str)
+            entry: dict[str, str] = {
+                "name": var_name,
+                "type": "variable",
+                "hash": compute_sha256_hash(serialized),
+            }
+            if isinstance(var_value, str) and len(var_value) <= 100:
+                entry["value"] = var_value
+            inputs.append(entry)
+
+    return inputs
 
 
 class HashCollector:

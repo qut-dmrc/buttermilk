@@ -245,7 +245,7 @@ def test_score_template_with_empty_expected_should_fail():
     with pytest.raises(Exception, match="unfilled|expected"):
         # Merge inputs with parameters (parameters take precedence)
         merged_vars = {**untrusted_inputs, "fail_on_unfilled_parameters": True}
-        rendered, unfilled_vars, _ = load_template(
+        rendered, unfilled_vars, _, _ = load_template(
             template="score",
             template_vars=merged_vars,
         )
@@ -269,7 +269,7 @@ def test_score_template_without_expected_should_fail():
     with pytest.raises(Exception, match="unfilled|expected"):
         # Merge inputs with parameters (parameters take precedence)
         merged_vars = {**untrusted_inputs, "fail_on_unfilled_parameters": True}
-        rendered, unfilled_vars, _ = load_template(
+        rendered, unfilled_vars, _, _ = load_template(
             template="score",
             template_vars=merged_vars,
         )

@@ -1141,20 +1141,20 @@ class TestExecutionTraceSchemaContracts:
             agent_info={"component_name": "TestAgent"},
             metadata={
                 "hashes": {
-                    "record_hash": "abc123",
-                    "template_hash": "def456",
-                    "ground_truth_hash": "ghi789",
+                    "inputs": [
+                        {"name": "judge.jinja2", "type": "template", "hash": "def456"},
+                    ],
+                    "message_hashes": [
+                        {"role": "system", "index": 0, "hash": "abc123"},
+                    ],
                 },
                 "other_data": "preserved",
             },
         )
 
-        # Verify hashes are accessible in consolidated location
         assert "hashes" in trace.metadata
-        assert trace.metadata["hashes"]["record_hash"] == "abc123"
-        assert trace.metadata["hashes"]["template_hash"] == "def456"
-        assert trace.metadata["hashes"]["ground_truth_hash"] == "ghi789"
-        # Other metadata preserved
+        assert trace.metadata["hashes"]["inputs"][0]["hash"] == "def456"
+        assert trace.metadata["hashes"]["message_hashes"][0]["hash"] == "abc123"
         assert trace.metadata["other_data"] == "preserved"
 
     def test_inputs_flat_structure(self, real_bm):
@@ -1259,19 +1259,19 @@ class TestExecutionTraceSchemaContracts:
             record=record,
             metadata={
                 "hashes": {
-                    "record_hash": record.record_hash,
-                    "template_hash": "tmpl_hash_123",
+                    "inputs": [
+                        {"name": "test.jinja2", "type": "template", "hash": "tmpl_hash_123"},
+                    ],
+                    "message_hashes": [],
                 },
             },
         )
 
-        # Verify all schema contracts
         assert trace.agent_info["agent_class"] == "LLMCore"
         assert "config" not in trace.agent_info
         assert trace.record is not None
-        # Record may be dict or BaseRecord - access appropriately
         record_id = trace.record["record_id"] if isinstance(trace.record, dict) else trace.record.record_id
         assert record_id == "rec_schema_test"
         assert "record" not in trace.inputs
         assert trace.inputs["prompt_var"] == "test value"
-        assert trace.metadata["hashes"]["template_hash"] == "tmpl_hash_123"
+        assert trace.metadata["hashes"]["inputs"][0]["hash"] == "tmpl_hash_123"

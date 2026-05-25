@@ -10,14 +10,15 @@ from PIL import Image as PILImage
 from buttermilk._core.hashing import (
     compute_flow_hash,
     compute_ground_truth_hash,
+    compute_input_hashes,
     compute_message_hashes,
     compute_record_hash,
     compute_sha256_hash,
     compute_template_hash,
     compute_template_hash_from_file,
-    extract_system_hash,
     normalize_flow_config,
 )
+from buttermilk.utils.templating import IncludedFile
 from buttermilk._core.types import Record
 
 
@@ -393,41 +394,128 @@ class TestMessageHashing:
         assert hash1 == hash2
 
     def test_different_criteria_different_system_hash(self):
-        """Different criteria content produces different system_hash — the core use case."""
+        """Different criteria content produces different system message hash."""
         tja_messages = [SystemMessage(content="Criteria: TJA guidelines for trans coverage")]
         glaad_messages = [SystemMessage(content="Criteria: GLAAD media reference guide")]
 
         tja_hashes = compute_message_hashes(tja_messages)
         glaad_hashes = compute_message_hashes(glaad_messages)
 
-        tja_system = extract_system_hash(tja_hashes)
-        glaad_system = extract_system_hash(glaad_hashes)
+        tja_system = next(h for h in tja_hashes if h["role"] == "system")
+        glaad_system = next(h for h in glaad_hashes if h["role"] == "system")
 
-        assert tja_system != glaad_system
-
-    def test_extract_system_hash_present(self):
-        """extract_system_hash returns hash of first system message."""
-        messages = [
-            SystemMessage(content="system prompt"),
-            UserMessage(content="user input", source="test"),
-        ]
-        hashes = compute_message_hashes(messages)
-        system_hash = extract_system_hash(hashes)
-
-        assert system_hash is not None
-        assert system_hash == hashes[0]["hash"]
-
-    def test_extract_system_hash_missing(self):
-        """extract_system_hash returns None when no system message exists."""
-        messages = [UserMessage(content="just a user message", source="test")]
-        hashes = compute_message_hashes(messages)
-
-        assert extract_system_hash(hashes) is None
-
-    def test_extract_system_hash_empty_list(self):
-        """extract_system_hash handles empty list."""
-        assert extract_system_hash([]) is None
+        assert tja_system["hash"] != glaad_system["hash"]
 
     def test_message_hashes_empty_messages(self):
         """compute_message_hashes handles empty message list."""
         assert compute_message_hashes([]) == []
+
+
+class TestInputHashing:
+    """Test input-component hashing for rendering provenance."""
+
+    def test_template_only(self):
+        """Template entry appears with correct structure."""
+        inputs = compute_input_hashes(
+            template_name="judge.jinja2",
+            template_hash="abc123",
+        )
+        assert len(inputs) == 1
+        assert inputs[0] == {"name": "judge.jinja2", "type": "template", "hash": "abc123"}
+
+    def test_with_included_files(self):
+        """Included files produce type=include entries."""
+        inc = IncludedFile(name="criteria/tja.jinja2", path="/tmp/tja.jinja2", content_hash="def456")
+        inputs = compute_input_hashes(
+            template_name="judge.jinja2",
+            template_hash="abc123",
+            included_files=[inc],
+        )
+        assert len(inputs) == 2
+        assert inputs[1] == {"name": "criteria/tja.jinja2", "type": "include", "hash": "def456"}
+
+    def test_with_variables(self):
+        """Variables produce type=variable entries with hashes."""
+        inputs = compute_input_hashes(
+            template_name="judge.jinja2",
+            template_hash="abc123",
+            template_vars={"criteria": "tja", "content": "A long article " * 50},
+        )
+        assert len(inputs) == 3
+
+        criteria_entry = next(e for e in inputs if e["name"] == "criteria")
+        assert criteria_entry["type"] == "variable"
+        assert "value" in criteria_entry
+        assert criteria_entry["value"] == "tja"
+
+        content_entry = next(e for e in inputs if e["name"] == "content")
+        assert content_entry["type"] == "variable"
+        assert "value" not in content_entry
+
+    def test_determinism(self):
+        """Same inputs produce identical hashes across calls."""
+        kwargs = dict(
+            template_name="judge.jinja2",
+            template_hash="abc123",
+            included_files=[IncludedFile(name="inc.jinja2", path="/tmp/inc.jinja2", content_hash="x")],
+            template_vars={"criteria": "tja"},
+        )
+        assert compute_input_hashes(**kwargs) == compute_input_hashes(**kwargs)
+
+    def test_different_criteria_different_include_hash(self):
+        """Changing the include file content changes only the include hash."""
+        inc_tja = IncludedFile(name="criteria/tja.jinja2", path="/tmp/tja.jinja2", content_hash="hash_tja")
+        inc_glaad = IncludedFile(name="criteria/glaad.jinja2", path="/tmp/glaad.jinja2", content_hash="hash_glaad")
+
+        inputs_tja = compute_input_hashes(
+            template_name="judge.jinja2", template_hash="same",
+            included_files=[inc_tja], template_vars={"content": "same article"},
+        )
+        inputs_glaad = compute_input_hashes(
+            template_name="judge.jinja2", template_hash="same",
+            included_files=[inc_glaad], template_vars={"content": "same article"},
+        )
+
+        tja_include = next(e for e in inputs_tja if e["type"] == "include")
+        glaad_include = next(e for e in inputs_glaad if e["type"] == "include")
+        assert tja_include["hash"] != glaad_include["hash"]
+
+        tja_template = next(e for e in inputs_tja if e["type"] == "template")
+        glaad_template = next(e for e in inputs_glaad if e["type"] == "template")
+        assert tja_template["hash"] == glaad_template["hash"]
+
+        tja_content = next(e for e in inputs_tja if e["name"] == "content")
+        glaad_content = next(e for e in inputs_glaad if e["name"] == "content")
+        assert tja_content["hash"] == glaad_content["hash"]
+
+    def test_template_change_only_affects_template_entry(self):
+        """Editing the template file changes only the template entry hash."""
+        inc = IncludedFile(name="criteria/tja.jinja2", path="/tmp/tja.jinja2", content_hash="inc_hash")
+
+        inputs_v1 = compute_input_hashes(
+            template_name="judge.jinja2", template_hash="template_v1",
+            included_files=[inc], template_vars={"criteria": "tja"},
+        )
+        inputs_v2 = compute_input_hashes(
+            template_name="judge.jinja2", template_hash="template_v2",
+            included_files=[inc], template_vars={"criteria": "tja"},
+        )
+
+        v1_template = next(e for e in inputs_v1 if e["type"] == "template")
+        v2_template = next(e for e in inputs_v2 if e["type"] == "template")
+        assert v1_template["hash"] != v2_template["hash"]
+
+        v1_include = next(e for e in inputs_v1 if e["type"] == "include")
+        v2_include = next(e for e in inputs_v2 if e["type"] == "include")
+        assert v1_include["hash"] == v2_include["hash"]
+
+    def test_placeholder_vars_excluded(self):
+        """record and context vars are not included in inputs."""
+        inputs = compute_input_hashes(
+            template_name="t.jinja2", template_hash="h",
+            template_vars={"record": "big blob", "context": [], "criteria": "tja"},
+        )
+        names = [e["name"] for e in inputs]
+        assert "record" not in names
+        assert "context" not in names
+        assert "criteria" in names

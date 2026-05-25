@@ -23,7 +23,7 @@ def test_template_synth():
     }
     # Merge parameters with flow_data (parameters take precedence)
     merged_vars = {**flow_data, **parameters}
-    rendered, unfilled, template_hash = load_template(
+    rendered, unfilled, template_hash, _ = load_template(
         template="synthesise",
         template_vars=merged_vars,
     )
@@ -77,7 +77,7 @@ def test_load_template_hash_consistency():
     direct_hash, _ = calculate_template_hash("synthesise")
 
     # Get hash from load_template
-    _, _, template_hash = load_template(
+    _, _, template_hash, _ = load_template(
         template="synthesise",
         template_vars={"test": "value"},
     )

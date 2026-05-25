@@ -28,7 +28,7 @@ from pydantic import BaseModel, Field, PrivateAttr, model_validator
 from buttermilk import bm, logger
 from buttermilk._core.contract import ErrorEvent
 from buttermilk._core.exceptions import FatalError, ProcessingError
-from buttermilk._core.hashing import compute_sha256_hash
+
 from buttermilk._core.processor_core import ObservabilityMixin, TraceParams
 
 if TYPE_CHECKING:
@@ -327,68 +327,41 @@ class LLMCore(ObservabilityMixin):
             "context": context,
         }
 
-    def _compute_criteria_hash(self, criteria_val: Any, resolved_inputs: dict[str, Any]) -> str:
-        """Hash rendered criteria content; falls back to str() if render fails."""
-        try:
-            cr_result = render_template(criteria_val, template_vars=resolved_inputs)
-            criteria_content = cr_result.rendered
-        except Exception:
-            criteria_content = str(criteria_val)
-        return compute_sha256_hash(criteria_content.strip())
-
-    def _collect_record_hashes(self, record: BaseRecord) -> dict[str, Any]:
-        """Collect all per-record hash entries, including deprecated monolithic hash."""
-        hashes: dict[str, Any] = {
-            "record_hash": record.record_hash,
-            "record_hash_deprecated": True,
-        }
-        if hasattr(record, "record_hashes"):
-            hashes["record_hashes"] = record.record_hashes
-        if hasattr(record, "ground_truth_hash") and record.ground_truth_hash:
-            hashes["ground_truth_hash"] = record.ground_truth_hash
-        return hashes
-
     def _collect_result_metadata(self, result: LLMResult, llm_result: Any, record: BaseRecord | None) -> None:
         """Populate result with template metadata, hashes, and LLM response metadata."""
+        from buttermilk._core.hashing import compute_input_hashes
         from buttermilk._core.llms import ModelOutput
 
-        # Template metadata
         result.metadata["template"] = {
             "template_name": self._template_metadata.get("template_name"),
             "unfilled_vars": self._template_metadata.get("unfilled_vars", []),
         }
 
-        # Hashes
+        template_name_str = self._template_metadata.get("template_name", "")
+        template_filename = f"{template_name_str}.jinja2" if template_name_str else ""
+
+        input_hashes = compute_input_hashes(
+            template_name=template_filename,
+            template_hash=self._template_metadata.get("template_hash", ""),
+            included_files=self._template_metadata.get("included_files"),
+            template_vars=result.resolved_inputs,
+        )
+
+        msg_hashes = result.metadata.pop("_message_hashes", [])
+
         result.metadata["hashes"] = {
-            "template_hash": self._template_metadata.get("template_hash"),
-            "system_prompt_hash": self._template_metadata.get("template_hash"),  # Template itself is the instruction block
+            "inputs": input_hashes,
+            "message_hashes": msg_hashes,
         }
 
-        # Calculate criteria hash if criteria is in resolved inputs
-        if result.resolved_inputs and (criteria_val := result.resolved_inputs.get("criteria")):
-            result.metadata["hashes"]["criteria_hash"] = self._compute_criteria_hash(criteria_val, result.resolved_inputs)
-
-        # Add per-message hashes (computed before LLM call in process_with_llm)
-        if "_message_hashes" in result.metadata:
-            from buttermilk._core.hashing import extract_system_hash
-
-            msg_hashes = result.metadata.pop("_message_hashes")
-            result.metadata["hashes"]["message_hashes"] = msg_hashes
-            system_hash = extract_system_hash(msg_hashes)
-            if system_hash:
-                result.metadata["hashes"]["system_hash"] = system_hash
-
         if record is not None:
-            result.metadata["hashes"].update(self._collect_record_hashes(record))
             result.metadata["record_id"] = record.record_id
 
-        # Extract content
         if self._resolved_output_model and isinstance(llm_result, ModelOutput):
             result.content = llm_result.parsed_object
         else:
             result.content = llm_result.content
 
-        # Store messages
         from autogen_core.models import AssistantMessage
 
         result.messages = result.messages.copy() if result.messages else []
@@ -401,7 +374,6 @@ class LLMCore(ObservabilityMixin):
                 content_str = str(result.content)
             result.messages.append(AssistantMessage(content=content_str, source=self.model))
 
-        # Model name and usage
         model_name = self.model
         if isinstance(llm_result, ModelOutput) and hasattr(llm_result, "metadata"):
             model_name = llm_result.metadata.get("model", self.model)
@@ -413,7 +385,6 @@ class LLMCore(ObservabilityMixin):
             "usage": llm_result.usage,
         }
 
-        # Pricing
         if isinstance(llm_result, ModelOutput) and hasattr(llm_result, "metadata"):
             if "pricing" in llm_result.metadata:
                 result.metadata["pricing"] = llm_result.metadata["pricing"]
@@ -568,11 +539,11 @@ class LLMCore(ObservabilityMixin):
         if unfilled_vars:
             logger.warning(f"Template has unfilled parameters: {unfilled_vars}")
 
-        # Store template metadata
         self._template_metadata = {
             "template_name": result.template_name,
             "template_hash": result.template_hash,
             "unfilled_vars": list(unfilled_vars) if unfilled_vars else [],
+            "included_files": result.included_files,
         }
 
         logger.debug(f"Template '{result.template_name}' rendered into {len(llm_messages)} messages")
