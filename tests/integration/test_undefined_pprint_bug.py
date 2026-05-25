@@ -22,7 +22,7 @@ def test_score_template_with_missing_expected_shows_placeholder():
     """
     # Use ACTUAL score template from buttermilk/templates/prompt/score.jinja2
     # Provide answers and criteria (required), but NOT expected (triggers bug)
-    rendered, unfilled_vars, _ = load_template(
+    rendered, unfilled_vars, _, _ = load_template(
         template="score",
         template_vars={
             "answers": [{"agent_id": "test", "result": "test result"}],

@@ -133,6 +133,38 @@ def _get_cached_jinja_environment(
     return sandboxed_env
 
 
+class TrackingFileSystemLoader(FileSystemLoader):
+    """FileSystemLoader subclass that records every get_source() call.
+
+    Used to track which template files Jinja2 actually loaded during rendering,
+    enabling per-include hashing for input-component provenance.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._loaded_files: list[tuple[str, str]] = []
+
+    def get_source(self, environment, template):
+        source, filename, uptodate = super().get_source(environment, template)
+        self._loaded_files.append((template, filename))
+        return source, filename, uptodate
+
+    def get_loaded_files(self) -> list[tuple[str, str]]:
+        return list(self._loaded_files)
+
+    def reset_tracking(self):
+        self._loaded_files.clear()
+
+
+@dataclass
+class IncludedFile:
+    """A file loaded during Jinja2 template rendering."""
+
+    name: str
+    path: str
+    content_hash: str
+
+
 class KeyValueCollector(BaseModel):
     """A collector for key-value pairs, typically used for populating prompt templates.
 
@@ -416,98 +448,99 @@ def _parse_prompty(string_template: str) -> str:
 def load_template(
     template: str,  # Name of the template file (without .jinja2 extension)
     template_vars: dict[str, Any] | None = None,  # Variables for template rendering
-) -> tuple[str, set[str], str]:
+) -> tuple[str, set[str], str, list[IncludedFile]]:
     """Renders a Jinja2 template with hierarchical includes.
 
-    Uses a sandboxed Jinja2 environment. Undefined variables in the template
-    are preserved as `{{ variable_name }}` in the output, and their names are
-    collected.
-
-    The template loader searches recursively within configured template paths.
+    Uses a sandboxed Jinja2 environment with a tracking loader that records
+    which files Jinja2 actually loaded during rendering.
 
     Args:
         template (str): The name of the template file (without the .jinja2 extension)
             to load from configured template paths.
         template_vars (dict[str, Any] | None): Variables available to the template.
-            Can control template logic, includes, and content substitution.
-            Empty values (None, "", [], {}) are automatically removed to enforce
-            fail-fast - variables with empty values will be treated as missing/unfilled.
 
     Returns:
-        tuple[str, set[str], str]: A tuple containing:
+        tuple[str, set[str], str, list[IncludedFile]]: A tuple containing:
             - str: The fully rendered template content as a string.
             - set[str]: A set of variable names present in template but not in template_vars.
-            - str: The SHA-256 hash of the template file content, prefixed with "sha256:".
+            - str: The SHA-256 hash of the template file content.
+            - list[IncludedFile]: Files loaded via Jinja2 include during rendering.
 
     Raises:
         FatalError: If the specified template file cannot be loaded.
-
     """
+    from buttermilk._core.hashing import compute_sha256_hash
+
     effective_vars = template_vars or {}
 
-    # Clean empty values to enforce fail-fast
-    # Empty values (None, "", [], {}) are removed so they're treated as missing
-    # This prevents silent failures where empty data is rendered as valid input
     effective_vars = clean_empty_values(effective_vars)
 
-    # Define search paths for templates using the new helper
     search_paths = _get_template_search_paths()
 
-    # Get cached environment to prevent file descriptor leaks
-    # Convert list to tuple for hashability in lru_cache
-    sandboxed_env = _get_cached_jinja_environment(tuple(search_paths))
+    tracking_loader = TrackingFileSystemLoader(searchpath=search_paths)
 
     collected_undefined_vars: list[str] = []
 
     class KeepUndefinedAndCollect(Undefined):
-        """Custom Undefined type to keep undefined variables in the template
-        and collect their names.
-        """
-
         def __str__(self) -> str:
-            # Add the undefined variable name to our list
             collected_undefined_vars.append(self._undefined_name)
-            # Render as {{ variable_name }} to make it clear it was undefined
             return "{{" + str(self._undefined_name) + "}}"
 
-    # Override the undefined handler for this specific render
-    # (The cached environment has a default Undefined, we override per-use)
-    sandboxed_env.undefined = KeepUndefinedAndCollect
+    render_env = sandbox.SandboxedEnvironment(
+        loader=tracking_loader,
+        trim_blocks=True,
+        lstrip_blocks=True,
+        undefined=KeepUndefinedAndCollect,
+        keep_trailing_newline=False,
+    )
+
+    def strip_all_whitespace(s: Any) -> Any:
+        if isinstance(s, str):
+            return s.strip()
+        return s
+
+    render_env.filters["strip_all"] = strip_all_whitespace
 
     template_filename = f"{template}.jinja2"
     try:
-        jinja_template = sandboxed_env.get_template(template_filename)
-    except Exception as err:  # Catch Jinja2 specific TemplateNotFound or general errors
+        jinja_template = render_env.get_template(template_filename)
+    except Exception as err:
         logger.error(
             f"Failed to load Jinja2 template '{template_filename}': {err!s}",
             exc_info=True,
         )
         raise FatalError(f"Template '{template}' (file: '{template_filename}') could not be loaded.") from err
 
-    # Exclude 'record' and 'context' from Jinja2 rendering - these are handled
-    # specially by make_messages() as placeholder roles, not template variables.
-    # If they're in rendering_context, Jinja2 would render them as JSON/dict
-    # instead of leaving {{record}} for make_messages to process.
     placeholder_keys = {"record", "context"}
     rendering_context = {k: v for k, v in effective_vars.items() if k not in placeholder_keys}
 
     rendered_string = jinja_template.render(**rendering_context)
 
-    # Calculate template hash for version tracking
     try:
         template_hash, _ = calculate_template_hash(template)
     except FatalError:
-        # If hash calculation fails, re-raise as the template loading should have also failed
         logger.warning(f"Could not calculate hash for template '{template}' - this may indicate a template loading issue")
         raise
 
-    # Check for unfilled parameters if requested (fail-fast)
-    # Exclude placeholder keys (record, context) - these are handled by make_messages, not Jinja2
+    included_files: list[IncludedFile] = []
+    top_level_template_filename = template_filename
+    for loaded_name, loaded_path in tracking_loader.get_loaded_files():
+        if loaded_name == top_level_template_filename:
+            continue
+        file_content = Path(loaded_path).read_text(encoding="utf-8")
+        included_files.append(
+            IncludedFile(
+                name=loaded_name,
+                path=loaded_path,
+                content_hash=compute_sha256_hash(file_content),
+            )
+        )
+
     unfilled_vars = set(collected_undefined_vars) - placeholder_keys
     if effective_vars.get("fail_on_unfilled_parameters") and unfilled_vars:
         raise FatalError(f"Template '{template}' has unfilled parameters: {', '.join(sorted(unfilled_vars))}")
 
-    return rendered_string, unfilled_vars, template_hash
+    return rendered_string, unfilled_vars, template_hash, included_files
 
 
 @dataclass
@@ -522,12 +555,18 @@ class TemplateRenderResult:
         template_name: Name of the template that was rendered
         template_hash: SHA-256 hash of the template file for version tracking
         unfilled_vars: List of template variables that remained unfilled
+        included_files: Files loaded via Jinja2 {% include %} during rendering
     """
 
     rendered: str
     template_name: str
     template_hash: str
     unfilled_vars: list[str]
+    included_files: list[IncludedFile] = None
+
+    def __post_init__(self):
+        if self.included_files is None:
+            self.included_files = []
 
 
 def render_template(
@@ -571,18 +610,13 @@ def render_template(
         >>> print(result.rendered)
         >>> print(result.template_hash)
     """
-    # Merge base (config-time) with runtime, runtime overrides
     merged = {**(base_template_vars or {}), **(template_vars or {})}
     filtered = clean_empty_values(merged) if merged else {}
 
-    # Load and render template
-    rendered_str, unfilled_vars, template_hash = load_template(template, filtered)
+    rendered_str, unfilled_vars, template_hash, included_files = load_template(template, filtered)
 
-    # Exclude placeholders handled by make_messages (not Jinja2 variables)
     unfilled_vars = unfilled_vars - {"record", "context"}
 
-    # Fail-fast on unfilled variables if requested
-    # Use FatalError for consistency with load_template (config/setup error, not runtime)
     if unfilled_vars and fail_on_unfilled:
         raise FatalError(f"Template '{template}' has unfilled parameters: {', '.join(sorted(unfilled_vars))}")
 
@@ -591,6 +625,7 @@ def render_template(
         template_name=template,
         template_hash=template_hash,
         unfilled_vars=list(unfilled_vars),
+        included_files=included_files,
     )
 
 

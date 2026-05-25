@@ -292,18 +292,13 @@ class TestLLMCore:
     async def test_template_metadata_preserved_in_result(self):
         """Test that template metadata is preserved in LLMResult.
 
-        Regression test for bug where template_hash was calculated but then
-        overwritten when metadata dict was replaced instead of updated.
-
         Template info is stored at:
         - metadata["template"]["template_name"] and ["unfilled_vars"]
-        - metadata["hashes"]["template_hash"]
-
-        This test uses REAL template loading to verify the actual bug is fixed.
+        - metadata["hashes"]["inputs"] (array with type=template entry)
+        - metadata["hashes"]["message_hashes"] (array with per-message hashes)
         """
         core = LLMCore(model="gpt-4", template="test/simple")
 
-        # Mock ONLY the external LLM boundary
         mock_bm = MagicMock()
         mock_client = AsyncMock()
         mock_client.call_chat.return_value = CreateResult(
@@ -317,40 +312,37 @@ class TestLLMCore:
         with patch("buttermilk._core.llm_core.bm", mock_bm):
             result = await core.process_with_llm(template_vars={"var": "test input"})
 
-            # The bug: template metadata should be in result.metadata
-            # If the bug exists, template metadata would be overwritten
-            assert "template" in result.metadata, "Template metadata should be present in result"
+            assert "template" in result.metadata
             assert result.metadata["template"]["template_name"] == "test/simple"
             assert result.metadata["template"]["unfilled_vars"] == []
 
-            # Template hash is consolidated in metadata.hashes
-            assert "hashes" in result.metadata, "Hashes should be present in result metadata"
-            assert "template_hash" in result.metadata["hashes"]
-            assert result.metadata["hashes"]["template_hash"] != ""  # Should have a hash
+            assert "hashes" in result.metadata
+            hashes = result.metadata["hashes"]
+            assert "inputs" in hashes
+            assert "message_hashes" in hashes
+            assert len(hashes) == 2
 
-            # Also verify other metadata is still there (wasn't overwritten)
+            template_entry = next(e for e in hashes["inputs"] if e["type"] == "template")
+            assert template_entry["hash"] != ""
+
             assert result.metadata["model"] == "gpt-4"
             assert result.metadata["finish_reason"] == "stop"
 
     @pytest.mark.anyio
     async def test_record_metadata_preserved_in_result(self):
-        """Test that record metadata (including record_hash) is stored in LLMResult.
+        """Test that record metadata is stored in LLMResult.
 
-        Similar to template_metadata test, this verifies that when a record is
-        provided, its metadata is preserved:
-        - record_id at result.metadata["record_id"]
-        - record_hash at result.metadata["hashes"]["record_hash"]
+        record_id at result.metadata["record_id"]; hashes contains
+        only inputs and message_hashes arrays.
         """
         core = LLMCore(model="gpt-4", template="test/simple")
 
-        # Create a test record
         record = BaseRecord(
             record_id="test_record_123",
             dataset_name="test_dataset",
             split_type="train",
         )
 
-        # Mock ONLY the external LLM boundary
         mock_bm = MagicMock()
         mock_client = AsyncMock()
         mock_client.call_chat.return_value = CreateResult(
@@ -364,20 +356,13 @@ class TestLLMCore:
         with patch("buttermilk._core.llm_core.bm", mock_bm):
             result = await core.process_with_llm(template_vars={"var": "test input"}, record=record)
 
-            # Verify record metadata is present in result.metadata
-            assert "record_id" in result.metadata, "Record ID should be present in result metadata"
+            assert "record_id" in result.metadata
             assert result.metadata["record_id"] == "test_record_123"
 
-            # Verify hashes are consolidated in metadata.hashes
-            assert "hashes" in result.metadata, "Hashes should be present in result metadata"
-            assert "record_hash" in result.metadata["hashes"]
-            assert result.metadata["hashes"]["record_hash"] != ""  # Should have a hash
-            assert len(result.metadata["hashes"]["record_hash"]) == 64  # SHA256 length
+            assert "hashes" in result.metadata
+            hashes = result.metadata["hashes"]
+            assert set(hashes.keys()) == {"inputs", "message_hashes"}
 
-            # Verify the hash matches the record's computed hash
-            assert result.metadata["hashes"]["record_hash"] == record.record_hash
-
-            # Also verify other metadata is still there (wasn't overwritten)
             assert result.metadata["model"] == "gpt-4"
             assert result.metadata["finish_reason"] == "stop"
             assert "template" in result.metadata

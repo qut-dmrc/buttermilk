@@ -151,7 +151,7 @@ class TestScoreTemplateRendering:
         )
 
         # Render template
-        rendered, undefined_vars, template_hash = load_template(
+        rendered, undefined_vars, template_hash, _ = load_template(
             template="score",
             template_vars={
                 "source": source,
@@ -175,7 +175,7 @@ class TestScoreTemplateRendering:
         assert isinstance(expected, dict)
         assert "reasons" in expected
 
-        rendered, _, _ = load_template(
+        rendered, _, _, _ = load_template(
             template="score",
             template_vars={
                 "source": "Test source",
@@ -191,7 +191,7 @@ class TestScoreTemplateRendering:
 
     def test_template_handles_ground_truth_as_string(self):
         """Verify template handles expected when it's a plain string."""
-        rendered, _, _ = load_template(
+        rendered, _, _, _ = load_template(
             template="score",
             template_vars={
                 "source": "Test source",
@@ -209,7 +209,7 @@ class TestScoreTemplateRendering:
             "[JUDGE,SYNTHESISER][].{agent_id: agent_info.agent_id, result: outputs, answer_id: call_id, error: error}", flow_state
         )
 
-        rendered, _, _ = load_template(
+        rendered, _, _, _ = load_template(
             template="score",
             template_vars={
                 "source": "Test source",

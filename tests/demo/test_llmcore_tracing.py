@@ -465,57 +465,39 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
     # HASH VALIDATION: Verify hashes exist and match recomputed values
     # ==========================================================================
 
-    # 1. Validate template_hash exists in metadata.hashes and matches recomputed hash
+    # 1. Validate hashes contains inputs and message_hashes arrays
     assert "hashes" in metadata, f"Metadata should contain 'hashes' dict. Got keys: {metadata.keys()}"
     hashes_metadata = metadata["hashes"]
     if isinstance(hashes_metadata, str):
         hashes_metadata = json.loads(hashes_metadata)
 
-    assert "template_hash" in hashes_metadata, f"Hashes metadata should contain 'template_hash'. Got: {hashes_metadata.keys()}"
-    logged_template_hash = hashes_metadata["template_hash"]
-    assert logged_template_hash is not None, "template_hash should not be None"
-    assert len(logged_template_hash) == 64, f"template_hash should be 64-char SHA256, got {len(logged_template_hash)} chars: {logged_template_hash}"
+    assert "inputs" in hashes_metadata, f"Hashes should contain 'inputs' array. Got: {hashes_metadata.keys()}"
+    assert "message_hashes" in hashes_metadata, f"Hashes should contain 'message_hashes' array. Got: {hashes_metadata.keys()}"
+    assert set(hashes_metadata.keys()) == {"inputs", "message_hashes"}, f"Hashes should only have inputs and message_hashes. Got: {hashes_metadata.keys()}"
 
-    # Recompute template hash and verify it matches
-    # The test uses template="ra"
-    _, _, expected_template_hash = load_template(
+    # Validate template entry in inputs
+    template_entries = [e for e in hashes_metadata["inputs"] if e["type"] == "template"]
+    assert len(template_entries) == 1, f"Should have exactly one template entry. Got: {template_entries}"
+    logged_template_hash = template_entries[0]["hash"]
+    assert len(logged_template_hash) == 64, f"template hash should be 64-char SHA256, got {len(logged_template_hash)} chars"
+
+    _, _, expected_template_hash, _ = load_template(
         template="ra",
         template_vars={},
     )
     assert logged_template_hash == expected_template_hash, (
-        f"Logged template_hash should match recomputed hash.\nLogged:   {logged_template_hash}\nExpected: {expected_template_hash}"
+        f"Logged template hash should match recomputed hash.\nLogged:   {logged_template_hash}\nExpected: {expected_template_hash}"
     )
-    logger.info(f"✅ template_hash validated: {logged_template_hash[:16]}...")
+    logger.info(f"✅ template hash validated: {logged_template_hash[:16]}...")
 
     # 2. Validate record_id exists in inputs (flattened structure)
-    # Record data is flattened directly into inputs
     assert "record_id" in inputs, f"inputs should have record_id. Got keys: {inputs.keys()}"
-    # Verify the record_id matches our sample_record
     assert inputs["record_id"] == sample_record.record_id, (
         f"Record ID in trace should match input record.\nTrace:    {inputs['record_id']}\nExpected: {sample_record.record_id}"
     )
     logger.info(f"✅ record_id validated: {inputs['record_id']}")
 
-    # Validate record_hash exists in metadata.hashes and matches recomputed hash
-    assert "hashes" in metadata, f"Metadata should contain 'hashes' dict. Got keys: {metadata.keys()}"
-    hashes_metadata = metadata["hashes"]
-    if isinstance(hashes_metadata, str):
-        hashes_metadata = json.loads(hashes_metadata)
-
-    assert "record_hash" in hashes_metadata, f"Hashes metadata should contain 'record_hash'. Got: {hashes_metadata.keys()}"
-    logged_record_hash = hashes_metadata["record_hash"]
-    assert logged_record_hash is not None, "record_hash should not be None"
-    assert len(logged_record_hash) == 64, f"record_hash should be 64-char SHA256, got {len(logged_record_hash)} chars: {logged_record_hash}"
-
-    # Recompute record hash and verify it matches
-    expected_record_hash = compute_record_hash(sample_record.as_markdown())
-    assert logged_record_hash == expected_record_hash, (
-        f"Logged record_hash should match recomputed hash.\nLogged:   {logged_record_hash}\nExpected: {expected_record_hash}"
-    )
-    logger.info(f"✅ record_hash validated: {logged_record_hash[:16]}...")
-
     # 3. Validate config hash can be computed from llm_config
-    # The llm_config contains the LLMCore config that should be hashable
     config_hash = hash_dict(llm_config_metadata)
     assert len(config_hash) == 64, f"config_hash should be 64-char SHA256, got {len(config_hash)} chars"
     logger.info(f"✅ config_hash computed from llm_config: {config_hash[:16]}...")
@@ -797,15 +779,11 @@ async def test_trace_writer_save(real_bm, llm_wrapper_type):
 
 @pytest.mark.anyio
 async def test_record_hash_stored_in_single_location(real_bm, sample_record: BaseRecord, real_model_name_expensive: str, llm_wrapper_type):
-    """Test that record_hash appears in exactly ONE location in the serialized trace.
+    """Test that metadata.hashes contains exactly inputs and message_hashes arrays.
 
-    This test validates data integrity by ensuring record_hash is stored in a
-    single, predictable location rather than duplicated across multiple fields.
-
-    All hashes are consolidated in metadata.hashes dict:
-    - metadata.hashes.record_hash (expected location)
-    - metadata.hashes.template_hash
-    - metadata.hashes.ground_truth_hash (optional)
+    Validates the new hashing schema: no top-level record_hash, template_hash,
+    etc. — all provenance is in the inputs array, all rendered-message identity
+    is in message_hashes.
     """
     # Skip structured output test for models that don't support it
     if real_model_name_expensive in MODELS_WITHOUT_STRUCTURED_OUTPUT:
@@ -881,72 +859,29 @@ async def test_record_hash_stored_in_single_location(real_bm, sample_record: Bas
         "metadata": json.loads(trace.metadata) if isinstance(trace.metadata, str) else trace.metadata,
     }
 
-    # Step 5: Walk the entire structure and find ALL occurrences of record_hash
-    def find_record_hash_paths(obj: Any, path: str = "root") -> list[str]:
-        """Recursively find all paths where record_hash appears.
+    # Step 5: Validate hashes contains exactly inputs and message_hashes
+    hashes = trace_dict["metadata"]["hashes"]
+    if isinstance(hashes, str):
+        hashes = json.loads(hashes)
 
-        Args:
-            obj: The object to search (dict, list, or primitive)
-            path: Current path in dot notation
-
-        Returns:
-            List of paths where record_hash was found
-        """
-        paths = []
-
-        if isinstance(obj, dict):
-            # Check if this dict has a record_hash key
-            if "record_hash" in obj:
-                paths.append(f"{path}.record_hash")
-
-            # Recursively search all values
-            for key, value in obj.items():
-                child_paths = find_record_hash_paths(value, f"{path}.{key}")
-                paths.extend(child_paths)
-
-        elif isinstance(obj, list):
-            # Recursively search all list items
-            for idx, item in enumerate(obj):
-                child_paths = find_record_hash_paths(item, f"{path}[{idx}]")
-                paths.extend(child_paths)
-
-        # Primitives (str, int, bool, None) don't contain nested record_hash
-        return paths
-
-    all_record_hash_paths = find_record_hash_paths(trace_dict)
-
-    # Step 6: Assert record_hash appears exactly ONCE
-    logger.info(f"Found record_hash at {len(all_record_hash_paths)} locations:")
-    for path in all_record_hash_paths:
-        logger.info(f"  - {path}")
-
-    assert len(all_record_hash_paths) == 1, (
-        f"record_hash should appear in EXACTLY ONE location, but found {len(all_record_hash_paths)} locations:\n"
-        + "\n".join(f"  - {path}" for path in all_record_hash_paths)
-        + "\n\nThis indicates record_hash is being duplicated across multiple fields, "
-        + "which creates data integrity issues and confusion about the source of truth."
+    assert set(hashes.keys()) == {"inputs", "message_hashes"}, (
+        f"metadata.hashes should contain exactly 'inputs' and 'message_hashes'. Got: {hashes.keys()}"
     )
+    assert isinstance(hashes["inputs"], list), "inputs should be a list"
+    assert isinstance(hashes["message_hashes"], list), "message_hashes should be a list"
 
-    # Validate the single location is the expected one (metadata.hashes.record_hash)
-    expected_path = "root.metadata.hashes.record_hash"
-    assert all_record_hash_paths[0] == expected_path, (
-        f"record_hash should be stored at '{expected_path}', but found it at '{all_record_hash_paths[0]}'"
-    )
+    template_entries = [e for e in hashes["inputs"] if e.get("type") == "template"]
+    assert len(template_entries) == 1, f"Should have exactly one template entry in inputs. Got: {template_entries}"
 
-    logger.info(f"✅ record_hash appears in exactly ONE location: {all_record_hash_paths[0]}")
+    logger.info(f"✅ hashes schema validated: {len(hashes['inputs'])} inputs, {len(hashes['message_hashes'])} message_hashes")
 
 
 @pytest.mark.anyio
 async def test_template_hash_stored_in_single_location(real_bm, sample_record: BaseRecord, real_model_name_expensive: str, llm_wrapper_type):
-    """Test that template_hash appears in exactly ONE location in the serialized trace.
+    """Test that template hash appears in the inputs array of metadata.hashes.
 
-    This test validates data integrity by ensuring template_hash is stored in a
-    single, predictable location rather than duplicated across multiple fields.
-
-    All hashes are consolidated in metadata.hashes dict:
-    - metadata.hashes.template_hash (expected location)
-    - metadata.hashes.record_hash
-    - metadata.hashes.ground_truth_hash (optional)
+    Validates the new hashing schema: template hash is in
+    metadata.hashes.inputs[type=template], not at a top-level key.
     """
     # Skip structured output test for models that don't support it
     if real_model_name_expensive in MODELS_WITHOUT_STRUCTURED_OUTPUT:
@@ -1022,59 +957,20 @@ async def test_template_hash_stored_in_single_location(real_bm, sample_record: B
         "metadata": json.loads(trace.metadata) if isinstance(trace.metadata, str) else trace.metadata,
     }
 
-    # Step 5: Walk the entire structure and find ALL occurrences of template_hash
-    def find_template_hash_paths(obj: Any, path: str = "root") -> list[str]:
-        """Recursively find all paths where template_hash appears.
+    # Step 5: Validate hashes structure and template hash in inputs array
+    hashes = trace_dict["metadata"]["hashes"]
+    if isinstance(hashes, str):
+        hashes = json.loads(hashes)
 
-        Args:
-            obj: The object to search (dict, list, or primitive)
-            path: Current path in dot notation
-
-        Returns:
-            List of paths where template_hash was found
-        """
-        paths = []
-
-        if isinstance(obj, dict):
-            # Check if this dict has a template_hash key
-            if "template_hash" in obj:
-                paths.append(f"{path}.template_hash")
-
-            # Recursively search all values
-            for key, value in obj.items():
-                child_paths = find_template_hash_paths(value, f"{path}.{key}")
-                paths.extend(child_paths)
-
-        elif isinstance(obj, list):
-            # Recursively search all list items
-            for idx, item in enumerate(obj):
-                child_paths = find_template_hash_paths(item, f"{path}[{idx}]")
-                paths.extend(child_paths)
-
-        # Primitives (str, int, bool, None) don't contain nested template_hash
-        return paths
-
-    all_template_hash_paths = find_template_hash_paths(trace_dict)
-
-    # Step 6: Assert template_hash appears exactly ONCE
-    logger.info(f"Found template_hash at {len(all_template_hash_paths)} locations:")
-    for path in all_template_hash_paths:
-        logger.info(f"  - {path}")
-
-    assert len(all_template_hash_paths) == 1, (
-        f"template_hash should appear in EXACTLY ONE location, but found {len(all_template_hash_paths)} locations:\n"
-        + "\n".join(f"  - {path}" for path in all_template_hash_paths)
-        + "\n\nThis indicates template_hash is being duplicated across multiple fields, "
-        + "which creates data integrity issues and confusion about the source of truth."
+    assert set(hashes.keys()) == {"inputs", "message_hashes"}, (
+        f"metadata.hashes should contain exactly 'inputs' and 'message_hashes'. Got: {hashes.keys()}"
     )
 
-    # Validate the single location is the expected one (metadata.hashes.template_hash)
-    expected_path = "root.metadata.hashes.template_hash"
-    assert all_template_hash_paths[0] == expected_path, (
-        f"template_hash should be stored at '{expected_path}', but found it at '{all_template_hash_paths[0]}'"
-    )
+    template_entries = [e for e in hashes["inputs"] if e.get("type") == "template"]
+    assert len(template_entries) == 1, f"Should have exactly one template entry in inputs. Got: {template_entries}"
+    assert len(template_entries[0]["hash"]) == 64, "Template hash should be 64-char SHA256"
 
-    logger.info(f"✅ template_hash appears in exactly ONE location: {all_template_hash_paths[0]}")
+    logger.info(f"✅ template hash validated in inputs array: {template_entries[0]['hash'][:16]}...")
 
 
 @pytest.mark.anyio

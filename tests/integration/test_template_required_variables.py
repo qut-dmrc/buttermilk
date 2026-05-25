@@ -95,7 +95,7 @@ def test_template_detects_missing_required_variable(template_name, required_vars
     for required_var in required_vars:
         # Render template WITHOUT the required variable
         # (minimal_inputs contains everything EXCEPT the var we're testing)
-        rendered, unfilled_vars, _ = load_template(template=template_name, template_vars=minimal_inputs)
+        rendered, unfilled_vars, _, _ = load_template(template=template_name, template_vars=minimal_inputs)
 
         # CRITICAL ASSERTION: Missing variable MUST be detected
         assert required_var in unfilled_vars, (
@@ -116,7 +116,7 @@ def test_score_template_expected_variable_comprehensive():
     This test ensures 'expected' is tracked even with conditionals and pprint.
     """
     # Provide all required variables EXCEPT 'expected'
-    rendered, unfilled_vars, _ = load_template(
+    rendered, unfilled_vars, _, _ = load_template(
         template="score",
         template_vars={
             "answers": [
@@ -153,7 +153,7 @@ def test_template_with_all_variables_provided_has_no_unfilled():
     contain truly missing variables, not false positives.
     """
     # Provide ALL required variables for score template
-    rendered, unfilled_vars, _ = load_template(
+    rendered, unfilled_vars, _, _ = load_template(
         template="score",
         template_vars={
             "answers": [{"agent_id": "test", "result": "test result"}],
@@ -226,7 +226,7 @@ def test_template_with_wrong_type_fails_or_warns(template_name, var_name, correc
     """
     # First, verify the CORRECT type works
     correct_inputs = {**other_inputs, var_name: correct_value}
-    rendered_correct, unfilled_correct, _ = load_template(template=template_name, template_vars=correct_inputs)
+    rendered_correct, unfilled_correct, _, _ = load_template(template=template_name, template_vars=correct_inputs)
 
     # Baseline: correct type should work without issues
     assert var_name not in unfilled_correct, (
@@ -235,7 +235,7 @@ def test_template_with_wrong_type_fails_or_warns(template_name, var_name, correc
 
     # Now test with WRONG type (dict as string or string as dict)
     wrong_inputs = {**other_inputs, var_name: wrong_value}
-    rendered_wrong, unfilled_wrong, _ = load_template(template=template_name, template_vars=wrong_inputs)
+    rendered_wrong, unfilled_wrong, _, _ = load_template(template=template_name, template_vars=wrong_inputs)
 
     # Check how template handles wrong type
     # Acceptable outcomes:
@@ -415,7 +415,7 @@ def test_template_renders_successfully_with_all_parameters(template_name, comple
     4. Output should contain expected content
     """
     # Render template with complete inputs
-    rendered, unfilled_vars, _ = load_template(template=template_name, template_vars=complete_inputs)
+    rendered, unfilled_vars, _, _ = load_template(template=template_name, template_vars=complete_inputs)
 
     # Assertion 1: No unfilled variables (all were provided)
     # Note: 'record' and 'context' are placeholder variables handled by make_messages(),
@@ -578,7 +578,7 @@ def test_template_detects_empty_values_as_unfilled(template_name, var_name, empt
     all_inputs = {**other_inputs, var_name: empty_value}
 
     # Render template with empty value
-    rendered, unfilled_vars, _ = load_template(template=template_name, template_vars=all_inputs)
+    rendered, unfilled_vars, _, _ = load_template(template=template_name, template_vars=all_inputs)
 
     # CRITICAL ASSERTION: Empty value should be detected as unfilled
     # OR template should have raised an error (which would prevent us reaching here)
@@ -703,7 +703,7 @@ def test_score_template_comprehensive_passing():
     }
 
     # Render template
-    rendered, unfilled_vars, _ = load_template(template="score", template_vars=complete_inputs)
+    rendered, unfilled_vars, _, _ = load_template(template="score", template_vars=complete_inputs)
 
     # Validate rendering success
     assert "answers" not in unfilled_vars, f"'answers' should not be unfilled: {unfilled_vars}"

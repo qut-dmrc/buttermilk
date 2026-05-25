@@ -276,7 +276,7 @@ class TestAgentVariableExtraction:
         }
 
         # Render the REAL template with proper data
-        rendered, undefined_vars, template_hash = load_template(
+        rendered, undefined_vars, template_hash, _ = load_template(
             template=real_template, template_vars=proper_inputs
         )  # MUST render without undefined variables
         assert len(undefined_vars) == 0, f"Template has undefined variables: {undefined_vars}"
