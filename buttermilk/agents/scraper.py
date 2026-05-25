@@ -26,6 +26,7 @@ Note:
 
 import logging  # Standard logging
 import random
+import re
 import time
 from typing import Any  # For type hinting
 
@@ -50,6 +51,7 @@ except ImportError:
     StaleElementReferenceException = Exception  # type: ignore
 
 
+import shortuuid
 import urllib3  # Underlying HTTP library used by requests
 from pydantic import PrivateAttr  # Pydantic for private attributes
 from tenacity import (  # Retry library components
@@ -59,7 +61,7 @@ from tenacity import (  # Retry library components
     wait_exponential_jitter,
 )
 
-from buttermilk import bm, logger  # Global Buttermilk instance for saving
+from buttermilk import bm  # Global Buttermilk instance for saving
 from buttermilk._core.agent import Agent  # Buttermilk base Agent class
 from buttermilk._core.exceptions import FatalError, RateLimit  # Custom exceptions
 from buttermilk._core.log import logger  # Buttermilk logger

@@ -921,11 +921,16 @@ async def test_continue_on_error_partial_success():
     async for record in orchestrator():
         results.append(record)
 
-    # 2 of 3 variants succeed
-    assert len(results) == 2
+    # 2 variants succeed, 1 variant fails but is yielded with error metadata
+    assert len(results) == 3
     assert orchestrator._summary.processed == 1  # source record counted as processed
     assert orchestrator._summary.variant_errors == 1
     assert orchestrator._summary.failed == 0
+
+    failed_records = [r for r in results if r.metadata and r.metadata.get("test_continue", {}).get("status") == "failed"]
+    assert len(failed_records) == 1
+    assert failed_records[0].metadata["test_continue"]["error_type"] == "ValueError"
+    assert "Simulated failure" in failed_records[0].metadata["test_continue"]["error"]
 
 
 @pytest.mark.anyio
@@ -951,10 +956,15 @@ async def test_continue_on_error_all_fail():
     async for record in orchestrator():
         results.append(record)
 
-    # All variants failed → source record failed, no outputs
-    assert len(results) == 0
+    # All variants failed → source record failed, but failed variants are yielded
+    assert len(results) == 3
     assert orchestrator._summary.failed == 1
     assert orchestrator._summary.variant_errors == 3
+
+    failed_records = [r for r in results if r.metadata and r.metadata.get("test_all_fail", {}).get("status") == "failed"]
+    assert len(failed_records) == 3
+    for r in failed_records:
+        assert r.metadata["test_all_fail"]["error_type"] == "ValueError"
 
 
 @pytest.mark.anyio
@@ -1038,6 +1048,9 @@ async def test_continue_on_error_noop_single_record():
     async for record in orchestrator():
         results.append(record)
 
-    # Single record fails → source record failed (continue_on_error can't help)
-    assert len(results) == 0
+    # Single record fails → source record failed, but failed record is yielded
+    assert len(results) == 1
     assert orchestrator._summary.failed == 1
+
+    failed_records = [r for r in results if r.metadata and r.metadata.get("test_noop", {}).get("status") == "failed"]
+    assert len(failed_records) == 1

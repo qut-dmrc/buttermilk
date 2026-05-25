@@ -27,7 +27,7 @@ from autogen_core.tools import (
     Tool,
     ToolSchema,
 )  # Importing the Tool protocol from autogen_core
-from omegaconf import DictConfig, ListConfig  # For OmegaConf integration
+from omegaconf import DictConfig, ListConfig, OmegaConf  # For OmegaConf integration
 from pydantic import (
     BaseModel,
     ConfigDict,

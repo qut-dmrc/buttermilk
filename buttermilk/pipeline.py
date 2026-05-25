@@ -306,6 +306,7 @@ class PipelineOrchestrator(BaseModel):
             try:
                 # Start with the record as a single item in a processing queue
                 processing_queue = [record]
+                failed_queue = []
 
                 # Flow records through each processor in sequence
                 for processor_index, processor in enumerate(self.processors):
@@ -447,6 +448,21 @@ class PipelineOrchestrator(BaseModel):
                                 )
                                 self._summary.increment_variant_errors()
                                 local_variant_errors += 1
+
+                                if hasattr(current_record, "metadata") and hasattr(current_record, "model_copy"):
+                                    updated_metadata = current_record.metadata.copy() if current_record.metadata else {}
+                                    updated_metadata[self.pipeline_name] = {
+                                        "status": "failed",
+                                        "timestamp": time.time(),
+                                        "error": str(e),
+                                        "error_type": type(e).__name__,
+                                        "failed_stage": processor_stage_name,
+                                    }
+                                    failed_record = current_record.model_copy(update={"metadata": updated_metadata})
+                                    failed_queue.append(failed_record)
+                                else:
+                                    failed_queue.append(current_record)
+
                                 continue
 
                             if not outputs:
@@ -553,11 +569,19 @@ class PipelineOrchestrator(BaseModel):
                         # Typed data flow: yield non-BaseRecord objects as-is
                         yield final_record
 
+                # Also yield all failed variant records
+                for failed_record in failed_queue:
+                    yield failed_record
+
             except GeneratorExit:
                 # Handle early generator termination gracefully
                 chain_span.set_status(trace.Status(trace.StatusCode.OK))
                 raise
             except Exception as e:
+                # Yield any accumulated failed records before bubbling up the error
+                for failed_record in failed_queue:
+                    yield failed_record
+
                 chain_span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
                 # Let exception bubble up - task wrapper will handle error logging
                 raise
