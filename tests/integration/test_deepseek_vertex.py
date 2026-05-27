@@ -89,8 +89,12 @@ async def test_deepseek_models_use_correct_regions(real_bm):
 
     r1_config = llms.connections.get("deepseek-ai/deepseek-r1-0528-maas")
     assert r1_config is not None
-    assert r1_config.configs.get("region") == "us-central1", f"deepseek-ai/deepseek-r1-0528-maas region should be us-central1, got {r1_config.configs.get('region')}"
+    assert r1_config.configs.get("region") == "us-central1", (
+        f"deepseek-ai/deepseek-r1-0528-maas region should be us-central1, got {r1_config.configs.get('region')}"
+    )
 
     v3_config = llms.connections.get("deepseek-ai/deepseek-v3.2-maas")
     assert v3_config is not None
-    assert v3_config.configs.get("region") == "global", f"deepseek-ai/deepseek-v3.2-maas region should be global, got {v3_config.configs.get('region')}"
+    assert v3_config.configs.get("region") == "global", (
+        f"deepseek-ai/deepseek-v3.2-maas region should be global, got {v3_config.configs.get('region')}"
+    )
