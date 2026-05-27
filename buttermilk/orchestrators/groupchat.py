@@ -103,6 +103,8 @@ class AutogenOrchestrator(Orchestrator):
     async def _dispatch_message(self, message: Any, topic: str) -> None:
         """Dispatch a message to all agents subscribed to the given topic."""
         self._termination_handler.check(message)
+        if self._interrupt_handler is not None:
+            await self._interrupt_handler.on_publish(message, message_context=None)
 
         ctx = MessageContext(
             topic_id=topic,

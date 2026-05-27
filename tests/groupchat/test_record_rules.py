@@ -61,5 +61,5 @@ async def test_run_record_agent(
 
 
 @pytest.mark.anyio
-async def test_judger(runtime, fight_no_more_forever):
+async def test_judger(fight_no_more_forever):
     pass

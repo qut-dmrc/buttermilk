@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import functools
+import types
 import typing
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 # ---------------------------------------------------------------------------
@@ -81,9 +81,9 @@ def _build_handler_registry(cls: type) -> dict[type, str]:
             msg_type = hints.get("message")
             if msg_type is None:
                 continue
-            # Handle Union types (X | Y or Union[X, Y])
+            # Handle Union types — both typing.Union[X, Y] and PEP 604 X | Y
             origin = getattr(msg_type, "__origin__", None)
-            if origin is typing.Union:
+            if origin is typing.Union or isinstance(msg_type, types.UnionType):
                 for t in msg_type.__args__:
                     if isinstance(t, type):
                         registry[t] = name
