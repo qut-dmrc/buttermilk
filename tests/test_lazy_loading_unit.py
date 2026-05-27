@@ -166,7 +166,7 @@ class TestLLMManagerLazyLoading:
 
         # Mock connections data
         test_connections = {
-            "gemini": {"api_key": "test_key", "model": "google/gemini-3-pro-preview"},
+            "gemini": {"api_key": "test_key", "model": "google/gemini-3.1-pro-preview"},
             "openai": {"api_key": "test_key2", "model": "gpt-4"},
         }
 

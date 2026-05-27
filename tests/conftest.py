@@ -22,7 +22,6 @@ if TYPE_CHECKING:
 # Model lists duplicated here to avoid importing llms.py at collection time
 # (llms.py imports litellm which takes ~3s)
 CHAT_MODELS = [
-    "google/gemini-3-pro-preview",
     "google/gemini-3.1-pro-preview",
     "google/gemini-3-flash-preview",
     "google/gemini-3.5-flash",
@@ -35,8 +34,6 @@ CHAT_MODELS = [
     "deepseek-ai/deepseek-r1-0528-maas",
     "deepseek-ai/deepseek-v3.2-maas",
     "mistralai/mistral-small-2503",
-    "xai/grok-4.20",
-    "xai/grok-4-1-fast-reasoning",
 ]
 
 CHEAP_CHAT_MODELS = [

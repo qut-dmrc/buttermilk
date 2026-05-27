@@ -39,7 +39,7 @@ class VariantProcessor(ProcessorCore):
           - _target_: buttermilk.processors.VariantProcessor
             processor_obj: buttermilk.processors.LLMCore
             variants:
-              model: ["gpt-4", "claude-3", "google/gemini-3-pro-preview"]
+              model: ["gpt-4", "claude-3", "google/gemini-3.1-pro-preview"]
               temperature: [0.7]
             parameters:
               template: "default"
