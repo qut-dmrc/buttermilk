@@ -3,7 +3,7 @@ import os
 from unittest.mock import AsyncMock, call, patch
 
 import pytest
-from autogen_core.tools import FunctionTool
+from buttermilk._core.tool_types import FunctionTool
 
 from buttermilk.tools.catalog_test import (
     THEMOVIEDB_AVAILABLE,

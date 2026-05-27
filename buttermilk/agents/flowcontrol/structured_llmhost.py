@@ -8,12 +8,10 @@ from collections.abc import AsyncGenerator
 
 import pydantic
 from autogen_core import (
-    CancellationToken,
     MessageContext,
     message_handler,
 )
-from autogen_core.tools import Tool
-
+from buttermilk._core.tool_types import CancellationToken, FunctionCall, Tool
 from buttermilk._core.messages import FunctionCall, LLMMessage
 
 from buttermilk import AgentInput, StepRequest, bm, logger

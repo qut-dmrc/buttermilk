@@ -5,9 +5,8 @@ from typing import Literal
 import pytest
 
 pytestmark = pytest.mark.slow
-from autogen_core import CancellationToken
 from buttermilk._core.messages import FunctionCall, SystemMessage, UserMessage
-from autogen_core.tools import FunctionTool
+from buttermilk._core.tool_types import CancellationToken, FunctionCall, FunctionTool
 from pydantic import BaseModel, ConfigDict, Field
 
 from buttermilk._core.llms import ModelOutput

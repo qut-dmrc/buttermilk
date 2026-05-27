@@ -89,14 +89,8 @@ def __getattr__(name: str):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-# Autogen imports - only non-message types remain (Phase 1 removal)
-from autogen_core import CancellationToken
-from autogen_core.tools import (
-    Tool,  # Autogen tool handling
-    ToolSchema,
-)
-
-# Native Buttermilk message / response types (replaces autogen_core.models)
+# Native Buttermilk types (replaces autogen_core.models and autogen_core.tools)
+from buttermilk._core.tool_types import CancellationToken, FunctionCall, Tool, ToolSchema
 from buttermilk._core.messages import (
     AssistantMessage,
     CreateResult,

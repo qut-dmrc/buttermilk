@@ -11,7 +11,7 @@ from collections.abc import (
 )
 from typing import Any
 
-from autogen_core import CancellationToken
+from buttermilk._core.tool_types import CancellationToken
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent

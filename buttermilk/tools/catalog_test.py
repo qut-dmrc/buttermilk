@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import shortuuid
-from autogen_core.tools import FunctionTool
+from buttermilk._core.tool_types import FunctionTool
 from pydantic import ConfigDict, Field, field_validator
 from tqdm.asyncio import tqdm
 

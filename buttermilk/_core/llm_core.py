@@ -20,7 +20,7 @@ from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any, Self
 
 import pydantic
-from autogen_core import CancellationToken
+from buttermilk._core.tool_types import CancellationToken
 from buttermilk._core.messages import LLMMessage
 from opentelemetry import trace
 from pydantic import BaseModel, Field, PrivateAttr, model_validator

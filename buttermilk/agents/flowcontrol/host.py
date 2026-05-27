@@ -8,7 +8,7 @@ from typing import Any
 
 from autogen_core import DefaultTopicId, MessageContext, message_handler
 from buttermilk._core.messages import AssistantMessage, UserMessage
-from autogen_core.tools import Tool
+from buttermilk._core.tool_types import Tool
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent

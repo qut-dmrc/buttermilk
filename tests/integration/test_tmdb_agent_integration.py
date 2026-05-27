@@ -10,8 +10,7 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from autogen_core import CancellationToken
-from autogen_core.tools import FunctionTool
+from buttermilk._core.tool_types import CancellationToken, FunctionTool
 
 from buttermilk.tools.catalog_test import THEMOVIEDB_AVAILABLE, Title, TMDBTool
 
