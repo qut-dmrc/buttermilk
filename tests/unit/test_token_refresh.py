@@ -350,9 +350,9 @@ async def test_get_autogen_chat_client_passes_token_provider_for_vertex(real_bm:
     from buttermilk._core.llms import ClientType, LiteLLMWrapper
 
     # Get a model that uses Vertex
-    # Based on testing.yaml, we use llms:debug which has gemini-flash
+    # Based on testing.yaml, we use llms:debug which has google/gemini-3-flash-preview
     # Need to verify this model uses ClientType.GEMINI_VERTEX or VERTEX_OPENAI
-    model_name = "gemini-flash"
+    model_name = "google/gemini-3-flash-preview"
 
     # Verify the model config uses a Vertex client_type
     llms = real_bm.llms

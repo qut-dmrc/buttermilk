@@ -34,9 +34,9 @@ _MODEL_MAPPINGS = {
     "gemini25flash": "gemini/gemini-2.5-flash-preview-05-20",
     "sonnet": "vertex_ai/claude-sonnet-4@20250514",
     # Claude model aliases used in batch manifests
-    "claude-sonnet": "vertex_ai/claude-sonnet-4@20250514",
-    "claude-haiku": "vertex_ai/claude-3-5-haiku@20241022",
-    "claude-opus": "vertex_ai/claude-opus-4@20250514",
+    "claude-sonnet-4-5@20250929": "vertex_ai/claude-sonnet-4@20250514",
+    "claude-haiku-4-5@20251001": "vertex_ai/claude-3-5-haiku@20241022",
+    "claude-opus-4-1": "vertex_ai/claude-opus-4@20250514",
 }
 
 
@@ -55,7 +55,7 @@ def _simple_model_resolution(model_name: str | None) -> str:
     if model_name in _MODEL_MAPPINGS:
         return _MODEL_MAPPINGS[model_name]
 
-    # Handle double-prefixed model names (e.g., "openai/google/gemini-2.5-flash-lite")
+    # Handle double-prefixed model names (e.g., "openai/google/gemini-3.1-flash-lite")
     # This occurs when vertex_openai models are incorrectly prefixed for pricing
     if model_name.count("/") >= 2:
         parts = model_name.split("/")

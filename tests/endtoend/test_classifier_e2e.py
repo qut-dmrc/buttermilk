@@ -38,12 +38,12 @@ class ClassificationOutput(BaseModel):
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("model", ["gpt-oss-safeguard-20b"])
+@pytest.mark.parametrize("model", ["openai/gpt-oss-safeguard-20b"])
 async def test_huggingface_classifier_e2e(real_bm, session_runner, text_record: BaseRecord, model: str):
     """Test HuggingFaceClassifier with real model via LiteLLM.
 
     Uses:
-    - Real HuggingFace model: gpt-oss-safeguard-20b
+    - Real HuggingFace model: openai/gpt-oss-safeguard-20b
     - Real text_record fixture: Contains toxic content
     - Real template: test/classify
     - Real LiteLLM API call
@@ -156,7 +156,7 @@ async def test_zentropi_classifier_e2e(real_bm, session_runner, text_record: Bas
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("model", ["gpt-oss-safeguard-20b"])
+@pytest.mark.parametrize("model", ["openai/gpt-oss-safeguard-20b"])
 async def test_huggingface_classifier_input_tracing(real_bm, session_runner, text_record: BaseRecord, model: str):
     """Test that HuggingFaceClassifier correctly stores rendered_prompt in ExecutionTrace.inputs.
 
@@ -166,7 +166,7 @@ async def test_huggingface_classifier_input_tracing(real_bm, session_runner, tex
     3. Inputs can be retrieved from BigQuery for debugging/analysis
 
     Uses:
-    - Real HuggingFace model: gpt-oss-safeguard-20b
+    - Real HuggingFace model: openai/gpt-oss-safeguard-20b
     - Real text_record fixture: Contains toxic content
     - Real template: test/classify
     - Real BigQuery trace storage

@@ -52,12 +52,12 @@ def _validate_actual_model_name(logged_model: str, alias: str) -> None:
 
     Args:
         logged_model: The model name logged in metadata
-        alias: Our shorthand model name (e.g., "gemini-flash")
+        alias: Our shorthand model name (e.g., "google/gemini-3-flash-preview")
 
     Raises:
         AssertionError: If validation fails
     """
-    # Extract key components from alias (e.g., "gemini-flash" -> ["gemini", "flash"])
+    # Extract key components from alias (e.g., "google/gemini-3-flash-preview" -> ["gemini", "flash"])
     alias_components = []
     if "gemini" in alias.lower():
         alias_components.append("gemini")
@@ -77,10 +77,10 @@ def _validate_actual_model_name(logged_model: str, alias: str) -> None:
 # Models that don't reliably support structured JSON output
 # Note: Models with function_calling=true can use the fake tool fallback for structured output
 # gpt-oss-safeguard models on HuggingFace don't support structured output or function calling
-# claude-haiku has function_calling=false so can't use either approach
+# claude-haiku-4-5@20251001 has function_calling=false so can't use either approach
 MODELS_WITHOUT_STRUCTURED_OUTPUT = {
-    "gpt-oss-safeguard-20b",
-    "gpt-oss-safeguard-120b",
+    "openai/gpt-oss-safeguard-20b",
+    "openai/gpt-oss-safeguard-120b",
 }
 
 
@@ -540,7 +540,7 @@ async def test_template_filling_with_criteria_variants(real_bm, sample_record: B
     Bug being tested: Templates not filled properly when using variants.
     """
     # Use a cheap model for this test
-    model = "gemini-flash"
+    model = "google/gemini-3-flash-preview"
     test_start_time = datetime.datetime.now(datetime.timezone.utc)
     traces_by_criteria = {}
 
@@ -989,7 +989,7 @@ async def test_warning_raised_on_record_mismatch(real_bm, caplog):
     # Create template_vars with DIFFERENT text
     template_vars = {"text": "Content B"}
 
-    llm_core = LLMCore(model="gemini-flash-lite", template="ra", fail_on_unfilled_parameters=False)
+    llm_core = LLMCore(model="google/gemini-3.1-flash-lite", template="ra", fail_on_unfilled_parameters=False)
 
     with caplog.at_level(logging.WARNING):
         results = []

@@ -7,7 +7,7 @@ structures to their actual Python types.
 """
 
 from json import JSONDecodeError  # Standard JSON exception
-from typing import Any, Literal  # For type hinting
+from typing import Any, ClassVar, Literal  # For type hinting
 
 import json_repair  # Library for repairing "broken" JSON
 import regex as re  # Advanced regular expression library
@@ -31,6 +31,11 @@ class ChatParser(BaseModel):
     After successful parsing, it also attempts to convert string representations
     of booleans and numbers to their actual types using `convert_dict_types`.
 
+    It also strips inline ``<think>...</think>`` reasoning blocks (emitted by
+    DeepSeek-R1 served via Vertex AI MAAS) before parsing, capturing their
+    contents on ``self.thought`` so callers can route the reasoning into the
+    proper ``CreateResult.thought`` field.
+
     Attributes:
         on_error (Literal["raise", "warn", "ignore"]): Defines behavior upon
             JSON decoding failure:
@@ -40,14 +45,70 @@ class ChatParser(BaseModel):
             - "ignore": Returns a dictionary containing the original text and an
               error message, without logging a warning explicitly (though underlying
               parsing attempts might log debug messages).
+        thought (str | None): Reasoning content captured from inline
+            ``<think>...</think>`` blocks (or supplied via ``structured_reasoning``
+            in :meth:`extract_reasoning`). Populated as a side-effect of
+            :meth:`extract_reasoning` and :meth:`parse`. Not serialised.
 
     """
+
+    _THINK_TAG_RE: ClassVar = re.compile(
+        r"<think\b[^>]*>(.*?)</think\s*>",
+        re.DOTALL | re.IGNORECASE,
+    )
 
     on_error: Literal["raise", "warn", "ignore"] = Field(
         default="warn",
         description="Defines behavior on JSON parsing failure: 'raise' an error, "
         "'warn' and return original text, or 'ignore' and return original text.",
     )
+    thought: str | None = Field(
+        default=None,
+        description="Reasoning captured from inline <think>...</think> blocks or supplied externally.",
+        exclude=True,
+    )
+
+    def extract_reasoning(self, text: str, structured_reasoning: str | None = None) -> str:
+        r"""Strip ``<think>...</think>`` blocks from ``text`` and capture reasoning.
+
+        Some reasoning models (notably DeepSeek-R1 served via Vertex AI MAAS)
+        emit their chain-of-thought inline in the response ``content`` wrapped
+        in ``<think>...</think>`` tags rather than via litellm's structured
+        ``reasoning_content`` field. This method removes those blocks so JSON
+        parsing operates on the clean post-reasoning answer, and records the
+        reasoning on ``self.thought`` for the caller.
+
+        Merge precedence: ``structured_reasoning`` (when truthy) wins over any
+        inline-extracted text. The two virtually never co-occur in practice
+        because a given provider does one or the other, but if both are present
+        the structured value is the cleaner, provider-curated version.
+
+        Args:
+            text: The LLM response text potentially containing ``<think>`` blocks.
+            structured_reasoning: Pre-existing reasoning string (e.g. from
+                ``message.reasoning_content`` on the litellm response). If
+                truthy, takes precedence over inline-extracted text.
+
+        Returns:
+            The input ``text`` with ``<think>...</think>`` blocks removed.
+            If stripping leaves an empty string, returns the original ``text``
+            so downstream parsing can still emit a diagnostic rather than
+            receive blank input.
+        """
+        if not isinstance(text, str) or not text:
+            self.thought = structured_reasoning or None
+            return text
+
+        captured_blocks = [m.strip() for m in self._THINK_TAG_RE.findall(text) if m.strip()]
+        if structured_reasoning:
+            self.thought = structured_reasoning
+        elif captured_blocks:
+            self.thought = "\n\n".join(captured_blocks)
+        else:
+            self.thought = None
+
+        stripped = self._THINK_TAG_RE.sub("", text).strip()
+        return stripped or text  # if stripping removed everything, fall back to original
 
     def parse(self, text: str) -> Any:
         r"""Parses a string, attempting to extract and decode a JSON object.
@@ -84,6 +145,11 @@ class ChatParser(BaseModel):
         if not isinstance(text, str):
             logger.warning(f"ChatParser.parse expected a string, got {type(text)}. Attempting to stringify.")
             text = str(text)
+
+        # Strip inline <think>...</think> reasoning blocks (DeepSeek-R1 via
+        # Vertex MAAS) before JSON parsing; captured content lands on
+        # self.thought for the caller to route into the proper field.
+        text = self.extract_reasoning(text)
 
         try:
             # Attempt to find a JSON object structure (content between first { and last })

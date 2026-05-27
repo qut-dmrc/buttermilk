@@ -476,7 +476,7 @@ class MockOrchestrator(Orchestrator):
             metadata = {
                 "duration_ms": random.randint(500, 3000),
                 "tokens": random.randint(100, 1000),
-                "model": random.choice(["gpt-4", "claude-3", "gemini-pro", "llama-3"]),
+                "model": random.choice(["gpt-4", "claude-3", "google/gemini-3-pro-preview", "llama-3"]),
             }
 
         # Create an empty AgentInput for the trace (or populate with mock data if needed)

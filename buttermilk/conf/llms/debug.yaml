@@ -1,20 +1,20 @@
-host: gemini-flash
+host: google/gemini-3-flash-preview
 
 cheap:
-  - gemini-flash
+  - google/gemini-3-flash-preview
 
 general:
-  - gemini-flash
+  - google/gemini-3-flash-preview
 
 judgers:
-  - gemini-flash
+  - google/gemini-3-flash-preview
 
 synthesisers:
-  - gemini-flash
+  - google/gemini-3-flash-preview
 
 # Model-specific parameter overrides for debug config
 # Use lower max_tokens for faster iteration during development
 model_parameters:
-  gemini-flash:
+  google/gemini-3-flash-preview:
     temperature: 0.5
     max_tokens: 16384

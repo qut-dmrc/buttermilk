@@ -22,16 +22,16 @@ async def test_model_parameters_loaded_from_yaml(real_llms: LLMs):
 
     The debug.yaml config sets:
       model_parameters:
-        gemini-flash:
+        google/gemini-3-flash-preview:
           temperature: 0.5
           max_tokens: 2048
     """
     # Verify model_parameters dict is populated
     assert real_llms.model_parameters, "model_parameters should be loaded from YAML"
 
-    # Check gemini-flash has expected parameters from debug.yaml
-    if "gemini-flash" in real_llms.model_parameters:
-        params = real_llms.model_parameters["gemini-flash"]
+    # Check google/gemini-3-flash-preview has expected parameters from debug.yaml
+    if "google/gemini-3-flash-preview" in real_llms.model_parameters:
+        params = real_llms.model_parameters["google/gemini-3-flash-preview"]
         if isinstance(params, dict):
             params = ModelParameters(**params)
 
@@ -48,7 +48,7 @@ async def test_get_merged_parameters_returns_yaml_values(real_llms: LLMs):
     2. LLMs.model_parameters (from YAML config) - highest priority
     """
     # Get merged parameters for a model with YAML overrides
-    merged = real_llms.get_merged_parameters("gemini-flash")
+    merged = real_llms.get_merged_parameters("google/gemini-3-flash-preview")
 
     assert isinstance(merged, ModelParameters), f"Expected ModelParameters, got {type(merged)}"
 
@@ -92,7 +92,7 @@ async def test_parameters_passed_to_llm_api_call(real_llm, session_runner):
 @pytest.mark.anyio
 async def test_model_parameters_to_api_params_conversion(real_llms: LLMs):
     """Verify to_api_params() correctly converts ModelParameters to API dict."""
-    merged = real_llms.get_merged_parameters("gemini-flash")
+    merged = real_llms.get_merged_parameters("google/gemini-3-flash-preview")
 
     api_params = merged.to_api_params()
 
@@ -113,7 +113,7 @@ async def test_model_parameters_to_api_params_conversion(real_llms: LLMs):
 @pytest.mark.anyio
 async def test_model_parameters_merge_with(real_llms: LLMs):
     """Verify merge_with() correctly merges parameters with override precedence."""
-    base = real_llms.get_merged_parameters("gemini-flash")
+    base = real_llms.get_merged_parameters("google/gemini-3-flash-preview")
 
     # Create override parameters
     override = ModelParameters(temperature=0.1, top_p=0.95)

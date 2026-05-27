@@ -89,7 +89,7 @@ class TestAzureStructuredOutput:
 
     @pytest.mark.anyio
     async def test_qualscore_schema_with_azure_model(self, real_bm, session_runner):
-        """Test that Azure-hosted gpt-nano can use structured output with QualScore.
+        """Test that Azure-hosted gpt-5-nano can use structured output with QualScore.
 
         QualScore uses StrEnum fields with Field descriptions, which previously
         caused issues with Azure OpenAI structured output.
@@ -100,9 +100,9 @@ class TestAzureStructuredOutput:
         """
         from buttermilk.agents.evaluators.scorer import QualScore
 
-        # Get Azure model (gpt-nano is hosted on Azure)
+        # Get Azure model (gpt-5-nano is hosted on Azure)
         # Note: After autogen removal, litellm is the only wrapper
-        llm = real_bm.llms["gpt-nano"]
+        llm = real_bm.llms["gpt-5-nano"]
 
         # Create messages asking to evaluate content
         messages = [

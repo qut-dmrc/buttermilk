@@ -759,7 +759,7 @@ class BatchJobManager(BaseModel):
         input unchanged.
 
         Args:
-            model: Model name - can be a short alias (e.g., "gemini-flash")
+            model: Model name - can be a short alias (e.g., "google/gemini-3-flash-preview")
                    or a full name (e.g., "gemini-3-flash-preview")
 
         Returns:
@@ -782,7 +782,7 @@ class BatchJobManager(BaseModel):
     def _get_vertex_model_path(self, model: str) -> str:
         """Convert model name to Vertex AI model path.
 
-        Resolves short model aliases (e.g., "gemini-flash") to full model names
+        Resolves short model aliases (e.g., "google/gemini-3-flash-preview") to full model names
         (e.g., "gemini-3-flash-preview") using the buttermilk model registry.
 
         Args:
@@ -799,7 +799,7 @@ class BatchJobManager(BaseModel):
             claude_map = {
                 "claude-sonnet-4": "publishers/anthropic/models/claude-sonnet-4",
                 "claude-opus-4": "publishers/anthropic/models/claude-opus-4",
-                "claude-haiku": "publishers/anthropic/models/claude-3-5-haiku",
+                "claude-haiku-4-5@20251001": "publishers/anthropic/models/claude-3-5-haiku",
             }
             return claude_map.get(resolved_model, f"publishers/anthropic/models/{resolved_model}")
         if resolved_model.startswith("google/"):

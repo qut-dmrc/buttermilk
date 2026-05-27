@@ -18,16 +18,18 @@ pytestmark = [pytest.mark.integration, pytest.mark.slow]
 async def test_deepseek_r1_responds(real_bm):
     """DeepSeek R1 (reasoning model) responds via Vertex AI.
 
-    ARRANGE: Get LiteLLMWrapper for deepseek-r1
+    ARRANGE: Get LiteLLMWrapper for deepseek-ai/deepseek-r1-0528-maas
     ACT: Send a simple prompt
-    ASSERT: Response contains expected content
+    ASSERT: Response answer is present, the `<think>...</think>` reasoning
+            block is stripped from content, and the reasoning is surfaced
+            on result.thought.
     """
     llms = real_bm.llms
-    config = llms.connections.get("deepseek-r1")
-    assert config is not None, "deepseek-r1 not found in connections"
+    config = llms.connections.get("deepseek-ai/deepseek-r1-0528-maas")
+    assert config is not None, "deepseek-ai/deepseek-r1-0528-maas not found in connections"
     assert config.client_type == ClientType.DEEPSEEK_VERTEX
 
-    wrapper = llms.get_client("deepseek-r1")
+    wrapper = llms.get_client("deepseek-ai/deepseek-r1-0528-maas")
     assert isinstance(wrapper, LiteLLMWrapper)
     assert wrapper.token_provider is not None, "token_provider not set for Vertex model"
 
@@ -38,22 +40,30 @@ async def test_deepseek_r1_responds(real_bm):
     assert result.content is not None, "Response has no content"
     assert len(result.content) > 0, "Response content is empty"
     assert "4" in str(result.content), f"Expected '4' in response: {result.content}"
+    # Reasoning normalisation: <think> blocks must be stripped from content
+    # and surfaced on result.thought. R1 reasons before every non-trivial
+    # answer, so reasoning must be non-empty here. (Either inline-extracted
+    # from a <think> block in content, or supplied via litellm's structured
+    # `reasoning_content` field — we don't care which path; both land on
+    # result.thought.)
+    assert "<think>" not in str(result.content), f"<think> tag leaked into content: {result.content[:200]}"
+    assert result.thought, f"Expected reasoning on result.thought, got {result.thought!r}"
 
 
 @pytest.mark.anyio
 async def test_deepseek_v3_responds(real_bm):
     """DeepSeek V3.2 (chat model) responds via Vertex AI.
 
-    ARRANGE: Get LiteLLMWrapper for deepseek-v3
+    ARRANGE: Get LiteLLMWrapper for deepseek-ai/deepseek-v3.2-maas
     ACT: Send a simple prompt
     ASSERT: Response contains expected content
     """
     llms = real_bm.llms
-    config = llms.connections.get("deepseek-v3")
-    assert config is not None, "deepseek-v3 not found in connections"
+    config = llms.connections.get("deepseek-ai/deepseek-v3.2-maas")
+    assert config is not None, "deepseek-ai/deepseek-v3.2-maas not found in connections"
     assert config.client_type == ClientType.DEEPSEEK_VERTEX
 
-    wrapper = llms.get_client("deepseek-v3")
+    wrapper = llms.get_client("deepseek-ai/deepseek-v3.2-maas")
     assert isinstance(wrapper, LiteLLMWrapper)
     assert wrapper.token_provider is not None, "token_provider not set for Vertex model"
 
@@ -64,6 +74,9 @@ async def test_deepseek_v3_responds(real_bm):
     assert result.content is not None, "Response has no content"
     assert len(result.content) > 0, "Response content is empty"
     assert "4" in str(result.content), f"Expected '4' in response: {result.content}"
+    # V3.2 is a chat model, not a reasoning model — no <think> blocks, no thought.
+    assert "<think>" not in str(result.content), f"<think> tag unexpectedly in V3.2 content: {result.content[:200]}"
+    assert result.thought is None, f"Expected no reasoning on V3.2, got {result.thought!r}"
 
 
 @pytest.mark.anyio
@@ -74,10 +87,10 @@ async def test_deepseek_models_use_correct_regions(real_bm):
     """
     llms = real_bm.llms
 
-    r1_config = llms.connections.get("deepseek-r1")
+    r1_config = llms.connections.get("deepseek-ai/deepseek-r1-0528-maas")
     assert r1_config is not None
-    assert r1_config.configs.get("region") == "us-central1", f"deepseek-r1 region should be us-central1, got {r1_config.configs.get('region')}"
+    assert r1_config.configs.get("region") == "us-central1", f"deepseek-ai/deepseek-r1-0528-maas region should be us-central1, got {r1_config.configs.get('region')}"
 
-    v3_config = llms.connections.get("deepseek-v3")
+    v3_config = llms.connections.get("deepseek-ai/deepseek-v3.2-maas")
     assert v3_config is not None
-    assert v3_config.configs.get("region") == "global", f"deepseek-v3 region should be global, got {v3_config.configs.get('region')}"
+    assert v3_config.configs.get("region") == "global", f"deepseek-ai/deepseek-v3.2-maas region should be global, got {v3_config.configs.get('region')}"

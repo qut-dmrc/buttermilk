@@ -36,7 +36,7 @@ async def test_litellm_vertex_uses_token_provider(real_bm):
     - API call succeeds (proving token works)
 
     This test uses REAL Vertex AI API - no mocks.
-    Uses gemini-flash for low cost.
+    Uses google/gemini-3-flash-preview for low cost.
 
     Args:
         real_bm: Real ButtermilkBM instance from conftest.py fixture
@@ -46,8 +46,8 @@ async def test_litellm_vertex_uses_token_provider(real_bm):
     from buttermilk._core.llms import ClientType, LiteLLMWrapper
 
     # ARRANGE: Get a Vertex model wrapper
-    # testing.yaml uses llms:debug which has gemini-flash as a Vertex model
-    model_name = "gemini-flash"
+    # testing.yaml uses llms:debug which has google/gemini-3-flash-preview as a Vertex model
+    model_name = "google/gemini-3-flash-preview"
 
     # Verify the model config uses a Vertex client_type
     llms = real_bm.llms

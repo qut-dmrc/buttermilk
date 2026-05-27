@@ -280,7 +280,7 @@ class TestCacheInvalidationIntegration:
         record = BaseRecord(record_id="test_003", content="test content")
 
         # Simulate LLM with model parameter
-        processor1 = MockProcessor(model="claude-sonnet", template="default")
+        processor1 = MockProcessor(model="claude-sonnet-4-5@20250929", template="default")
         hash1 = compute_processor_config_hash(processor1.model_dump())
 
         async def source1():

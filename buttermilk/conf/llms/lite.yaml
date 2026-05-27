@@ -1,13 +1,13 @@
-host: gemini-flash-lite
+host: google/gemini-3.1-flash-lite
 cheap:
-  - claude-haiku
-  - gemini-flash-lite
+  - claude-haiku-4-5@20251001
+  - google/gemini-3.1-flash-lite
 general:
-  - gemini-flash-lite
-  - claude-haiku
+  - google/gemini-3.1-flash-lite
+  - claude-haiku-4-5@20251001
 judgers:
-  - claude-haiku
-  - gemini-flash-lite
+  - claude-haiku-4-5@20251001
+  - google/gemini-3.1-flash-lite
 synthesisers:
-  - gemini-flash-lite
-  - claude-haiku
+  - google/gemini-3.1-flash-lite
+  - claude-haiku-4-5@20251001

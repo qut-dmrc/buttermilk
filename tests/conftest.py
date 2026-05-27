@@ -22,23 +22,29 @@ if TYPE_CHECKING:
 # Model lists duplicated here to avoid importing llms.py at collection time
 # (llms.py imports litellm which takes ~3s)
 CHAT_MODELS = [
-    "gemini-pro",
-    "gemini-flash",
-    "gemini-flash-lite",
-    "gpt-mini",
-    "gpt-nano",
+    "google/gemini-3-pro-preview",
+    "google/gemini-3.1-pro-preview",
+    "google/gemini-3-flash-preview",
+    "google/gemini-3.5-flash",
+    "google/gemini-3.1-flash-lite",
+    "gpt-5-mini",
+    "gpt-5-nano",
     "gpt-4o",
-    "llama-maverick",
-    "claude-sonnet",
-    "deepseek-v3",
-    "mistral-small",
+    "meta/llama-4-maverick-17b-128e-instruct-maas",
+    "claude-sonnet-4-5@20250929",
+    "deepseek-ai/deepseek-r1-0528-maas",
+    "deepseek-ai/deepseek-v3.2-maas",
+    "mistralai/mistral-small-2503",
+    "xai/grok-4.20",
+    "xai/grok-4-1-fast-reasoning",
 ]
 
 CHEAP_CHAT_MODELS = [
-    "gemini-flash-lite",
-    "llama-maverick",
-    "gpt-nano",
-    "claude-haiku",
+    "google/gemini-3.1-flash-lite",
+    "google/gemini-3.5-flash",
+    "meta/llama-4-maverick-17b-128e-instruct-maas",
+    "gpt-5-nano",
+    "claude-haiku-4-5@20251001",
 ]
 
 

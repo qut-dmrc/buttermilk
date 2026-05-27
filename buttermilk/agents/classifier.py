@@ -328,7 +328,7 @@ class HuggingFaceClassifier(ClassifierCore):
 
         classifier = HuggingFaceClassifier(
             template="classification_prompt",
-            model="gpt-oss-safeguard-20b",
+            model="openai/gpt-oss-safeguard-20b",
             output_model=SafeguardClassification,
         )
         ```

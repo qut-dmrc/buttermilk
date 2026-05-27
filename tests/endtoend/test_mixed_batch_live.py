@@ -24,7 +24,7 @@ class TestMixedBatchLivePipeline:
 
     @pytest.mark.anyio
     async def test_two_live_processors_in_batch_accumulator(self, real_bm):
-        """Test two live LLMProcessors (gpt-mini, gpt-nano) in BatchAccumulator.
+        """Test two live LLMProcessors (gpt-5-mini, gpt-5-nano) in BatchAccumulator.
 
         This verifies the core feature: LLMProcessor works inside BatchAccumulator
         without needing a batch API. Each processor makes live API calls per record.
@@ -32,7 +32,7 @@ class TestMixedBatchLivePipeline:
         # Create two live processors for different Azure models
         gpt_mini_processor = LLMProcessor(
             name="gpt-mini-live",
-            model="gpt-mini",
+            model="gpt-5-mini",
             template="judge",
             fail_on_unfilled_parameters=False,
             temperature=0.7,
@@ -41,7 +41,7 @@ class TestMixedBatchLivePipeline:
 
         gpt_nano_processor = LLMProcessor(
             name="gpt-nano-live",
-            model="gpt-nano",
+            model="gpt-5-nano",
             template="judge",
             fail_on_unfilled_parameters=False,
             temperature=0.7,
@@ -92,14 +92,14 @@ class TestMixedBatchLivePipeline:
 
     @pytest.mark.anyio
     async def test_grok_fast_live_processor(self, real_bm):
-        """Test grok-fast (Azure AI Services via openai client_type) works as live processor.
+        """Test grok-4-1-fast-non-reasoning (Azure AI Services via openai client_type) works as live processor.
 
         Regression test for LiteLLM provider routing: openai client_type models
         need the openai/ prefix for LiteLLM to route correctly.
         """
         grok_processor = LLMProcessor(
             name="grok-fast-live",
-            model="grok-fast",
+            model="grok-4-1-fast-non-reasoning",
             template="judge",
             fail_on_unfilled_parameters=False,
             temperature=0.7,
@@ -132,4 +132,4 @@ class TestMixedBatchLivePipeline:
             output_str = str(output)[:200]
             print(f"  Output {i}: {output_str}")
 
-        assert len(all_outputs) == 1, f"Expected 1 output from grok-fast, got {len(all_outputs)}"
+        assert len(all_outputs) == 1, f"Expected 1 output from grok-4-1-fast-non-reasoning, got {len(all_outputs)}"

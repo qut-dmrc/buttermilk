@@ -22,7 +22,7 @@ def flow_request_data():
     # Return raw dict for flow request data
     return {
         "flow": "test_minimal",
-        "model": "claude-haiku",
+        "model": "claude-haiku-4-5@20251001",
         "template": "judge",
         "template_vars": {"formatting": "json_rules", "criteria": "criteria_ordinary"},
         "text": "Sample text",

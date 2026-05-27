@@ -372,7 +372,7 @@ class TestOpenAIModelDetection:
 
         assert _is_openai_model("gemini-2.5-flash") is False
         assert _is_openai_model("claude-sonnet-4") is False
-        assert _is_openai_model("llama-maverick") is False
+        assert _is_openai_model("meta/llama-4-maverick-17b-128e-instruct-maas") is False
 
     def test_is_openai_model_case_insensitive(self):
         """Model detection should be case-insensitive."""

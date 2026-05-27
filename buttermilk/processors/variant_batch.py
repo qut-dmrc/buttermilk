@@ -11,8 +11,8 @@ Usage:
         batch_processors:
           - _target_: buttermilk.processors.VariantBatchProcessor
             models:
-              - gemini-flash
-              - deepseek-v3
+              - google/gemini-3-flash-preview
+              - deepseek-ai/deepseek-v3.2-maas
             templates:
               - political_speech/satirize
               - political_speech/flyer

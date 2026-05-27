@@ -11,7 +11,7 @@ Usage with OpenAI/Azure executor:
     runner = BatchPipelineRunner(
         source=records,
         batch_processor=BatchLLMProcessor(
-            model="gpt-chat",
+            model="gpt-5-chat",
             template="my_template",
         ),
         executor=OpenAIBatchExecutor(),

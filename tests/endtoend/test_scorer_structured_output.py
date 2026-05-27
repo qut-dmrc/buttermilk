@@ -93,7 +93,7 @@ DAVENPORT, IA—In the wake of growing controversy surrounding transgender bathr
 @pytest.mark.anyio
 @pytest.mark.parametrize(
     "model_name",
-    ["claude-haiku", "gemini-flash-lite", "gpt-nano"],
+    ["claude-haiku-4-5@20251001", "google/gemini-3.1-flash-lite", "gpt-5-nano"],
 )
 async def test_scorer_structured_output_with_real_data(
     real_bm,
@@ -171,7 +171,7 @@ async def test_scorer_structured_output_with_real_data(
 @pytest.mark.anyio
 @pytest.mark.parametrize(
     "model_name",
-    ["claude-haiku", "gemini-flash-lite", "gpt-nano"],
+    ["claude-haiku-4-5@20251001", "google/gemini-3.1-flash-lite", "gpt-5-nano"],
 )
 async def test_scorer_agent_with_real_data(
     real_bm,

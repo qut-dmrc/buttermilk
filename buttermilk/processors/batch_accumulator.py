@@ -148,7 +148,7 @@ class BatchAccumulator(ProcessorCore):
 
         # Fan-out: each batch processor gets the ORIGINAL contexts independently.
         # This is correct for multi-model pipelines where each processor handles
-        # the same records (e.g., deepseek-r1, llama-maverick, gpt-mini all
+        # the same records (e.g., deepseek-ai/deepseek-r1-0528-maas, meta/llama-4-maverick-17b-128e-instruct-maas, gpt-5-mini all
         # process the same expanded records with the same variant_params).
         all_output_records: list[BaseRecord] = []
 

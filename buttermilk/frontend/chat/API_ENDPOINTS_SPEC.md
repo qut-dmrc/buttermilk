@@ -66,7 +66,7 @@ GET /api/flows/{flow}/records/{record_id}/scores
       "score": 0.78,
       "label": "TOXIC",
       "confidence": 0.85,
-      "model_version": "gemini-pro"
+      "model_version": "google/gemini-3-pro-preview"
     },
     "LLaMA-2": {
       "correct": true,

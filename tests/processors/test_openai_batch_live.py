@@ -40,7 +40,7 @@ pytestmark = [pytest.mark.slow, pytest.mark.anyio, pytest.mark.timeout(600)]
 MODELS_JSON = Path.home() / ".cache" / "buttermilk" / "models" / "models.json"
 
 # Azure model keys to try for credentials (picks first azure model found)
-AZURE_MODEL_KEYS = ["gpt-nano", "gpt-mini", "gpt-4o", "gpt-chat"]
+AZURE_MODEL_KEYS = ["gpt-5-nano", "gpt-5-mini", "gpt-4o", "gpt-5-chat"]
 
 
 def _find_azure_credentials():

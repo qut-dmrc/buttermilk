@@ -1,41 +1,41 @@
-host: gemini-flash
+host: google/gemini-3-flash-preview
 
 general:
-  - gemini-flash
-  - claude-sonnet
-  - llama-maverick
+  - google/gemini-3-flash-preview
+  - claude-sonnet-4-5@20250929
+  - meta/llama-4-maverick-17b-128e-instruct-maas
 
 judgers:
-  - gemini-pro
-  - gemini-flash
-  - claude-sonnet
-  - llama-maverick
-  - deepseek-r1
-  - deepseek-v3
-  - gpt-mini
-  - gpt-nano
-  - grok-fast
+  - google/gemini-3-pro-preview
+  - google/gemini-3-flash-preview
+  - claude-sonnet-4-5@20250929
+  - meta/llama-4-maverick-17b-128e-instruct-maas
+  - deepseek-ai/deepseek-r1-0528-maas
+  - deepseek-ai/deepseek-v3.2-maas
+  - gpt-5-mini
+  - gpt-5-nano
+  - grok-4-1-fast-non-reasoning
 
 synthesisers:
-  - gemini-pro
-  - gemini-flash
-  - claude-sonnet
-  - llama-maverick
-  - deepseek-r1
-  - deepseek-v3
+  - google/gemini-3-pro-preview
+  - google/gemini-3-flash-preview
+  - claude-sonnet-4-5@20250929
+  - meta/llama-4-maverick-17b-128e-instruct-maas
+  - deepseek-ai/deepseek-r1-0528-maas
+  - deepseek-ai/deepseek-v3.2-maas
 
 # Model-specific parameter overrides
 # These override the defaults from models.json for this llms config
 model_parameters:
-  gemini-flash:
+  google/gemini-3-flash-preview:
     temperature: 1.0
-  gemini-pro:
+  google/gemini-3-pro-preview:
     temperature: 1.0
-  claude-sonnet:
+  claude-sonnet-4-5@20250929:
     temperature: 1.0
-  llama-maverick:
+  meta/llama-4-maverick-17b-128e-instruct-maas:
     temperature: 1.0
-  deepseek-r1:
+  deepseek-ai/deepseek-r1-0528-maas:
     temperature: 1.0
-  deepseek-v3:
+  deepseek-ai/deepseek-v3.2-maas:
     temperature: 1.0

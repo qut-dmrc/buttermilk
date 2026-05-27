@@ -1,10 +1,10 @@
 """Minimal E2E test for flow verification with reduced rate limit pressure.
 
-This test uses debug LLM config (gemini-flash only) to avoid rate limits
+This test uses debug LLM config (google/gemini-3-flash-preview only) to avoid rate limits
 while verifying all the key flow behaviors.
 
 The comprehensive test in test_flow_e2e.py uses the full lite config with
-multiple models (claude-haiku, gemini-flash-lite, gpt-nano) but may fail
+multiple models (claude-haiku-4-5@20251001, google/gemini-3.1-flash-lite, gpt-5-nano) but may fail
 due to Azure rate limits on gpt-nano. This minimal test serves as the
 reliable CI test.
 """
@@ -24,7 +24,7 @@ from buttermilk.runner.flowrunner import FlowRunner
 
 @pytest.fixture(scope="module")
 def debug_bm(real_bm):
-    """BM instance with debug LLM config (gemini-flash only)."""
+    """BM instance with debug LLM config (google/gemini-3-flash-preview only)."""
     return real_bm
 
 
@@ -80,7 +80,7 @@ async def test_flow_e2e_minimal(
 ):
     """Minimal E2E test with detailed verification.
 
-    Tests with gemini-flash only to avoid rate limits.
+    Tests with google/gemini-3-flash-preview only to avoid rate limits.
 
     Verifies:
     1. Complete run with stage-to-stage input passing

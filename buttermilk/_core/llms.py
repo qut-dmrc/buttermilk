@@ -369,14 +369,15 @@ class LLMConfig(BaseModel):
 # cat .cache/buttermilk/models.json | jq "keys[]"
 # ```
 """A predefined list of chat model identifiers available within the Buttermilk setup."""
-CHAT_MODELS = ["gemini-pro", "gemini-flash", "gemini-flash-lite", "gpt-mini", "gpt-nano", "gpt-4o", "llama-maverick", "claude-sonnet", "deepseek-v3"]
+CHAT_MODELS = ["google/gemini-3-pro-preview", "google/gemini-3.1-pro-preview", "google/gemini-3-flash-preview", "google/gemini-3.5-flash", "google/gemini-3.1-flash-lite", "gpt-5-mini", "gpt-5-nano", "gpt-4o", "meta/llama-4-maverick-17b-128e-instruct-maas", "claude-sonnet-4-5@20250929", "deepseek-ai/deepseek-v3.2-maas", "xai/grok-4.20", "xai/grok-4-1-fast-reasoning"]
 
 """A predefined list of identifiers for cost-effective chat models."""
 CHEAP_CHAT_MODELS = [
-    "gemini-flash-lite",
-    "llama-maverick",
-    "gpt-nano",
-    "claude-haiku",
+    "google/gemini-3.1-flash-lite",
+    "google/gemini-3.5-flash",
+    "meta/llama-4-maverick-17b-128e-instruct-maas",
+    "gpt-5-nano",
+    "claude-haiku-4-5@20251001",
 ]
 
 
@@ -645,6 +646,7 @@ def litellm_to_autogen_result(response: Any, usage: Any, model: str, schema: typ
 
     # Extract content from response
     content: str | list[FunctionCall]
+    thought: str | None = None
     if hasattr(response, "choices") and response.choices and len(response.choices) > 0:
         choice = response.choices[0]
         message = choice.message if hasattr(choice, "message") else choice
@@ -660,6 +662,19 @@ def litellm_to_autogen_result(response: Any, usage: Any, model: str, schema: typ
         else:
             # Regular text content
             content = message.content if hasattr(message, "content") else str(message)
+            # Route the response through ChatParser to (a) strip inline
+            # <think>...</think> blocks emitted by DeepSeek-R1 via Vertex MAAS
+            # and (b) capture any reasoning into the proper `thought` field.
+            # Providers that emit structured `reasoning_content` (DeepSeek
+            # reasoner, OpenAI o-series, Anthropic extended thinking, Gemini
+            # thinking) take precedence over inline-extracted text.
+            if isinstance(content, str):
+                parser = importlib.import_module("buttermilk.utils.json_parser").ChatParser()
+                content = parser.extract_reasoning(
+                    content,
+                    structured_reasoning=getattr(message, "reasoning_content", None),
+                )
+                thought = parser.thought
 
         raw_finish_reason = choice.finish_reason if hasattr(choice, "finish_reason") else "stop"
         # Map LiteLLM finish_reason to Autogen values
@@ -697,6 +712,7 @@ def litellm_to_autogen_result(response: Any, usage: Any, model: str, schema: typ
         finish_reason=finish_reason,
         usage=request_usage,
         cached=cached,
+        thought=thought,
         parsed_object=None,  # Will be parsed by caller if needed
     )
 
