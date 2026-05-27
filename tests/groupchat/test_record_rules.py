@@ -1,12 +1,6 @@
 import pytest
 
-from buttermilk._core.runtime_types import DefaultTopicId
-from buttermilk._core.messages import (
-    UserMessage,
-)
-
 from buttermilk._core.agent import Agent
-from buttermilk._core.contract import AgentInput
 from buttermilk.agents.llm import LLMAgent
 
 
@@ -57,7 +51,6 @@ async def test_run_record_agent(
     NOTE: This test is outdated - AgentInput no longer accepts 'records' as a parameter.
     Need to update to use current AgentInput API with 'inputs' dict.
     """
-    pass
 
 
 @pytest.mark.anyio

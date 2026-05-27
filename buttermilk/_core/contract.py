@@ -17,17 +17,6 @@ from typing import Any, Literal, Union
 
 import numpy as np
 import shortuuid  # For generating unique IDs
-
-# Buttermilk message types
-from buttermilk._core.messages import (
-    FunctionExecutionResult,
-    LLMMessage,
-)
-
-from buttermilk._core.tool_types import (
-    Tool,
-    ToolSchema,
-)
 from omegaconf import DictConfig, ListConfig, OmegaConf  # For OmegaConf integration
 from pydantic import (
     BaseModel,
@@ -38,6 +27,16 @@ from pydantic import (
 )
 
 from buttermilk._core.context import session_id_var
+
+# Buttermilk message types
+from buttermilk._core.messages import (
+    FunctionExecutionResult,
+    LLMMessage,
+)
+from buttermilk._core.tool_types import (
+    Tool,
+    ToolSchema,
+)
 from buttermilk.utils.utils import clean_empty_values
 from buttermilk.utils.validators import (
     convert_omegaconf_objects,

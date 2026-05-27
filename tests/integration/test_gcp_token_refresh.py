@@ -41,9 +41,8 @@ async def test_litellm_vertex_uses_token_provider(real_bm):
     Args:
         real_bm: Real ButtermilkBM instance from conftest.py fixture
     """
-    from buttermilk._core.messages import UserMessage
-
     from buttermilk._core.llms import ClientType, LiteLLMWrapper
+    from buttermilk._core.messages import UserMessage
 
     # ARRANGE: Get a Vertex model wrapper
     # testing.yaml uses llms:debug which has google/gemini-3-flash-preview as a Vertex model

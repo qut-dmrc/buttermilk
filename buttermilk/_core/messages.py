@@ -11,11 +11,10 @@ Phase 1 of the autogen removal: message / response types only.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal, Optional, Union
+from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, Field
-from typing_extensions import Annotated, Required, TypedDict
-
+from typing_extensions import Required, TypedDict
 
 # ---------------------------------------------------------------------------
 # Function-call types (replaces autogen_core.FunctionCall dataclass)
@@ -143,14 +142,14 @@ FinishReasons = Literal["stop", "length", "function_calls", "content_filter", "u
 @dataclass
 class TopLogprob:
     logprob: float
-    bytes: Optional[list[int]] = None
+    bytes: list[int] | None = None
 
 
 class ChatCompletionTokenLogprob(BaseModel):
     token: str
     logprob: float
-    top_logprobs: Optional[list[TopLogprob] | None] = None
-    bytes: Optional[list[int]] = None
+    top_logprobs: list[TopLogprob] | None = None
+    bytes: list[int] | None = None
 
 
 class CreateResult(BaseModel):
@@ -168,10 +167,10 @@ class CreateResult(BaseModel):
     cached: bool
     """Whether the completion was generated from a cached response."""
 
-    logprobs: Optional[list[ChatCompletionTokenLogprob] | None] = None
+    logprobs: list[ChatCompletionTokenLogprob] | None = None
     """Log probabilities of the tokens, if available."""
 
-    thought: Optional[str] = None
+    thought: str | None = None
     """Reasoning text for reasoning models, if available."""
 
     model_config = {"arbitrary_types_allowed": True}
@@ -291,7 +290,7 @@ class ModelInfo(TypedDict, total=False):
     json_output: Required[bool]
     family: Required[str]
     structured_output: Required[bool]
-    multiple_system_messages: Optional[bool]
+    multiple_system_messages: bool | None
 
 
 # ---------------------------------------------------------------------------

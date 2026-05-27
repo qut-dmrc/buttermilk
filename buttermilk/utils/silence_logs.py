@@ -181,7 +181,6 @@ def silence_task_logs():
     logging.getLogger("fsspec.asyn").setLevel(logging.ERROR)
 
 
-
 # Automatically silence logs when module is imported
 # silence_task_logs()
 

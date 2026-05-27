@@ -350,19 +350,23 @@ def compute_input_hashes(
     """
     inputs: list[dict[str, str]] = []
 
-    inputs.append({
-        "name": template_name,
-        "type": "template",
-        "hash": template_hash,
-    })
+    inputs.append(
+        {
+            "name": template_name,
+            "type": "template",
+            "hash": template_hash,
+        }
+    )
 
     if included_files:
         for inc in included_files:
-            inputs.append({
-                "name": inc.name,
-                "type": "include",
-                "hash": inc.content_hash,
-            })
+            inputs.append(
+                {
+                    "name": inc.name,
+                    "type": "include",
+                    "hash": inc.content_hash,
+                }
+            )
 
     if template_vars:
         placeholder_keys = {"record", "context", "fail_on_unfilled_parameters"}

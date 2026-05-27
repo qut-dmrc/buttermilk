@@ -3,9 +3,9 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from buttermilk._core.messages import SystemMessage, UserMessage
 
 from buttermilk._core.contract import AgentOutput, ExecutionTrace
+from buttermilk._core.messages import SystemMessage, UserMessage
 from buttermilk.utils.trace_writer import TraceWriter, get_trace_writer
 
 

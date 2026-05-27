@@ -11,11 +11,10 @@ from collections.abc import (
 )
 from typing import Any
 
-from buttermilk._core.tool_types import CancellationToken
-
 from buttermilk import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import AgentInput, AgentOutput, OOBMessages
+from buttermilk._core.tool_types import CancellationToken
 
 
 class UIAgent(Agent):

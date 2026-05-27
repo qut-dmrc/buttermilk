@@ -3,7 +3,6 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from buttermilk._core.messages import SystemMessage, UserMessage
 from pydantic import BaseModel, ConfigDict
 
 from buttermilk._core.exceptions import ProcessingError
@@ -11,9 +10,10 @@ from buttermilk._core.llms import (
     LiteLLMWrapper,
     ModelInfo,
     ModelParameters,
-    to_litellm_messages,
     litellm_to_model_output,
+    to_litellm_messages,
 )
+from buttermilk._core.messages import SystemMessage, UserMessage
 
 
 class TestLiteLLMWrapper:

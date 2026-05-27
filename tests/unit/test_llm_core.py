@@ -3,12 +3,12 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from buttermilk._core.messages import RequestUsage, SystemMessage, UserMessage
 from pydantic import BaseModel
 
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llm_core import LLMCore, LLMResult
 from buttermilk._core.llms import CreateResult, ModelOutput
+from buttermilk._core.messages import RequestUsage, SystemMessage, UserMessage
 from buttermilk._core.types import BaseRecord
 
 

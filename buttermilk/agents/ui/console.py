@@ -7,8 +7,6 @@ from typing import Union
 
 import regex as re
 from aioconsole import ainput  # For asynchronous console input
-from buttermilk._core.runtime_types import MessageContext, message_handler
-from buttermilk._core.tool_types import CancellationToken
 from rich.console import Console
 from rich.highlighter import JSONHighlighter  # Specific highlighter for JSON
 from rich.pretty import pretty_repr  # For formatted output of complex objects
@@ -31,6 +29,8 @@ from buttermilk._core.contract import (
     ToolOutput,  # Potentially displayable tool output
     UserResponseMessage,  # Responses sent *from* the manager (this agent)
 )
+from buttermilk._core.runtime_types import MessageContext, message_handler
+from buttermilk._core.tool_types import CancellationToken
 from buttermilk._core.types import Record  # For displaying record data
 from buttermilk.agents.differences import Differences
 from buttermilk.agents.judge import JudgeReasons  # Specific format for judge reasons

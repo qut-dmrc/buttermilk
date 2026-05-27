@@ -3,11 +3,11 @@
 import pytest
 
 pytestmark = pytest.mark.slow
-from buttermilk._core.tool_types import FunctionTool
 from pydantic import BaseModel
 
 from buttermilk import AgentInput
 from buttermilk._core.llms import CHAT_MODELS
+from buttermilk._core.tool_types import FunctionTool
 from buttermilk.agents.rag.rag_zotero import (
     RagZotero,
     ZoteroReference,
@@ -151,8 +151,8 @@ async def test_rag_zotero_llama4_specific(real_bm):
     )
 
     try:
-        from buttermilk._core.tool_types import CancellationToken
         from buttermilk._core.messages import UserMessage
+        from buttermilk._core.tool_types import CancellationToken
 
         response = await llm_client.call_chat(
             messages=[UserMessage(content="Test echo hello", source="user")],

@@ -5,8 +5,8 @@ used by main agents like OSB, analyst, RAG, etc.
 """
 
 import pytest
-from buttermilk._core.messages import AssistantMessage, SystemMessage, UserMessage
 
+from buttermilk._core.messages import AssistantMessage, SystemMessage, UserMessage
 from buttermilk._core.types import BaseRecord
 from buttermilk.utils.templating import (
     _parse_chat_messages,

@@ -51,6 +51,7 @@ def message_handler(func=None, *, match=None):
     incoming message type against the 'message' parameter's type hint.
     Optional `match` predicate filters messages before dispatch.
     """
+
     def decorator(fn):
         fn._is_message_handler = True
         fn._match_predicate = match

@@ -7,8 +7,9 @@ definitions that can be used for LLM tool invocation.
 import re
 from typing import Any
 
-from buttermilk._core.tool_types import CancellationToken, ToolSchema
 from pydantic import BaseModel, Field, field_validator
+
+from buttermilk._core.tool_types import CancellationToken, ToolSchema
 
 
 class AgentToolDefinition(BaseModel):

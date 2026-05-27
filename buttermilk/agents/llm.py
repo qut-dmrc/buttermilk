@@ -15,13 +15,13 @@ workflow.
 from typing import Any
 
 import pydantic
-from buttermilk._core.tool_types import CancellationToken
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import AgentInput, AgentOutput
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llm_core import LLMCore
+from buttermilk._core.tool_types import CancellationToken
 
 
 class LLMAgent(Agent):

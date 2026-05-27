@@ -10,9 +10,10 @@ from pathlib import Path
 from typing import Any
 
 import shortuuid
-from buttermilk._core.tool_types import FunctionTool
 from pydantic import ConfigDict, Field, field_validator
 from tqdm.asyncio import tqdm
+
+from buttermilk._core.tool_types import FunctionTool
 
 try:
     from themoviedb import aioTMDb

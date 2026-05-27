@@ -6,10 +6,6 @@ from collections.abc import (
 )
 from typing import Any
 
-from buttermilk._core.runtime_types import DefaultTopicId, MessageContext, message_handler
-from buttermilk._core.messages import AssistantMessage, UserMessage
-from buttermilk._core.tool_types import Tool
-
 from buttermilk import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.constants import COMMAND_SYMBOL, END, MANAGER, WAIT
@@ -28,6 +24,9 @@ from buttermilk._core.contract import (
     UserResponseMessage,
 )
 from buttermilk._core.exceptions import FatalError, ProcessingError
+from buttermilk._core.messages import AssistantMessage, UserMessage
+from buttermilk._core.runtime_types import DefaultTopicId, MessageContext, message_handler
+from buttermilk._core.tool_types import Tool
 from buttermilk._core.types import BaseRecord
 
 TRUNCATE_LEN = 1000  # characters per history message

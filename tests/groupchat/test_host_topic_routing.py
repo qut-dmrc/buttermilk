@@ -4,12 +4,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from buttermilk._core.runtime_types import DefaultTopicId
 from buttermilk._core.contract import (
     FlowEvent,
     StepRequest,
     SystemPromptMessage,
 )
+from buttermilk._core.runtime_types import DefaultTopicId
 from buttermilk.agents.flowcontrol.host import HostAgent
 
 pytestmark = pytest.mark.anyio

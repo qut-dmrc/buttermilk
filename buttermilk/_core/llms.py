@@ -90,7 +90,18 @@ def __getattr__(name: str):
 
 
 # Buttermilk types
-from buttermilk._core.tool_types import CancellationToken, Tool, ToolSchema
+# from google import genai  # Google Generative AI library (unused in current implementation)
+from pydantic import (
+    BaseModel,  # Pydantic models for configuration
+    ConfigDict,
+    Field,
+    field_validator,
+)
+
+from buttermilk import bm, logger
+from buttermilk._core.constants import CONFIG_CACHE_FILENAME, cache, get_base_cache_dir  # Models cache constants
+from buttermilk._core.exceptions import ContentBlockedError, ProcessingError  # Custom Buttermilk exceptions
+from buttermilk._core.json_schema import make_all_properties_required, resolve_json_schema_refs  # Schema $ref resolution for Azure compatibility
 from buttermilk._core.messages import (
     AssistantMessage,
     CreateResult,
@@ -101,21 +112,7 @@ from buttermilk._core.messages import (
     ModelInfo,
     RequestUsage,
 )
-
-# from google import genai  # Google Generative AI library (unused in current implementation)
-from pydantic import (
-    BaseModel,  # Pydantic models for configuration
-    ConfigDict,
-    Field,
-    field_validator,
-)
-
-from buttermilk import bm, logger
-
-
-from buttermilk._core.constants import CONFIG_CACHE_FILENAME, cache, get_base_cache_dir  # Models cache constants
-from buttermilk._core.exceptions import ContentBlockedError, ProcessingError  # Custom Buttermilk exceptions
-from buttermilk._core.json_schema import make_all_properties_required, resolve_json_schema_refs  # Schema $ref resolution for Azure compatibility
+from buttermilk._core.tool_types import CancellationToken, Tool, ToolSchema
 from buttermilk.utils.pricing import calculate_token_cost  # Token cost calculation
 
 
@@ -365,7 +362,18 @@ class LLMConfig(BaseModel):
 # cat .cache/buttermilk/models.json | jq "keys[]"
 # ```
 """A predefined list of chat model identifiers available within the Buttermilk setup."""
-CHAT_MODELS = ["google/gemini-3.1-pro-preview", "google/gemini-3-flash-preview", "google/gemini-3.5-flash", "google/gemini-3.1-flash-lite", "gpt-5-mini", "gpt-5-nano", "gpt-4o", "meta/llama-4-maverick-17b-128e-instruct-maas", "claude-sonnet-4-5@20250929", "deepseek-ai/deepseek-v3.2-maas"]
+CHAT_MODELS = [
+    "google/gemini-3.1-pro-preview",
+    "google/gemini-3-flash-preview",
+    "google/gemini-3.5-flash",
+    "google/gemini-3.1-flash-lite",
+    "gpt-5-mini",
+    "gpt-5-nano",
+    "gpt-4o",
+    "meta/llama-4-maverick-17b-128e-instruct-maas",
+    "claude-sonnet-4-5@20250929",
+    "deepseek-ai/deepseek-v3.2-maas",
+]
 
 """A predefined list of identifiers for cost-effective chat models."""
 CHEAP_CHAT_MODELS = [

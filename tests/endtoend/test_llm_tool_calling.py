@@ -5,11 +5,11 @@ from typing import Literal
 import pytest
 
 pytestmark = pytest.mark.slow
-from buttermilk._core.messages import FunctionCall, SystemMessage, UserMessage
-from buttermilk._core.tool_types import CancellationToken, FunctionTool
 from pydantic import BaseModel, ConfigDict, Field
 
 from buttermilk._core.llms import ModelOutput
+from buttermilk._core.messages import FunctionCall, SystemMessage, UserMessage
+from buttermilk._core.tool_types import CancellationToken, FunctionTool
 
 
 class StructuredTestAgentOutput(BaseModel):

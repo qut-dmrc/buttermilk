@@ -94,11 +94,8 @@ def test_deepseek_r1_vertex_maas_inline_think_block_is_stripped():
     the JSON parser fails because the reasoning block is concatenated with
     the answer.
     """
-    reasoning_body = (
-        "Alright, let's tackle this step by step. The user has shared "
-        "a news excerpt and wants me to analyze it..."
-    )
-    raw_content = f"<think>\n{reasoning_body}\n</think>\n" '{"prediction": true, "confidence": "high"}'
+    reasoning_body = "Alright, let's tackle this step by step. The user has shared a news excerpt and wants me to analyze it..."
+    raw_content = f'<think>\n{reasoning_body}\n</think>\n{{"prediction": true, "confidence": "high"}}'
     response, usage = _make_response(raw_content)
 
     result = litellm_to_model_output(response, usage, "deepseek-r1-maas")
@@ -135,7 +132,7 @@ def test_structured_reasoning_wins_over_inline_think_block():
     """
     inline = "inline chain of thought"
     structured = "structured provider reasoning"
-    raw_content = f"<think>{inline}</think>\n" '{"prediction": false}'
+    raw_content = f'<think>{inline}</think>\n{{"prediction": false}}'
     response, usage = _make_response(raw_content, reasoning_content=structured)
 
     result = litellm_to_model_output(response, usage, "hybrid-model")

@@ -13,19 +13,6 @@ from typing import Any
 
 from opentelemetry import trace
 
-from buttermilk._core.runtime_types import (
-    AgentIdentity,
-    ChatHistory,
-    DefaultTopicId,
-    MessageContext,
-    TopicId,
-    _build_handler_registry,
-    message_handler,
-)
-
-from buttermilk._core.messages import AssistantMessage, UserMessage
-from buttermilk._core.tool_types import CancellationToken, Tool
-
 from buttermilk import bm, logger
 from buttermilk._core.config import AgentConfig
 
@@ -38,7 +25,6 @@ from buttermilk._core.contract import (
     ConductorRequest,
     ErrorEvent,
     ExecutionTrace,
-    OOBMessages,
     StepRequest,  # Request to execute a specific step
     TaskProcessingComplete,
     TaskProcessingStarted,
@@ -46,6 +32,17 @@ from buttermilk._core.contract import (
 )
 from buttermilk._core.exceptions import FatalError, ProcessingError  # Custom exceptions
 from buttermilk._core.message_data import extract_message_data
+from buttermilk._core.messages import AssistantMessage, UserMessage
+from buttermilk._core.runtime_types import (
+    AgentIdentity,
+    ChatHistory,
+    DefaultTopicId,
+    MessageContext,
+    TopicId,
+    _build_handler_registry,
+    message_handler,
+)
+from buttermilk._core.tool_types import CancellationToken, Tool
 from buttermilk._core.types import BaseRecord  # Data record structure
 from buttermilk.utils.templating import (
     KeyValueCollector,

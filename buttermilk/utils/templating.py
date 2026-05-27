@@ -17,12 +17,6 @@ from typing import Any
 from weakref import WeakValueDictionary
 
 import regex as re  # For regular expression operations, used in _parse_prompty
-from buttermilk._core.messages import (
-    AssistantMessage,
-    LLMMessage,
-    SystemMessage,
-    UserMessage,
-)  # Native Buttermilk message types
 from jinja2 import (  # Jinja2 templating components
     FileSystemLoader,
     Undefined,
@@ -33,6 +27,12 @@ from pydantic import BaseModel, PrivateAttr  # Pydantic components
 from buttermilk import bm, logger  # Centralized logger
 from buttermilk._core.constants import TEMPLATES_PATH  # Default path for templates
 from buttermilk._core.exceptions import FatalError, ProcessingError  # Custom exceptions
+from buttermilk._core.messages import (
+    AssistantMessage,
+    LLMMessage,
+    SystemMessage,
+    UserMessage,
+)  # Native Buttermilk message types
 from buttermilk._core.types import BaseRecord  # Core Buttermilk Record type
 from buttermilk.utils.utils import (
     clean_empty_values,

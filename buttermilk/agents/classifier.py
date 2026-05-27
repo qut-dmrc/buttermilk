@@ -20,12 +20,12 @@ from collections.abc import AsyncGenerator
 from typing import Any, Self
 
 import pydantic
-from buttermilk._core.messages import AssistantMessage, SystemMessage, UserMessage
 from opentelemetry import trace
 from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 
 from buttermilk import logger
 from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.messages import AssistantMessage, SystemMessage, UserMessage
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.processor_core import ProcessorCore, TraceParams
 from buttermilk._core.types import BaseRecord

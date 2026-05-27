@@ -3,15 +3,6 @@
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from buttermilk._core.runtime_types import (
-    AgentIdentity,
-    MessageContext,
-    TopicId,
-    _build_handler_registry,
-    message_handler,
-)
-from buttermilk._core.storage_config import StorageConfig, StorageFactory
-
 from buttermilk import (
     bm,
     logger,
@@ -21,6 +12,13 @@ from buttermilk._core.contract import (
     ErrorEvent,
     ExecutionTrace,
 )
+from buttermilk._core.runtime_types import (
+    AgentIdentity,
+    MessageContext,
+    _build_handler_registry,
+    message_handler,
+)
+from buttermilk._core.storage_config import StorageConfig, StorageFactory
 from buttermilk.utils.uploader import (
     AsyncDataUploader,
 )
@@ -75,9 +73,7 @@ class SpyAgent:
         await self.manager.flush()
 
     @message_handler
-    async def agent_output_handler(
-        self, message: ExecutionTrace, ctx: MessageContext
-    ) -> ErrorEvent | None:
+    async def agent_output_handler(self, message: ExecutionTrace, ctx: MessageContext) -> ErrorEvent | None:
         """Capture ExecutionTrace messages and save them."""
         if isinstance(message, ExecutionTrace):
             if message.outputs:

@@ -14,7 +14,6 @@ import shortuuid
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from buttermilk import (
-    AllMessages,
     StepRequest,
     bm,
     logger,
@@ -30,7 +29,7 @@ from buttermilk._core.contract import (
 )
 from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk._core.orchestrator import Orchestrator
-from buttermilk._core.runtime_types import AgentIdentity, DefaultTopicId, MessageContext, TopicId
+from buttermilk._core.runtime_types import AgentIdentity, MessageContext, TopicId
 from buttermilk._core.types import RunRequest
 from buttermilk.agents.spy import SpyAgent
 from buttermilk.api.services.session_storage import SessionStorageService
@@ -137,15 +136,18 @@ class AutogenOrchestrator(Orchestrator):
 
     def _make_agent_publish_fn(self) -> Callable[..., Awaitable[None]]:
         """Create a publish callback for agents to use."""
+
         async def publish_fn(message: Any, topic: TopicId | str) -> None:
             topic_str = str(topic)
             await self._publish(message, topic_str)
+
         return publish_fn
 
     async def _setup(self, request: RunRequest) -> tuple[TerminationHandler, InterruptHandler]:
         """Initialize orchestrator and register all configured agents."""
         if not self._topic:
             from buttermilk._core.execution_context import get_execution_context
+
             exec_ctx = get_execution_context()
             suffix = shortuuid.uuid()[:4]
             self._topic = f"{bm.session_info.project_name}-{exec_ctx.slug}-{bm.session_info.slug}-{suffix}"
@@ -253,13 +255,12 @@ class AutogenOrchestrator(Orchestrator):
                 config_with_session["bm"] = self.get_effective_bm()
 
             return agent_cls(**config_with_session)
-        elif issubclass(agent_cls, SpyAgent):
+        if issubclass(agent_cls, SpyAgent):
             return agent_cls(
                 **variant_config.parameters,
                 publish_fn=publish_fn,
             )
-        else:
-            return agent_cls(**variant_config.parameters)
+        return agent_cls(**variant_config.parameters)
 
     async def _register_ui(self, callback_to_ui: Callable[..., Awaitable[None]]) -> None:
         """Register the UI callback as a subscriber."""
@@ -367,6 +368,7 @@ class AutogenOrchestrator(Orchestrator):
 
     def make_publish_callback(self) -> Callable[[FlowMessage], Awaitable[None]]:
         """Creates an asynchronous callback function for the UI to use."""
+
         async def publish_callback(message: FlowMessage) -> None:
             logger.debug(f"[AutogenOrchestrator.make_publish_callback] Publishing message to runtime: {message}")
 

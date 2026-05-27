@@ -8,7 +8,6 @@ import pytest
 
 pytestmark = pytest.mark.slow
 from buttermilk._core.messages import SystemMessage, UserMessage
-
 from buttermilk.agents.evaluators.scorer import QualScore
 
 # Real input data from BigQuery traces

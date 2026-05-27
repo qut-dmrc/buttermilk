@@ -1,9 +1,9 @@
 """Tests for the refactored LLM configuration schema."""
 
 import pytest
-from buttermilk._core.messages import ModelInfo
 
 from buttermilk._core.llms import ClientType, LLMConfig
+from buttermilk._core.messages import ModelInfo
 
 
 def test_client_type_enum():

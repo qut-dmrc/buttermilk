@@ -16,8 +16,6 @@ from typing import Any, Protocol, runtime_checkable
 
 from pydantic import TypeAdapter
 
-from buttermilk._core.messages import FunctionCall
-
 
 @dataclass
 class ToolSchema:
@@ -170,9 +168,8 @@ class FunctionTool:
 
         if asyncio.iscoroutinefunction(self._func):
             return await self._func(**args)
-        else:
-            loop = asyncio.get_running_loop()
-            return await loop.run_in_executor(None, functools.partial(self._func, **args))
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, functools.partial(self._func, **args))
 
     def return_value_as_string(self, value: Any) -> str:
         if isinstance(value, str):

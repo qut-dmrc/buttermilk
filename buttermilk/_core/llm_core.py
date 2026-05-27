@@ -20,16 +20,15 @@ from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any, Self
 
 import pydantic
-from buttermilk._core.tool_types import CancellationToken
-from buttermilk._core.messages import LLMMessage
 from opentelemetry import trace
 from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 from buttermilk import bm, logger
 from buttermilk._core.contract import ErrorEvent
 from buttermilk._core.exceptions import FatalError, ProcessingError
-
+from buttermilk._core.messages import LLMMessage
 from buttermilk._core.processor_core import ObservabilityMixin, TraceParams
+from buttermilk._core.tool_types import CancellationToken
 
 if TYPE_CHECKING:
     from buttermilk._core.llms import CreateResult, ModelOutput

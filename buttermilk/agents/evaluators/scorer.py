@@ -9,7 +9,6 @@ criteria, individual assessments, and the overall scoring output.
 
 from typing import Any
 
-from buttermilk._core.runtime_types import MessageContext, message_handler
 from pydantic import BaseModel, Field  # Pydantic components
 
 # Buttermilk core imports
@@ -22,6 +21,7 @@ from buttermilk._core.contract import (  # Buttermilk message contracts
 from buttermilk._core.message_data import (
     extract_message_data,
 )  # Utility for data extraction
+from buttermilk._core.runtime_types import MessageContext, message_handler
 from buttermilk.agents.judge import (
     JudgeReasons,
 )  # Expected input model from Judge agent

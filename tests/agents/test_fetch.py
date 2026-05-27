@@ -1,12 +1,10 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from buttermilk._core.runtime_types import DefaultTopicId
 
 from buttermilk._core.config import AgentConfig
 from buttermilk._core.contract import AgentInput
 from buttermilk._core.exceptions import ProcessingError  # Added ProcessingError
-from buttermilk._core.types import Record
 from buttermilk.agents.fetch import FetchAgent
 
 NEWS_RECORDS = [

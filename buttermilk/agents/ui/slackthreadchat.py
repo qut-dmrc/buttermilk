@@ -2,7 +2,6 @@ from collections.abc import Callable
 from typing import Any
 
 import pydantic
-from buttermilk._core.tool_types import CancellationToken
 from pydantic import BaseModel, Field, PrivateAttr
 from rich.console import Console
 from rich.markdown import Markdown
@@ -17,6 +16,7 @@ from buttermilk._core.contract import (
     SystemPromptMessage,
     UserResponseMessage,
 )
+from buttermilk._core.tool_types import CancellationToken
 from buttermilk.agents.ui.formatting.slackblock import (
     confirm_bool,
     confirm_options,

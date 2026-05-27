@@ -15,7 +15,6 @@ from dataclasses import dataclass
 from typing import Any, Literal, Self  # Standard typing utilities
 
 import shortuuid  # For generating short unique IDs
-from buttermilk._core.messages import AssistantMessage, UserMessage  # Native message types
 from PIL.Image import Image  # For image manipulation with Pillow
 from pydantic import (
     BaseModel,
@@ -27,6 +26,7 @@ from pydantic import (
 )
 
 from buttermilk._core.hashing import hash_content
+from buttermilk._core.messages import AssistantMessage, UserMessage  # Native message types
 
 from .log import logger
 

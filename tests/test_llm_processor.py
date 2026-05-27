@@ -9,10 +9,10 @@ Tests use REAL templates and data patterns (no mocking internal code) and follow
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from buttermilk._core.messages import RequestUsage
 from pydantic import BaseModel
 
 from buttermilk._core.llms import CreateResult
+from buttermilk._core.messages import RequestUsage
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.protocols import Processor
 from buttermilk._core.types import BaseRecord
