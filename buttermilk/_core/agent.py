@@ -469,8 +469,9 @@ class Agent:
 
         # Invoke the agent and yield the result
         trace_object = await self.invoke(agent_input)
-        if trace_object is not None:
-            yield trace_object
+        if trace_object is None:
+            raise ProcessingError(f"Agent {self.agent_name} invoke() returned None — processing failed")
+        yield trace_object
 
     async def trace_and_execute(
         self,
