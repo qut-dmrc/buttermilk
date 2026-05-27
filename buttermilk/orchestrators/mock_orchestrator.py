@@ -763,7 +763,7 @@ class MockOrchestrator(Orchestrator):
         async def publish_callback(message) -> None:
             # Trigger the interrupt and exit handlers
             await self._interrupt_handler.on_publish(message, message_context=None)
-            await self._termination_handler.on_publish(message, message_context=None)
+            self._termination_handler.check(message)
             # And otherwise forward to our _publish_message method
             await self._publish_message(message)
 

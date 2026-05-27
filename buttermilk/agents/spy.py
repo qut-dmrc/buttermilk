@@ -1,22 +1,16 @@
-"""SpyAgent — passively listens and saves ExecutionTrace messages.
+"""SpyAgent — passively listens and saves ExecutionTrace messages."""
 
-Phase 3: Removed direct autogen type imports. SpyAgent retains RoutedAgent
-inheritance for orchestrator compatibility but imports via runtime_types. For compatibility
-with the autogen GroupChat orchestrator, it retains a register()
-classmethod that delegates to RoutedAgent.register().
-"""
+from collections.abc import Awaitable, Callable
+from typing import Any
 
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
-
-# Phase 4 removal target: autogen compatibility for register()
-from autogen_core import RoutedAgent
-
-from buttermilk._core.runtime_types import MessageContext, message_handler
+from buttermilk._core.runtime_types import (
+    AgentIdentity,
+    MessageContext,
+    TopicId,
+    _build_handler_registry,
+    message_handler,
+)
 from buttermilk._core.storage_config import StorageConfig, StorageFactory
-
-if TYPE_CHECKING:
-    from autogen_core import AgentRuntime
 
 from buttermilk import (
     bm,
@@ -34,41 +28,51 @@ from buttermilk.utils.uploader import (
 BATCH_SIZE = 10
 
 
-class SpyAgent(RoutedAgent):
-    """Passively captures ExecutionTrace messages and persists them.
-
-    Inherits RoutedAgent as a compatibility adapter for the autogen
-    GroupChat orchestrator (Phase 4 removal target).
-    """
+class SpyAgent:
+    """Passively captures ExecutionTrace messages and persists them."""
 
     def __init__(
         self,
         save: StorageConfig,
+        publish_fn: Callable[..., Awaitable[None]] | None = None,
         **_kwargs: Any,
     ) -> None:
-        super().__init__(description="Save results to storage")
-
         save = StorageFactory.create_config(save)
         self.storage = bm.get_storage(save)
         self.manager = AsyncDataUploader(storage=self.storage, buffer_size=BATCH_SIZE)
+        self._publish_fn = publish_fn
+        self._handler_registry: dict[type, str] | None = None
 
-    @classmethod
-    async def register(
-        cls,
-        runtime: "AgentRuntime",
-        type: str,
-        factory: Callable[[], Any],
-        skip_class_subscriptions: bool = False,
-        skip_direct_message_subscription: bool = False,
-    ) -> Any:
-        """Register SpyAgent with the autogen runtime (Phase 4 removal target)."""
-        return await RoutedAgent.register(
-            runtime=runtime,
-            type=type,
-            factory=factory,
-            skip_class_subscriptions=skip_class_subscriptions,
-            skip_direct_message_subscription=skip_direct_message_subscription,
-        )
+    @property
+    def identity(self) -> AgentIdentity:
+        return AgentIdentity(key="spy", type="SpyAgent", description="Save results to storage")
+
+    def _get_handler_registry(self) -> dict[type, str]:
+        if self._handler_registry is None:
+            self._handler_registry = _build_handler_registry(type(self))
+        return self._handler_registry
+
+    async def dispatch(self, message: Any, ctx: MessageContext) -> Any:
+        """Dispatch an incoming message to the appropriate handler."""
+        registry = self._get_handler_registry()
+        msg_type = type(message)
+        method_name = registry.get(msg_type)
+        if method_name is None:
+            for handled_type, name in registry.items():
+                if issubclass(msg_type, handled_type):
+                    method_name = name
+                    break
+        if method_name is not None:
+            method = getattr(self, method_name)
+            match_pred = getattr(method, "_match_predicate", None)
+            if match_pred and not match_pred(message, ctx):
+                return None
+            return await method(message, ctx)
+        return None
+
+    async def close(self) -> None:
+        """Flush pending writes."""
+        await self.manager.flush()
 
     @message_handler
     async def agent_output_handler(

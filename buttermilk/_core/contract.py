@@ -18,7 +18,7 @@ from typing import Any, Literal, Union
 import numpy as np
 import shortuuid  # For generating unique IDs
 
-# Native Buttermilk message types (replaces autogen_core.models)
+# Buttermilk message types
 from buttermilk._core.messages import (
     FunctionExecutionResult,
     LLMMessage,
@@ -780,7 +780,7 @@ class ConductorRequest(AgentInput):
     )
 
     model_config = ConfigDict(
-        arbitrary_types_allowed=True,  # Allow Tool type from autogen_core
+        arbitrary_types_allowed=True,
     )
 
 

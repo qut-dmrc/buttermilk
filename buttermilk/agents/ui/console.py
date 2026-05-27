@@ -580,35 +580,35 @@ class CLIUserAgent(UIAgent):
     async def handle_record(self, message: Record, ctx: MessageContext) -> None:
         """Handle Record messages by displaying them."""
         await super().handle_record(message, ctx)
-        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
+        source = ctx.sender.key if ctx.sender else "unknown"
         await self.callback_to_ui(message, source=source)
 
     @message_handler
     async def handle_agent_output(self, message: AgentOutput, ctx: MessageContext) -> None:
         """Handle AgentOutput messages by displaying them."""
         await super().handle_agent_output(message, ctx)
-        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
+        source = ctx.sender.key if ctx.sender else "unknown"
         await self.callback_to_ui(message, source=source)
 
     @message_handler
     async def handle_agent_trace(self, message: ExecutionTrace, ctx: MessageContext) -> None:
         """Handle ExecutionTrace messages by displaying them."""
         await super().handle_agent_trace(message, ctx)
-        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
+        source = ctx.sender.key if ctx.sender else "unknown"
         await self.callback_to_ui(message, source=source)
 
     @message_handler
     async def handle_user_response_message(self, message: UserResponseMessage, ctx: MessageContext) -> None:
         """Handle UserResponseMessage messages by displaying them."""
         await super().handle_user_response_message(message, ctx)
-        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
+        source = ctx.sender.key if ctx.sender else "unknown"
         await self.callback_to_ui(message, source=source)
 
     @message_handler
     async def handle_tool_output(self, message: ToolOutput, ctx: MessageContext) -> None:
         """Handle ToolOutput messages by displaying them."""
         await super().handle_tool_output(message, ctx)
-        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
+        source = ctx.sender.key if ctx.sender else "unknown"
         await self.callback_to_ui(message, source=source)
 
     async def _handle_events(

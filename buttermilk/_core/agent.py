@@ -3,30 +3,15 @@
 Agents are responsible for performing specific tasks as part of a larger
 data processing flow. `AgentConfig` provides the base configuration,
 and `Agent` provides the execution logic and state management.
-
-Phase 3 note: Agent still inherits from autogen's RoutedAgent as a
-compatibility adapter so the GroupChat orchestrator (Phase 4 target)
-can register and dispatch to agents. All autogen imports are localised
-here; agent subclasses import from buttermilk._core.runtime_types.
 """
 
 import asyncio
 import warnings
 from abc import abstractmethod
-from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any
+from collections.abc import Awaitable, Callable, Mapping
+from typing import Any
 
 from opentelemetry import trace
-
-if TYPE_CHECKING:
-    from autogen_core import AgentRuntime
-
-# --- Autogen compatibility adapter (Phase 4 removal target) -----------
-# The GroupChat orchestrator uses autogen's SingleThreadedAgentRuntime,
-# which requires agents to inherit from RoutedAgent and decorate handlers
-# with @message_handler. These imports are kept HERE ONLY so that agent
-# subclasses can import from buttermilk._core.runtime_types instead.
-from autogen_core import RoutedAgent
 
 from buttermilk._core.runtime_types import (
     AgentIdentity,
@@ -34,9 +19,9 @@ from buttermilk._core.runtime_types import (
     DefaultTopicId,
     MessageContext,
     TopicId,
+    _build_handler_registry,
     message_handler,
 )
-# --- End autogen compatibility section --------------------------------
 
 from buttermilk._core.messages import AssistantMessage, UserMessage
 from buttermilk._core.tool_types import CancellationToken, Tool
@@ -146,15 +131,12 @@ def create_agent_trace_info(
 # --- Base Agent Class ---
 
 
-class Agent(RoutedAgent):
+class Agent:
     """Base class for all Buttermilk agents.
 
-    Inherits from autogen RoutedAgent as a compatibility adapter (Phase 4
-    removal target). All native agent infrastructure lives in this class;
-    the RoutedAgent parent provides only the runtime registration and
-    message dispatch interface needed by the GroupChat orchestrator.
-
-    Subclasses implement `_process` for their core logic.
+    Subclasses implement `_process` for their core logic. The orchestrator
+    injects a `_publish_fn` callback for message dispatch, and calls
+    `dispatch()` to route incoming messages to the correct handler.
     """
 
     # --- Configuration properties (delegated to _config) ---
@@ -236,22 +218,22 @@ class Agent(RoutedAgent):
 
         return get_bm()
 
-    def __init__(self, topic_id: TopicId | None = None, **data: Any) -> None:
-        # Set groupchat topic ID, defaulting to a standard topic if not provided
-        self._topic_id: TopicId = topic_id or DefaultTopicId(type="default")
-
-        # Create AgentConfig from the data
+    def __init__(
+        self,
+        topic_id: TopicId | str | None = None,
+        publish_fn: Callable[..., Awaitable[None]] | None = None,
+        **data: Any,
+    ) -> None:
+        self._topic_id: TopicId = TopicId(topic_id) if topic_id else DefaultTopicId(type="default")
         self._config = AgentConfig(**data)
+        self._publish_fn = publish_fn
 
-        # Initialize RoutedAgent (Phase 4 removal target)
-        RoutedAgent.__init__(self, description=self._config.description)
-
-        # Native chat history replacing autogen's UnboundedChatCompletionContext
         self._model_context = ChatHistory()
         self._data = KeyValueCollector()
         self._heartbeat = asyncio.Queue(maxsize=1)
         self._announced = False
         self._tools = self._get_available_tools()
+        self._handler_registry: dict[type, str] | None = None
 
     @property
     def identity(self) -> AgentIdentity:
@@ -262,30 +244,31 @@ class Agent(RoutedAgent):
             description=self.description,
         )
 
-    # --- Autogen compatibility properties (Phase 4 removal target) ----
+    # --- Message dispatch ---
 
-    @property
-    def metadata(self) -> Any:
-        """Autogen AgentMetadata — used by the orchestrator runtime."""
-        from autogen_core import AgentMetadata
+    def _get_handler_registry(self) -> dict[type, str]:
+        if self._handler_registry is None:
+            self._handler_registry = _build_handler_registry(type(self))
+        return self._handler_registry
 
-        if self._id is None:
-            raise RuntimeError("Agent not bound to runtime")
-        return AgentMetadata(key=self._id.key, type=self._id.type, description=self.description)
-
-    @property
-    def id(self) -> Any:
-        """Autogen AgentId — used by the orchestrator runtime."""
-        if self._id is None:
-            raise RuntimeError("Agent not bound to runtime")
-        return self._id
-
-    async def bind_id_and_runtime(self, id: Any, runtime: "AgentRuntime") -> None:
-        """Bind agent to an autogen AgentRuntime (Phase 4 removal target)."""
-        self._id = id
-        self._runtime = runtime
-
-    # --- End autogen compatibility properties -------------------------
+    async def dispatch(self, message: Any, ctx: MessageContext) -> Any:
+        """Dispatch an incoming message to the appropriate @message_handler."""
+        registry = self._get_handler_registry()
+        msg_type = type(message)
+        method_name = registry.get(msg_type)
+        if method_name is None:
+            for handled_type, name in registry.items():
+                if issubclass(msg_type, handled_type):
+                    method_name = name
+                    break
+        if method_name is not None:
+            method = getattr(self, method_name)
+            # Check match predicate if present
+            match_pred = getattr(method, "_match_predicate", None)
+            if match_pred and not match_pred(message, ctx):
+                return None
+            return await method(message, ctx)
+        return None
 
     async def save_state(self) -> Mapping[str, Any]:
         """Save the state of the agent. The result must be JSON serializable."""
@@ -308,10 +291,6 @@ class Agent(RoutedAgent):
     def _get_available_tools(self) -> list[Tool]:
         """Get list of tools this agent can respond to.
 
-        This method checks `self.tools` (an `AgentConfig` field, typically populated
-        from Hydra configuration) and uses `create_tool_functions` to convert these
-        tool definitions into a list of Autogen-compatible tool objects (`_tools`).
-
         Returns:
             list[Tool]: List of tools.
 
@@ -331,7 +310,6 @@ class Agent(RoutedAgent):
             else:
                 tools[tool_name] = tool
 
-        # Uses utility function to convert tool configurations into Autogen-compatible tool formats.
         return create_tool_functions(tools)
 
     # --- Core Methods (Lifecycle & Interaction) ---
@@ -348,51 +326,24 @@ class Agent(RoutedAgent):
         """
         logger.debug(f"Agent {self.agent_name}: No persistent resourcces to cleanup.")
 
-    # --- Announcement Methods ---
-
-    async def _send_chat(
-        self,
-        message: OOBMessages,
-        topic_id: TopicId,
-    ):
-        # Agents should call the _publish method; this one just exists for tracing.
-        await super().publish_message(message, topic_id=topic_id)
+    # --- Publishing ---
 
     async def _publish(
         self,
         message: Any,
-        topic_id: TopicId | None = None,
+        topic_id: TopicId | str | None = None,
         *,
         cancellation_token: CancellationToken | None = None,
     ) -> None:
-        """Publish a message to the group chat or a specific topic.
-
-        Args:
-            message: The message to publish.
-            topic_id: Optional specific topic to publish to. Defaults to self._topic_id.
-            cancellation_token: Optional cancellation token to cancel the operation.
-
-        """
-        # If we are not running within an autogen runtime, just log the message
-        if not hasattr(self, "_runtime") or not self._runtime:
-            logger.debug(f"Agent {self.agent_name} ({self.agent_id}) sent {type(message).__name__}.")
-            return
-
-        # Use provided topic_id or fall back to the agent's default topic
+        """Publish a message to the group chat or a specific topic."""
         target_topic = topic_id or self._topic_id
-
-        if isinstance(message, OOBMessages):
-            # send events without tracing
-            logger.debug(
-                f"Agent {self.agent_name} ({self.agent_id}) sent event {type(message).__name__} to {target_topic}.",
-            )
-            await super().publish_message(message, topic_id=target_topic, cancellation_token=cancellation_token)
-        else:
-            # send and trace
-            await self._send_chat(message, topic_id=target_topic)
-            logger.debug(
-                f"Agent {self.agent_name} ({self.agent_id}) sent {type(message).__name__} to {target_topic}.",
-            )
+        if not self._publish_fn:
+            logger.debug(f"Agent {self.agent_name} ({self.agent_id}) sent {type(message).__name__} (no runtime).")
+            return
+        logger.debug(
+            f"Agent {self.agent_name} ({self.agent_id}) sent {type(message).__name__} to {target_topic}.",
+        )
+        await self._publish_fn(message, target_topic)
 
     # --- Core Execution Logic ---
 
@@ -759,7 +710,7 @@ class Agent(RoutedAgent):
             ctx: Message context containing sender and topic information.
 
         """
-        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
+        source = ctx.sender.key if ctx.sender else "unknown"
 
         # Build complete input mappings including record and context
         # Start with regular inputs, then add record/context if configured
@@ -809,7 +760,7 @@ class Agent(RoutedAgent):
             ctx: Message context containing sender and topic information.
 
         """
-        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "manager"
+        source = ctx.sender.key if ctx.sender else "manager"
 
         # Extract data based on input mappings if defined
         if self.inputs:
@@ -978,22 +929,8 @@ class Agent(RoutedAgent):
     def get_tool_definitions(self) -> list[Tool]:
         """Generate structured tool definitions for this agent.
 
-        This method creates tool definitions representing what this agent can do,
-        allowing it to be invoked as a tool in the Autogen groupchat and
-        enabling proper routing by host agents.
-
         Returns:
-            List of Tool objects (FunctionTool, AgentToolDefinition, etc.)
-            representing this agent's capabilities. All returned objects must
-            implement the Tool protocol with a .schema property for serialization
-            in announcements.
-
-        Note:
-            - For executable tools: return FunctionTool objects
-            - For capability advertisements: return AgentToolDefinition objects
-            - Host agents automatically extract .schema for serialization
-            - LLM agents can pass these directly to autogen for tool calling
-
+            List of Tool objects representing this agent's capabilities.
         """
         from buttermilk._core.tool_definition import AgentToolDefinition
 

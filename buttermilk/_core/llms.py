@@ -89,7 +89,7 @@ def __getattr__(name: str):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-# Native Buttermilk types (replaces autogen_core.models and autogen_core.tools)
+# Buttermilk types
 from buttermilk._core.tool_types import CancellationToken, Tool, ToolSchema
 from buttermilk._core.messages import (
     AssistantMessage,

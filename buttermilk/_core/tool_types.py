@@ -1,4 +1,4 @@
-"""Native tool protocol types replacing autogen_core.tools and related imports.
+"""Native tool protocol types.
 
 Provides:
 - Tool: Protocol for executable tools with schema

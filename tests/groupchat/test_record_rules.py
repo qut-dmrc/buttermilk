@@ -1,9 +1,6 @@
 import pytest
-from autogen_core import (
-    DefaultTopicId,
-    SingleThreadedAgentRuntime,
-    TypeSubscription,
-)
+
+from buttermilk._core.runtime_types import DefaultTopicId
 from buttermilk._core.messages import (
     UserMessage,
 )
@@ -11,11 +8,6 @@ from buttermilk._core.messages import (
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import AgentInput
 from buttermilk.agents.llm import LLMAgent
-
-
-@pytest.fixture
-def runtime():
-    return SingleThreadedAgentRuntime()
 
 
 @pytest.fixture(params=["Judger", "Owl"], scope="function")
@@ -57,7 +49,6 @@ def record_agent_cfg(
 @pytest.mark.anyio
 @pytest.mark.skip(reason="Test uses outdated AgentInput API that no longer accepts 'records' parameter")
 async def test_run_record_agent(
-    runtime,
     record_agent_cfg,
     fight_no_more_forever,
 ):
@@ -66,27 +57,7 @@ async def test_run_record_agent(
     NOTE: This test is outdated - AgentInput no longer accepts 'records' as a parameter.
     Need to update to use current AgentInput API with 'inputs' dict.
     """
-    agent_id = await LLMAgent.register(
-        runtime,
-        DefaultTopicId().type,
-        lambda: LLMAgent(
-            **record_agent_cfg,
-        ),
-    )
-    await runtime.add_subscription(
-        TypeSubscription(
-            topic_type=DefaultTopicId().type,
-            agent_type=agent_id.type,
-        ),
-    )
-    runtime.start()
-    record = UserMessage(content=fight_no_more_forever.content, source="testing")
-    result = await runtime.send_message(
-        AgentInput(records=[record]),
-        await runtime.get("default"),
-    )
-    await runtime.stop_when_idle()
-    assert result
+    pass
 
 
 @pytest.mark.anyio

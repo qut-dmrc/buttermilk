@@ -9,7 +9,7 @@ import sys
 from unittest.mock import MagicMock
 
 import pytest
-from autogen_core import MessageContext
+from buttermilk._core.runtime_types import MessageContext
 
 from buttermilk._core.contract import TaskProcessingComplete, TaskProcessingStarted
 from buttermilk.agents.flowcontrol.host import HostAgent

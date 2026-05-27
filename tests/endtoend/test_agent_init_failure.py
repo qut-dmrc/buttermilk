@@ -166,10 +166,10 @@ async def test_valid_agent_init_succeeds(real_bm):
         # ASSERT: Setup completed successfully
         assert termination_handler is not None
         assert interrupt_handler is not None
-        assert orchestrator._runtime is not None
-        assert "TESTER" in orchestrator._agent_types
+        assert len(orchestrator._agents) > 0
 
     finally:
-        # Cleanup: Stop the runtime
-        if hasattr(orchestrator, "_runtime") and orchestrator._runtime is not None:
-            await orchestrator._runtime.stop()
+        # Cleanup: Close all agents
+        for agent in orchestrator._agents.values():
+            if hasattr(agent, "close"):
+                await agent.close()
