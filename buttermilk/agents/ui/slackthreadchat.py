@@ -2,7 +2,7 @@ from collections.abc import Callable
 from typing import Any
 
 import pydantic
-from autogen_core import CancellationToken
+from buttermilk._core.tool_types import CancellationToken
 from pydantic import BaseModel, Field, PrivateAttr
 from rich.console import Console
 from rich.markdown import Markdown

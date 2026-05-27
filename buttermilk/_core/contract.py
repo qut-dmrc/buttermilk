@@ -23,10 +23,10 @@ from autogen_core.models import (
     FunctionExecutionResult,
     LLMMessage,
 )
-from autogen_core.tools import (
+from buttermilk._core.tool_types import (
     Tool,
     ToolSchema,
-)  # Importing the Tool protocol from autogen_core
+)
 from omegaconf import DictConfig, ListConfig, OmegaConf  # For OmegaConf integration
 from pydantic import (
     BaseModel,

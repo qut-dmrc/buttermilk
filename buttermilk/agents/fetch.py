@@ -10,7 +10,7 @@ from typing import Any
 from autogen_core import (
     message_handler,
 )
-from autogen_core.tools import FunctionTool, Tool
+from buttermilk._core.tool_types import FunctionTool, Tool
 
 from buttermilk import bm, logger
 from buttermilk._core.agent import Agent

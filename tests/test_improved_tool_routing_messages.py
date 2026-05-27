@@ -1,6 +1,6 @@
 """Test improved tool routing messages in HostAgent and StructuredLLMHostAgent."""
 
-from autogen_core import FunctionCall
+from buttermilk._core.tool_types import FunctionCall
 
 from buttermilk.agents.flowcontrol.host import HostAgent
 from buttermilk.agents.flowcontrol.structured_llmhost import StructuredLLMHostAgent

@@ -1,6 +1,6 @@
 from typing import Any
 
-from autogen_core.tools import Tool
+from buttermilk._core.tool_types import Tool
 
 
 def create_tool_functions(tool_cfg: dict[str, Any]) -> list[Tool]:

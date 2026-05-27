@@ -91,7 +91,7 @@ def __getattr__(name: str):
 
 # Autogen library imports - used for message/tool type compatibility
 # OpenAI SDK for exception handling
-from autogen_core import CancellationToken, FunctionCall  # Autogen core types
+from buttermilk._core.tool_types import CancellationToken, FunctionCall
 from autogen_core.models import (
     AssistantMessage,
     CreateResult,
@@ -101,8 +101,8 @@ from autogen_core.models import (
     ModelInfo,
     RequestUsage,
 )
-from autogen_core.tools import (
-    Tool,  # Autogen tool handling
+from buttermilk._core.tool_types import (
+    Tool,
     ToolSchema,
 )
 

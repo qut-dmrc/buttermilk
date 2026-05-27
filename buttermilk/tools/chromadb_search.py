@@ -7,7 +7,7 @@ It can be configured with any ChromaDB instance and used by any agent.
 import asyncio
 from typing import Any
 
-from autogen_core.tools import FunctionTool
+from buttermilk._core.tool_types import FunctionTool
 from pydantic import BaseModel, ConfigDict, Field
 
 from buttermilk import logger
