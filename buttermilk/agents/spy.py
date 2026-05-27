@@ -1,7 +1,7 @@
 """SpyAgent — passively listens and saves ExecutionTrace messages.
 
-Phase 3: Removed direct RoutedAgent inheritance. SpyAgent is now a
-standalone class with a handle_message() method. For compatibility
+Phase 3: Removed direct autogen type imports. SpyAgent retains RoutedAgent
+inheritance for orchestrator compatibility but imports via runtime_types. For compatibility
 with the autogen GroupChat orchestrator, it retains a register()
 classmethod that delegates to RoutedAgent.register().
 """
