@@ -196,7 +196,7 @@ async def test_litellm_create_uses_token_provider_for_auth():
         # Return a minimal valid response structure that matches litellm format
         mock_response = Mock()
         mock_choice = Mock()
-        mock_choice.message = Mock(content="test response", tool_calls=None)
+        mock_choice.message = Mock(content="test response", tool_calls=None, reasoning_content=None)
         mock_choice.finish_reason = "stop"  # Must be a valid finish_reason
         mock_response.choices = [mock_choice]
         mock_response.usage = Mock(prompt_tokens=10, completion_tokens=5, total_tokens=15)
