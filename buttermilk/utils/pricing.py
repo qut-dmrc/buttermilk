@@ -11,7 +11,7 @@ _cost_per_token = None
 _cost_per_token_loaded = False
 
 
-def _get_cost_per_token():
+def _get_cost_per_token() -> Any:
     """Get cost_per_token function, lazy-loading litellm on first use."""
     global _cost_per_token, _cost_per_token_loaded
     if not _cost_per_token_loaded:

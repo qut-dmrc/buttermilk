@@ -78,7 +78,7 @@ class AgentRegistry:
                 logger.warning(f"Error importing module {modname}: {e}")
 
         # Now find all Agent subclasses that have been loaded
-        def get_all_subclasses(cls):
+        def get_all_subclasses(cls: type) -> list[type]:
             all_subclasses = []
             for subclass in cls.__subclasses__():
                 all_subclasses.append(subclass)

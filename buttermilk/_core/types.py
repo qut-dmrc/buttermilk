@@ -577,6 +577,7 @@ class Record(BaseRecord):
                     processed_parts.append(item)
                 elif isinstance(item, Image):
                     from buttermilk.utils.utils import image_to_base64
+
                     b64 = image_to_base64(item)
                     processed_parts.append(f"data:image/png;base64,{b64}")
             message_content = processed_parts
