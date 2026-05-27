@@ -15,8 +15,6 @@ from dataclasses import dataclass
 from typing import Any, Literal, Self  # Standard typing utilities
 
 import shortuuid  # For generating short unique IDs
-from autogen_core import Image as AutogenImage  # Autogen's own Image type
-from autogen_core.models import AssistantMessage, UserMessage  # Autogen message types
 from PIL.Image import Image  # For image manipulation with Pillow
 from pydantic import (
     BaseModel,
@@ -28,6 +26,7 @@ from pydantic import (
 )
 
 from buttermilk._core.hashing import hash_content
+from buttermilk._core.messages import AssistantMessage, UserMessage  # Native message types
 
 from .log import logger
 
@@ -123,15 +122,14 @@ class BaseRecord(BaseModel):
     )
 
     def as_message(self, role: Literal["user", "assistant"] = "user") -> Any:
-        """Converts the `Record` into an Autogen `UserMessage` or `AssistantMessage`.
+        """Converts the `Record` into a `UserMessage` or `AssistantMessage`.
 
         Args:
             role (Literal["user", "assistant"]): The role to assign to the
                 resulting message. Defaults to "user".
 
         Returns:
-            Autogen message object populated with the record's content and ID.
-            Returns None if Autogen is not available.
+            Message object populated with the record's content and ID.
 
         """
         if role == "assistant":
@@ -550,9 +548,9 @@ class Record(BaseRecord):
         return self.metadata.get("title")
 
     def as_message(self, role: Literal["user", "assistant"] = "user") -> Any:
-        """Converts the `Record` into an Autogen `UserMessage` or `AssistantMessage`.
+        """Converts the `Record` into a `UserMessage` or `AssistantMessage`.
 
-        This is useful for integrating Buttermilk records directly into Autogen
+        This is useful for integrating Buttermilk records directly into
         conversational flows.
 
         Args:
@@ -560,8 +558,7 @@ class Record(BaseRecord):
                 resulting message. Defaults to "user".
 
         Returns:
-            Autogen message object populated with the record's content and ID.
-            Returns None if Autogen is not available.
+            Message object populated with the record's content and ID.
 
         """
         if role == "assistant":
@@ -569,7 +566,7 @@ class Record(BaseRecord):
             return AssistantMessage(content=self.as_markdown(), source=self.record_id)
 
         # For user messages, content can be str or List[Union[str, Dict]] (for multimodal)
-        message_content: str | list[Any]  # Use Any for list items to match Autogen's expectation for multimodal
+        message_content: str | list[Any]  # Use Any for list items for multimodal support
 
         if isinstance(self.content, str):
             message_content = self.content
@@ -579,7 +576,9 @@ class Record(BaseRecord):
                 if isinstance(item, str):
                     processed_parts.append(item)
                 elif isinstance(item, Image):
-                    processed_parts.append(AutogenImage.from_pil(item))
+                    from buttermilk.utils.utils import image_to_base64
+                    b64 = image_to_base64(item)
+                    processed_parts.append(f"data:image/png;base64,{b64}")
             message_content = processed_parts
         else:  # Fallback if content type is unexpected
             message_content = str(self.content)

@@ -17,16 +17,6 @@ from typing import Any, Literal, Union
 
 import numpy as np
 import shortuuid  # For generating unique IDs
-
-# Import Autogen types used as base or components - conditional import
-from autogen_core.models import (
-    FunctionExecutionResult,
-    LLMMessage,
-)
-from autogen_core.tools import (
-    Tool,
-    ToolSchema,
-)  # Importing the Tool protocol from autogen_core
 from omegaconf import DictConfig, ListConfig, OmegaConf  # For OmegaConf integration
 from pydantic import (
     BaseModel,
@@ -37,6 +27,16 @@ from pydantic import (
 )
 
 from buttermilk._core.context import session_id_var
+
+# Buttermilk message types
+from buttermilk._core.messages import (
+    FunctionExecutionResult,
+    LLMMessage,
+)
+from buttermilk._core.tool_types import (
+    Tool,
+    ToolSchema,
+)
 from buttermilk.utils.utils import clean_empty_values
 from buttermilk.utils.validators import (
     convert_omegaconf_objects,
@@ -328,7 +328,7 @@ class AgentInput(FlowMessage):
             the agent's default configurations (e.g., a different LLM model,
             a specific prompt template name).
         context (list[LLMMessage]): A list of messages representing the conversation
-            history (e.g., `SystemMessage`, `UserMessage`, `AssistantMessage` from Autogen).
+            history (e.g., `SystemMessage`, `UserMessage`, `AssistantMessage`).
             This provides conversational context, especially for LLM-based agents.
         record (Record | None): A `Record` object relevant to the current
             task. This is typically the primary data item the agent will process.
@@ -349,7 +349,7 @@ class AgentInput(FlowMessage):
     )
     context: list[LLMMessage] = Field(
         default_factory=list,
-        description="Conversation history (list of Autogen `LLMMessage` objects like SystemMessage, UserMessage, AssistantMessage).",
+        description="Conversation history (list of `LLMMessage` objects like SystemMessage, UserMessage, AssistantMessage).",
     )
     record: Record | None = Field(
         default=None,
@@ -779,7 +779,7 @@ class ConductorRequest(AgentInput):
     )
 
     model_config = ConfigDict(
-        arbitrary_types_allowed=True,  # Allow Tool type from autogen_core
+        arbitrary_types_allowed=True,
     )
 
 
@@ -930,7 +930,7 @@ class FlowProgressUpdate(FlowMessage):
 class ToolOutput(FunctionExecutionResult):
     """Represents the result of a tool (function) execution performed by an agent.
 
-        This class inherits from Autogen's `FunctionExecutionResult`, which typically
+        This class inherits from `FunctionExecutionResult`, which typically
         includes fields like `call_id` (for the function call), `function_name`, and
         `content` (the stringified result of the function). It adds Buttermilk-specific
         context or alternative ways to structure results.

@@ -1,6 +1,6 @@
-"""Tests for session storage integration in AutogenOrchestrator.
+"""Tests for session storage integration in Orchestrator.
 
-This test verifies that AutogenOrchestrator properly wires SessionStorageService
+This test verifies that Orchestrator properly wires SessionStorageService
 to log batch session messages during groupchat execution.
 """
 
@@ -9,17 +9,17 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from buttermilk._core.types import RunRequest
-from buttermilk.orchestrators.groupchat import AutogenOrchestrator
+from buttermilk.orchestrators.groupchat import Orchestrator
 
 
-class TestAutogenOrchestratorSessionStorage:
-    """Test session storage integration in AutogenOrchestrator."""
+class TestOrchestratorSessionStorage:
+    """Test session storage integration in Orchestrator."""
 
     @pytest.mark.anyio
     async def test_orchestrator_calls_finalize_session_after_run_completes(self, real_bm):
-        """Test that AutogenOrchestrator calls SessionStorageService.finalize_session() after run completes.
+        """Test that Orchestrator calls SessionStorageService.finalize_session() after run completes.
 
-        This test should FAIL because AutogenOrchestrator currently does not:
+        This test should FAIL because Orchestrator currently does not:
         1. Instantiate SessionStorageService
         2. Call finalize_session() in the finally block
 
@@ -34,7 +34,7 @@ class TestAutogenOrchestratorSessionStorage:
         }
 
         # Create orchestrator instance
-        orchestrator = AutogenOrchestrator(**orchestrator_config)
+        orchestrator = Orchestrator(**orchestrator_config)
 
         # Mock SessionStorageService to verify it gets called
         mock_storage = Mock()
@@ -73,7 +73,7 @@ class TestAutogenOrchestratorSessionStorage:
         # 1. SessionStorageService is not imported in groupchat.py
         # 2. _storage_service attribute is not created
         # 3. finalize_session() is not called in the finally block
-        assert mock_storage.finalize_session.called, "finalize_session was not called - SessionStorageService not wired in AutogenOrchestrator"
+        assert mock_storage.finalize_session.called, "finalize_session was not called - SessionStorageService not wired in Orchestrator"
 
         if mock_storage.finalize_session.called:
             call_args = mock_storage.finalize_session.call_args

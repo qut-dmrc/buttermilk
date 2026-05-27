@@ -284,10 +284,10 @@ _ROLE_MAP: dict[type, str] | None = None
 
 
 def _get_role_map() -> dict[type, str]:
-    """Lazy-load role map to avoid import-time dependency on autogen_core."""
+    """Lazy-load role map to avoid circular import."""
     global _ROLE_MAP
     if _ROLE_MAP is None:
-        from autogen_core.models import AssistantMessage, SystemMessage, UserMessage
+        from buttermilk._core.messages import AssistantMessage, SystemMessage, UserMessage
 
         _ROLE_MAP = {
             SystemMessage: "system",
@@ -350,19 +350,23 @@ def compute_input_hashes(
     """
     inputs: list[dict[str, str]] = []
 
-    inputs.append({
-        "name": template_name,
-        "type": "template",
-        "hash": template_hash,
-    })
+    inputs.append(
+        {
+            "name": template_name,
+            "type": "template",
+            "hash": template_hash,
+        }
+    )
 
     if included_files:
         for inc in included_files:
-            inputs.append({
-                "name": inc.name,
-                "type": "include",
-                "hash": inc.content_hash,
-            })
+            inputs.append(
+                {
+                    "name": inc.name,
+                    "type": "include",
+                    "hash": inc.content_hash,
+                }
+            )
 
     if template_vars:
         placeholder_keys = {"record", "context", "fail_on_unfilled_parameters"}

@@ -319,7 +319,7 @@ def scrub_serializable(d) -> T:
         except (TypeError, AttributeError):
             # If conversion fails, fall through to other handlers
             pass
-    # Handle objects with __dict__ (like RequestUsage from autogen_core)
+    # Handle objects with __dict__
     if hasattr(d, "__dict__") and not isinstance(d, (str, int, float, bool)):
         try:
             # Convert object to dict using its __dict__ attribute

@@ -10,9 +10,10 @@ from pathlib import Path
 from typing import Any
 
 import shortuuid
-from autogen_core.tools import FunctionTool
 from pydantic import ConfigDict, Field, field_validator
 from tqdm.asyncio import tqdm
+
+from buttermilk._core.tool_types import FunctionTool
 
 try:
     from themoviedb import aioTMDb
@@ -643,17 +644,36 @@ class TMDBTool:
                         continue
 
                     for provider in providers:
+                        # Extract price fields from the provider dict.
+                        # The TMDB API returns price, currency, and
+                        # presentation_type (HD/SD/4K) for rent and buy
+                        # providers. The themoviedb SDK's WatchProviderData
+                        # dataclass doesn't model these fields, so they are
+                        # only available when working with raw dicts (e.g.
+                        # from cached API responses or when the SDK is
+                        # bypassed). Using .get() handles both cases safely.
+                        provider_dict = (
+                            provider
+                            if isinstance(provider, dict)
+                            else (
+                                asdict(provider)
+                                if hasattr(provider, "__dataclass_fields__")
+                                else {
+                                    k: getattr(provider, k, None) for k in ["provider_id", "provider_name", "price", "currency", "presentation_type"]
+                                }
+                            )
+                        )
                         obs = Observation(
                             record_id=str(record_id),
                             title=title,
                             year=year,
-                            provider_id=str(provider.get("provider_id")) if provider.get("provider_id") is not None else None,
-                            provider_name=provider.get("provider_name"),
+                            provider_id=str(provider_dict.get("provider_id")) if provider_dict.get("provider_id") is not None else None,
+                            provider_name=provider_dict.get("provider_name"),
                             provider_type=provider_type,
                             region=normalized_region,
-                            price=None,
-                            currency=None,
-                            format=None,
+                            price=provider_dict.get("price"),
+                            currency=provider_dict.get("currency"),
+                            format=provider_dict.get("presentation_type"),
                             available=True,
                             source="TMDB",
                             metadata={
@@ -1080,7 +1100,7 @@ class TMDBTool:
                 self.titles_uploader.shutdown()
 
     def as_tool(self) -> FunctionTool:
-        """Return as autogen FunctionTool for agent integration."""
+        """Return as FunctionTool for agent integration."""
         return FunctionTool(
             name="tmdb_search",
             description=(

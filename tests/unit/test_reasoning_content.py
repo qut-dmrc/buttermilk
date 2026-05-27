@@ -1,4 +1,4 @@
-"""Tests for reasoning-model handling in litellm_to_autogen_result.
+"""Tests for reasoning-model handling in litellm_to_model_output.
 
 Covers three response shapes we encounter with reasoning models:
 
@@ -13,12 +13,12 @@ Covers three response shapes we encounter with reasoning models:
 The ``<think>`` stripping and reasoning-capture lives on
 :class:`buttermilk.utils.json_parser.ChatParser` — these tests exercise both
 the parser-level surface and the integration through
-:func:`buttermilk._core.llms.litellm_to_autogen_result`.
+:func:`buttermilk._core.llms.litellm_to_model_output`.
 """
 
 from unittest.mock import MagicMock
 
-from buttermilk._core.llms import litellm_to_autogen_result
+from buttermilk._core.llms import litellm_to_model_output
 from buttermilk.utils.json_parser import ChatParser
 
 
@@ -94,14 +94,11 @@ def test_deepseek_r1_vertex_maas_inline_think_block_is_stripped():
     the JSON parser fails because the reasoning block is concatenated with
     the answer.
     """
-    reasoning_body = (
-        "Alright, let's tackle this step by step. The user has shared "
-        "a news excerpt and wants me to analyze it..."
-    )
-    raw_content = f"<think>\n{reasoning_body}\n</think>\n" '{"prediction": true, "confidence": "high"}'
+    reasoning_body = "Alright, let's tackle this step by step. The user has shared a news excerpt and wants me to analyze it..."
+    raw_content = f'<think>\n{reasoning_body}\n</think>\n{{"prediction": true, "confidence": "high"}}'
     response, usage = _make_response(raw_content)
 
-    result = litellm_to_autogen_result(response, usage, "deepseek-r1-maas")
+    result = litellm_to_model_output(response, usage, "deepseek-r1-maas")
 
     assert result.content == '{"prediction": true, "confidence": "high"}'
     # Reasoning surfaces on the proper CreateResult field, not in metadata.
@@ -117,7 +114,7 @@ def test_reasoning_content_field_is_preserved_in_thought():
     reasoning = "The user asks for the capital of France. That is Paris."
     response, usage = _make_response(clean_content, reasoning_content=reasoning)
 
-    result = litellm_to_autogen_result(response, usage, "deepseek-reasoner")
+    result = litellm_to_model_output(response, usage, "deepseek-reasoner")
 
     # Content untouched
     assert result.content == clean_content
@@ -135,10 +132,10 @@ def test_structured_reasoning_wins_over_inline_think_block():
     """
     inline = "inline chain of thought"
     structured = "structured provider reasoning"
-    raw_content = f"<think>{inline}</think>\n" '{"prediction": false}'
+    raw_content = f'<think>{inline}</think>\n{{"prediction": false}}'
     response, usage = _make_response(raw_content, reasoning_content=structured)
 
-    result = litellm_to_autogen_result(response, usage, "hybrid-model")
+    result = litellm_to_model_output(response, usage, "hybrid-model")
 
     # Inline block still stripped from content
     assert result.content == '{"prediction": false}'
@@ -151,7 +148,7 @@ def test_regression_plain_json_content_unchanged():
     raw_content = '{"prediction": false, "labels": ["A", "B"]}'
     response, usage = _make_response(raw_content)
 
-    result = litellm_to_autogen_result(response, usage, "gpt-4o")
+    result = litellm_to_model_output(response, usage, "gpt-4o")
 
     assert result.content == raw_content
     assert result.thought is None

@@ -51,8 +51,8 @@ class TestAgentToolDefinition:
 
         assert tool_def.permissions == ["read:data"]
 
-    def test_to_autogen_schema(self):
-        """Test conversion to Autogen tool schema."""
+    def test_to_tool_schema(self):
+        """Test conversion to tool schema."""
         tool_def = AgentToolDefinition(
             name="test_tool",
             description="A test tool",

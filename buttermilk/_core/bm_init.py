@@ -172,7 +172,7 @@ class SessionInfo(BaseModel):
     template_paths: list[str] = Field(default_factory=list, description="Paths to search for templates.")
     llm_wrapper: str = Field(
         default="litellm",
-        description="Global LLM wrapper selection (autogen or litellm). Per-model use_litellm overrides this.",
+        description="Global LLM wrapper selection. Per-model use_litellm overrides this.",
     )
 
     @property

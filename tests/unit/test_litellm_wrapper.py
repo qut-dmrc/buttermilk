@@ -3,7 +3,6 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from autogen_core.models import SystemMessage, UserMessage
 from pydantic import BaseModel, ConfigDict
 
 from buttermilk._core.exceptions import ProcessingError
@@ -11,9 +10,10 @@ from buttermilk._core.llms import (
     LiteLLMWrapper,
     ModelInfo,
     ModelParameters,
-    autogen_to_litellm_messages,
-    litellm_to_autogen_result,
+    litellm_to_model_output,
+    to_litellm_messages,
 )
+from buttermilk._core.messages import SystemMessage, UserMessage
 
 
 class TestLiteLLMWrapper:
@@ -42,39 +42,39 @@ class TestLiteLLMWrapper:
 class TestMessageFormatConversion:
     """Test message format conversion utilities."""
 
-    def test_autogen_to_litellm_system_message(self):
+    def test_to_litellm_system_message(self):
         """Test conversion of SystemMessage."""
         messages = [SystemMessage(content="You are a helpful assistant.")]
-        litellm_messages = autogen_to_litellm_messages(messages)
+        litellm_messages = to_litellm_messages(messages)
 
         assert len(litellm_messages) == 1
         assert litellm_messages[0]["role"] == "system"
         assert litellm_messages[0]["content"] == "You are a helpful assistant."
 
-    def test_autogen_to_litellm_user_message(self):
+    def test_to_litellm_user_message(self):
         """Test conversion of UserMessage."""
         messages = [UserMessage(content="Hello!", source="user")]
-        litellm_messages = autogen_to_litellm_messages(messages)
+        litellm_messages = to_litellm_messages(messages)
 
         assert len(litellm_messages) == 1
         assert litellm_messages[0]["role"] == "user"
         assert litellm_messages[0]["content"] == "Hello!"
 
-    def test_autogen_to_litellm_conversation(self):
+    def test_to_litellm_conversation(self):
         """Test conversion of multi-turn conversation."""
         messages = [
             SystemMessage(content="You are a helpful assistant."),
             UserMessage(content="Hello!", source="user"),
             UserMessage(content="How are you?", source="user"),
         ]
-        litellm_messages = autogen_to_litellm_messages(messages)
+        litellm_messages = to_litellm_messages(messages)
 
         assert len(litellm_messages) == 3
         assert litellm_messages[0]["role"] == "system"
         assert litellm_messages[1]["role"] == "user"
         assert litellm_messages[2]["role"] == "user"
 
-    def test_litellm_to_autogen_result_basic(self):
+    def test_litellm_to_model_output_basic(self):
         """Test conversion of basic LiteLLM response."""
         # Mock LiteLLM response — use spec=[] on the message to prevent
         # MagicMock auto-creating attributes like reasoning_content, which
@@ -97,7 +97,7 @@ class TestMessageFormatConversion:
         mock_usage.prompt_tokens = 10
         mock_usage.completion_tokens = 20
 
-        result = litellm_to_autogen_result(mock_response, mock_usage, "gpt-4")
+        result = litellm_to_model_output(mock_response, mock_usage, "gpt-4")
 
         assert result.content == "Hello! I'm doing well."
         assert result.finish_reason == "stop"

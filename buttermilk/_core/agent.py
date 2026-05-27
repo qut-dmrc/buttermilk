@@ -1,40 +1,17 @@
-"""Defines the core Agent base class, its configuration, and the `buttermilk_handler`
-decorator.
+"""Core Agent base class for the Buttermilk framework.
 
-This module provides the foundational components for creating agents within the
-Buttermilk framework. Agents are responsible for performing specific tasks as part
-of a larger data processing flow. `AgentConfig` (from `config.py`) provides the
-base configuration, and `Agent` provides the execution logic and state management.
-The `buttermilk_handler` decorator is used to designate methods within agent
-subclasses as handlers for specific message types, typically when integrating with
-systems like Autogen.
+Agents are responsible for performing specific tasks as part of a larger
+data processing flow. `AgentConfig` provides the base configuration,
+and `Agent` provides the execution logic and state management.
 """
 
 import asyncio
 import warnings
 from abc import abstractmethod
-from collections.abc import AsyncGenerator, Mapping
-from typing import TYPE_CHECKING, Any
+from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping
+from typing import Any
 
 from opentelemetry import trace
-
-if TYPE_CHECKING:
-    from autogen_core import AgentRuntime
-
-# Autogen imports (primarily for type hints and base classes/interfaces used in methods)
-from autogen_core import (
-    AgentId,
-    AgentMetadata,
-    CancellationToken,
-    DefaultTopicId,
-    MessageContext,
-    RoutedAgent,
-    TopicId,
-    message_handler,
-)
-from autogen_core.model_context import UnboundedChatCompletionContext
-from autogen_core.models import AssistantMessage, UserMessage
-from autogen_core.tools import Tool
 
 from buttermilk import bm, logger
 from buttermilk._core.config import AgentConfig
@@ -48,7 +25,6 @@ from buttermilk._core.contract import (
     ConductorRequest,
     ErrorEvent,
     ExecutionTrace,
-    OOBMessages,
     StepRequest,  # Request to execute a specific step
     TaskProcessingComplete,
     TaskProcessingStarted,
@@ -56,6 +32,18 @@ from buttermilk._core.contract import (
 )
 from buttermilk._core.exceptions import FatalError, ProcessingError  # Custom exceptions
 from buttermilk._core.message_data import extract_message_data
+from buttermilk._core.messages import AssistantMessage, UserMessage
+from buttermilk._core.runtime_types import (
+    AgentIdentity,
+    ChatHistory,
+    DefaultTopicId,
+    MessageContext,
+    TopicId,
+    _build_handler_registry,
+    dispatch_message,
+    message_handler,
+)
+from buttermilk._core.tool_types import CancellationToken, Tool
 from buttermilk._core.types import BaseRecord, RunRequest  # Data record structure
 from buttermilk.utils.templating import (
     KeyValueCollector,
@@ -141,42 +129,12 @@ def create_agent_trace_info(
 # --- Base Agent Class ---
 
 
-class Agent(RoutedAgent):
-    """Base class for all Buttermilk agents, integrating with autogen_core's RoutedAgent.
+class Agent:
+    """Base class for all Buttermilk agents.
 
-    This class serves as the foundation for all specialized agents within the
-    Buttermilk framework. It uses the configuration structure from `AgentConfig`
-    and defines a common interface for agent execution, state management, and
-    lifecycle hooks.
-
-    Subclasses are expected to implement the `_process` method, which contains
-    the core logic for that agent's specific task (e.g., interacting with an
-    LLM, calling an API, transforming data).
-
-    The `Agent` class manages internal state such as data records, conversation
-    history (model context), and extracted key-value data. It also provides
-    methods for initialization, resetting state, and handling various types of
-    messages and events.
-
-    Attributes:
-        session_id (str): A unique identifier for the current flow execution session.
-            This helps in tracking and correlating agent activities within a specific run.
-        _records (list[Record]): Internal list to store data `Record` objects relevant
-            to the agent's current context or processing task.
-        _model_context (ChatCompletionContext): Internal store for conversation history,
-            particularly for agents interacting with chat-based models. Defaults to
-            an `UnboundedChatCompletionContext`.
-        _data (KeyValueCollector): Internal store for arbitrary key-value data that
-            can be extracted from incoming messages (based on `inputs` mappings) or
-            accumulated during processing.
-        _heartbeat (asyncio.Queue): An internal queue used for heartbeat signals,
-            allowing orchestrators or other components to check agent responsiveness.
-        model_config (dict): Pydantic model configuration.
-            - `extra`: "ignore" - Ignores extra fields during model parsing.
-            - `arbitrary_types_allowed`: False - Disallows arbitrary types unless explicitly handled.
-            - `populate_by_name`: True - Allows population by field name (alias support).
-            - `validate_assignment`: True - Validates fields on assignment.
-
+    Subclasses implement `_process` for their core logic. The orchestrator
+    injects a `_publish_fn` callback for message dispatch, and calls
+    `dispatch()` to route incoming messages to the correct handler.
     """
 
     # --- Configuration properties (delegated to _config) ---
@@ -258,48 +216,42 @@ class Agent(RoutedAgent):
 
         return get_bm()
 
-    def __init__(self, topic_id: TopicId | None = None, **data: Any) -> None:
-        """Initialize the Agent with configuration data and setup RoutedAgent."""
-        # Set groupchat topic ID, defaulting to a standard topic if not provided
-        self._topic_id: TopicId = topic_id or DefaultTopicId(type="default")
-
-        # Create AgentConfig from the data
+    def __init__(
+        self,
+        topic_id: TopicId | str | None = None,
+        publish_fn: Callable[..., Awaitable[None]] | None = None,
+        **data: Any,
+    ) -> None:
+        self._topic_id: TopicId = TopicId(topic_id) if topic_id else DefaultTopicId(type="default")
         self._config = AgentConfig(**data)
+        self._publish_fn = publish_fn
 
-        # Initialize RoutedAgent with description
-        RoutedAgent.__init__(self, description=self._config.description)
-
-        # Initialize private attributes
-        self._model_context = UnboundedChatCompletionContext()
+        self._model_context = ChatHistory()
         self._data = KeyValueCollector()
         self._heartbeat = asyncio.Queue(maxsize=1)
         self._announced = False
         self._tools = self._get_available_tools()
+        self._handler_registry: dict[type, str] | None = None
 
     @property
-    def metadata(self) -> AgentMetadata:
-        """Metadata of the agent."""
-        if self._id is None:
-            raise RuntimeError("Agent not bound to runtime")
-        return AgentMetadata(key=self._id.key, type=self._id.type, description=self.description)
+    def identity(self) -> AgentIdentity:
+        """Native agent identity."""
+        return AgentIdentity(
+            key=self.agent_id,
+            type=self.agent_name,
+            description=self.description,
+        )
 
-    @property
-    def id(self) -> AgentId:
-        """ID of the agent."""
-        if self._id is None:
-            raise RuntimeError("Agent not bound to runtime")
-        return self._id
+    # --- Message dispatch ---
 
-    async def bind_id_and_runtime(self, id: AgentId, runtime: "AgentRuntime") -> None:
-        """Function used to bind an Agent instance to an `AgentRuntime`.
+    def _get_handler_registry(self) -> dict[type, str]:
+        if self._handler_registry is None:
+            self._handler_registry = _build_handler_registry(type(self))
+        return self._handler_registry
 
-        Args:
-            id (AgentId): ID of the agent.
-            runtime (AgentRuntime): AgentRuntime instance to bind the agent to.
-
-        """
-        self._id = id
-        self._runtime = runtime
+    async def dispatch(self, message: Any, ctx: MessageContext) -> Any:
+        """Dispatch an incoming message to the appropriate @message_handler."""
+        return await dispatch_message(self, message, ctx)
 
     async def save_state(self) -> Mapping[str, Any]:
         """Save the state of the agent. The result must be JSON serializable."""
@@ -322,10 +274,6 @@ class Agent(RoutedAgent):
     def _get_available_tools(self) -> list[Tool]:
         """Get list of tools this agent can respond to.
 
-        This method checks `self.tools` (an `AgentConfig` field, typically populated
-        from Hydra configuration) and uses `create_tool_functions` to convert these
-        tool definitions into a list of Autogen-compatible tool objects (`_tools`).
-
         Returns:
             list[Tool]: List of tools.
 
@@ -345,7 +293,6 @@ class Agent(RoutedAgent):
             else:
                 tools[tool_name] = tool
 
-        # Uses utility function to convert tool configurations into Autogen-compatible tool formats.
         return create_tool_functions(tools)
 
     # --- Core Methods (Lifecycle & Interaction) ---
@@ -362,51 +309,24 @@ class Agent(RoutedAgent):
         """
         logger.debug(f"Agent {self.agent_name}: No persistent resourcces to cleanup.")
 
-    # --- Announcement Methods ---
-
-    async def _send_chat(
-        self,
-        message: OOBMessages,
-        topic_id: TopicId,
-    ):
-        # Agents should call the _publish method; this one just exists for tracing.
-        await super().publish_message(message, topic_id=topic_id)
+    # --- Publishing ---
 
     async def _publish(
         self,
         message: Any,
-        topic_id: TopicId | None = None,
+        topic_id: TopicId | str | None = None,
         *,
         cancellation_token: CancellationToken | None = None,
     ) -> None:
-        """Publish a message to the group chat or a specific topic.
-
-        Args:
-            message: The message to publish.
-            topic_id: Optional specific topic to publish to. Defaults to self._topic_id.
-            cancellation_token: Optional cancellation token to cancel the operation.
-
-        """
-        # If we are not running within an autogen runtime, just log the message
-        if not hasattr(self, "_runtime") or not self._runtime:
-            logger.debug(f"Agent {self.agent_name} ({self.agent_id}) sent {type(message).__name__}.")
-            return
-
-        # Use provided topic_id or fall back to the agent's default topic
+        """Publish a message to the group chat or a specific topic."""
         target_topic = topic_id or self._topic_id
-
-        if isinstance(message, OOBMessages):
-            # send events without tracing
-            logger.debug(
-                f"Agent {self.agent_name} ({self.agent_id}) sent event {type(message).__name__} to {target_topic}.",
-            )
-            await super().publish_message(message, topic_id=target_topic, cancellation_token=cancellation_token)
-        else:
-            # send and trace
-            await self._send_chat(message, topic_id=target_topic)
-            logger.debug(
-                f"Agent {self.agent_name} ({self.agent_id}) sent {type(message).__name__} to {target_topic}.",
-            )
+        if not self._publish_fn:
+            logger.debug(f"Agent {self.agent_name} ({self.agent_id}) sent {type(message).__name__} (no runtime).")
+            return
+        logger.debug(
+            f"Agent {self.agent_name} ({self.agent_id}) sent {type(message).__name__} to {target_topic}.",
+        )
+        await self._publish_fn(message, target_topic)
 
     # --- Core Execution Logic ---
 
@@ -807,7 +727,7 @@ class Agent(RoutedAgent):
             ctx: Message context containing sender and topic information.
 
         """
-        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
+        source = ctx.sender.key if ctx.sender else "unknown"
 
         # Build complete input mappings including record and context
         # Start with regular inputs, then add record/context if configured
@@ -857,7 +777,7 @@ class Agent(RoutedAgent):
             ctx: Message context containing sender and topic information.
 
         """
-        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "manager"
+        source = ctx.sender.key if ctx.sender else "manager"
 
         # Extract data based on input mappings if defined
         if self.inputs:
@@ -1026,22 +946,8 @@ class Agent(RoutedAgent):
     def get_tool_definitions(self) -> list[Tool]:
         """Generate structured tool definitions for this agent.
 
-        This method creates tool definitions representing what this agent can do,
-        allowing it to be invoked as a tool in the Autogen groupchat and
-        enabling proper routing by host agents.
-
         Returns:
-            List of Tool objects (FunctionTool, AgentToolDefinition, etc.)
-            representing this agent's capabilities. All returned objects must
-            implement the Tool protocol with a .schema property for serialization
-            in announcements.
-
-        Note:
-            - For executable tools: return FunctionTool objects
-            - For capability advertisements: return AgentToolDefinition objects
-            - Host agents automatically extract .schema for serialization
-            - LLM agents can pass these directly to autogen for tool calling
-
+            List of Tool objects representing this agent's capabilities.
         """
         from buttermilk._core.tool_definition import AgentToolDefinition
 

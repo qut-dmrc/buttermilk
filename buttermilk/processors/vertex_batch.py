@@ -380,7 +380,7 @@ class BatchLLMProcessor(BatchProcessorCore):
         Returns:
             List of BatchRequest objects
         """
-        from buttermilk._core.llms import autogen_to_litellm_messages
+        from buttermilk._core.llms import to_litellm_messages
         from buttermilk._core.vertex_batch import BatchRequest
 
         requests: list[BatchRequest] = []
@@ -437,7 +437,7 @@ class BatchLLMProcessor(BatchProcessorCore):
                 continue
 
             # Convert to LiteLLM format (standardized intermediate format)
-            litellm_messages = autogen_to_litellm_messages(messages)
+            litellm_messages = to_litellm_messages(messages)
 
             # Extract variant and traceability info
             variant_from_metadata = self._extract_variant_from_metadata(record)

@@ -5,8 +5,8 @@ used by main agents like OSB, analyst, RAG, etc.
 """
 
 import pytest
-from autogen_core.models import AssistantMessage, SystemMessage, UserMessage
 
+from buttermilk._core.messages import AssistantMessage, SystemMessage, UserMessage
 from buttermilk._core.types import BaseRecord
 from buttermilk.utils.templating import (
     _parse_chat_messages,
@@ -251,7 +251,7 @@ class TestRAGTemplate:
 
     def test_rag_template_messages_with_context(self):
         """Test RAG template with context messages."""
-        from autogen_core.models import UserMessage as AutogenUserMessage
+        from buttermilk._core.messages import UserMessage
 
         parameters = {
             "prompt": "Summarize the findings",
@@ -264,7 +264,7 @@ class TestRAGTemplate:
 
         # Create context messages
         context_messages = [
-            AutogenUserMessage(content="Previous question", source="user"),
+            UserMessage(content="Previous question", source="user"),
             SystemMessage(content="Previous response"),
         ]
 

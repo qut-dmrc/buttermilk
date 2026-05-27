@@ -4,7 +4,6 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from autogen_core.models import SystemMessage, UserMessage
 from PIL import Image as PILImage
 
 from buttermilk._core.hashing import (
@@ -18,8 +17,9 @@ from buttermilk._core.hashing import (
     compute_template_hash_from_file,
     normalize_flow_config,
 )
-from buttermilk.utils.templating import IncludedFile
+from buttermilk._core.messages import SystemMessage, UserMessage
 from buttermilk._core.types import Record
+from buttermilk.utils.templating import IncludedFile
 
 
 class TestCoreHashFunction:
@@ -468,12 +468,16 @@ class TestInputHashing:
         inc_glaad = IncludedFile(name="criteria/glaad.jinja2", path="/tmp/glaad.jinja2", content_hash="hash_glaad")
 
         inputs_tja = compute_input_hashes(
-            template_name="judge.jinja2", template_hash="same",
-            included_files=[inc_tja], template_vars={"content": "same article"},
+            template_name="judge.jinja2",
+            template_hash="same",
+            included_files=[inc_tja],
+            template_vars={"content": "same article"},
         )
         inputs_glaad = compute_input_hashes(
-            template_name="judge.jinja2", template_hash="same",
-            included_files=[inc_glaad], template_vars={"content": "same article"},
+            template_name="judge.jinja2",
+            template_hash="same",
+            included_files=[inc_glaad],
+            template_vars={"content": "same article"},
         )
 
         tja_include = next(e for e in inputs_tja if e["type"] == "include")
@@ -493,12 +497,16 @@ class TestInputHashing:
         inc = IncludedFile(name="criteria/tja.jinja2", path="/tmp/tja.jinja2", content_hash="inc_hash")
 
         inputs_v1 = compute_input_hashes(
-            template_name="judge.jinja2", template_hash="template_v1",
-            included_files=[inc], template_vars={"criteria": "tja"},
+            template_name="judge.jinja2",
+            template_hash="template_v1",
+            included_files=[inc],
+            template_vars={"criteria": "tja"},
         )
         inputs_v2 = compute_input_hashes(
-            template_name="judge.jinja2", template_hash="template_v2",
-            included_files=[inc], template_vars={"criteria": "tja"},
+            template_name="judge.jinja2",
+            template_hash="template_v2",
+            included_files=[inc],
+            template_vars={"criteria": "tja"},
         )
 
         v1_template = next(e for e in inputs_v1 if e["type"] == "template")
@@ -512,7 +520,8 @@ class TestInputHashing:
     def test_placeholder_vars_excluded(self):
         """record and context vars are not included in inputs."""
         inputs = compute_input_hashes(
-            template_name="t.jinja2", template_hash="h",
+            template_name="t.jinja2",
+            template_hash="h",
             template_vars={"record": "big blob", "context": [], "criteria": "tja"},
         )
         names = [e["name"] for e in inputs]

@@ -144,7 +144,7 @@ class Judge(LLMAgent):
 
     The `buttermilk_handler` decorator (if used and implemented in the framework)
     would typically register methods like `evaluate_content` to handle specific
-    message types within a Buttermilk or Autogen-based multi-agent system.
+    message types within a Buttermilk multi-agent system.
 
     Key Configuration Parameters (from `AgentConfig.parameters`):
         - `model` (str): **Required**. The name of the LLM to use for judgment.

@@ -98,11 +98,6 @@ dependencies = [
   "json5>=0.10.0",
   "jq>=1.8.0,<2.0.0",
   "gql<4.0.0",
-  # Multi-agent frameworks
-  "autogen-core>=0.7.0",
-  "autogen-agentchat>=0.4.9.2",
-  "autogen-ext[azure,gemini,openai]>=0.7.0",
-  "autogen-gemini>=0.0.1",
   # Tracing and observability
   # weave removed for performance optimization
   "traceloop-sdk>=0.38.5",

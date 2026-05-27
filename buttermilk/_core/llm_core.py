@@ -20,16 +20,15 @@ from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any, Self
 
 import pydantic
-from autogen_core import CancellationToken
-from autogen_core.models import LLMMessage
 from opentelemetry import trace
 from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 from buttermilk import bm, logger
 from buttermilk._core.contract import ErrorEvent
 from buttermilk._core.exceptions import FatalError, ProcessingError
-
+from buttermilk._core.messages import LLMMessage
 from buttermilk._core.processor_core import ObservabilityMixin, TraceParams
+from buttermilk._core.tool_types import CancellationToken
 
 if TYPE_CHECKING:
     from buttermilk._core.llms import CreateResult, ModelOutput
@@ -363,7 +362,7 @@ class LLMCore(ObservabilityMixin):
         else:
             result.content = llm_result.content
 
-        from autogen_core.models import AssistantMessage
+        from buttermilk._core.messages import AssistantMessage
 
         result.messages = result.messages.copy() if result.messages else []
         if result.content:
@@ -577,7 +576,7 @@ class LLMCore(ObservabilityMixin):
         with tracer.start_as_current_span("llm_core.call_llm", attributes=span_attributes) as span:
             try:
                 # Get LLM client from global BM instance
-                model_client = bm.llms.get_autogen_chat_client(self.model)
+                model_client = bm.llms.get_client(self.model)
 
                 logger.debug(
                     f"LLMCore: Calling {self.model} with {len(messages)} messages, {len(self.tools)} tools, schema={self._resolved_output_model}",

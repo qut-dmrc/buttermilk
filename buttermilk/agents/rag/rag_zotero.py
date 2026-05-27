@@ -7,10 +7,10 @@ simplified RagAgent base class and adds only Zotero-specific output formatting.
 from typing import Any
 
 import pydantic
-from autogen_core.tools import Tool
 from pydantic import Field
 
 from buttermilk._core.tool_definition import AgentToolDefinition
+from buttermilk._core.tool_types import Tool
 from buttermilk.agents.rag.simple_rag_agent import RagAgent, Reference, ResearchResult
 
 

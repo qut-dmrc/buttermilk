@@ -3,11 +3,11 @@
 import pytest
 
 pytestmark = pytest.mark.slow
-from autogen_core.tools import FunctionTool
 from pydantic import BaseModel
 
 from buttermilk import AgentInput
 from buttermilk._core.llms import CHAT_MODELS
+from buttermilk._core.tool_types import FunctionTool
 from buttermilk.agents.rag.rag_zotero import (
     RagZotero,
     ZoteroReference,
@@ -134,7 +134,7 @@ async def test_rag_zotero_llama4_specific(real_bm):
         pytest.skip(f"Model {model_name} not configured")
 
     # Get the LLM client directly
-    llm_client = real_bm.llms.get_autogen_chat_client(model_name)
+    llm_client = real_bm.llms.get_client(model_name)
 
     # First test: Simple tool calling
     print(f"\n1. Testing simple tool calling with {model_name}...")
@@ -150,8 +150,8 @@ async def test_rag_zotero_llama4_specific(real_bm):
     )
 
     try:
-        from autogen_core import CancellationToken
-        from autogen_core.models import UserMessage
+        from buttermilk._core.messages import UserMessage
+        from buttermilk._core.tool_types import CancellationToken
 
         response = await llm_client.call_chat(
             messages=[UserMessage(content="Test echo hello", source="user")],

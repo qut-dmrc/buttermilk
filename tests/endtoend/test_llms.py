@@ -3,9 +3,9 @@
 import pytest
 
 pytestmark = pytest.mark.slow
-from autogen_core.models import SystemMessage, UserMessage
 from pydantic import BaseModel, Field
 
+from buttermilk._core.messages import SystemMessage, UserMessage
 from buttermilk._core.types import Record
 
 
@@ -101,7 +101,7 @@ class TestAzureStructuredOutput:
         from buttermilk.agents.evaluators.scorer import QualScore
 
         # Get Azure model (gpt-5-nano is hosted on Azure)
-        # Note: After autogen removal, litellm is the only wrapper
+        # Note: litellm is the only wrapper
         llm = real_bm.llms["gpt-5-nano"]
 
         # Create messages asking to evaluate content

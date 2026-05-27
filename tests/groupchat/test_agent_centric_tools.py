@@ -84,8 +84,8 @@ async def test_agent_tool_definition():
     # Create a mock agent
     agent = MockSimpleAgent("RESEARCHER", "Researches topics")
 
-    # Test get_autogen_tool_definition
-    tool_def = agent.get_autogen_tool_definition()
+    # Test get_tool_definition
+    tool_def = agent.get_tool_definition()
 
     print(f"✅ Tool definition: {tool_def}")
 

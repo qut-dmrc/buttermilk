@@ -1,7 +1,7 @@
 """Final test to verify participants fix works correctly."""
 
 from buttermilk._core.config import AgentVariants
-from buttermilk.orchestrators.groupchat import AutogenOrchestrator
+from buttermilk.orchestrators.groupchat import Orchestrator
 
 
 def test_participants_includes_both_agents_and_observers():
@@ -52,9 +52,9 @@ def test_participants_includes_both_agents_and_observers():
     monitor = AgentVariants(**monitor_config)
 
     # Create orchestrator
-    orchestrator = AutogenOrchestrator(
+    orchestrator = Orchestrator(
         name="test_orchestrator",
-        orchestrator="AutogenOrchestrator",
+        orchestrator="Orchestrator",
         agents={
             "agent1": agent1,
             "agent2": agent2,
