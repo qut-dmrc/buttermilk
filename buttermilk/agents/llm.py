@@ -15,13 +15,13 @@ workflow.
 from typing import Any
 
 import pydantic
-from autogen_core import CancellationToken
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import AgentInput, AgentOutput
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llm_core import LLMCore
+from buttermilk._core.tool_types import CancellationToken
 
 
 class LLMAgent(Agent):
@@ -47,7 +47,7 @@ class LLMAgent(Agent):
 
     Attributes:
             _model (str): The name/identifier of the LLM model this agent uses.
-            _tools_list (list[Tool]): List of Autogen-compatible tool objects.
+            _tools_list (list[Tool]): List of tool objects available to the agent.
             _fail_on_unfilled_parameters (bool): If True, raises an error when
                 template variables are missing from inputs.
 

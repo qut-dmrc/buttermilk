@@ -9,10 +9,10 @@ Tests use REAL templates and data patterns (no mocking internal code) and follow
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from autogen_core.models import RequestUsage
 from pydantic import BaseModel
 
 from buttermilk._core.llms import CreateResult
+from buttermilk._core.messages import RequestUsage
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.protocols import Processor
 from buttermilk._core.types import BaseRecord
@@ -154,7 +154,7 @@ class TestLLMProcessorProcessing:
             usage=RequestUsage(prompt_tokens=25, completion_tokens=25),
             cached=False,
         )
-        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.get_client.return_value = mock_client
 
         with patch("buttermilk._core.llm_core.bm", mock_bm), patch("buttermilk.processors.unified_processors.bm", mock_bm):
             # Process the record
@@ -202,7 +202,7 @@ class TestLLMProcessorProcessing:
             usage=RequestUsage(prompt_tokens=10, completion_tokens=10),
             cached=False,
         )
-        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.get_client.return_value = mock_client
 
         with patch("buttermilk._core.llm_core.bm", mock_bm), patch("buttermilk.processors.unified_processors.bm", mock_bm):
             outputs = []
@@ -247,7 +247,7 @@ class TestLLMProcessorProcessing:
             usage=RequestUsage(prompt_tokens=50, completion_tokens=30),
             cached=False,
         )
-        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.get_client.return_value = mock_client
 
         with patch("buttermilk._core.llm_core.bm", mock_bm), patch("buttermilk.processors.unified_processors.bm", mock_bm):
             outputs = []
@@ -291,7 +291,7 @@ class TestLLMProcessorProcessing:
             usage=RequestUsage(prompt_tokens=10, completion_tokens=10),
             cached=False,
         )
-        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.get_client.return_value = mock_client
 
         with patch("buttermilk._core.llm_core.bm", mock_bm), patch("buttermilk.processors.unified_processors.bm", mock_bm):
             outputs = []
@@ -342,7 +342,7 @@ class TestLLMProcessorIntegration:
             usage=RequestUsage(prompt_tokens=100, completion_tokens=50),
             cached=False,
         )
-        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.get_client.return_value = mock_client
 
         with patch("buttermilk._core.llm_core.bm", mock_bm), patch("buttermilk.processors.unified_processors.bm", mock_bm):
             # Process the record
@@ -402,7 +402,7 @@ class TestLLMProcessorIntegration:
             usage=RequestUsage(prompt_tokens=40, completion_tokens=35),
             cached=False,
         )
-        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.get_client.return_value = mock_client
 
         with patch("buttermilk._core.llm_core.bm", mock_bm), patch("buttermilk.processors.unified_processors.bm", mock_bm):
             outputs = []
@@ -460,7 +460,7 @@ class TestLLMProcessorInputs:
             usage=RequestUsage(prompt_tokens=10, completion_tokens=10),
             cached=False,
         )
-        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.get_client.return_value = mock_client
         mock_bm.llms.connections = {}
 
         with patch("buttermilk._core.llm_core.bm", mock_bm), patch("buttermilk.processors.unified_processors.bm", mock_bm):
@@ -470,7 +470,7 @@ class TestLLMProcessorInputs:
 
             assert len(outputs) == 1
             # The LLM client should have been fetched with the overridden model
-            mock_bm.llms.get_autogen_chat_client.assert_called_with("claude-3-opus")
+            mock_bm.llms.get_client.assert_called_with("claude-3-opus")
             # Enriched metadata should reflect the resolved model
             assert outputs[0].metadata["llm_output"]["model"] == "claude-3-opus"
 
@@ -499,7 +499,7 @@ class TestLLMProcessorInputs:
             usage=RequestUsage(prompt_tokens=10, completion_tokens=10),
             cached=False,
         )
-        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.get_client.return_value = mock_client
         mock_bm.llms.connections = {}
 
         with patch("buttermilk._core.llm_core.bm", mock_bm), patch("buttermilk.processors.unified_processors.bm", mock_bm):
@@ -536,7 +536,7 @@ class TestLLMProcessorInputs:
             usage=RequestUsage(prompt_tokens=10, completion_tokens=10),
             cached=False,
         )
-        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.get_client.return_value = mock_client
         mock_bm.llms.connections = {}
 
         with patch("buttermilk._core.llm_core.bm", mock_bm), patch("buttermilk.processors.unified_processors.bm", mock_bm):
@@ -574,7 +574,7 @@ class TestLLMProcessorInputs:
             usage=RequestUsage(prompt_tokens=10, completion_tokens=10),
             cached=False,
         )
-        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.get_client.return_value = mock_client
         mock_bm.llms.connections = {}
 
         with patch("buttermilk._core.llm_core.bm", mock_bm), patch("buttermilk.processors.unified_processors.bm", mock_bm):
@@ -584,7 +584,7 @@ class TestLLMProcessorInputs:
 
             assert len(outputs) == 1
             # Should fall back to configured default
-            mock_bm.llms.get_autogen_chat_client.assert_called_with("gpt-4")
+            mock_bm.llms.get_client.assert_called_with("gpt-4")
             assert outputs[0].metadata["llm_output"]["model"] == "gpt-4"
 
     @pytest.mark.anyio
@@ -611,7 +611,7 @@ class TestLLMProcessorInputs:
             usage=RequestUsage(prompt_tokens=10, completion_tokens=10),
             cached=False,
         )
-        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.get_client.return_value = mock_client
         mock_bm.llms.connections = {}
 
         with patch("buttermilk._core.llm_core.bm", mock_bm), patch("buttermilk.processors.unified_processors.bm", mock_bm):
@@ -681,7 +681,7 @@ class TestLLMProcessorVariantParamsTemplateVars:
             usage=RequestUsage(prompt_tokens=5, completion_tokens=5),
             cached=False,
         )
-        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.get_client.return_value = mock_client
         mock_bm.llms.connections = {}
 
         with patch("buttermilk._core.llm_core.bm", mock_bm), patch("buttermilk.processors.unified_processors.bm", mock_bm):
@@ -716,7 +716,7 @@ class TestLLMProcessorVariantParamsTemplateVars:
             usage=RequestUsage(prompt_tokens=5, completion_tokens=5),
             cached=False,
         )
-        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.get_client.return_value = mock_client
         mock_bm.llms.connections = {}
 
         with patch("buttermilk._core.llm_core.bm", mock_bm), patch("buttermilk.processors.unified_processors.bm", mock_bm):
@@ -725,7 +725,7 @@ class TestLLMProcessorVariantParamsTemplateVars:
                 outputs.append(output)
 
         assert len(outputs) == 1
-        assert mock_bm.llms.get_autogen_chat_client.call_args[0][0] == "override-model"
+        assert mock_bm.llms.get_client.call_args[0][0] == "override-model"
 
     @pytest.mark.anyio
     async def test_inputs_jmespath_takes_priority_over_variant_params(self):
@@ -756,7 +756,7 @@ class TestLLMProcessorVariantParamsTemplateVars:
             usage=RequestUsage(prompt_tokens=5, completion_tokens=5),
             cached=False,
         )
-        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.get_client.return_value = mock_client
         mock_bm.llms.connections = {}
 
         with patch("buttermilk._core.llm_core.bm", mock_bm), patch("buttermilk.processors.unified_processors.bm", mock_bm):

@@ -7,11 +7,11 @@ It can be configured with any ChromaDB instance and used by any agent.
 import asyncio
 from typing import Any
 
-from autogen_core.tools import FunctionTool
 from pydantic import BaseModel, ConfigDict, Field
 
 from buttermilk import logger
 from buttermilk._core.config import ToolConfig
+from buttermilk._core.tool_types import FunctionTool
 from buttermilk.data.vector import ChromaDBEmbeddings
 
 
@@ -135,7 +135,7 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
         return "\n---\n".join(formatted_parts) if formatted_parts else "No results found."
 
     def get_tool(self) -> FunctionTool:
-        """Get this as an autogen FunctionTool.
+        """Get this as a FunctionTool.
 
         Returns:
             FunctionTool that can be used by agents

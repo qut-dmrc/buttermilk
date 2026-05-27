@@ -11,9 +11,8 @@ NO mocks - validates the complete workflow from YAML config to API call.
 import pytest
 
 pytestmark = pytest.mark.slow
-from autogen_core.models import UserMessage
-
 from buttermilk._core.llms import LLMs, ModelParameters
+from buttermilk._core.messages import UserMessage
 
 
 @pytest.mark.anyio

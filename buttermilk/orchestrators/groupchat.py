@@ -1,35 +1,19 @@
-"""Implements an Orchestrator using the autogen-core library for managing multi-agent interactions.
+"""Native orchestrator for managing multi-agent interactions.
 
-This module defines `AutogenOrchestrator`, which leverages Autogen's agent registration,
-message routing (via topics and subscriptions), and runtime management to execute
-complex workflows involving multiple LLM agents. It's designed to be configured via Hydra
-and integrates with the Buttermilk agent and contract system.
+Direct-dispatch orchestrator for managing multi-agent interactions.
+Holds agent instances directly, dispatches messages by topic subscription,
+and checks termination inline.
 """
 
 import asyncio
 import itertools
-from collections.abc import Awaitable, Callable  # Added type hints for clarity
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import shortuuid
-from autogen_core import (
-    AgentId,
-    AgentType,
-    ClosureAgent,
-    ClosureContext,  # Represents a registered type of agent in the runtime.
-    DefaultInterventionHandler,
-    DefaultTopicId,
-    DropMessage,  # A standard implementation for topic identifiers.
-    MessageContext,
-    SingleThreadedAgentRuntime,  # The core runtime managing agents and messages.
-    TopicId,  # Abstract base class for topic identifiers.
-    TypeSubscription,  # Defines a subscription based on message type and agent type.
-)
-from opentelemetry.trace import NoOpTracerProvider
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 from buttermilk import (
-    AllMessages,
     StepRequest,
     bm,
     logger,
@@ -44,55 +28,40 @@ from buttermilk._core.contract import (
     UserResponseMessage,
 )
 from buttermilk._core.exceptions import FatalError, ProcessingError
-from buttermilk._core.orchestrator import Orchestrator  # Base class for orchestrators.
+from buttermilk._core.orchestrator import Orchestrator as BaseOrchestrator
+from buttermilk._core.runtime_types import AgentIdentity, MessageContext, TopicId
 from buttermilk._core.types import RunRequest
+from buttermilk.agents.spy import SpyAgent
 from buttermilk.api.services.session_storage import SessionStorageService
-
-# AutogenAgentAdapter no longer needed - Agent now inherits from RoutedAgent directly
 
 
 class InterruptHandler(BaseModel):
-    """A simple handler for managing interrupts in the flow."""
+    """Manages flow pause/resume via user interrupt messages."""
 
     interrupt: asyncio.Event = Field(default_factory=asyncio.Event)
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    async def on_publish(self, message: Any, *, message_context: MessageContext) -> Any | type[DropMessage]:
-        """Called when a message is published to the AgentRuntime using :meth:`autogen_core.base.AgentRuntime.publish_message`."""
+    async def on_publish(self, message: Any, *, message_context: MessageContext | None = None) -> Any:
         if isinstance(message, UserResponseMessage):
             if message.interrupt:
-                # Pause the flow
                 logger.info(f"Manager interrupt message received: {message}")
                 self.interrupt.set()
             elif self.interrupt.is_set():
-                # Resume the flow
                 logger.info(f"Manager resume message received: {message}")
                 self.interrupt.clear()
         return message
 
-    async def on_send(self, message: Any, *, message_context: MessageContext, recipient: AgentId) -> Any | type[DropMessage]:
-        """Called when a message is submitted to the AgentRuntime using :meth:`autogen_core.base.AgentRuntime.send_message`."""
-        return message
 
-    async def on_response(self, message: Any, *, sender: AgentId, recipient: AgentId | None) -> Any | type[DropMessage]:
-        """Called when a response is received by the AgentRuntime from an Agent's message handler returning a value."""
-        return message
-
-
-class TerminationHandler(DefaultInterventionHandler):
+class TerminationHandler:
     def __init__(self) -> None:
         self._termination_value: StepRequest | None = None
 
-    async def on_publish(self, message: Any, *, message_context: MessageContext) -> Any:
-        if isinstance(message, StepRequest):
-            if message.role == "END":
-                # This is a termination message
-                logger.info(f"Termination message received: {message}")
-                self._termination_value = message
-        return message
+    def check(self, message: Any) -> None:
+        if isinstance(message, StepRequest) and message.role == "END":
+            logger.info(f"Termination message received: {message}")
+            self._termination_value = message
 
     def request_termination(self):
-        """Signal that the flow should terminate"""
         self._termination_value = StepRequest(role="END", content="Termination requested")
 
     @property
@@ -104,89 +73,106 @@ class TerminationHandler(DefaultInterventionHandler):
         return self._termination_value is not None
 
 
-class AutogenOrchestrator(Orchestrator):
-    """Orchestrates multi-agent workflows using the autogen-core library.
+class Orchestrator(BaseOrchestrator):
+    """Native direct-dispatch orchestrator for multi-agent workflows.
 
-    This orchestrator manages a `SingleThreadedAgentRuntime` to host and coordinate
-    Buttermilk agents adapted for Autogen. It uses Autogen's topic-based pub/sub
-    system for message routing between agents. A central `CONDUCTOR` agent is
-    typically used to determine the sequence of steps in the workflow. It also
-    supports interaction with a `MANAGER` agent (often representing a human user or UI)
-    for approvals or feedback.
-
-    Inherits configuration fields (agents, parameters, data, etc.) from the base `Orchestrator`.
-
-    Attributes:
-        _runtime: The underlying Autogen runtime instance.
-        _agent_types: Maps role names (UPPERCASE) to lists of registered Autogen AgentTypes and variant configs.
-        _topic: The main topic ID for this specific group chat instance, generated uniquely per run.
-
+    Manages agent instances directly, dispatches messages by topic
+    subscription, and checks termination inline.
     """
 
-    # Private attributes managed internally. Use PrivateAttr for Pydantic integration.
-    _runtime: SingleThreadedAgentRuntime = PrivateAttr()
-    _agent_types: dict[str, list[tuple[AgentType, Any]]] = PrivateAttr(default_factory=dict)
-    _pending_messages: list[tuple[FlowMessage, TopicId]] = PrivateAttr(default_factory=list)
+    _agents: dict[str, Any] = PrivateAttr(default_factory=dict)
+    _subscriptions: dict[str, list[Any]] = PrivateAttr(default_factory=dict)
+    _termination_handler: TerminationHandler | None = PrivateAttr(default=None)
+    _interrupt_handler: InterruptHandler | None = PrivateAttr(default=None)
+    _ui_callback: Callable[..., Awaitable[None]] | None = PrivateAttr(default=None)
+    _session_collector: Callable[..., Awaitable[None]] | None = PrivateAttr(default=None)
+    _pending_messages: list[tuple[FlowMessage, str]] = PrivateAttr(default_factory=list)
     _is_initialized: bool = PrivateAttr(default=False)
     _storage_service: SessionStorageService | None = PrivateAttr(default=None)
     _session_id: str | None = PrivateAttr(default=None)
+    _topic: str = PrivateAttr(default="")
+    _dispatch_lock: asyncio.Lock = PrivateAttr(default_factory=asyncio.Lock)
 
-    # Dynamically generates a unique topic ID for this specific orchestrator run.
-    # Ensures messages within this run don't interfere with other concurrent runs.
-    _topic: TopicId = PrivateAttr(default=None)
+    def _subscribe(self, agent: Any, topic: str) -> None:
+        """Subscribe an agent to a topic."""
+        if topic not in self._subscriptions:
+            self._subscriptions[topic] = []
+        self._subscriptions[topic].append(agent)
+
+    async def _dispatch_message(self, message: Any, topic: str) -> None:
+        """Dispatch a message to all agents subscribed to the given topic."""
+        self._termination_handler.check(message)
+        if self._interrupt_handler is not None:
+            await self._interrupt_handler.on_publish(message, message_context=None)
+
+        ctx = MessageContext(
+            topic_id=topic,
+            sender=self._get_sender_identity(message),
+        )
+
+        # Dispatch to subscribed agents
+        subscribers = self._subscriptions.get(topic, [])
+        for agent in subscribers:
+            try:
+                if hasattr(agent, "dispatch"):
+                    await agent.dispatch(message, ctx)
+                elif callable(agent):
+                    await agent(message, ctx)
+            except Exception as e:
+                agent_name = getattr(agent, "agent_name", getattr(agent, "__name__", str(agent)))
+                logger.error(f"Error dispatching to {agent_name}: {e}", exc_info=True)
+
+    def _get_sender_identity(self, message: Any) -> AgentIdentity | None:
+        """Extract sender identity from a message if available."""
+        agent_id = getattr(message, "agent_id", None) or getattr(message, "source", None)
+        if agent_id:
+            return AgentIdentity(key=str(agent_id))
+        return None
+
+    async def _publish(self, message: Any, topic: str) -> None:
+        """Publish a message — entry point used by agents via their _publish_fn callback."""
+        async with self._dispatch_lock:
+            await self._dispatch_message(message, topic)
+
+    def _make_agent_publish_fn(self) -> Callable[..., Awaitable[None]]:
+        """Create a publish callback for agents to use."""
+
+        async def publish_fn(message: Any, topic: TopicId | str) -> None:
+            topic_str = str(topic)
+            await self._publish(message, topic_str)
+
+        return publish_fn
 
     async def _setup(self, request: RunRequest) -> tuple[TerminationHandler, InterruptHandler]:
-        """Initializes the Autogen runtime and registers all configured agents."""
-        # Initialize the topic ID if not already set
-        if self._topic is None:
-            # Import execution context for slug extraction
+        """Initialize orchestrator and register all configured agents."""
+        if not self._topic:
             from buttermilk._core.execution_context import get_execution_context
 
             exec_ctx = get_execution_context()
-            # Format: {project}-{exec_slug}-{session_slug}-{suffix}
-            # Example: TJA-cge7b5Fi-dda43ff9-a3b2
-            suffix = shortuuid.uuid()[:4]  # Unique suffix for multiple groupchats in same session
-            self._topic = DefaultTopicId(type=f"{bm.session_info.project_name}-{exec_ctx.slug}-{bm.session_info.slug}-{suffix}")
+            suffix = shortuuid.uuid()[:4]
+            self._topic = f"{bm.session_info.project_name}-{exec_ctx.slug}-{bm.session_info.slug}-{suffix}"
 
-        msg = f"Setting up AutogenOrchestrator for topic: {self._topic.type}"
-        logger.info(f"[AutogenOrchestrator._setup] {msg} (callback_to_ui: {'set' if request.callback_to_ui else 'not set'})")
+        msg = f"Setting up orchestrator for topic: {self._topic}"
+        logger.info(f"[Orchestrator._setup] {msg} (callback_to_ui: {'set' if request.callback_to_ui else 'not set'})")
 
-        termination_handler = TerminationHandler()
-        interrupt_handler = InterruptHandler()
+        self._termination_handler = TerminationHandler()
+        self._interrupt_handler = InterruptHandler()
 
-        # Note: Autogen runtime has built-in telemetry that can be disabled if needed.
-        # From the autogen docs:
-        # - Set trace_provider to opentelemetry.trace.NoOpTracerProvider in the runtime constructor
-        # - Or set AUTOGEN_DISABLE_RUNTIME_TRACING=true environment variable
-
-        self._runtime = SingleThreadedAgentRuntime(
-            tracer_provider=NoOpTracerProvider(),
-            intervention_handlers=[termination_handler, interrupt_handler],
-            ignore_unhandled_exceptions=False,
-        )
-
-        # Start the Autogen runtime's processing loop in the background.
-        self._runtime.start()
-
-        # Register Buttermilk agents (wrapped in Adapters) with the Autogen runtime.
         await self._register_agents(params=request)
-
-        await self.register_ui(callback_to_ui=request.callback_to_ui)
-
+        await self._register_ui(callback_to_ui=request.callback_to_ui)
         await self._register_session_collector()
 
-        # Send a broadcast message to initialize all agents subscribed to the group chat
-        logger.info(f"Broadcasting initialization message to topic '{self._topic.type}' to wake up all agents")
-        await self._runtime.publish_message(
+        # Broadcast initialization event
+        logger.info(f"Broadcasting initialization message to topic '{self._topic}' to wake up all agents")
+        await self._publish(
             FlowEvent(source="orchestrator", content="Initializing group chat participants"),
-            topic_id=self._topic,
+            self._topic,
         )
 
-        # Send a welcome message to the UI
+        # Welcome message to UI
         flow_event = FlowEvent(source="orchestrator", content=msg)
-        topic = DefaultTopicId(type=MANAGER)
-        logger.debug("[AutogenOrchestrator._setup] Publishing welcome message to MANAGER topic")
-        await self._runtime.publish_message(flow_event, topic_id=topic)
+        logger.debug("[Orchestrator._setup] Publishing welcome message to MANAGER topic")
+        await self._publish(flow_event, MANAGER)
 
         # Start up the host agent with participants and their tools
         logger.info(
@@ -202,225 +188,104 @@ class AutogenOrchestrator(Orchestrator):
             observers=list(self.observers.keys()),
             input_keys=list(conductor_request.inputs.keys()) if conductor_request.inputs else [],
         )
-        await self._runtime.publish_message(
-            conductor_request,
-            topic_id=self._topic,
-        )
+        await self._publish(conductor_request, self._topic)
 
         # Mark as initialized and process any pending messages
         self._is_initialized = True
 
-        # Process any messages that were queued before initialization
         if self._pending_messages:
-            logger.debug(f"[AutogenOrchestrator._setup] Processing {len(self._pending_messages)} pending messages")
+            logger.debug(f"[Orchestrator._setup] Processing {len(self._pending_messages)} pending messages")
             for pending_message, topic_id in self._pending_messages:
-                await self._runtime.publish_message(pending_message, topic_id=topic_id)
-
-        # Clear the pending messages
+                await self._publish(pending_message, topic_id)
         self._pending_messages.clear()
 
-        return termination_handler, interrupt_handler
+        return self._termination_handler, self._interrupt_handler
 
     async def _register_agents(self, params: RunRequest) -> None:
-        """Registers Buttermilk agents with the Autogen runtime.
+        """Register all configured agents."""
+        logger.debug("Registering agents with native orchestrator...")
 
-        Iterates through the `self.agents` configuration, creating Agent
-        instances for each agent variant and registering them with the runtime.
-        Sets up subscriptions so agents listen on the main group chat topic and
-        potentially role-specific topics.
-
-        Agents are registered in parallel to improve startup performance.
-        """
-        logger.debug("Registering agents with Autogen runtime...")
-
-        # Collect all registration tasks
-        registration_tasks = []
-        role_mapping = {}  # Maps task index to (role_name, actual_role)
+        publish_fn = self._make_agent_publish_fn()
 
         for role_name, step_config in itertools.chain(self.agents.items(), self.observers.items()):
-            # `get_configs` yields tuples of (AgentClass, agent_variant_config)
             for agent_cls, variant_config in step_config.get_configs(params=params, flow_default_params=self.parameters):
                 actual_role = step_config.role.upper()
-                task_index = len(registration_tasks)
-                role_mapping[task_index] = (role_name, actual_role)
+                try:
+                    agent_instance = self._create_agent(
+                        agent_cls=agent_cls,
+                        variant_config=variant_config,
+                        params=params,
+                        publish_fn=publish_fn,
+                    )
 
-                # Create registration task
-                task = self._register_single_agent(
-                    agent_cls=agent_cls,
-                    variant_config=variant_config,
-                    params=params,
-                    actual_role=actual_role,
-                    role_name=role_name,
-                )
-                registration_tasks.append(task)
+                    agent_key = variant_config.agent_id
+                    self._agents[agent_key] = agent_instance
 
-        # Execute all registrations in parallel
-        try:
-            registration_results = await asyncio.gather(*registration_tasks, return_exceptions=True)
-        except Exception as e:
-            logger.critical(f"Critical error during parallel agent registration: {e}")
-            raise
+                    # Subscribe to main topic and role topic
+                    self._subscribe(agent_instance, self._topic)
+                    self._subscribe(agent_instance, actual_role)
 
-        # Process results and organize by role
-        for task_index, result in enumerate(registration_results):
-            role_name, actual_role = role_mapping[task_index]
+                    logger.debug(
+                        f"Registered agent {agent_cls.__name__}: ID='{variant_config.agent_name}', "
+                        f"Role='{actual_role}'. Subscribed to topics: '{self._topic}', '{actual_role}'",
+                    )
+                except Exception as e:
+                    error_msg = f"FATAL: Agent registration failed for role '{role_name}': {e}"
+                    logger.critical(error_msg)
+                    raise FatalError(error_msg) from e
 
-            if isinstance(result, Exception):
-                # Re-raise the exception with context
-                error_msg = f"🚨 FATAL: Agent registration failed for role '{role_name}': {result}"
-                logger.critical(f"💥 AGENT REGISTRATION FAILURE: {error_msg}")
-                raise FatalError(error_msg) from result
-
-            agent_type, variant_config = result
-
-            # Store in agent_types dictionary
-            if role_name.upper() not in self._agent_types:
-                self._agent_types[role_name.upper()] = []
-            self._agent_types[role_name.upper()].append((agent_type, variant_config))
-
-        # Log summary
-        for role_name, agents in self._agent_types.items():
-            logger.debug(f"Registered {len(agents)} agent variants for role '{role_name}'.")
-
-    async def _register_single_agent(
+    def _create_agent(
         self,
         agent_cls: type,
         variant_config: Any,
         params: RunRequest,
-        actual_role: str,
-        role_name: str,
-    ) -> tuple[AgentType, Any]:
-        """Register a single agent with the runtime.
+        publish_fn: Callable[..., Awaitable[None]],
+    ) -> Any:
+        """Create a single agent instance."""
+        if issubclass(agent_cls, Agent):
+            dumped_config = variant_config.model_dump()
+            logger.debug(f"Agent {variant_config.role}: model_dump required field = {dumped_config.get('required')!r}")
+            config_with_session = {
+                **dumped_config,
+                "session_id": params.session_id,
+                "topic_id": self._topic,
+                "publish_fn": publish_fn,
+            }
+            if hasattr(self, "get_effective_bm"):
+                config_with_session["bm"] = self.get_effective_bm()
 
-        Returns:
-            tuple: (agent_type, variant_config) on success
-
-        Raises:
-            Exception: Any exception that occurs during registration
-
-        """
-        try:
-            # Define a factory function required by Autogen's registration.
-            # Check if this is a Buttermilk Agent subclass
-            if issubclass(agent_cls, Agent):
-                dumped_config = variant_config.model_dump()
-                # DEBUG RFC #311: Check if required field is in config
-                logger.debug(f"Agent {variant_config.role}: model_dump required field = {dumped_config.get('required')!r}")
-                config_with_session = {
-                    **dumped_config,
-                    "session_id": params.session_id,
-                    "topic_id": self._topic,
-                }
-
-                # Add BM instance if available from orchestrator
-                if hasattr(self, "get_effective_bm"):
-                    config_with_session["bm"] = self.get_effective_bm()
-
-                # Create factory function for the agent
-                def agent_factory(
-                    orchestrator_ref,  # Reference to orchestrator for registration
-                    cfg: dict = config_with_session,
-                    cls: type[Agent] = agent_cls,
-                ) -> Agent:
-                    # Create the agent instance
-                    agent_instance = cls(**cfg)
-                    # Agent registration is now handled by the Agent class itself
-                    return agent_instance
-
-                # Register the agent factory with the runtime.
-                # The runtime will call this factory to create agent instances.
-                agent_type: AgentType = await Agent.register(
-                    runtime=self._runtime,
-                    type=variant_config.agent_id,  # Use the specific variant ID for registration
-                    factory=lambda orch=self, v_cfg=config_with_session, a_cls=agent_cls: agent_factory(
-                        orch,
-                        cfg=v_cfg,
-                        cls=a_cls,
-                    ),
-                )
-            else:
-                # Register AutoGen agents (like SpyAgent) that have their own register method
-                agent_type: AgentType = await agent_cls.register(
-                    runtime=self._runtime,
-                    type=variant_config.agent_id,  # Use the specific variant ID for registration
-                    factory=lambda params=variant_config.parameters, cls=agent_cls: cls(**params),
-                )
-
-            # Subscribe the newly registered agent type to the main group chat topic.
-            # This allows it to receive general messages sent to the group.
-            await self._runtime.add_subscription(
-                TypeSubscription(
-                    topic_type=self._topic.type,  # Main group chat topic
-                    agent_type=agent_type,
-                ),
+            return agent_cls(**config_with_session)
+        if issubclass(agent_cls, SpyAgent):
+            return agent_cls(
+                **variant_config.parameters,
+                publish_fn=publish_fn,
             )
+        return agent_cls(**variant_config.parameters)
 
-            # Also subscribe the agent to a topic specific to its role (e.g., "JUDGE", "SCORER").
-            # This allows targeted messages to be sent directly to agents fulfilling that specific role.
-            await self._runtime.add_subscription(
-                TypeSubscription(
-                    topic_type=actual_role,
-                    agent_type=agent_type,
-                ),
-            )
-
-            logger.debug(
-                f"Registered agent of type {agent_cls}: ID='{variant_config.agent_name}', Role='{actual_role}', Type='{agent_type}'. Subscribed to topics: '{self._topic.type}', '{actual_role}'",
-            )
-
-            return agent_type, variant_config
-
-        except Exception as e:
-            # Log detailed error information for agent registration failures
-            error_msg = f"Failed to register agent {variant_config.agent_id} (class: {agent_cls.__name__}) for role '{role_name}': {e}"
-            logger.error(error_msg, exc_info=True)
-            raise
-
-    async def register_ui(self, callback_to_ui: Callable[..., Awaitable[None]]) -> None:
-        """Registers a callback function for the groupchat to send messages to the UI.
-
-        Args:
-            callback_to_ui: A callable that takes a message and sends it to the UI.
-
-        """
+    async def _register_ui(self, callback_to_ui: Callable[..., Awaitable[None]]) -> None:
+        """Register the UI callback as a subscriber."""
         if not callback_to_ui:
             logger.warning("No UI callback provided. Messages will not be sent to the UI.")
+            return
 
-        async def output_result(_ctx: ClosureContext, message: AllMessages, ctx: MessageContext) -> None:
+        self._ui_callback = callback_to_ui
+
+        async def ui_handler(message: Any, ctx: MessageContext) -> None:
             try:
                 await callback_to_ui(message)
             except Exception as e:
-                logger.error(
-                    f"[MANAGER ClosureAgent] ❌ Error calling callback_to_ui: {e}",
-                    exc_info=True,
-                )
+                logger.error(f"[MANAGER handler] Error calling callback_to_ui: {e}", exc_info=True)
 
-        # Register the closure function as an agent named MANAGER.
-        logger.debug(f"[AutogenOrchestrator.register_ui] Attempting to register ClosureAgent with type: {MANAGER}")
-        await ClosureAgent.register_closure(
-            runtime=self._runtime,
-            type=MANAGER,  # Agent ID/Name.
-            closure=output_result,  # The async function to handle messages.
-            subscriptions=lambda: [
-                TypeSubscription(
-                    topic_type=MANAGER,  # Subscribe to the MANAGER topic
-                    agent_type=MANAGER,
-                ),
-                TypeSubscription(
-                    topic_type=self._topic.type,  # Main group chat topic
-                    agent_type=MANAGER,
-                ),
-            ],
-            # If a message arrives that isn't handled, just ignore it silently.
-            # unknown_type_policy="ignore",
-        )
-        logger.debug(f"[AutogenOrchestrator.register_ui] ClosureAgent registered successfully for type: {MANAGER}")
+        # Subscribe UI handler to MANAGER and main topic
+        self._subscribe(ui_handler, MANAGER)
+        self._subscribe(ui_handler, self._topic)
+        logger.debug(f"[Orchestrator._register_ui] UI handler registered for topics: {MANAGER}, {self._topic}")
 
     async def _register_session_collector(self) -> None:
-        """Register a ClosureAgent to persist messages via SessionStorageService."""
+        """Register a message collector for session persistence."""
         from buttermilk.api.services.message_service import MessageService
 
-        async def persist_message(_ctx: ClosureContext, message: AllMessages, ctx: MessageContext) -> None:
+        async def persist_message(message: Any, ctx: MessageContext) -> None:
             if self._storage_service is None or self._session_id is None:
                 return
             try:
@@ -430,73 +295,39 @@ class AutogenOrchestrator(Orchestrator):
             except Exception as e:
                 logger.warning(f"Failed to persist session message: {e}")
 
-        collector_type = f"SESSION_COLLECTOR_{shortuuid.uuid()[:6]}"
-        await ClosureAgent.register_closure(
-            runtime=self._runtime,
-            type=collector_type,
-            closure=persist_message,
-            subscriptions=lambda: [
-                TypeSubscription(topic_type=self._topic.type, agent_type=collector_type),
-            ],
-        )
+        self._session_collector = persist_message
+        self._subscribe(persist_message, self._topic)
 
     async def _run(self, request: RunRequest, flow_name: str = "") -> None:
-        """Simplified main execution loop for the orchestrator.
-
-        This version delegates most of the substantive flow control to the
-        host (CONDUCTOR) agent. The orchestrator now acts mainly as a message
-        bus between agents, handling only the technical aspects of execution:
-        1. Setting up the runtime and agents
-        2. Loading initial data if needed
-        3. Getting step suggestions from the host agent
-        4. Getting user confirmation if needed
-        5. Executing the steps by sending messages
-
-        All decisions about what steps to take, pacing, and agent coordination
-        are delegated to the host agent.
-
-        Args:
-            request: An optional RunRequest containing initial data.
-
-        """
-        # Initialize session storage before setup (ensures it's available in finally block)
+        """Main execution loop."""
         self._session_id = request.session_id
         self._storage_service = SessionStorageService()
 
         try:
-            # 1. Setup the runtime and agents
             try:
-                logger.debug(f"[AutogenOrchestrator._run] Calling _setup with request.callback_to_ui: {request.callback_to_ui is not None}")
+                logger.debug(f"[Orchestrator._run] Calling _setup with request.callback_to_ui: {request.callback_to_ui is not None}")
                 termination_handler, interrupt_handler = await self._setup(request)
             except Exception as e:
                 logger.error(f"Error during setup: {e}")
                 raise FatalError(f"Orchestrator setup failed: {e}") from e
 
-            # 2. Pass any initial data handling to the host via ConductorRequest.inputs
-            # The host agent is now responsible for checking if there are records/prompts
-            # in the parameters and handling them appropriately
-
-            # 3. Wait for termination.
             while True:
                 try:
                     if termination_handler.has_terminated:
                         logger.info("Termination message received.")
-                        # Send flow_completed event before TaskProcessingComplete
-                        await self._runtime.publish_message(
+                        await self._publish(
                             FlowEvent(source="orchestrator", content="flow_completed"),
-                            topic_id=DefaultTopicId(type=MANAGER),
+                            MANAGER,
                         )
-                        # Publish a TaskProcessingComplete message to the UI
-                        logger.debug("[AutogenOrchestrator._run] Publishing TaskProcessingComplete message.")
-                        logger.debug("[AutogenOrchestrator._run] Publishing TaskProcessingComplete message to MANAGER topic.")
-                        await self._runtime.publish_message(
+                        logger.debug("[Orchestrator._run] Publishing TaskProcessingComplete message.")
+                        await self._publish(
                             TaskProcessingComplete(
                                 agent_id="orchestrator",
                                 role="orchestrator",
                             ),
-                            topic_id=DefaultTopicId(type=MANAGER),
+                            MANAGER,
                         )
-                        logger.debug("[AutogenOrchestrator._run] TaskProcessingComplete message published.")
+                        logger.debug("[Orchestrator._run] TaskProcessingComplete message published.")
                         break
                     if interrupt_handler.interrupt.is_set():
                         logger.info("Flow is paused. Waiting for resume...")
@@ -506,7 +337,6 @@ class AutogenOrchestrator(Orchestrator):
                     await asyncio.sleep(0.1)
 
                 except ProcessingError as e:
-                    # Non-fatal error - let the host agent decide how to recover
                     logger.error(f"Error in execution: {e}")
                 except (StopAsyncIteration, KeyboardInterrupt):
                     raise
@@ -522,12 +352,13 @@ class AutogenOrchestrator(Orchestrator):
             logger.exception(f"Unexpected and unhandled fatal error: {e}", exc_info=True)
             raise
         finally:
-            # Stop the runtime gracefully to avoid "Task was destroyed but it is pending!" errors
-            if hasattr(self, "_runtime") and self._runtime:
+            # Close all agents
+            for agent_key, agent in self._agents.items():
                 try:
-                    await self._runtime.stop()
+                    if hasattr(agent, "close"):
+                        await agent.close()
                 except Exception as e:
-                    logger.warning(f"Failed to stop runtime: {e}")
+                    logger.warning(f"Failed to close agent {agent_key}: {e}")
 
             if self._storage_service and self._session_id:
                 try:
@@ -536,25 +367,20 @@ class AutogenOrchestrator(Orchestrator):
                     logger.warning(f"Failed to finalize session: {e}")
 
     def make_publish_callback(self) -> Callable[[FlowMessage], Awaitable[None]]:
-        """Creates an asynchronous callback function for the UI to use.
-
-        Returns:
-            An async callback function that takes a `FlowMessage` and publishes it.
-
-        """
+        """Creates an asynchronous callback function for the UI to use."""
 
         async def publish_callback(message: FlowMessage) -> None:
-            logger.debug(f"[AutogenOrchestrator.make_publish_callback] Publishing message to runtime: {message}")
+            logger.debug(f"[Orchestrator.make_publish_callback] Publishing message to runtime: {message}")
 
-            # If runtime is not initialized yet, queue the message
-            if not self._is_initialized or not hasattr(self, "_runtime") or self._runtime is None:
-                logger.info(f"[AutogenOrchestrator] Runtime not initialized yet, queueing message: {message}")
+            if not self._is_initialized:
+                logger.info(f"[Orchestrator] Runtime not initialized yet, queueing message: {message}")
                 self._pending_messages.append((message, self._topic))
                 return
 
-            await self._runtime.publish_message(
-                message,
-                topic_id=self._topic,
-            )
+            await self._publish(message, self._topic)
 
         return publish_callback
+
+
+# Backward-compatible alias (deprecated — use Orchestrator directly)
+AutogenOrchestrator = Orchestrator

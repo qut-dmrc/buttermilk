@@ -464,74 +464,6 @@ wheels = [
 ]
 
 [[package]]
-name = "autogen-agentchat"
-version = "0.7.5"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "autogen-core" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/e5/b6/df2f835ce3aaaa2716a3dfbbd4ab8855839184f08b35ce0baa23b26a1885/autogen_agentchat-0.7.5.tar.gz", hash = "sha256:8d9c718db52ef24a518806b3a0ef848f0e4c1902877675dc0abed73a8e6e7755", size = 147716, upload-time = "2025-09-30T06:16:14.413Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/9e/82/23490a70837d77d691948863d393cef71a06d36903249f635b28f579292b/autogen_agentchat-0.7.5-py3-none-any.whl", hash = "sha256:d19ca8ec26cb15e071a56c4269140aea2bf3c718bdc7e06f6677af9a905815ba", size = 119302, upload-time = "2025-09-30T06:16:12.895Z" },
-]
-
-[[package]]
-name = "autogen-core"
-version = "0.7.5"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "jsonref" },
-    { name = "opentelemetry-api" },
-    { name = "pillow" },
-    { name = "protobuf" },
-    { name = "pydantic" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/b1/11/fea52bf3541c5308bed1ee9b9b3596fa510b2c5db893d32b649d22f02b87/autogen_core-0.7.5.tar.gz", hash = "sha256:70c2871389f1d0a7f6db8ef78717a51b7ce877ff4a08a836b7758d604dece203", size = 101980, upload-time = "2025-09-30T06:16:25.957Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/33/83/8ad899fca9dd2d2b3e5e37be13dd9e6aee3e53a621041b0624d74b07e1ee/autogen_core-0.7.5-py3-none-any.whl", hash = "sha256:4f4a0d3b88a36da75b2ef0d40be2d5e3a207cae7f7d951511e498ad1d68f8ef4", size = 101874, upload-time = "2025-09-30T06:16:24.306Z" },
-]
-
-[[package]]
-name = "autogen-ext"
-version = "0.7.5"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "autogen-core" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/e5/c8/f0651372f814c48eb64ffe921166995b7734bec0df7f0ba663383e831f58/autogen_ext-0.7.5.tar.gz", hash = "sha256:711ab9238ea66ff2abef163c331e538092bdea661620727a4a9b2ebce1c22df9", size = 417568, upload-time = "2025-09-30T06:16:24.278Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/5c/10/9333ba6c532086cce7ec7fb39e36b9a08afdbc39e2d3519f00af712e403a/autogen_ext-0.7.5-py3-none-any.whl", hash = "sha256:18cecc8aab37c7c4861fbad038a1017f0ef25e35e273aa158066ccf9d93fea4f", size = 331380, upload-time = "2025-09-30T06:16:22.832Z" },
-]
-
-[package.optional-dependencies]
-azure = [
-    { name = "azure-ai-inference" },
-    { name = "azure-ai-projects" },
-    { name = "azure-core" },
-    { name = "azure-identity" },
-    { name = "azure-search-documents" },
-]
-gemini = [
-    { name = "google-genai", version = "1.75.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.13'" },
-    { name = "google-genai", version = "2.6.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13'" },
-]
-openai = [
-    { name = "aiofiles" },
-    { name = "openai" },
-    { name = "tiktoken" },
-]
-
-[[package]]
-name = "autogen-gemini"
-version = "0.0.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/e1/91/d41326c6cd876b6b5f1c42ee0bdeb753df773b26e2487cd36a985c92bdc2/autogen_gemini-0.0.1.tar.gz", hash = "sha256:d7b43e179524bdb1737ecee6763720b40664d21e91eb883ddccaec91c0856154", size = 1566, upload-time = "2024-08-21T15:53:09.36Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/40/12/e83b51c048048e084779aa18cb14ea2ecc0a6e858768967e9b7e605d32d7/autogen_gemini-0.0.1-py3-none-any.whl", hash = "sha256:a9a91135664f8f0f1abeb7dedb1cf6ef614b479b363e751d3028d73bb5c23bf5", size = 2684, upload-time = "2024-08-21T15:53:07.899Z" },
-]
-
-[[package]]
 name = "azure-ai-contentsafety"
 version = "1.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -586,23 +518,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/60/a4/a6ed7ddedb8c575651627712f5bb994b58ba1d37b70be3e13a831dce4d26/azure_ai_ml-1.18.0.tar.gz", hash = "sha256:0a1ec1a65df4e4437652a270c1cc28c5bb847d43eaa7a9ecdde4dab647d4f12e", size = 7667487, upload-time = "2024-07-16T03:49:31.241Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/64/5c/43a8a6f4967e1a6c666ed7756d87466d9cb562e84430685503cfab2df15d/azure_ai_ml-1.18.0-py3-none-any.whl", hash = "sha256:21fb562d55a21e0ba2268791e2151c700a5ee30b0b70c3231afb1661ea3a0031", size = 10505421, upload-time = "2024-07-16T03:49:34.977Z" },
-]
-
-[[package]]
-name = "azure-ai-projects"
-version = "2.1.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "azure-core" },
-    { name = "azure-identity" },
-    { name = "azure-storage-blob" },
-    { name = "isodate" },
-    { name = "openai" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/72/76/3fdede8eddfe5927a571898a15f0288ba30fee78e5ba099f88df3ded70af/azure_ai_projects-2.1.0.tar.gz", hash = "sha256:f0749fa9a174255aa1a5550fb6078208521518472907a4c6dd552767d9b39caa", size = 543343, upload-time = "2026-04-20T17:06:48.751Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/f7/f6/4984e7772a97c7a9e6505a3de8e55a5070fa2b02cd7e980da91e0d9b9b97/azure_ai_projects-2.1.0-py3-none-any.whl", hash = "sha256:6f259d8eb9167d2dfd372006d0221a8118faeaeb05829fa898b595bc6f19c699", size = 274309, upload-time = "2026-04-20T17:06:50.542Z" },
 ]
 
 [[package]]
@@ -843,20 +758,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/6c/c3/2f18eaed17a40982ad04953ad0fa5b1a2dbc5a5c98b6d3ef68c1d7d285ae/azure_monitor_opentelemetry_exporter-1.0.0b41.tar.gz", hash = "sha256:b363e6f89c0dee16d02782a310a60d626e4c081ef49d533ff5225a40cbab12cc", size = 206710, upload-time = "2025-07-31T22:37:28.378Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/50/d4/8cc989c4eedcefb74dccdd5af2faf51e0237163f538d2b258eef7e35f33d/azure_monitor_opentelemetry_exporter-1.0.0b41-py2.py3-none-any.whl", hash = "sha256:cbba629cca53e0e33416c61e08ebaabe833e740cfbfd7f2e9151821f92c66a51", size = 162631, upload-time = "2025-07-31T22:37:29.809Z" },
-]
-
-[[package]]
-name = "azure-search-documents"
-version = "12.0.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "azure-core" },
-    { name = "isodate" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/59/dc/bb4db263381aa5b29414e280a8535a343d877a3831a501ef39332174c85c/azure_search_documents-12.0.0.tar.gz", hash = "sha256:8e6d73ec0ed1623083435b757e34324db65d72d4e09cca061a59fc7e90c8ddbc", size = 386222, upload-time = "2026-05-01T20:28:22.269Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a4/b1/4869a064dbb79fb4ecac684de51a8f8f7a93a315f3f9cc4bf8a65cc413cd/azure_search_documents-12.0.0-py3-none-any.whl", hash = "sha256:d88114e4179cd753845711042380a4571e7faa8619addf5e017928ebe37fc0d1", size = 352117, upload-time = "2026-05-01T20:28:23.989Z" },
 ]
 
 [[package]]
@@ -1252,10 +1153,6 @@ dependencies = [
     { name = "aioconsole" },
     { name = "anthropic", extra = ["vertex"] },
     { name = "anyio" },
-    { name = "autogen-agentchat" },
-    { name = "autogen-core" },
-    { name = "autogen-ext", extra = ["azure", "gemini", "openai"] },
-    { name = "autogen-gemini" },
     { name = "beautifulsoup4" },
     { name = "bleach" },
     { name = "chromadb" },
@@ -1402,10 +1299,6 @@ requires-dist = [
     { name = "altair", marker = "extra == 'dev'", specifier = ">=5.0.0" },
     { name = "anthropic", extras = ["vertex"], specifier = ">=0.42.0,<1.0.0" },
     { name = "anyio", specifier = ">=4.7.0,<5.0.0" },
-    { name = "autogen-agentchat", specifier = ">=0.4.9.2" },
-    { name = "autogen-core", specifier = ">=0.7.0" },
-    { name = "autogen-ext", extras = ["azure", "gemini", "openai"], specifier = ">=0.7.0" },
-    { name = "autogen-gemini", specifier = ">=0.0.1" },
     { name = "azure-ai-contentsafety", marker = "extra == 'ml'", specifier = ">=1.0.0,<2.0.0" },
     { name = "azure-ai-inference", marker = "extra == 'ml'", specifier = ">=1.0.0b9" },
     { name = "azure-ai-ml", marker = "extra == 'ml'", specifier = "==1.18.0" },
@@ -4378,15 +4271,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/18/c7/af399a2e7a67fd18d63c40c5e62d3af4e67b836a2107468b6a5ea24c4304/jsonpointer-3.1.1.tar.gz", hash = "sha256:0b801c7db33a904024f6004d526dcc53bbb8a4a0f4e32bfd10beadf60adf1900", size = 9068, upload-time = "2026-03-23T22:32:32.458Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9e/6a/a83720e953b1682d2d109d3c2dbb0bc9bf28cc1cbc205be4ef4be5da709d/jsonpointer-3.1.1-py3-none-any.whl", hash = "sha256:8ff8b95779d071ba472cf5bc913028df06031797532f08a7d5b602d8b2a488ca", size = 7659, upload-time = "2026-03-23T22:32:31.568Z" },
-]
-
-[[package]]
-name = "jsonref"
-version = "1.1.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/aa/0d/c1f3277e90ccdb50d33ed5ba1ec5b3f0a242ed8c1b1a85d3afeb68464dca/jsonref-1.1.0.tar.gz", hash = "sha256:32fe8e1d85af0fdefbebce950af85590b22b60f9e95443176adbde4e1ecea552", size = 8814, upload-time = "2023-01-16T16:10:04.455Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/0c/ec/e1db9922bceb168197a558a2b8c03a7963f1afe93517ddd3cf99f202f996/jsonref-1.1.0-py3-none-any.whl", hash = "sha256:590dc7773df6c21cbf948b5dac07a72a251db28b0238ceecce0a2abfa8ec30a9", size = 9425, upload-time = "2023-01-16T16:10:02.255Z" },
 ]
 
 [[package]]

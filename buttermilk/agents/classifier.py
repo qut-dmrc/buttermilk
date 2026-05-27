@@ -20,12 +20,12 @@ from collections.abc import AsyncGenerator
 from typing import Any, Self
 
 import pydantic
-from autogen_core.models import AssistantMessage, SystemMessage, UserMessage
 from opentelemetry import trace
 from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 
 from buttermilk import logger
 from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.messages import AssistantMessage, SystemMessage, UserMessage
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.processor_core import ProcessorCore, TraceParams
 from buttermilk._core.types import BaseRecord
@@ -346,7 +346,7 @@ class HuggingFaceClassifier(ClassifierCore):
         from buttermilk import bm
 
         try:
-            self._llm_wrapper = bm.llms.get_autogen_chat_client(self.model)
+            self._llm_wrapper = bm.llms.get_client(self.model)
             logger.debug(f"HuggingFaceClassifier initialized with model: {self.model}")
         except AttributeError as e:
             raise ValueError(f"Model '{self.model}' not found in LLM connections. Available: {list(bm.llms.connections.keys())}") from e
@@ -393,7 +393,7 @@ class HuggingFaceClassifier(ClassifierCore):
         """Call HuggingFace classification model via wrapper with structured output.
 
         Args:
-            messages: List of autogen message objects
+            messages: List of LLM message objects
 
         Returns:
             Parsed Pydantic model if wrapper handled structured output,
@@ -507,7 +507,7 @@ class HuggingFaceClassifier(ClassifierCore):
         # Step 2: Parse template into messages
         parsed_messages = self._parse_template_messages(rendered_text)
 
-        # Convert to autogen message objects
+        # Convert to LLM message objects
         message_classes = {
             "system": SystemMessage,
             "user": UserMessage,

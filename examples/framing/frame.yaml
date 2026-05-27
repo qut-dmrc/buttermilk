@@ -13,7 +13,7 @@ run:
   flows:
     frame:
       # Core flow configuration
-      orchestrator: buttermilk.orchestrators.groupchat.AutogenOrchestrator
+      orchestrator: buttermilk.orchestrators.groupchat.Orchestrator
       name: "frame"
       description: "Journalism quality assessment for frame issues reporting"
       parameters:

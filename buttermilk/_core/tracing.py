@@ -45,18 +45,9 @@ class EmptyTraceFilter:
     2. The trace has no error or exception
     3. The output is None, empty dict {}, or empty string ""
 
-    This helps reduce clutter from autogen's automatic tracing of all message handlers,
+    This helps reduce clutter from automatic tracing of message handlers,
     including those that intentionally ignore messages. Traces with errors or exceptions
     are always preserved for debugging purposes.
-
-    Usage:
-        filter = EmptyTraceFilter()
-        # Configure weave to use this formatter
-        # The formatter's format() method will be called for each trace
-
-    Note:
-        This filter is designed specifically for autogen message handlers which
-        follow the pattern "ClassName.method_name.message_handler" in their op_name.
     """
 
     def format(self, trace_data: dict[str, Any]) -> dict[str, Any] | None:

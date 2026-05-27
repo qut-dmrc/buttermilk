@@ -43,7 +43,7 @@ The `SequentialBatchHost` enables automated batch processing:
 
 ## Usage
 
-Orchestrators (like `AutogenOrchestrator` or `Selector`) now act primarily as message buses, while hosts control the conversational flow:
+Orchestrators (like `Orchestrator` or `Selector`) now act primarily as message buses, while hosts control the conversational flow:
 
 ```python
 # Configure a flow with an explorer host
@@ -62,7 +62,7 @@ flow_config = {
 }
 
 # Run with any orchestrator - the host controls the flow
-orchestrator = AutogenOrchestrator(**flow_config)
+orchestrator = Orchestrator(**flow_config)
 await orchestrator.run()
 ```
 

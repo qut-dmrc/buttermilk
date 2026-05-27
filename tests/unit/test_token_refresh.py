@@ -173,9 +173,8 @@ async def test_litellm_create_uses_token_provider_for_auth():
     2. That the token from token_provider appears in the Authorization header
     3. That calling create() twice results in two token_provider calls
     """
-    from autogen_core.models import UserMessage
-
     from buttermilk._core.llms import LiteLLMWrapper
+    from buttermilk._core.messages import UserMessage
 
     # Track token_provider calls
     token_provider_call_count = 0
@@ -197,7 +196,7 @@ async def test_litellm_create_uses_token_provider_for_auth():
         # Return a minimal valid response structure that matches litellm format
         mock_response = Mock()
         mock_choice = Mock()
-        mock_choice.message = Mock(content="test response", tool_calls=None)
+        mock_choice.message = Mock(content="test response", tool_calls=None, reasoning_content=None)
         mock_choice.finish_reason = "stop"  # Must be a valid finish_reason
         mock_response.choices = [mock_choice]
         mock_response.usage = Mock(prompt_tokens=10, completion_tokens=5, total_tokens=15)
@@ -325,18 +324,18 @@ async def test_token_refresh_retries_on_transient_failure(real_bm: BM):
 
 
 @pytest.mark.anyio
-async def test_get_autogen_chat_client_passes_token_provider_for_vertex(real_bm: BM):
-    """Test that get_autogen_chat_client() passes token_provider for Vertex models.
+async def test_get_client_passes_token_provider_for_vertex(real_bm: BM):
+    """Test that get_client() passes token_provider for Vertex models.
 
-    ACCEPTANCE CRITERION: When get_autogen_chat_client() creates a LiteLLMWrapper
+    ACCEPTANCE CRITERION: When get_client() creates a LiteLLMWrapper
     for Vertex/GCP models, it must pass a token_provider callable that calls
     bm.get_gcp_access_token().
 
-    BEHAVIOR BEING TESTED: The LiteLLMWrapper returned by get_autogen_chat_client()
+    BEHAVIOR BEING TESTED: The LiteLLMWrapper returned by get_client()
     for Vertex models should have token_provider set to a callable that fetches
     fresh GCP tokens.
 
-    EXPECTED FAILURE: Currently get_autogen_chat_client() doesn't pass token_provider
+    EXPECTED FAILURE: Currently get_client() doesn't pass token_provider
     to LiteLLMWrapper at line 2252-2262, so the wrapper will not have this field set.
 
     This test verifies that:
@@ -364,11 +363,11 @@ async def test_get_autogen_chat_client_passes_token_provider_for_vertex(real_bm:
         f"Model {model_name} uses {config.client_type}, expected a Vertex type. This test requires a Vertex model to verify token_provider is passed."
     )
 
-    # Get LiteLLMWrapper via get_autogen_chat_client
+    # Get LiteLLMWrapper via get_client
     # This should be configured with token_provider for Vertex models
-    wrapper = llms.get_autogen_chat_client(model_name)
+    wrapper = llms.get_client(model_name)
 
-    # ASSERT: wrapper should be LiteLLMWrapper (not AutoGenWrapper)
+    # ASSERT: wrapper should be LiteLLMWrapper
     assert isinstance(wrapper, LiteLLMWrapper), f"Expected LiteLLMWrapper for Vertex model {model_name}, got {type(wrapper).__name__}"
 
     # ASSERT: wrapper should have token_provider field
@@ -376,14 +375,14 @@ async def test_get_autogen_chat_client_passes_token_provider_for_vertex(real_bm:
     assert hasattr(wrapper, "token_provider"), (
         f"LiteLLMWrapper for {model_name} missing token_provider field. "
         f"Need to add token_provider field to LiteLLMWrapper class and pass it "
-        f"in get_autogen_chat_client() at line ~2252."
+        f"in get_client() at line ~2252."
     )
 
     # ASSERT: token_provider should be set (not None)
-    # EXPECTED TO FAIL: Currently get_autogen_chat_client() doesn't pass token_provider
+    # EXPECTED TO FAIL: Currently get_client() doesn't pass token_provider
     assert wrapper.token_provider is not None, (
         f"token_provider is None for Vertex model {model_name}. "
-        f"Need to pass token_provider=bm.get_gcp_access_token in get_autogen_chat_client() "
+        f"Need to pass token_provider=bm.get_gcp_access_token in get_client() "
         f"when creating LiteLLMWrapper for Vertex models."
     )
 

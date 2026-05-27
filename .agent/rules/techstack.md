@@ -39,7 +39,7 @@
   - Concurrent agent execution
   - Non-blocking LLM calls
 
-- **autogen-core**: Agent communication runtime
+- **Native agent runtime**: Agent communication and orchestration
   - Message routing via topics
   - Agent lifecycle management
   - Background processing

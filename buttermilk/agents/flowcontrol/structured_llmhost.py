@@ -7,14 +7,6 @@ import asyncio
 from collections.abc import AsyncGenerator
 
 import pydantic
-from autogen_core import (
-    CancellationToken,
-    FunctionCall,
-    MessageContext,
-    message_handler,
-)
-from autogen_core.models import LLMMessage
-from autogen_core.tools import Tool
 
 from buttermilk import AgentInput, StepRequest, bm, logger
 from buttermilk._core.agent import UserResponseMessage
@@ -22,6 +14,9 @@ from buttermilk._core.constants import COMMAND_SYMBOL, END, MANAGER
 from buttermilk._core.contract import AgentOutput, ErrorEvent
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llms import CreateResult, ModelOutput
+from buttermilk._core.messages import FunctionCall, LLMMessage
+from buttermilk._core.runtime_types import MessageContext, message_handler
+from buttermilk._core.tool_types import CancellationToken, Tool
 from buttermilk.agents.flowcontrol.host import HostAgent
 from buttermilk.agents.llm import LLMAgent
 

@@ -7,11 +7,6 @@ autonomously to fetch records based on incoming messages.
 import datetime
 from typing import Any
 
-from autogen_core import (
-    message_handler,
-)
-from autogen_core.tools import FunctionTool, Tool
-
 from buttermilk import bm, logger
 from buttermilk._core.agent import Agent
 from buttermilk._core.contract import (
@@ -21,6 +16,8 @@ from buttermilk._core.contract import (
     StepRequest,
 )  # Buttermilk message contracts
 from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.runtime_types import message_handler
+from buttermilk._core.tool_types import FunctionTool, Tool
 from buttermilk._core.types import BaseRecord, Record
 from buttermilk.utils.media import download_and_convert  # Media utilities
 from buttermilk.utils.utils import URL_PATTERN

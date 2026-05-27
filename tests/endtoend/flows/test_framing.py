@@ -46,7 +46,7 @@ async def test_frames_text(framer, text_record, real_bm: BM, model):
     )
     orchestrator = OrchestratorProtocol(
         agents={"FRAMER": agent_variants},
-        orchestrator="buttermilk.orchestrators.groupchat.AutogenOrchestrator",
+        orchestrator="buttermilk.orchestrators.groupchat.Orchestrator",
     )
     flow = FlowRunner(source="testing", flows={"testframer": orchestrator})
 
@@ -80,7 +80,7 @@ async def test_frames_article(framer, news_record, real_bm: BM, model):
     )
     orchestrator = OrchestratorProtocol(
         agents={"FRAMER": agent_variants},
-        orchestrator="buttermilk.orchestrators.groupchat.AutogenOrchestrator",
+        orchestrator="buttermilk.orchestrators.groupchat.Orchestrator",
     )
     flow = FlowRunner(source="testing", flows={"testframer": orchestrator})
 
@@ -112,7 +112,7 @@ async def test_framing_video(framer, model, real_bm, link_to_video_gcp):
     )
     orchestrator = OrchestratorProtocol(
         agents={"FRAMER": agent_variants},
-        orchestrator="buttermilk.orchestrators.groupchat.AutogenOrchestrator",
+        orchestrator="buttermilk.orchestrators.groupchat.Orchestrator",
     )
     flow = FlowRunner(source="testing", flows={"testframer": orchestrator})
 

@@ -17,11 +17,11 @@ import asyncio
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from autogen_core.models import CreateResult
-from autogen_core.tools import ToolSchema
 
 from buttermilk._core.llms import LiteLLMWrapper
+from buttermilk._core.messages import CreateResult
 from buttermilk._core.tool_definition import AgentToolDefinition
+from buttermilk._core.tool_types import ToolSchema
 from buttermilk.agents.flowcontrol.structured_llmhost import StructuredLLMHostAgent
 
 
@@ -31,10 +31,10 @@ class TestToolTypeHandling:
     @pytest.fixture
     def sample_tool_schema(self) -> ToolSchema:
         """Create a sample ToolSchema for testing."""
-        return {
-            "name": "test_search",
-            "description": "Search for test data",
-            "parameters": {
+        return ToolSchema(
+            name="test_search",
+            description="Search for test data",
+            parameters={
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "The search query"},
@@ -46,15 +46,15 @@ class TestToolTypeHandling:
                 },
                 "required": ["query"],
             },
-        }
+        )
 
     @pytest.fixture
     def sample_tool_object(self, sample_tool_schema: ToolSchema) -> AgentToolDefinition:
         """Create a sample Tool object for testing."""
         return AgentToolDefinition(
-            name=sample_tool_schema["name"],
-            description=sample_tool_schema["description"],
-            input_schema=sample_tool_schema["parameters"],
+            name=sample_tool_schema.name,
+            description=sample_tool_schema.description,
+            input_schema=sample_tool_schema.parameters,
             output_schema={
                 "type": "object",
                 "properties": {
@@ -67,16 +67,15 @@ class TestToolTypeHandling:
     @pytest.fixture
     def mixed_tools_list(self, sample_tool_schema: ToolSchema, sample_tool_object: AgentToolDefinition):
         """Create a list containing both Tool objects and ToolSchema objects."""
-        # Create another ToolSchema
-        another_schema: ToolSchema = {
-            "name": "analyze_data",
-            "description": "Analyze collected data",
-            "parameters": {
+        another_schema = ToolSchema(
+            name="analyze_data",
+            description="Analyze collected data",
+            parameters={
                 "type": "object",
                 "properties": {"data": {"type": "array"}, "method": {"type": "string"}},
                 "required": ["data"],
             },
-        }
+        )
 
         # Return mixed list: Tool object, ToolSchema, another ToolSchema
         return [
@@ -96,7 +95,7 @@ class TestToolTypeHandling:
         # Mock the create method with the correct signature
         async def mock_create(messages, tools=[], schema=None, cancellation_token=None, **kwargs):
             # This should accept both Tool and ToolSchema objects
-            from autogen_core.models import RequestUsage
+            from buttermilk._core.messages import RequestUsage
 
             return CreateResult(
                 content="Mock response",
@@ -174,7 +173,7 @@ class TestToolTypeHandling:
 
         # Mock the LLM client
         mock_client = Mock(spec=LiteLLMWrapper)
-        from autogen_core.models import RequestUsage
+        from buttermilk._core.messages import RequestUsage
 
         mock_client.call_chat = AsyncMock(
             return_value=CreateResult(
@@ -222,17 +221,17 @@ class TestToolTypeHandling:
         assert hasattr(sample_tool_object, "schema")
 
         schema = sample_tool_object.schema
-        assert isinstance(schema, dict)
-        assert schema["name"] == "test_search"
-        assert schema["description"] == "Search for test data"
-        assert "parameters" in schema
+        assert isinstance(schema, ToolSchema)
+        assert schema.name == "test_search"
+        assert schema.description == "Search for test data"
+        assert schema.parameters is not None
 
         # Test that both Tool.schema and direct ToolSchema work the same way
         tool_via_schema = sample_tool_object.schema
-        direct_schema: ToolSchema = {
-            "name": "test_search",
-            "description": "Search for test data",
-            "parameters": {
+        direct_schema = ToolSchema(
+            name="test_search",
+            description="Search for test data",
+            parameters={
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "The search query"},
@@ -244,12 +243,12 @@ class TestToolTypeHandling:
                 },
                 "required": ["query"],
             },
-        }
+        )
 
         # They should have the same structure
-        assert tool_via_schema["name"] == direct_schema["name"]
-        assert tool_via_schema["description"] == direct_schema["description"]
-        assert tool_via_schema["parameters"] == direct_schema["parameters"]
+        assert tool_via_schema.name == direct_schema.name
+        assert tool_via_schema.description == direct_schema.description
+        assert tool_via_schema.parameters == direct_schema.parameters
 
     def test_type_hints_accept_both_tool_and_toolschema(self):
         """Test that the type hints Tool | ToolSchema work correctly."""

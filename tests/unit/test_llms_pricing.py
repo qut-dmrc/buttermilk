@@ -1,9 +1,9 @@
 """Tests for pricing functionality in llms.py module."""
 
 import pytest
-from autogen_core.models import RequestUsage
 
 from buttermilk._core.llms import LLMs, ModelOutput
+from buttermilk._core.messages import RequestUsage
 
 
 class TestModelOutputPricing:

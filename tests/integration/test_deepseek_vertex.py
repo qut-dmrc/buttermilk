@@ -7,9 +7,9 @@ No mocks - this is a TRUE integration test making REAL API calls.
 """
 
 import pytest
-from autogen_core.models import UserMessage
 
 from buttermilk._core.llms import ClientType, LiteLLMWrapper
+from buttermilk._core.messages import UserMessage
 
 pytestmark = [pytest.mark.integration, pytest.mark.slow]
 

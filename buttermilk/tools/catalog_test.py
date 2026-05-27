@@ -10,9 +10,10 @@ from pathlib import Path
 from typing import Any
 
 import shortuuid
-from autogen_core.tools import FunctionTool
 from pydantic import ConfigDict, Field, field_validator
 from tqdm.asyncio import tqdm
+
+from buttermilk._core.tool_types import FunctionTool
 
 try:
     from themoviedb import aioTMDb
@@ -1099,7 +1100,7 @@ class TMDBTool:
                 self.titles_uploader.shutdown()
 
     def as_tool(self) -> FunctionTool:
-        """Return as autogen FunctionTool for agent integration."""
+        """Return as FunctionTool for agent integration."""
         return FunctionTool(
             name="tmdb_search",
             description=(

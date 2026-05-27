@@ -7,11 +7,6 @@ from typing import Union
 
 import regex as re
 from aioconsole import ainput  # For asynchronous console input
-from autogen_core import (
-    CancellationToken,
-    MessageContext,
-    message_handler,
-)  # Autogen types (used by base Agent)
 from rich.console import Console
 from rich.highlighter import JSONHighlighter  # Specific highlighter for JSON
 from rich.pretty import pretty_repr  # For formatted output of complex objects
@@ -34,6 +29,8 @@ from buttermilk._core.contract import (
     ToolOutput,  # Potentially displayable tool output
     UserResponseMessage,  # Responses sent *from* the manager (this agent)
 )
+from buttermilk._core.runtime_types import MessageContext, message_handler
+from buttermilk._core.tool_types import CancellationToken
 from buttermilk._core.types import Record  # For displaying record data
 from buttermilk.agents.differences import Differences
 from buttermilk.agents.judge import JudgeReasons  # Specific format for judge reasons
@@ -232,7 +229,7 @@ class CLIUserAgent(UIAgent):
 
         Args:
             message: The AgentInput message received.
-            cancellation_token: Autogen cancellation token.
+            cancellation_token: Cancellation token.
             **kwargs: Additional keyword arguments.
 
         Returns:
@@ -583,35 +580,35 @@ class CLIUserAgent(UIAgent):
     async def handle_record(self, message: Record, ctx: MessageContext) -> None:
         """Handle Record messages by displaying them."""
         await super().handle_record(message, ctx)
-        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
+        source = ctx.sender.key if ctx.sender else "unknown"
         await self.callback_to_ui(message, source=source)
 
     @message_handler
     async def handle_agent_output(self, message: AgentOutput, ctx: MessageContext) -> None:
         """Handle AgentOutput messages by displaying them."""
         await super().handle_agent_output(message, ctx)
-        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
+        source = ctx.sender.key if ctx.sender else "unknown"
         await self.callback_to_ui(message, source=source)
 
     @message_handler
     async def handle_agent_trace(self, message: ExecutionTrace, ctx: MessageContext) -> None:
         """Handle ExecutionTrace messages by displaying them."""
         await super().handle_agent_trace(message, ctx)
-        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
+        source = ctx.sender.key if ctx.sender else "unknown"
         await self.callback_to_ui(message, source=source)
 
     @message_handler
     async def handle_user_response_message(self, message: UserResponseMessage, ctx: MessageContext) -> None:
         """Handle UserResponseMessage messages by displaying them."""
         await super().handle_user_response_message(message, ctx)
-        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
+        source = ctx.sender.key if ctx.sender else "unknown"
         await self.callback_to_ui(message, source=source)
 
     @message_handler
     async def handle_tool_output(self, message: ToolOutput, ctx: MessageContext) -> None:
         """Handle ToolOutput messages by displaying them."""
         await super().handle_tool_output(message, ctx)
-        source = str(ctx.sender).split("/", maxsplit=1)[0] if ctx.sender else "unknown"
+        source = ctx.sender.key if ctx.sender else "unknown"
         await self.callback_to_ui(message, source=source)
 
     async def _handle_events(
