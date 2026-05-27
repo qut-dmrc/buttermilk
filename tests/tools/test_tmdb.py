@@ -1255,3 +1255,212 @@ class TestTMDBGetAvailabilityById:
             # Verify regions for null observations
             null_types = {r.provider_type for r in null_obs}
             assert null_types == {"rent", "buy", "ads", "free"}
+
+
+class TestTMDBPriceMapping:
+    """Test cases for price/currency/format extraction from rent and buy providers.
+
+    The TMDB API returns price, currency, and presentation_type fields for
+    rent and buy providers. The scraper must map these to the Observation
+    model's price, currency, and format fields.
+    """
+
+    @staticmethod
+    def load_raw_fixture_as_mock(fixture_filename: str):
+        """Load a JSON fixture and return as a mock response with raw dict data.
+
+        Unlike load_fixture_as_mock which converts to dataclasses (which strip
+        extra fields), this preserves raw dicts so price/currency/presentation_type
+        fields are retained -- matching what happens when we bypass the SDK's
+        dataclass conversion.
+
+        Args:
+            fixture_filename: Name of fixture file in tests/tools/fixtures/
+
+        Returns:
+            Mock response object with results dict containing raw provider dicts
+        """
+        from pathlib import Path
+        from types import SimpleNamespace
+
+        fixture_path = Path(__file__).parent / "fixtures" / fixture_filename
+        with open(fixture_path, encoding="utf-8") as f:
+            raw_data = json.load(f)
+
+        # Use SimpleNamespace so hasattr checks work correctly
+        mock_response = SimpleNamespace()
+        # Keep region data as raw dicts (not dataclasses) so price fields survive
+        mock_response.results = raw_data["results"]
+        return mock_response, raw_data
+
+    @pytest.mark.anyio
+    async def test_rent_prices_are_captured(self, tmdb_tool):
+        """Test that rent provider observations include price, currency, and format."""
+        mock_response, _ = self.load_raw_fixture_as_mock("tmdb_availability_with_prices.json")
+
+        with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
+            mock_movie_obj = AsyncMock()
+            mock_movie_obj.watch_providers = AsyncMock(return_value=mock_response)
+            mock_tmdb.movie.return_value = mock_movie_obj
+
+            results = []
+            async for obs in tmdb_tool.get_availability_by_id(
+                record_id=550,
+                title="Fight Club",
+                year=1999,
+            ):
+                results.append(obs)
+
+            # Find AU rent observations
+            au_rent = [r for r in results if r.region == "AU" and r.provider_type == "rent" and r.available]
+            assert len(au_rent) == 2
+
+            # Check Apple TV rent has price info
+            apple_rent = next(r for r in au_rent if r.provider_name == "Apple TV")
+            assert apple_rent.price == 5.99, f"Expected price 5.99, got {apple_rent.price}"
+            assert apple_rent.currency == "AUD", f"Expected currency AUD, got {apple_rent.currency}"
+            assert apple_rent.format == "hd", f"Expected format hd, got {apple_rent.format}"
+
+            # Check Amazon Video rent has price info
+            amazon_rent = next(r for r in au_rent if r.provider_name == "Amazon Video")
+            assert amazon_rent.price == 4.99
+            assert amazon_rent.currency == "AUD"
+            assert amazon_rent.format == "sd"
+
+    @pytest.mark.anyio
+    async def test_buy_prices_are_captured(self, tmdb_tool):
+        """Test that buy provider observations include price, currency, and format."""
+        mock_response, _ = self.load_raw_fixture_as_mock("tmdb_availability_with_prices.json")
+
+        with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
+            mock_movie_obj = AsyncMock()
+            mock_movie_obj.watch_providers = AsyncMock(return_value=mock_response)
+            mock_tmdb.movie.return_value = mock_movie_obj
+
+            results = []
+            async for obs in tmdb_tool.get_availability_by_id(
+                record_id=550,
+                title="Fight Club",
+                year=1999,
+            ):
+                results.append(obs)
+
+            # Find AU buy observations
+            au_buy = [r for r in results if r.region == "AU" and r.provider_type == "buy" and r.available]
+            assert len(au_buy) == 2
+
+            # Check Apple TV buy has price info
+            apple_buy = next(r for r in au_buy if r.provider_name == "Apple TV")
+            assert apple_buy.price == 14.99
+            assert apple_buy.currency == "AUD"
+            assert apple_buy.format == "hd"
+
+            # Check Google Play buy has price info
+            google_buy = next(r for r in au_buy if r.provider_name == "Google Play Movies")
+            assert google_buy.price == 12.99
+            assert google_buy.currency == "AUD"
+            assert google_buy.format == "4k"
+
+    @pytest.mark.anyio
+    async def test_flatrate_has_no_price(self, tmdb_tool):
+        """Test that flatrate providers correctly have None for price fields."""
+        mock_response, _ = self.load_raw_fixture_as_mock("tmdb_availability_with_prices.json")
+
+        with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
+            mock_movie_obj = AsyncMock()
+            mock_movie_obj.watch_providers = AsyncMock(return_value=mock_response)
+            mock_tmdb.movie.return_value = mock_movie_obj
+
+            results = []
+            async for obs in tmdb_tool.get_availability_by_id(
+                record_id=550,
+                title="Fight Club",
+                year=1999,
+            ):
+                results.append(obs)
+
+            # Find AU flatrate observations
+            au_flatrate = [r for r in results if r.region == "AU" and r.provider_type == "flatrate" and r.available]
+            assert len(au_flatrate) == 1
+
+            # Flatrate (streaming) providers don't have per-title pricing
+            stan = au_flatrate[0]
+            assert stan.provider_name == "Stan"
+            assert stan.price is None
+            assert stan.currency is None
+            assert stan.format is None
+
+    @pytest.mark.anyio
+    async def test_price_fields_across_regions(self, tmdb_tool):
+        """Test that price fields are correctly mapped across different regions."""
+        mock_response, _ = self.load_raw_fixture_as_mock("tmdb_availability_with_prices.json")
+
+        with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
+            mock_movie_obj = AsyncMock()
+            mock_movie_obj.watch_providers = AsyncMock(return_value=mock_response)
+            mock_tmdb.movie.return_value = mock_movie_obj
+
+            results = []
+            async for obs in tmdb_tool.get_availability_by_id(
+                record_id=550,
+                title="Fight Club",
+                year=1999,
+            ):
+                results.append(obs)
+
+            # US rent - Apple TV
+            us_rent = [r for r in results if r.region == "US" and r.provider_type == "rent" and r.available]
+            assert len(us_rent) == 1
+            apple_us = us_rent[0]
+            assert apple_us.price == 3.99
+            assert apple_us.currency == "USD"
+            assert apple_us.format == "hd"
+
+            # US buy - Apple TV
+            us_buy = [r for r in results if r.region == "US" and r.provider_type == "buy" and r.available]
+            assert len(us_buy) == 1
+            apple_us_buy = us_buy[0]
+            assert apple_us_buy.price == 14.99
+            assert apple_us_buy.currency == "USD"
+            assert apple_us_buy.format == "4k"
+
+    @pytest.mark.anyio
+    async def test_providers_without_price_fields_have_none(self, tmdb_tool):
+        """Test that provider dicts missing price fields result in None values."""
+        from types import SimpleNamespace
+
+        # Create a response where rent providers don't have price fields
+        # (like older API responses or some providers)
+        mock_response = SimpleNamespace()
+        mock_response.results = {
+            "AU": {
+                "link": "https://example.com",
+                "rent": [
+                    {
+                        "provider_id": 2,
+                        "provider_name": "Apple TV",
+                        "display_priority": 11,
+                        # No price, currency, or presentation_type
+                    }
+                ],
+            },
+        }
+
+        with patch.object(tmdb_tool, "_tmdb_client") as mock_tmdb:
+            mock_movie_obj = AsyncMock()
+            mock_movie_obj.watch_providers = AsyncMock(return_value=mock_response)
+            mock_tmdb.movie.return_value = mock_movie_obj
+
+            results = []
+            async for obs in tmdb_tool.get_availability_by_id(
+                record_id=550,
+                title="Fight Club",
+                year=1999,
+            ):
+                results.append(obs)
+
+            au_rent = [r for r in results if r.region == "AU" and r.provider_type == "rent" and r.available]
+            assert len(au_rent) == 1
+            assert au_rent[0].price is None
+            assert au_rent[0].currency is None
+            assert au_rent[0].format is None
