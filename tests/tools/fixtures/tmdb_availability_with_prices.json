@@ -1,0 +1,89 @@
+{
+  "id": 550,
+  "results": {
+    "AU": {
+      "link": "https://www.themoviedb.org/movie/550-fight-club/watch?locale=AU",
+      "flatrate": [
+        {
+          "logo_path": "/pvske1MyAoymrs5bguRfVqYiM9a.jpg",
+          "provider_id": 119,
+          "provider_name": "Stan",
+          "display_priority": 1
+        }
+      ],
+      "rent": [
+        {
+          "logo_path": "/SPnB1qiCkYfirS2it3hZORwGVn.jpg",
+          "provider_id": 2,
+          "provider_name": "Apple TV",
+          "display_priority": 11,
+          "price": 5.99,
+          "currency": "AUD",
+          "presentation_type": "hd"
+        },
+        {
+          "logo_path": "/qR6FKvnPBx2O37FDg8PNM7efwF3.jpg",
+          "provider_id": 10,
+          "provider_name": "Amazon Video",
+          "display_priority": 13,
+          "price": 4.99,
+          "currency": "AUD",
+          "presentation_type": "sd"
+        }
+      ],
+      "buy": [
+        {
+          "logo_path": "/SPnB1qiCkYfirS2it3hZORwGVn.jpg",
+          "provider_id": 2,
+          "provider_name": "Apple TV",
+          "display_priority": 11,
+          "price": 14.99,
+          "currency": "AUD",
+          "presentation_type": "hd"
+        },
+        {
+          "logo_path": "/8z7rC8uIDaTM91X0ZfkRf04ydj2.jpg",
+          "provider_id": 3,
+          "provider_name": "Google Play Movies",
+          "display_priority": 7,
+          "price": 12.99,
+          "currency": "AUD",
+          "presentation_type": "4k"
+        }
+      ]
+    },
+    "US": {
+      "link": "https://www.themoviedb.org/movie/550-fight-club/watch?locale=US",
+      "flatrate": [
+        {
+          "logo_path": "/pvske1MyAoymrs5bguRfVqYiM9a.jpg",
+          "provider_id": 9,
+          "provider_name": "Amazon Prime Video",
+          "display_priority": 5
+        }
+      ],
+      "rent": [
+        {
+          "logo_path": "/SPnB1qiCkYfirS2it3hZORwGVn.jpg",
+          "provider_id": 2,
+          "provider_name": "Apple TV",
+          "display_priority": 7,
+          "price": 3.99,
+          "currency": "USD",
+          "presentation_type": "hd"
+        }
+      ],
+      "buy": [
+        {
+          "logo_path": "/SPnB1qiCkYfirS2it3hZORwGVn.jpg",
+          "provider_id": 2,
+          "provider_name": "Apple TV",
+          "display_priority": 7,
+          "price": 14.99,
+          "currency": "USD",
+          "presentation_type": "4k"
+        }
+      ]
+    }
+  }
+}
