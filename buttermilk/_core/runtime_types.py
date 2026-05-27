@@ -15,7 +15,7 @@ from typing import Any
 class TopicId(str):
     """Topic identifier — a str subclass with .type for backward compat."""
 
-    def __new__(cls, type: str = "default"):  # noqa: A002
+    def __new__(cls, type: str = "default") -> TopicId:  # noqa: A002
         return super().__new__(cls, type)
 
     @property
@@ -44,7 +44,7 @@ class MessageContext:
 # ---------------------------------------------------------------------------
 
 
-def message_handler(func=None, *, match=None):
+def message_handler(func: Any = None, *, match: Any = None) -> Any:
     """Mark a method as a message handler.
 
     The orchestrator dispatches messages to handlers by matching the
@@ -52,7 +52,7 @@ def message_handler(func=None, *, match=None):
     Optional `match` predicate filters messages before dispatch.
     """
 
-    def decorator(fn):
+    def decorator(fn: Any) -> Any:
         fn._is_message_handler = True
         fn._match_predicate = match
         return fn
