@@ -4,7 +4,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from autogen_core.models import SystemMessage, UserMessage
+from buttermilk._core.messages import SystemMessage, UserMessage
 from PIL import Image as PILImage
 
 from buttermilk._core.hashing import (

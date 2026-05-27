@@ -7,7 +7,7 @@ when given real-world scorer input data from production BigQuery traces.
 import pytest
 
 pytestmark = pytest.mark.slow
-from autogen_core.models import SystemMessage, UserMessage
+from buttermilk._core.messages import SystemMessage, UserMessage
 
 from buttermilk.agents.evaluators.scorer import QualScore
 

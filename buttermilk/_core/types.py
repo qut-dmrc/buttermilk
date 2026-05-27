@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import Any, Literal, Self  # Standard typing utilities
 
 import shortuuid  # For generating short unique IDs
-from autogen_core.models import AssistantMessage, UserMessage  # Autogen message types
+from buttermilk._core.messages import AssistantMessage, UserMessage  # Native message types
 from PIL.Image import Image  # For image manipulation with Pillow
 from pydantic import (
     BaseModel,

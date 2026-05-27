@@ -17,12 +17,12 @@ from typing import Any
 from weakref import WeakValueDictionary
 
 import regex as re  # For regular expression operations, used in _parse_prompty
-from autogen_core.models import (
+from buttermilk._core.messages import (
     AssistantMessage,
     LLMMessage,
     SystemMessage,
     UserMessage,
-)  # Autogen message types
+)  # Native Buttermilk message types
 from jinja2 import (  # Jinja2 templating components
     FileSystemLoader,
     Undefined,

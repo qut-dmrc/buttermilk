@@ -17,7 +17,7 @@ import asyncio
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from autogen_core.models import CreateResult
+from buttermilk._core.messages import CreateResult
 from autogen_core.tools import ToolSchema
 
 from buttermilk._core.llms import LiteLLMWrapper
@@ -96,7 +96,7 @@ class TestToolTypeHandling:
         # Mock the create method with the correct signature
         async def mock_create(messages, tools=[], schema=None, cancellation_token=None, **kwargs):
             # This should accept both Tool and ToolSchema objects
-            from autogen_core.models import RequestUsage
+            from buttermilk._core.messages import RequestUsage
 
             return CreateResult(
                 content="Mock response",
@@ -174,7 +174,7 @@ class TestToolTypeHandling:
 
         # Mock the LLM client
         mock_client = Mock(spec=LiteLLMWrapper)
-        from autogen_core.models import RequestUsage
+        from buttermilk._core.messages import RequestUsage
 
         mock_client.call_chat = AsyncMock(
             return_value=CreateResult(

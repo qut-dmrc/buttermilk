@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from functools import partial
 from typing import Any
 
-from autogen_core.models import AssistantMessage, UserMessage
+from buttermilk._core.messages import AssistantMessage, UserMessage
 from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
 from slack_bolt.async_app import AsyncApp
 

@@ -41,7 +41,7 @@ async def test_litellm_vertex_uses_token_provider(real_bm):
     Args:
         real_bm: Real ButtermilkBM instance from conftest.py fixture
     """
-    from autogen_core.models import UserMessage
+    from buttermilk._core.messages import UserMessage
 
     from buttermilk._core.llms import ClientType, LiteLLMWrapper
 

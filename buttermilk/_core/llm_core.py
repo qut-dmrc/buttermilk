@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any, Self
 
 import pydantic
 from autogen_core import CancellationToken
-from autogen_core.models import LLMMessage
+from buttermilk._core.messages import LLMMessage
 from opentelemetry import trace
 from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
@@ -362,7 +362,7 @@ class LLMCore(ObservabilityMixin):
         else:
             result.content = llm_result.content
 
-        from autogen_core.models import AssistantMessage
+        from buttermilk._core.messages import AssistantMessage
 
         result.messages = result.messages.copy() if result.messages else []
         if result.content:

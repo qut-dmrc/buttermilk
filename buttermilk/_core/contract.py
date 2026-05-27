@@ -18,11 +18,13 @@ from typing import Any, Literal, Union
 import numpy as np
 import shortuuid  # For generating unique IDs
 
-# Import Autogen types used as base or components - conditional import
-from autogen_core.models import (
+# Native Buttermilk message types (replaces autogen_core.models)
+from buttermilk._core.messages import (
     FunctionExecutionResult,
     LLMMessage,
 )
+
+# Autogen imports - only non-message types remain (Phase 1 removal)
 from autogen_core.tools import (
     Tool,
     ToolSchema,

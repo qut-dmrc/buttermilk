@@ -33,7 +33,7 @@ from autogen_core import (
     message_handler,
 )
 from autogen_core.model_context import UnboundedChatCompletionContext
-from autogen_core.models import AssistantMessage, UserMessage
+from buttermilk._core.messages import AssistantMessage, UserMessage
 from autogen_core.tools import Tool
 
 from buttermilk import bm, logger

@@ -40,7 +40,7 @@ class TestVertexBatchProcessorIntegration:
         assert llm is not None
 
         # Verify the LLM can actually be called
-        from autogen_core.models import UserMessage
+        from buttermilk._core.messages import UserMessage
 
         messages = [UserMessage(content="Say hello", source="user")]
         response = await llm.create(messages=messages)

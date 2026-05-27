@@ -7,7 +7,7 @@ from collections.abc import (
 from typing import Any
 
 from autogen_core import DefaultTopicId, MessageContext, message_handler
-from autogen_core.models import AssistantMessage, UserMessage
+from buttermilk._core.messages import AssistantMessage, UserMessage
 from autogen_core.tools import Tool
 
 from buttermilk import logger

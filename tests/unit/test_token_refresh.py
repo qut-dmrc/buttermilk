@@ -173,7 +173,7 @@ async def test_litellm_create_uses_token_provider_for_auth():
     2. That the token from token_provider appears in the Authorization header
     3. That calling create() twice results in two token_provider calls
     """
-    from autogen_core.models import UserMessage
+    from buttermilk._core.messages import UserMessage
 
     from buttermilk._core.llms import LiteLLMWrapper
 

@@ -152,7 +152,7 @@ async def test_rag_zotero_llama4_specific(real_bm):
 
     try:
         from autogen_core import CancellationToken
-        from autogen_core.models import UserMessage
+        from buttermilk._core.messages import UserMessage
 
         response = await llm_client.call_chat(
             messages=[UserMessage(content="Test echo hello", source="user")],

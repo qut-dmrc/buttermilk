@@ -287,7 +287,7 @@ def _get_role_map() -> dict[type, str]:
     """Lazy-load role map to avoid import-time dependency on autogen_core."""
     global _ROLE_MAP
     if _ROLE_MAP is None:
-        from autogen_core.models import AssistantMessage, SystemMessage, UserMessage
+        from buttermilk._core.messages import AssistantMessage, SystemMessage, UserMessage
 
         _ROLE_MAP = {
             SystemMessage: "system",

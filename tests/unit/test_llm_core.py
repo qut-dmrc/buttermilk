@@ -3,7 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from autogen_core.models import RequestUsage, SystemMessage, UserMessage
+from buttermilk._core.messages import RequestUsage, SystemMessage, UserMessage
 from pydantic import BaseModel
 
 from buttermilk._core.exceptions import ProcessingError

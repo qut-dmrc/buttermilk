@@ -3,7 +3,7 @@
 import pytest
 
 pytestmark = pytest.mark.slow
-from autogen_core.models import SystemMessage, UserMessage
+from buttermilk._core.messages import SystemMessage, UserMessage
 from pydantic import BaseModel, Field
 
 from buttermilk._core.types import Record

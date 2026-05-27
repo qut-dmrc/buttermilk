@@ -6,7 +6,7 @@ This test verifies that LiteLLMWrapper works correctly for LLM calls.
 from __future__ import annotations
 
 import pytest
-from autogen_core.models import UserMessage
+from buttermilk._core.messages import UserMessage
 
 from buttermilk._core.llms import LiteLLMWrapper
 

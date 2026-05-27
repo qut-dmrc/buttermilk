@@ -4,7 +4,7 @@ from autogen_core import (
     SingleThreadedAgentRuntime,
     TypeSubscription,
 )
-from autogen_core.models import (
+from buttermilk._core.messages import (
     UserMessage,
 )
 

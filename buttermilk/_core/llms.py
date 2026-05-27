@@ -89,21 +89,23 @@ def __getattr__(name: str):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-# Autogen library imports - used for message/tool type compatibility
-# OpenAI SDK for exception handling
-from autogen_core import CancellationToken, FunctionCall  # Autogen core types
-from autogen_core.models import (
+# Autogen imports - only non-message types remain (Phase 1 removal)
+from autogen_core import CancellationToken
+from autogen_core.tools import (
+    Tool,  # Autogen tool handling
+    ToolSchema,
+)
+
+# Native Buttermilk message / response types (replaces autogen_core.models)
+from buttermilk._core.messages import (
     AssistantMessage,
     CreateResult,
+    FunctionCall,
     FunctionExecutionResult,
     FunctionExecutionResultMessage,
     LLMMessage,
     ModelInfo,
     RequestUsage,
-)
-from autogen_core.tools import (
-    Tool,  # Autogen tool handling
-    ToolSchema,
 )
 
 # from google import genai  # Google Generative AI library (unused in current implementation)

@@ -20,7 +20,7 @@ from collections.abc import AsyncGenerator
 from typing import Any, Self
 
 import pydantic
-from autogen_core.models import AssistantMessage, SystemMessage, UserMessage
+from buttermilk._core.messages import AssistantMessage, SystemMessage, UserMessage
 from opentelemetry import trace
 from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 

@@ -1,7 +1,7 @@
 """Tests for the refactored LLM configuration schema."""
 
 import pytest
-from autogen_core.models import ModelInfo
+from buttermilk._core.messages import ModelInfo
 
 from buttermilk._core.llms import ClientType, LLMConfig
 
