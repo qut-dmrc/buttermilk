@@ -1,13 +1,13 @@
-"""Defines the core Agent base class, its configuration, and the `buttermilk_handler`
-decorator.
+"""Core Agent base class for the Buttermilk framework.
 
-This module provides the foundational components for creating agents within the
-Buttermilk framework. Agents are responsible for performing specific tasks as part
-of a larger data processing flow. `AgentConfig` (from `config.py`) provides the
-base configuration, and `Agent` provides the execution logic and state management.
-The `buttermilk_handler` decorator is used to designate methods within agent
-subclasses as handlers for specific message types, typically when integrating with
-systems like Autogen.
+Agents are responsible for performing specific tasks as part of a larger
+data processing flow. `AgentConfig` provides the base configuration,
+and `Agent` provides the execution logic and state management.
+
+Phase 3 note: Agent still inherits from autogen's RoutedAgent as a
+compatibility adapter so the GroupChat orchestrator (Phase 4 target)
+can register and dispatch to agents. All autogen imports are localised
+here; agent subclasses import from buttermilk._core.runtime_types.
 """
 
 import asyncio
@@ -21,20 +21,25 @@ from opentelemetry import trace
 if TYPE_CHECKING:
     from autogen_core import AgentRuntime
 
-# Autogen imports (primarily for type hints and base classes/interfaces used in methods)
-from autogen_core import (
-    AgentId,
-    AgentMetadata,
-    CancellationToken,
+# --- Autogen compatibility adapter (Phase 4 removal target) -----------
+# The GroupChat orchestrator uses autogen's SingleThreadedAgentRuntime,
+# which requires agents to inherit from RoutedAgent and decorate handlers
+# with @message_handler. These imports are kept HERE ONLY so that agent
+# subclasses can import from buttermilk._core.runtime_types instead.
+from autogen_core import RoutedAgent
+
+from buttermilk._core.runtime_types import (
+    AgentIdentity,
+    ChatHistory,
     DefaultTopicId,
     MessageContext,
-    RoutedAgent,
     TopicId,
     message_handler,
 )
-from autogen_core.model_context import UnboundedChatCompletionContext
+# --- End autogen compatibility section --------------------------------
+
 from buttermilk._core.messages import AssistantMessage, UserMessage
-from buttermilk._core.tool_types import Tool
+from buttermilk._core.tool_types import CancellationToken, Tool
 
 from buttermilk import bm, logger
 from buttermilk._core.config import AgentConfig
@@ -142,41 +147,14 @@ def create_agent_trace_info(
 
 
 class Agent(RoutedAgent):
-    """Base class for all Buttermilk agents, integrating with autogen_core's RoutedAgent.
+    """Base class for all Buttermilk agents.
 
-    This class serves as the foundation for all specialized agents within the
-    Buttermilk framework. It uses the configuration structure from `AgentConfig`
-    and defines a common interface for agent execution, state management, and
-    lifecycle hooks.
+    Inherits from autogen RoutedAgent as a compatibility adapter (Phase 4
+    removal target). All native agent infrastructure lives in this class;
+    the RoutedAgent parent provides only the runtime registration and
+    message dispatch interface needed by the GroupChat orchestrator.
 
-    Subclasses are expected to implement the `_process` method, which contains
-    the core logic for that agent's specific task (e.g., interacting with an
-    LLM, calling an API, transforming data).
-
-    The `Agent` class manages internal state such as data records, conversation
-    history (model context), and extracted key-value data. It also provides
-    methods for initialization, resetting state, and handling various types of
-    messages and events.
-
-    Attributes:
-        session_id (str): A unique identifier for the current flow execution session.
-            This helps in tracking and correlating agent activities within a specific run.
-        _records (list[Record]): Internal list to store data `Record` objects relevant
-            to the agent's current context or processing task.
-        _model_context (ChatCompletionContext): Internal store for conversation history,
-            particularly for agents interacting with chat-based models. Defaults to
-            an `UnboundedChatCompletionContext`.
-        _data (KeyValueCollector): Internal store for arbitrary key-value data that
-            can be extracted from incoming messages (based on `inputs` mappings) or
-            accumulated during processing.
-        _heartbeat (asyncio.Queue): An internal queue used for heartbeat signals,
-            allowing orchestrators or other components to check agent responsiveness.
-        model_config (dict): Pydantic model configuration.
-            - `extra`: "ignore" - Ignores extra fields during model parsing.
-            - `arbitrary_types_allowed`: False - Disallows arbitrary types unless explicitly handled.
-            - `populate_by_name`: True - Allows population by field name (alias support).
-            - `validate_assignment`: True - Validates fields on assignment.
-
+    Subclasses implement `_process` for their core logic.
     """
 
     # --- Configuration properties (delegated to _config) ---
@@ -259,47 +237,55 @@ class Agent(RoutedAgent):
         return get_bm()
 
     def __init__(self, topic_id: TopicId | None = None, **data: Any) -> None:
-        """Initialize the Agent with configuration data and setup RoutedAgent."""
         # Set groupchat topic ID, defaulting to a standard topic if not provided
         self._topic_id: TopicId = topic_id or DefaultTopicId(type="default")
 
         # Create AgentConfig from the data
         self._config = AgentConfig(**data)
 
-        # Initialize RoutedAgent with description
+        # Initialize RoutedAgent (Phase 4 removal target)
         RoutedAgent.__init__(self, description=self._config.description)
 
-        # Initialize private attributes
-        self._model_context = UnboundedChatCompletionContext()
+        # Native chat history replacing autogen's UnboundedChatCompletionContext
+        self._model_context = ChatHistory()
         self._data = KeyValueCollector()
         self._heartbeat = asyncio.Queue(maxsize=1)
         self._announced = False
         self._tools = self._get_available_tools()
 
     @property
-    def metadata(self) -> AgentMetadata:
-        """Metadata of the agent."""
+    def identity(self) -> AgentIdentity:
+        """Native agent identity."""
+        return AgentIdentity(
+            key=self.agent_id,
+            type=self.agent_name,
+            description=self.description,
+        )
+
+    # --- Autogen compatibility properties (Phase 4 removal target) ----
+
+    @property
+    def metadata(self) -> Any:
+        """Autogen AgentMetadata — used by the orchestrator runtime."""
+        from autogen_core import AgentMetadata
+
         if self._id is None:
             raise RuntimeError("Agent not bound to runtime")
         return AgentMetadata(key=self._id.key, type=self._id.type, description=self.description)
 
     @property
-    def id(self) -> AgentId:
-        """ID of the agent."""
+    def id(self) -> Any:
+        """Autogen AgentId — used by the orchestrator runtime."""
         if self._id is None:
             raise RuntimeError("Agent not bound to runtime")
         return self._id
 
-    async def bind_id_and_runtime(self, id: AgentId, runtime: "AgentRuntime") -> None:
-        """Function used to bind an Agent instance to an `AgentRuntime`.
-
-        Args:
-            id (AgentId): ID of the agent.
-            runtime (AgentRuntime): AgentRuntime instance to bind the agent to.
-
-        """
+    async def bind_id_and_runtime(self, id: Any, runtime: "AgentRuntime") -> None:
+        """Bind agent to an autogen AgentRuntime (Phase 4 removal target)."""
         self._id = id
         self._runtime = runtime
+
+    # --- End autogen compatibility properties -------------------------
 
     async def save_state(self) -> Mapping[str, Any]:
         """Save the state of the agent. The result must be JSON serializable."""

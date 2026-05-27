@@ -7,9 +7,7 @@ autonomously to fetch records based on incoming messages.
 import datetime
 from typing import Any
 
-from autogen_core import (
-    message_handler,
-)
+from buttermilk._core.runtime_types import message_handler
 from buttermilk._core.tool_types import FunctionTool, Tool
 
 from buttermilk import bm, logger

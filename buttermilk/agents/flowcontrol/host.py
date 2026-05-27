@@ -6,7 +6,7 @@ from collections.abc import (
 )
 from typing import Any
 
-from autogen_core import DefaultTopicId, MessageContext, message_handler
+from buttermilk._core.runtime_types import DefaultTopicId, MessageContext, message_handler
 from buttermilk._core.messages import AssistantMessage, UserMessage
 from buttermilk._core.tool_types import Tool
 
