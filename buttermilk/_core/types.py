@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Any, Literal, Self  # Standard typing utilities
 
 import shortuuid  # For generating short unique IDs
+from autogen_core import Image as AutogenImage  # Autogen's own Image type
 from autogen_core.models import AssistantMessage, UserMessage  # Autogen message types
 from PIL.Image import Image  # For image manipulation with Pillow
 from pydantic import (
@@ -575,8 +576,10 @@ class Record(BaseRecord):
         elif isinstance(self.content, Sequence):
             processed_parts: list[Any] = []
             for item in self.content:
-                if isinstance(item, (str, Image)):
+                if isinstance(item, str):
                     processed_parts.append(item)
+                elif isinstance(item, Image):
+                    processed_parts.append(AutogenImage.from_pil(item))
             message_content = processed_parts
         else:  # Fallback if content type is unexpected
             message_content = str(self.content)

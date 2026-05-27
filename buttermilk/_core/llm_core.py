@@ -334,6 +334,7 @@ class LLMCore(ObservabilityMixin):
 
         result.metadata["template"] = {
             "template_name": self._template_metadata.get("template_name"),
+            "template_hash": self._template_metadata.get("template_hash", ""),
             "unfilled_vars": self._template_metadata.get("unfilled_vars", []),
         }
 

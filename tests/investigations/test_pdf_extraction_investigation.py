@@ -59,27 +59,17 @@ class TestProductionPDFFailures:
             pytest.skip("L5BK5MEM.pdf not found in cache")
         return pdf_path
 
-    def test_l5bk5mem_pdf_raises_pdfobjref_error(self, l5bk5mem_pdf):
-        """Document that L5BK5MEM.pdf fails with PDFObjRef error.
+    def test_l5bk5mem_pdf_extraction_succeeds(self, l5bk5mem_pdf):
+        """Verify L5BK5MEM.pdf extraction now succeeds.
 
-        Error from logs:
-        'PDFObjRef' object is not iterable
-
-        This test confirms the error is reproducible and verifies that:
-        1. The error is caught and wrapped as ProcessingError
-        2. The error message includes the file path
-        3. The error message includes debugging information
+        This PDF previously failed with PDFObjRef error, but extraction
+        code has since been fixed to handle it.
         """
-        with pytest.raises(ProcessingError) as exc_info:
-            get_pdf_text(str(l5bk5mem_pdf))
+        text = get_pdf_text(str(l5bk5mem_pdf))
+        assert text is not None
+        assert len(text) > 0
 
-        error_msg = str(exc_info.value)
-
-        # Verify error contains useful debugging info
-        assert "L5BK5MEM.pdf" in error_msg, "Error should include filename"
-        assert "PDFObjRef" in error_msg or "iterable" in error_msg, "Error should mention PDFObjRef issue"
-        assert "e.args=" in error_msg, "Error should include args for debugging"
-
+    @pytest.mark.timeout(300)
     def test_survey_zotero_cache_extraction_rate(self):
         """Survey extraction success rate across Zotero cache.
 

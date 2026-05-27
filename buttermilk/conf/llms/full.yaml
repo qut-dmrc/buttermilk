@@ -2,13 +2,13 @@ host: google/gemini-3-flash-preview
 
 general:
   - google/gemini-3-flash-preview
-  - claude-sonnet-4-5@20250929
+  - claude-sonnet-4-6
   - meta/llama-4-maverick-17b-128e-instruct-maas
 
 judgers:
   - google/gemini-3-pro-preview
   - google/gemini-3-flash-preview
-  - claude-sonnet-4-5@20250929
+  - claude-sonnet-4-6
   - meta/llama-4-maverick-17b-128e-instruct-maas
   - deepseek-ai/deepseek-r1-0528-maas
   - deepseek-ai/deepseek-v3.2-maas
@@ -19,7 +19,7 @@ judgers:
 synthesisers:
   - google/gemini-3-pro-preview
   - google/gemini-3-flash-preview
-  - claude-sonnet-4-5@20250929
+  - claude-sonnet-4-6
   - meta/llama-4-maverick-17b-128e-instruct-maas
   - deepseek-ai/deepseek-r1-0528-maas
   - deepseek-ai/deepseek-v3.2-maas
@@ -31,7 +31,7 @@ model_parameters:
     temperature: 1.0
   google/gemini-3-pro-preview:
     temperature: 1.0
-  claude-sonnet-4-5@20250929:
+  claude-sonnet-4-6:
     temperature: 1.0
   meta/llama-4-maverick-17b-128e-instruct-maas:
     temperature: 1.0

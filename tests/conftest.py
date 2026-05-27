@@ -30,7 +30,7 @@ CHAT_MODELS = [
     "gpt-5-nano",
     "gpt-4o",
     "meta/llama-4-maverick-17b-128e-instruct-maas",
-    "claude-sonnet-4-5@20250929",
+    "claude-sonnet-4-6",
     "deepseek-ai/deepseek-r1-0528-maas",
     "deepseek-ai/deepseek-v3.2-maas",
     "mistralai/mistral-small-2503",
@@ -449,12 +449,16 @@ async def multimodal_record(request) -> Record:
 )
 async def news_record(request) -> Record:
     from buttermilk.utils.media import download_and_convert
+    from buttermilk.utils.utils import is_uri
 
-    record = await download_and_convert(
-        uri=request.param[1],
-        mime=request.param[2],
-        title=request.param[0],
-    )
+    source = request.param[1]
+    mime_type = request.param[2]
+    title = request.param[0]
+
+    if is_uri(source) and (source.startswith("http") or source.startswith("gs://")):
+        record = await download_and_convert(uri=source, mime=mime_type, title=title)
+    else:
+        record = await download_and_convert(text=source, mime=mime_type, title=title)
     return record
 
 

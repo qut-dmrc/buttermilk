@@ -16,6 +16,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import Record
 from buttermilk.data.vector import ChromaDBEmbeddings, ChunkedDocument, SemanticSplitter
 from buttermilk.processors.embeddings import EmbeddingGenerator
@@ -92,7 +93,8 @@ class TestVectorE2EIntegration:
 
                     # Step 1: Chunk the document (produces dict chunks when using metadata)
                     chunked_records = []
-                    async for chunked_record in splitter.process(test_record, processor_stage="chunk"):
+                    chunk_context = ProcessingContext(session_id="chunk", record=test_record)
+                    async for chunked_record in splitter.process(chunk_context):
                         chunked_records.append(chunked_record)
 
                     assert len(chunked_records) == 1
@@ -133,7 +135,8 @@ class TestVectorE2EIntegration:
                     await embeddings.ensure_cache_initialized()
 
                     embedded_records = []
-                    async for embedded_record in embedding_gen.process(chunked_record, processor_stage="embed"):
+                    embed_context = ProcessingContext(session_id="embed", record=chunked_record)
+                    async for embedded_record in embedding_gen.process(embed_context):
                         embedded_records.append(embedded_record)
 
                     assert len(embedded_records) == 1

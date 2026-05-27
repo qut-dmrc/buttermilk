@@ -35,10 +35,13 @@ class AgentRegistry:
         process before raising an error.
         """
         agent_class = cls._agents.get(name)
+        if agent_class is None and "." in name:
+            agent_class = cls._agents.get(name.rsplit(".", 1)[-1])
         if agent_class is None:
-            # Attempt discovery if not found, might help in dynamic scenarios
             cls.discover()
             agent_class = cls._agents.get(name)
+            if agent_class is None and "." in name:
+                agent_class = cls._agents.get(name.rsplit(".", 1)[-1])
             if agent_class is None:
                 raise ValueError(f"Agent class '{name}' not found in registry after discovery.")
         return agent_class

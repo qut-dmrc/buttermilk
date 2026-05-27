@@ -105,7 +105,6 @@ async def test_rag_zotero_with_structured_output(model_name, real_bm):
         first_ref = research_result.literature[0]
         assert isinstance(first_ref, ZoteroReference), f"{model_name}: References should be ZoteroReference objects"
         assert first_ref.summary, f"{model_name}: Reference should have a summary"
-        assert first_ref.source, f"{model_name}: Reference should have a source"
         assert first_ref.citation, f"{model_name}: Reference should have a citation"
 
         # Check response

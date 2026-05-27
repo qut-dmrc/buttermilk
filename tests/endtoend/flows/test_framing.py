@@ -63,7 +63,7 @@ async def test_frames_text(framer, text_record, real_bm: BM, model):
         callback_to_ui=result_callback,
     )
 
-    await flow.run_flow(run_request=run_request)
+    await flow.run_flow(run_request=run_request, wait_for_completion=True)
 
     assert len(results) > 0
     # Add more assertions on the results
@@ -96,7 +96,7 @@ async def test_frames_article(framer, news_record, real_bm: BM, model):
         session_id="test_session",
         callback_to_ui=result_callback,
     )
-    await flow.run_flow(run_request=run_request)
+    await flow.run_flow(run_request=run_request, wait_for_completion=True)
 
     assert len(results) > 0
 
@@ -130,7 +130,7 @@ async def test_framing_video(framer, model, real_bm, link_to_video_gcp):
         session_id="test_session",
         callback_to_ui=result_callback,
     )
-    await flow.run_flow(run_request=run_request)
+    await flow.run_flow(run_request=run_request, wait_for_completion=True)
 
     assert len(results) > 0
 

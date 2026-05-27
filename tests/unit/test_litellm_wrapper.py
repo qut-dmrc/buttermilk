@@ -76,11 +76,21 @@ class TestMessageFormatConversion:
 
     def test_litellm_to_autogen_result_basic(self):
         """Test conversion of basic LiteLLM response."""
-        # Mock LiteLLM response
+        # Mock LiteLLM response — use spec=[] on the message to prevent
+        # MagicMock auto-creating attributes like reasoning_content, which
+        # confuses getattr(..., None) calls in litellm_to_autogen_result.
+        mock_message = MagicMock()
+        mock_message.content = "Hello! I'm doing well."
+        mock_message.tool_calls = None
+        mock_message.reasoning_content = None
+        mock_message.thought = None
+
+        mock_choice = MagicMock()
+        mock_choice.message = mock_message
+        mock_choice.finish_reason = "stop"
+
         mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = "Hello! I'm doing well."
-        mock_response.choices[0].finish_reason = "stop"
+        mock_response.choices = [mock_choice]
         mock_response.cached = False
 
         mock_usage = MagicMock()
@@ -119,10 +129,15 @@ class TestLiteLLMWrapperCreate:
 
         # Mock the acompletion call
         with patch("litellm.acompletion") as mock_acompletion:
+            mock_msg = MagicMock()
+            mock_msg.content = "Hello!"
+            mock_msg.tool_calls = None
+            mock_msg.reasoning_content = None
+            mock_choice = MagicMock()
+            mock_choice.message = mock_msg
+            mock_choice.finish_reason = "stop"
             mock_response = MagicMock()
-            mock_response.choices = [MagicMock()]
-            mock_response.choices[0].message.content = "Hello!"
-            mock_response.choices[0].finish_reason = "stop"
+            mock_response.choices = [mock_choice]
             mock_response.usage = MagicMock(prompt_tokens=10, completion_tokens=5)
             mock_response.cached = False
 
@@ -158,10 +173,15 @@ class TestLiteLLMWrapperCreate:
 
         with patch("litellm.acompletion") as mock_acompletion:
             # First call fails with rate limit, second succeeds
+            mock_msg = MagicMock()
+            mock_msg.content = "Hello!"
+            mock_msg.tool_calls = None
+            mock_msg.reasoning_content = None
+            mock_choice = MagicMock()
+            mock_choice.message = mock_msg
+            mock_choice.finish_reason = "stop"
             mock_response = MagicMock()
-            mock_response.choices = [MagicMock()]
-            mock_response.choices[0].message.content = "Hello!"
-            mock_response.choices[0].finish_reason = "stop"
+            mock_response.choices = [mock_choice]
             mock_response.usage = MagicMock(prompt_tokens=10, completion_tokens=5)
             mock_response.cached = False
 
@@ -232,10 +252,15 @@ class TestLiteLLMWrapperStructuredOutput:
         messages = [UserMessage(content="Analyze this text", source="user")]
 
         with patch("litellm.acompletion") as mock_acompletion:
+            mock_msg = MagicMock()
+            mock_msg.content = '{"summary": "Test summary", "sentiment": "positive"}'
+            mock_msg.tool_calls = None
+            mock_msg.reasoning_content = None
+            mock_choice = MagicMock()
+            mock_choice.message = mock_msg
+            mock_choice.finish_reason = "stop"
             mock_response = MagicMock()
-            mock_response.choices = [MagicMock()]
-            mock_response.choices[0].message.content = '{"summary": "Test summary", "sentiment": "positive"}'
-            mock_response.choices[0].finish_reason = "stop"
+            mock_response.choices = [mock_choice]
             mock_response.usage = MagicMock(prompt_tokens=10, completion_tokens=20)
             mock_response.cached = False
 

@@ -13,7 +13,7 @@ systems like Autogen.
 import asyncio
 import warnings
 from abc import abstractmethod
-from collections.abc import Mapping
+from collections.abc import AsyncGenerator, Mapping
 from typing import TYPE_CHECKING, Any
 
 from opentelemetry import trace
@@ -56,7 +56,7 @@ from buttermilk._core.contract import (
 )
 from buttermilk._core.exceptions import FatalError, ProcessingError  # Custom exceptions
 from buttermilk._core.message_data import extract_message_data
-from buttermilk._core.types import BaseRecord  # Data record structure
+from buttermilk._core.types import BaseRecord, RunRequest  # Data record structure
 from buttermilk.utils.templating import (
     KeyValueCollector,
 )  # Utility for managing state data
@@ -517,6 +517,40 @@ class Agent(RoutedAgent):
         logger.debug(f"Agent {self.agent_name} finished task {message}.")
 
         return trace_object
+
+    async def run_flows(
+        self,
+        *,
+        run_request: RunRequest,
+    ) -> AsyncGenerator[ExecutionTrace, None]:
+        """Run the agent as a single-step flow, yielding ExecutionTrace results.
+
+        This method bridges the RunRequest-based flow API (used by stream.py and
+        tests) to the agent's invoke() method. It converts the RunRequest into
+        an AgentInput, invokes the agent, and yields the resulting ExecutionTrace.
+
+        Args:
+            run_request: The RunRequest containing flow name, inputs, and parameters.
+
+        Yields:
+            ExecutionTrace: The execution trace from processing the request.
+
+        """
+        # Extract record from inputs if present
+        inputs = dict(run_request.inputs) if run_request.inputs else {}
+        record = inputs.pop("record", None)
+
+        # Build AgentInput from RunRequest
+        agent_input = AgentInput(
+            inputs=inputs,
+            parameters=run_request.parameters or {},
+            record=record,
+        )
+
+        # Invoke the agent and yield the result
+        trace_object = await self.invoke(agent_input)
+        if trace_object is not None:
+            yield trace_object
 
     async def trace_and_execute(
         self,
