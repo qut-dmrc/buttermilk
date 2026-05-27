@@ -91,8 +91,6 @@ class Orchestrator(BaseOrchestrator):
     _storage_service: SessionStorageService | None = PrivateAttr(default=None)
     _session_id: str | None = PrivateAttr(default=None)
     _topic: str = PrivateAttr(default="")
-    _dispatch_lock: asyncio.Lock = PrivateAttr(default_factory=asyncio.Lock)
-
     def _subscribe(self, agent: Any, topic: str) -> None:
         """Subscribe an agent to a topic."""
         if topic not in self._subscriptions:
@@ -121,6 +119,7 @@ class Orchestrator(BaseOrchestrator):
             except Exception as e:
                 agent_name = getattr(agent, "agent_name", getattr(agent, "__name__", str(agent)))
                 logger.error(f"Error dispatching to {agent_name}: {e}", exc_info=True)
+                raise
 
     def _get_sender_identity(self, message: Any) -> AgentIdentity | None:
         """Extract sender identity from a message if available."""
@@ -131,8 +130,7 @@ class Orchestrator(BaseOrchestrator):
 
     async def _publish(self, message: Any, topic: str) -> None:
         """Publish a message — entry point used by agents via their _publish_fn callback."""
-        async with self._dispatch_lock:
-            await self._dispatch_message(message, topic)
+        await self._dispatch_message(message, topic)
 
     def _make_agent_publish_fn(self) -> Callable[..., Awaitable[None]]:
         """Create a publish callback for agents to use."""
@@ -207,6 +205,8 @@ class Orchestrator(BaseOrchestrator):
 
         publish_fn = self._make_agent_publish_fn()
 
+        # Sequential: _create_agent is synchronous and mutates shared state (_agents, _subscriptions);
+        # asyncio.gather would require locks around those mutations.
         for role_name, step_config in itertools.chain(self.agents.items(), self.observers.items()):
             for agent_cls, variant_config in step_config.get_configs(params=params, flow_default_params=self.parameters):
                 actual_role = step_config.role.upper()

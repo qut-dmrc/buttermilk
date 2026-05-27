@@ -79,7 +79,7 @@ class CancellationToken:
 def _generate_schema(func: Any, name: str, description: str, strict: bool) -> dict[str, Any]:
     """Generate JSON Schema from a callable's type hints."""
     sig = inspect.signature(func)
-    hints = {}
+    hints: dict[str, Any] = {}
     try:
         hints = func.__annotations__ if hasattr(func, "__annotations__") else {}
     except Exception:
