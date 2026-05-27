@@ -251,7 +251,7 @@ class TestRAGTemplate:
 
     def test_rag_template_messages_with_context(self):
         """Test RAG template with context messages."""
-        from buttermilk._core.messages import UserMessage as AutogenUserMessage
+        from buttermilk._core.messages import UserMessage
 
         parameters = {
             "prompt": "Summarize the findings",
@@ -264,7 +264,7 @@ class TestRAGTemplate:
 
         # Create context messages
         context_messages = [
-            AutogenUserMessage(content="Previous question", source="user"),
+            UserMessage(content="Previous question", source="user"),
             SystemMessage(content="Previous response"),
         ]
 

@@ -328,7 +328,7 @@ class AgentInput(FlowMessage):
             the agent's default configurations (e.g., a different LLM model,
             a specific prompt template name).
         context (list[LLMMessage]): A list of messages representing the conversation
-            history (e.g., `SystemMessage`, `UserMessage`, `AssistantMessage` from Autogen).
+            history (e.g., `SystemMessage`, `UserMessage`, `AssistantMessage`).
             This provides conversational context, especially for LLM-based agents.
         record (Record | None): A `Record` object relevant to the current
             task. This is typically the primary data item the agent will process.
@@ -349,7 +349,7 @@ class AgentInput(FlowMessage):
     )
     context: list[LLMMessage] = Field(
         default_factory=list,
-        description="Conversation history (list of Autogen `LLMMessage` objects like SystemMessage, UserMessage, AssistantMessage).",
+        description="Conversation history (list of `LLMMessage` objects like SystemMessage, UserMessage, AssistantMessage).",
     )
     record: Record | None = Field(
         default=None,
@@ -930,7 +930,7 @@ class FlowProgressUpdate(FlowMessage):
 class ToolOutput(FunctionExecutionResult):
     """Represents the result of a tool (function) execution performed by an agent.
 
-        This class inherits from Autogen's `FunctionExecutionResult`, which typically
+        This class inherits from `FunctionExecutionResult`, which typically
         includes fields like `call_id` (for the function call), `function_name`, and
         `content` (the stringified result of the function). It adds Buttermilk-specific
         context or alternative ways to structure results.

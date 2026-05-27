@@ -22,8 +22,8 @@
     "use_litellm": true
   },
 
-  "gpt4_autogen": {
-    "_comment": "NOT MIGRATED: Still using AutoGenWrapper (default behavior)",
+  "gpt4_legacy": {
+    "_comment": "NOT MIGRATED: Legacy configuration example",
     "client_type": "azure",
     "api_key": "${AZURE_OPENAI_API_KEY}",
     "base_url": "https://your-resource.openai.azure.com/",

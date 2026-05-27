@@ -101,7 +101,7 @@ class TestAzureStructuredOutput:
         from buttermilk.agents.evaluators.scorer import QualScore
 
         # Get Azure model (gpt-5-nano is hosted on Azure)
-        # Note: After autogen removal, litellm is the only wrapper
+        # Note: litellm is the only wrapper
         llm = real_bm.llms["gpt-5-nano"]
 
         # Create messages asking to evaluate content

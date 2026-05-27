@@ -15,7 +15,7 @@ this protocol and provides the core logic and interface for orchestration.
 Subclasses of `Orchestrator` must implement specific abstract methods to define
 the setup, execution loop, and cleanup logic pertinent to their particular
 orchestration strategy (e.g., a linear sequence, a graph-based execution, or
-an Autogen-based multi-agent conversation).
+a multi-agent conversation).
 """
 
 from abc import ABC, abstractmethod
@@ -172,7 +172,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
     - Loading and validating the flow configuration (data sources, agents, parameters)
       based on `OrchestratorProtocol`.
     - Setting up the execution environment, which might include initializing
-      communication runtimes (e.g., for Autogen-based multi-agent systems).
+      communication runtimes (e.g., for multi-agent systems).
     - Managing the sequence of operations or steps within the flow. This can be
       a predefined sequence, determined by a conductor agent, or influenced by
       user interactions.
@@ -357,7 +357,7 @@ class Orchestrator(OrchestratorProtocol, ABC):
 
         Subclasses must implement this method to perform any necessary
         initialization before the main execution loop begins. This can include:
-        - Initializing communication runtimes (e.g., Autogen's group chat).
+        - Initializing communication runtimes (e.g., group chat).
         - Establishing connections to databases or external services.
         - Pre-loading essential components or models.
 

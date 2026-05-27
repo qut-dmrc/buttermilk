@@ -42,7 +42,7 @@ class TestLiteLLMWrapper:
 class TestMessageFormatConversion:
     """Test message format conversion utilities."""
 
-    def test_autogen_to_litellm_system_message(self):
+    def test_to_litellm_system_message(self):
         """Test conversion of SystemMessage."""
         messages = [SystemMessage(content="You are a helpful assistant.")]
         litellm_messages = to_litellm_messages(messages)
@@ -51,7 +51,7 @@ class TestMessageFormatConversion:
         assert litellm_messages[0]["role"] == "system"
         assert litellm_messages[0]["content"] == "You are a helpful assistant."
 
-    def test_autogen_to_litellm_user_message(self):
+    def test_to_litellm_user_message(self):
         """Test conversion of UserMessage."""
         messages = [UserMessage(content="Hello!", source="user")]
         litellm_messages = to_litellm_messages(messages)
@@ -60,7 +60,7 @@ class TestMessageFormatConversion:
         assert litellm_messages[0]["role"] == "user"
         assert litellm_messages[0]["content"] == "Hello!"
 
-    def test_autogen_to_litellm_conversation(self):
+    def test_to_litellm_conversation(self):
         """Test conversion of multi-turn conversation."""
         messages = [
             SystemMessage(content="You are a helpful assistant."),

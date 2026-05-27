@@ -28,7 +28,7 @@ from buttermilk._core.contract import (
     UserResponseMessage,
 )
 from buttermilk._core.exceptions import FatalError, ProcessingError
-from buttermilk._core.orchestrator import Orchestrator
+from buttermilk._core.orchestrator import Orchestrator as BaseOrchestrator
 from buttermilk._core.runtime_types import AgentIdentity, MessageContext, TopicId
 from buttermilk._core.types import RunRequest
 from buttermilk.agents.spy import SpyAgent
@@ -73,7 +73,7 @@ class TerminationHandler:
         return self._termination_value is not None
 
 
-class AutogenOrchestrator(Orchestrator):
+class Orchestrator(BaseOrchestrator):
     """Native direct-dispatch orchestrator for multi-agent workflows.
 
     Manages agent instances directly, dispatches messages by topic
@@ -153,7 +153,7 @@ class AutogenOrchestrator(Orchestrator):
             self._topic = f"{bm.session_info.project_name}-{exec_ctx.slug}-{bm.session_info.slug}-{suffix}"
 
         msg = f"Setting up orchestrator for topic: {self._topic}"
-        logger.info(f"[AutogenOrchestrator._setup] {msg} (callback_to_ui: {'set' if request.callback_to_ui else 'not set'})")
+        logger.info(f"[Orchestrator._setup] {msg} (callback_to_ui: {'set' if request.callback_to_ui else 'not set'})")
 
         self._termination_handler = TerminationHandler()
         self._interrupt_handler = InterruptHandler()
@@ -171,7 +171,7 @@ class AutogenOrchestrator(Orchestrator):
 
         # Welcome message to UI
         flow_event = FlowEvent(source="orchestrator", content=msg)
-        logger.debug("[AutogenOrchestrator._setup] Publishing welcome message to MANAGER topic")
+        logger.debug("[Orchestrator._setup] Publishing welcome message to MANAGER topic")
         await self._publish(flow_event, MANAGER)
 
         # Start up the host agent with participants and their tools
@@ -194,7 +194,7 @@ class AutogenOrchestrator(Orchestrator):
         self._is_initialized = True
 
         if self._pending_messages:
-            logger.debug(f"[AutogenOrchestrator._setup] Processing {len(self._pending_messages)} pending messages")
+            logger.debug(f"[Orchestrator._setup] Processing {len(self._pending_messages)} pending messages")
             for pending_message, topic_id in self._pending_messages:
                 await self._publish(pending_message, topic_id)
         self._pending_messages.clear()
@@ -279,7 +279,7 @@ class AutogenOrchestrator(Orchestrator):
         # Subscribe UI handler to MANAGER and main topic
         self._subscribe(ui_handler, MANAGER)
         self._subscribe(ui_handler, self._topic)
-        logger.debug(f"[AutogenOrchestrator._register_ui] UI handler registered for topics: {MANAGER}, {self._topic}")
+        logger.debug(f"[Orchestrator._register_ui] UI handler registered for topics: {MANAGER}, {self._topic}")
 
     async def _register_session_collector(self) -> None:
         """Register a message collector for session persistence."""
@@ -305,7 +305,7 @@ class AutogenOrchestrator(Orchestrator):
 
         try:
             try:
-                logger.debug(f"[AutogenOrchestrator._run] Calling _setup with request.callback_to_ui: {request.callback_to_ui is not None}")
+                logger.debug(f"[Orchestrator._run] Calling _setup with request.callback_to_ui: {request.callback_to_ui is not None}")
                 termination_handler, interrupt_handler = await self._setup(request)
             except Exception as e:
                 logger.error(f"Error during setup: {e}")
@@ -319,7 +319,7 @@ class AutogenOrchestrator(Orchestrator):
                             FlowEvent(source="orchestrator", content="flow_completed"),
                             MANAGER,
                         )
-                        logger.debug("[AutogenOrchestrator._run] Publishing TaskProcessingComplete message.")
+                        logger.debug("[Orchestrator._run] Publishing TaskProcessingComplete message.")
                         await self._publish(
                             TaskProcessingComplete(
                                 agent_id="orchestrator",
@@ -327,7 +327,7 @@ class AutogenOrchestrator(Orchestrator):
                             ),
                             MANAGER,
                         )
-                        logger.debug("[AutogenOrchestrator._run] TaskProcessingComplete message published.")
+                        logger.debug("[Orchestrator._run] TaskProcessingComplete message published.")
                         break
                     if interrupt_handler.interrupt.is_set():
                         logger.info("Flow is paused. Waiting for resume...")
@@ -370,13 +370,17 @@ class AutogenOrchestrator(Orchestrator):
         """Creates an asynchronous callback function for the UI to use."""
 
         async def publish_callback(message: FlowMessage) -> None:
-            logger.debug(f"[AutogenOrchestrator.make_publish_callback] Publishing message to runtime: {message}")
+            logger.debug(f"[Orchestrator.make_publish_callback] Publishing message to runtime: {message}")
 
             if not self._is_initialized:
-                logger.info(f"[AutogenOrchestrator] Runtime not initialized yet, queueing message: {message}")
+                logger.info(f"[Orchestrator] Runtime not initialized yet, queueing message: {message}")
                 self._pending_messages.append((message, self._topic))
                 return
 
             await self._publish(message, self._topic)
 
         return publish_callback
+
+
+# Backward-compatible alias (deprecated — use Orchestrator directly)
+AutogenOrchestrator = Orchestrator

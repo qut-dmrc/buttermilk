@@ -16,6 +16,7 @@ from buttermilk._core.runtime_types import (
     AgentIdentity,
     MessageContext,
     _build_handler_registry,
+    dispatch_message,
     message_handler,
 )
 from buttermilk._core.storage_config import StorageConfig, StorageFactory
@@ -52,21 +53,7 @@ class SpyAgent:
 
     async def dispatch(self, message: Any, ctx: MessageContext) -> Any:
         """Dispatch an incoming message to the appropriate handler."""
-        registry = self._get_handler_registry()
-        msg_type = type(message)
-        method_name = registry.get(msg_type)
-        if method_name is None:
-            for handled_type, name in registry.items():
-                if issubclass(msg_type, handled_type):
-                    method_name = name
-                    break
-        if method_name is not None:
-            method = getattr(self, method_name)
-            match_pred = getattr(method, "_match_predicate", None)
-            if match_pred and not match_pred(message, ctx):
-                return None
-            return await method(message, ctx)
-        return None
+        return await dispatch_message(self, message, ctx)
 
     async def close(self) -> None:
         """Flush pending writes."""

@@ -1,7 +1,7 @@
-"""Integration tests for TMDB tool with autogen agents.
+"""Integration tests for TMDB tool with agents.
 
 These tests verify that the TMDBTool works correctly when integrated with
-the autogen agent system, including tool announcements, function calling,
+the agent system, including tool announcements, function calling,
 and observability integration.
 """
 
@@ -39,7 +39,7 @@ def tmdb_tool_for_agent() -> TMDBTool:
 
 
 class TestTMDBAgentIntegration:
-    """Test TMDB tool integration with autogen agents."""
+    """Test TMDB tool integration with agents."""
 
     def test_tool_as_function_tool_creation(self, tmdb_tool_for_agent: TMDBTool) -> None:
         """Test that TMDBTool can be converted to FunctionTool for agent use."""
@@ -56,7 +56,7 @@ class TestTMDBAgentIntegration:
         assert callable(function_tool.run)
 
     def test_tool_function_signature_compatibility(self, tmdb_tool_for_agent: TMDBTool) -> None:
-        """Test that the tool function signature is compatible with autogen."""
+        """Test that the tool function signature is compatible with the agent system."""
         function_tool = tmdb_tool_for_agent.as_tool()
 
         # Check the tool schema for expected parameters
@@ -225,7 +225,7 @@ class TestTMDBAgentIntegration:
                 assert isinstance(result, Title)
 
     def test_tool_integration_with_strict_mode(self, tmdb_tool_for_agent: TMDBTool) -> None:
-        """Test that tool works with autogen's strict mode."""
+        """Test that tool works with strict mode."""
         function_tool = tmdb_tool_for_agent.as_tool()
 
         # Check if strict mode is supported (may be a private attribute)

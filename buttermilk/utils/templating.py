@@ -6,7 +6,7 @@ This module provides functionalities for:
 - Loading Jinja2 templates from the filesystem within a sandboxed environment,
   handling undefined variables gracefully (`load_template`).
 - Parsing "Prompty" formatted strings (text files with frontmatter and chat message
-  sections) and converting them into a list of Autogen `LLMMessage` objects,
+  sections) and converting them into a list of `LLMMessage` objects,
   injecting context and records into specified placeholders (`_parse_prompty`,
   `make_messages`).
 """
@@ -747,13 +747,13 @@ def make_messages(  # noqa: PLR0912
     context: list[LLMMessage] | None = None,  # Conversation history
     record: BaseRecord | None = None,  # Optional record
 ) -> tuple[list[LLMMessage], set[str]]:
-    """Construct a list of Autogen `LLMMessage` objects from a "Prompty" formatted string.
+    """Construct a list of `LLMMessage` objects from a "Prompty" formatted string.
 
     This function first parses the `local_template` string to separate Prompty
     frontmatter (if any) from the main content. It then parses the main content into
     a list of message dictionaries, each specifying a role and content.
 
-    These dictionaries are then converted into Autogen `LLMMessage` objects
+    These dictionaries are then converted into `LLMMessage` objects
     (e.g., `SystemMessage`, `UserMessage`, `AssistantMessage`). Special
     "placeholder" roles in the Prompty template are handled:
     -   A placeholder with content "context" (case-insensitive, after stripping
@@ -771,7 +771,7 @@ def make_messages(  # noqa: PLR0912
 
     Returns:
         tuple[list[LLMMessage], set[str]]: A tuple containing:
-            - list[LLMMessage]: A list of Autogen `LLMMessage` objects ready for use
+            - list[LLMMessage]: A list of `LLMMessage` objects ready for use
               with an LLM client.
             - set[str]: A set of placeholder names that were successfully processed
               ("context", "record", etc.)

@@ -129,9 +129,9 @@ def find_lazy_loading_opportunities():
             "priority": "🟢 MEDIUM",
         },
         {
-            "package": "autogen_core",
+            "package": "buttermilk._core",
             "time": "Variable",
-            "usage": "Multi-agent framework - only for agent flows",
+            "usage": "Native agent framework - core runtime",
             "where": "Agent modules",
             "priority": "🟢 MEDIUM",
         },

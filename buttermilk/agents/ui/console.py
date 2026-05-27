@@ -229,7 +229,7 @@ class CLIUserAgent(UIAgent):
 
         Args:
             message: The AgentInput message received.
-            cancellation_token: Autogen cancellation token.
+            cancellation_token: Cancellation token.
             **kwargs: Additional keyword arguments.
 
         Returns:

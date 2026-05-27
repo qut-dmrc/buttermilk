@@ -148,7 +148,7 @@ async def real_llm(request, real_bm: BM, session_runner):
 def llm_wrapper_type(request, real_bm: BM) -> str:
     """Fixture that provides the LLM wrapper type.
 
-    After removing autogen wrapper support, this is always "litellm".
+    This is always "litellm".
     Kept for test parameterization compatibility.
 
     Args:

@@ -14,7 +14,7 @@ pytestmark = pytest.mark.slow
 
 from buttermilk._core.config import AgentVariants
 from buttermilk._core.types import RunRequest
-from buttermilk.orchestrators.groupchat import AutogenOrchestrator
+from buttermilk.orchestrators.groupchat import Orchestrator
 
 
 @pytest.mark.anyio
@@ -28,7 +28,7 @@ async def test_agent_init_failure_fails_loud(real_bm):
     - Error message should identify WHICH agent failed and WHY
 
     This is a TRUE E2E test using:
-    - Real AutogenOrchestrator
+    - Real Orchestrator
     - Real AgentVariants configuration
     - Real agent registration (_register_agents)
 
@@ -52,7 +52,7 @@ async def test_agent_init_failure_fails_loud(real_bm):
     )
 
     # Create minimal orchestrator config with the bad agent
-    orchestrator = AutogenOrchestrator(
+    orchestrator = Orchestrator(
         name="test-agent-init-failure",
         agents={"scorer": invalid_agent_config},
         observers={},
@@ -146,7 +146,7 @@ async def test_valid_agent_init_succeeds(real_bm):
         },
     )
 
-    orchestrator = AutogenOrchestrator(
+    orchestrator = Orchestrator(
         name="test-valid-init",
         agents={"tester": valid_config},
         observers={},

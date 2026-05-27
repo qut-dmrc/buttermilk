@@ -407,7 +407,7 @@ class LLMClient(BaseModel):
 
 
 class ModelOutput(CreateResult):
-    """Extends Autogen's `CreateResult` with structured output parsing and pricing.
+    """Extends `CreateResult` with structured output parsing and pricing.
 
     Adds a parsed_object field to hold a Pydantic model instance when
     the LLM returns structured JSON output that can be parsed.
@@ -445,7 +445,7 @@ def _validate_schema_constraints(schema: type[BaseModel], model_info: Any) -> No
     if isinstance(model_info, dict):
         family = model_info.get("family", "")
     else:
-        # Assuming object with attributes (Autogen ModelInfo)
+        # Assuming object with attributes (ModelInfo)
         family = getattr(model_info, "family", "")
 
     family = str(family).lower()
@@ -580,10 +580,10 @@ async def _parse_structured_output(  # noqa: PLR0912
 
 
 def to_litellm_messages(messages: Sequence[LLMMessage]) -> list[dict[str, Any]]:
-    """Convert Autogen LLMMessage objects to LiteLLM message format.
+    """Convert LLMMessage objects to LiteLLM message format.
 
     Args:
-        messages: Sequence of Autogen LLMMessage objects
+        messages: Sequence of LLMMessage objects
 
     Returns:
         List of dicts in LiteLLM format
@@ -636,7 +636,7 @@ def to_litellm_messages(messages: Sequence[LLMMessage]) -> list[dict[str, Any]]:
 
 
 def litellm_to_model_output(response: Any, usage: Any, model: str, schema: type[BaseModel] | None = None) -> ModelOutput:
-    """Convert LiteLLM response to Autogen ModelOutput.
+    """Convert LiteLLM response to ModelOutput.
 
     Args:
         response: LiteLLM response object or dict
@@ -645,7 +645,7 @@ def litellm_to_model_output(response: Any, usage: Any, model: str, schema: type[
         schema: Optional Pydantic schema for structured output
 
     Returns:
-        ModelOutput compatible with Autogen interface (always returns ModelOutput to preserve pricing metadata)
+        ModelOutput (always returns ModelOutput to preserve pricing metadata)
     """
 
     # Extract content from response
@@ -681,8 +681,8 @@ def litellm_to_model_output(response: Any, usage: Any, model: str, schema: type[
                 thought = parser.thought
 
         raw_finish_reason = choice.finish_reason if hasattr(choice, "finish_reason") else "stop"
-        # Map LiteLLM finish_reason to Autogen values
-        # LiteLLM uses "tool_calls", Autogen uses "function_calls"
+        # Map LiteLLM finish_reason to native values
+        # LiteLLM uses "tool_calls", we use "function_calls"
         finish_reason_map = {
             "tool_calls": "function_calls",
             "tool_use": "function_calls",  # Some providers use this
@@ -727,16 +727,15 @@ def litellm_to_model_output(response: Any, usage: Any, model: str, schema: type[
 
 
 # =============================================================================
-# LiteLLM Wrapper - Drop-in Replacement for AutoGenWrapper
+# LiteLLM Wrapper
 # =============================================================================
 
 
 class LiteLLMWrapper(BaseModel):
-    """Wraps LiteLLM to provide the same interface as AutoGenWrapper.
+    """Wraps LiteLLM to provide a unified LLM interface.
 
-    This class provides a drop-in replacement for AutoGenWrapper that uses
-    LiteLLM instead of Autogen's ChatCompletionClient. It maintains full
-    compatibility with:
+    This class uses LiteLLM as the underlying chat completion client,
+    providing a consistent interface with full support for:
     - Structured output (Pydantic schemas)
     - Tool/function calling
     - Retry logic
@@ -766,7 +765,7 @@ class LiteLLMWrapper(BaseModel):
         description="Default inference parameters (temperature, max_tokens, etc.)",
     )
 
-    # Retry configuration (matching AutoGenWrapper)
+    # Retry configuration
     cooldown_seconds: float = 0.5
     max_retries: int = 3
     min_wait_seconds: float = 5.0
@@ -848,10 +847,8 @@ class LiteLLMWrapper(BaseModel):
     ) -> CreateResult | ModelOutput:
         """Create a chat completion using LiteLLM.
 
-        This method provides the same interface as AutoGenWrapper.create().
-
         Args:
-            messages: Sequence of Autogen LLMMessage objects
+            messages: Sequence of LLMMessage objects
             tools: Optional sequence of tools the LLM can call
             schema: Optional Pydantic schema for structured output
             cancellation_token: Optional cancellation token (not used by LiteLLM)
@@ -972,7 +969,7 @@ class LiteLLMWrapper(BaseModel):
 
         elif schema and function_calling_enabled and not tools:
             # No native structured output, but function calling available and no tools provided
-            # Use a fake tool to get structured output (same approach as AutoGenWrapper)
+            # Use a fake tool to get structured output
             schema_dict = schema.model_json_schema() if hasattr(schema, "model_json_schema") else schema.schema()
             fake_tool_name = f"create_{schema.__name__.lower()}"
             litellm_params["tools"] = [
@@ -998,7 +995,7 @@ class LiteLLMWrapper(BaseModel):
 
         # Handle tools
         if tools:
-            # Convert Autogen Tool objects to LiteLLM format
+            # Convert Tool objects to LiteLLM format
             litellm_tools = []
             for tool in tools:
                 if hasattr(tool, "schema"):
@@ -1096,7 +1093,7 @@ class LiteLLMWrapper(BaseModel):
                     else:
                         logger.warning(f"LiteLLMWrapper: Expected fake tool '{fake_tool_name}', got '{tool_call.function.name}'")
 
-        # Convert response to Autogen format (always returns ModelOutput now)
+        # Convert response to ModelOutput format
         result = litellm_to_model_output(response, usage, self.litellm_model_name, schema)
 
         # Add pricing metadata (result is always ModelOutput now)
@@ -1123,7 +1120,7 @@ class LiteLLMWrapper(BaseModel):
         schema: type[BaseModel] | None = None,
         intercept_tools: bool = False,
     ) -> CreateResult | ModelOutput:
-        """Manage chat interaction with tool execution (matching AutoGenWrapper interface).
+        """Manage chat interaction with tool execution.
 
         Args:
             messages: List of LLMMessage objects (mutable)
@@ -1168,7 +1165,7 @@ class LiteLLMWrapper(BaseModel):
             messages.append(assistant_msg)
 
             try:
-                # Execute tools (reuse logic from AutoGenWrapper)
+                # Execute tools
                 tool_outputs = await self._execute_tools(
                     calls=tool_calls,
                     tools_list=tools_list,
@@ -1211,7 +1208,7 @@ class LiteLLMWrapper(BaseModel):
         tools_list: Sequence[Tool | ToolSchema],
         cancellation_token: CancellationToken | None,
     ) -> list[FunctionExecutionResult]:
-        """Execute tools (reuse AutoGenWrapper implementation)."""
+        """Execute tools from function calls."""
         tasks = []
         for call in calls:
             # Find the tool by name

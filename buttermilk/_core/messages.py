@@ -1,11 +1,8 @@
 """Native Pydantic v2 message types for Buttermilk.
 
 This module provides Buttermilk's own message, function-call, and LLM-response
-types, replacing the equivalent types previously imported from autogen_core.
-Every class preserves the same field names, types, and access patterns so that
-the rest of the codebase can switch imports without any other code changes.
-
-Phase 1 of the autogen removal: message / response types only.
+types. Every class preserves the same field names, types, and access patterns
+used throughout the codebase.
 """
 
 from __future__ import annotations
@@ -17,7 +14,7 @@ from pydantic import BaseModel, Field
 from typing_extensions import Required, TypedDict
 
 # ---------------------------------------------------------------------------
-# Function-call types (replaces autogen_core.FunctionCall dataclass)
+# Function-call types
 # ---------------------------------------------------------------------------
 
 
@@ -25,9 +22,8 @@ from typing_extensions import Required, TypedDict
 class FunctionCall:
     """A single tool/function call requested by the model.
 
-    This is intentionally a *dataclass* (not a Pydantic model) to match the
-    original autogen_core.FunctionCall interface — it's compared by identity
-    in isinstance checks and used inside union fields of Pydantic models.
+    This is intentionally a *dataclass* (not a Pydantic model) — it's compared
+    by identity in isinstance checks and used inside union fields of Pydantic models.
     """
 
     id: str
@@ -41,7 +37,7 @@ class FunctionCall:
 
 
 # ---------------------------------------------------------------------------
-# Chat message types (replaces autogen_core.models.{System,User,Assistant}Message)
+# Chat message types
 # ---------------------------------------------------------------------------
 
 
@@ -58,8 +54,7 @@ class UserMessage(BaseModel):
     """User message — input from end users or a catch-all for data provided to the model."""
 
     content: Union[str, list[Union[str]]]
-    """The content of the message.  Simplified from autogen's ``str | list[str | Image]``
-    since buttermilk never passes autogen ``Image`` objects."""
+    """The content of the message (str or list of str for multimodal)."""
 
     source: str
     """The name of the agent that sent this message."""
@@ -153,7 +148,7 @@ class ChatCompletionTokenLogprob(BaseModel):
 
 
 class CreateResult(BaseModel):
-    """Result of a model completion — mirrors autogen_core.models.CreateResult."""
+    """Result of a model completion."""
 
     finish_reason: FinishReasons
     """The reason the model finished generating the completion."""
@@ -184,8 +179,7 @@ class CreateResult(BaseModel):
 class ModelFamily:
     """Namespace for model family constants.
 
-    Mirrors autogen_core.models.ModelFamily so that existing code that references
-    ``ModelFamily.GPT_4O`` etc. continues to work after the import switch.
+    Provides constants like ``ModelFamily.GPT_4O`` for model family identification.
     """
 
     GPT_5 = "gpt-5"
@@ -282,7 +276,7 @@ class ModelFamily:
 class ModelInfo(TypedDict, total=False):
     """Model metadata dictionary — accessed via ``.get()`` in existing code.
 
-    Mirrors autogen_core.models.ModelInfo exactly (a TypedDict).
+    Model metadata dictionary — accessed via ``.get()`` in existing code.
     """
 
     vision: Required[bool]

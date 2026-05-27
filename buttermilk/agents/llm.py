@@ -47,7 +47,7 @@ class LLMAgent(Agent):
 
     Attributes:
             _model (str): The name/identifier of the LLM model this agent uses.
-            _tools_list (list[Tool]): List of Autogen-compatible tool objects.
+            _tools_list (list[Tool]): List of tool objects available to the agent.
             _fail_on_unfilled_parameters (bool): If True, raises an error when
                 template variables are missing from inputs.
 

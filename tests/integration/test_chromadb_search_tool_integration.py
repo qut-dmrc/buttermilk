@@ -132,7 +132,7 @@ class TestChromaDBSearchToolIntegration:
     @pytest.mark.anyio
     async def test_tool_function_interface(self, search_tool):
         """Test the tool's function interface for agent integration."""
-        # Get the autogen FunctionTool
+        # Get the FunctionTool
         function_tool = search_tool.as_tool()
 
         assert function_tool is not None

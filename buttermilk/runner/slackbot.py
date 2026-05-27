@@ -16,9 +16,9 @@ from buttermilk._core.orchestrator import OrchestratorProtocol
 from buttermilk._core.types import RunRequest
 from buttermilk._core.variants import AgentRegistry
 from buttermilk.libs.slack import SlackContext, post_message_with_retry
-from buttermilk.orchestrators.groupchat import AutogenOrchestrator  # noqa
+from buttermilk.orchestrators.groupchat import Orchestrator  # noqa
 
-_ = "AutogenOrchestrator"
+_ = "Orchestrator"
 BOTPATTERNS = re.compile(
     r"^!?[<@>\w\d]*\s+(\w+)(.*)",
     re.IGNORECASE | re.MULTILINE,

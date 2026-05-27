@@ -93,6 +93,37 @@ def _build_handler_registry(cls: type) -> dict[type, str]:
     return registry
 
 
+async def dispatch_message(target: Any, message: Any, ctx: MessageContext) -> Any:
+    """Dispatch a message to the appropriate @message_handler on *target*.
+
+    Shared implementation used by Agent.dispatch() and SpyAgent.dispatch()
+    to avoid duplicating the handler-registry lookup logic.
+
+    Args:
+        target: The object whose handler registry and methods to use.
+        message: The incoming message to dispatch.
+        ctx: Message context (topic, sender, etc.).
+
+    Returns:
+        The return value of the matched handler, or None if no handler matched.
+    """
+    registry = target._get_handler_registry()
+    msg_type = type(message)
+    method_name = registry.get(msg_type)
+    if method_name is None:
+        for handled_type, name in registry.items():
+            if issubclass(msg_type, handled_type):
+                method_name = name
+                break
+    if method_name is not None:
+        method = getattr(target, method_name)
+        match_pred = getattr(method, "_match_predicate", None)
+        if match_pred and not match_pred(message, ctx):
+            return None
+        return await method(message, ctx)
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Native types
 # ---------------------------------------------------------------------------
@@ -138,5 +169,6 @@ __all__ = [
     "DefaultTopicId",
     "MessageContext",
     "TopicId",
+    "dispatch_message",
     "message_handler",
 ]

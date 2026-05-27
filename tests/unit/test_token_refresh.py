@@ -367,7 +367,7 @@ async def test_get_client_passes_token_provider_for_vertex(real_bm: BM):
     # This should be configured with token_provider for Vertex models
     wrapper = llms.get_client(model_name)
 
-    # ASSERT: wrapper should be LiteLLMWrapper (not AutoGenWrapper)
+    # ASSERT: wrapper should be LiteLLMWrapper
     assert isinstance(wrapper, LiteLLMWrapper), f"Expected LiteLLMWrapper for Vertex model {model_name}, got {type(wrapper).__name__}"
 
     # ASSERT: wrapper should have token_provider field
