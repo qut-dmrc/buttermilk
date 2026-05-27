@@ -90,7 +90,7 @@ def __getattr__(name: str):
 
 
 # Native Buttermilk types (replaces autogen_core.models and autogen_core.tools)
-from buttermilk._core.tool_types import CancellationToken, FunctionCall, Tool, ToolSchema
+from buttermilk._core.tool_types import CancellationToken, Tool, ToolSchema
 from buttermilk._core.messages import (
     AssistantMessage,
     CreateResult,

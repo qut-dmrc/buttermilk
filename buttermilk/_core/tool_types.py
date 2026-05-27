@@ -5,16 +5,18 @@ Provides:
 - FunctionTool: Wraps a Python callable into a Tool
 - ToolSchema: JSON Schema wrapper for tool parameters
 - CancellationToken: Simple cooperative cancellation
-- FunctionCall: Represents an LLM tool call request
 """
 
 import asyncio
+import functools
 import inspect
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
 from pydantic import TypeAdapter
+
+from buttermilk._core.messages import FunctionCall
 
 
 @dataclass
@@ -38,6 +40,9 @@ class Tool(Protocol):
 
     @property
     def name(self) -> str: ...
+
+    @property
+    def description(self) -> str: ...
 
     @property
     def schema(self) -> ToolSchema: ...
@@ -71,21 +76,6 @@ class CancellationToken:
     def raise_if_cancelled(self) -> None:
         if self._cancelled:
             raise asyncio.CancelledError("Operation was cancelled")
-
-
-@dataclass
-class FunctionCall:
-    """Represents a tool/function call requested by an LLM.
-
-    Attributes:
-        id: Unique identifier for the call (from the LLM response).
-        name: Name of the function to call.
-        arguments: JSON-encoded string of call arguments.
-    """
-
-    id: str
-    name: str
-    arguments: str
 
 
 def _generate_schema(func: Any, name: str, description: str, strict: bool) -> dict[str, Any]:
@@ -163,6 +153,10 @@ class FunctionTool:
         return self._name
 
     @property
+    def description(self) -> str:
+        return self._description
+
+    @property
     def schema(self) -> ToolSchema:
         return ToolSchema(
             name=self._name,
@@ -177,7 +171,8 @@ class FunctionTool:
         if asyncio.iscoroutinefunction(self._func):
             return await self._func(**args)
         else:
-            return self._func(**args)
+            loop = asyncio.get_running_loop()
+            return await loop.run_in_executor(None, functools.partial(self._func, **args))
 
     def return_value_as_string(self, value: Any) -> str:
         if isinstance(value, str):

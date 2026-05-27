@@ -11,7 +11,7 @@ from autogen_core import (
     MessageContext,
     message_handler,
 )
-from buttermilk._core.tool_types import CancellationToken, FunctionCall, Tool
+from buttermilk._core.tool_types import CancellationToken, Tool
 from buttermilk._core.messages import FunctionCall, LLMMessage
 
 from buttermilk import AgentInput, StepRequest, bm, logger
