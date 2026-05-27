@@ -91,6 +91,7 @@ class Orchestrator(BaseOrchestrator):
     _storage_service: SessionStorageService | None = PrivateAttr(default=None)
     _session_id: str | None = PrivateAttr(default=None)
     _topic: str = PrivateAttr(default="")
+
     def _subscribe(self, agent: Any, topic: str) -> None:
         """Subscribe an agent to a topic."""
         if topic not in self._subscriptions:
