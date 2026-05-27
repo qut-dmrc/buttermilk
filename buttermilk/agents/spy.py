@@ -1,62 +1,44 @@
-"""Defines the SpyAgent, an agent designed to passively listen and save data.
+"""SpyAgent — passively listens and saves ExecutionTrace messages.
 
-The `SpyAgent` operates within a multi-agent system (specifically compatible with
-Autogen's `RoutedAgent` structure). Its primary function is to "lurk" in a
-group chat or message bus, capture `ExecutionTrace` messages produced by other agents,
-and persist them using an asynchronous data uploader.
+Phase 3: Removed direct RoutedAgent inheritance. SpyAgent is now a
+standalone class with a handle_message() method. For compatibility
+with the autogen GroupChat orchestrator, it retains a register()
+classmethod that delegates to RoutedAgent.register().
 """
 
-from collections.abc import Callable  # For type hinting
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from autogen_core import (  # Autogen core components
-    AgentType,
-    MessageContext,
-    RoutedAgent,
-    message_handler,  # Decorator to register methods as message handlers.
-)
+# Phase 4 removal target: autogen compatibility for register()
+from autogen_core import RoutedAgent
 
+from buttermilk._core.runtime_types import MessageContext, message_handler
 from buttermilk._core.storage_config import StorageConfig, StorageFactory
 
 if TYPE_CHECKING:
     from autogen_core import AgentRuntime
 
-# Import the global Buttermilk instance getter
 from buttermilk import (
     bm,
-    logger,  # Buttermilk's centralized logger
+    logger,
 )
-from buttermilk._core.agent import ProcessingError  # Buttermilk custom exception
+from buttermilk._core.agent import ProcessingError
 from buttermilk._core.contract import (
     ErrorEvent,
     ExecutionTrace,
-)  # Buttermilk message contracts
+)
 from buttermilk.utils.uploader import (
     AsyncDataUploader,
-)  # Utility for asynchronous data upload
+)
 
 BATCH_SIZE = 10
-"""Default buffer size for the `AsyncDataUploader` before flushing data."""
 
 
 class SpyAgent(RoutedAgent):
-    """An agent that passively listens to a message bus (e.g., group chat)
-    and saves `ExecutionTrace` messages to a configured destination.
+    """Passively captures ExecutionTrace messages and persists them.
 
-    The `SpyAgent` does not typically produce messages itself but acts as a data
-    collector or logger for the activities of other agents. It uses an
-    `AsyncDataUploader` to buffer messages and upload them in batches.
-
-    The destination for saving data (e.g., BigQuery table, local file system,
-    cloud storage) is defined by the `save_dest` parameter during initialization.
-
-    Attributes:
-        manager (AsyncDataUploader): An instance of `AsyncDataUploader` used to
-            handle the asynchronous saving of captured messages.
-        description (str): A description for the agent, set during initialization.
-                           Defaults to "Save results to BQ" in the original code,
-                           but could be made more generic.
-
+    Inherits RoutedAgent as a compatibility adapter for the autogen
+    GroupChat orchestrator (Phase 4 removal target).
     """
 
     def __init__(
@@ -64,18 +46,9 @@ class SpyAgent(RoutedAgent):
         save: StorageConfig,
         **_kwargs: Any,
     ) -> None:
-        """Initializes the SpyAgent.
-
-        Args:
-            save (StorageConfig): Defines where and how to save captured data.
-            **_kwargs: Additional keyword arguments passed to the `RoutedAgent`
-                superclass constructor.
-
-        """
         super().__init__(description="Save results to storage")
 
         save = StorageFactory.create_config(save)
-        # Use unified storage system
         self.storage = bm.get_storage(save)
         self.manager = AsyncDataUploader(storage=self.storage, buffer_size=BATCH_SIZE)
 
@@ -87,20 +60,8 @@ class SpyAgent(RoutedAgent):
         factory: Callable[[], Any],
         skip_class_subscriptions: bool = False,
         skip_direct_message_subscription: bool = False,
-    ) -> AgentType:
-        """Register SpyAgent with AutoGen runtime.
-
-        Args:
-            runtime: The AutoGen runtime to register with
-            type: The agent type identifier
-            factory: Factory function to create SpyAgent instances
-            skip_class_subscriptions: Whether to skip class-based subscriptions
-            skip_direct_message_subscription: Whether to skip direct message subscriptions
-
-        Returns:
-            AgentType: The registered agent type
-
-        """
+    ) -> Any:
+        """Register SpyAgent with the autogen runtime (Phase 4 removal target)."""
         return await RoutedAgent.register(
             runtime=runtime,
             type=type,
@@ -109,57 +70,14 @@ class SpyAgent(RoutedAgent):
             skip_direct_message_subscription=skip_direct_message_subscription,
         )
 
-    @message_handler  # Autogen decorator to register this method as a handler
+    @message_handler
     async def agent_output_handler(
         self, message: ExecutionTrace, ctx: MessageContext
-    ) -> ErrorEvent | None:  # Changed to Any to handle type check first
-        """Message handler that captures `ExecutionTrace` messages and saves them.
-
-        This method is decorated with `@message_handler`, making it the entry point
-        for `ExecutionTrace` messages routed to this agent within an Autogen system.
-
-        It performs the following actions:
-        1.  Checks if the incoming `message` is an instance of `ExecutionTrace`.
-        2.  If it is an `ExecutionTrace` and has `outputs` (i.e., it's not an empty trace),
-            it performs a data cleaning step: if any `Record` objects within
-            `message.inputs.record` have both "text" and "content" attributes,
-            the "text" attribute is excluded before saving (this addresses a
-            potential data conflict or redundancy).
-        3.  The (potentially modified) `ExecutionTrace` message is then added to the
-            `self.manager` (AsyncDataUploader) for asynchronous saving.
-        4.  If the message has no `outputs`, it's logged and ignored.
-        5.  If the message is not an `ExecutionTrace`, an error is logged, an `ErrorEvent`
-            is published back to the topic from which the message came (if `publish_message`
-            is available), and a `ProcessingError` is raised.
-
-        Args:
-            message (ExecutionTrace): The incoming message object. This handler specifically
-                looks for `ExecutionTrace` instances.
-            ctx (MessageContext): The context associated with the message, providing
-                information like the topic ID and a method to publish messages.
-
-        Returns:
-            ErrorEvent | None: An `ErrorEvent` if an incompatible message type is
-            received (and `publish_message` is available). Returns `None` otherwise,
-            as this agent's primary role is to save data, not to produce direct
-            reply messages in the main flow.
-
-        Raises:
-            ProcessingError: If an incompatible message type (not `ExecutionTrace`)
-                is received.
-
-        """
+    ) -> ErrorEvent | None:
+        """Capture ExecutionTrace messages and save them."""
         if isinstance(message, ExecutionTrace):
             if message.outputs:
-                logger.debug(f"SpyAgent received message of type: {type(message)} on topic {ctx.topic_id}")  # Log received type and topic
-                # # Check if there's records in the inputs and then make sure they don't have both 'text' and 'content' fields.
-                # if message.inputs and message.inputs.record:
-                #     for record in message.inputs.record:
-                #         if hasattr(record, "text") and hasattr(record, "content"):
-                #             # This shouldn't happen because the pydantic model excludes text.
-                #             # But for some reason it does, so we need to handle it.
-                #             message.inputs.record = [x.model_dump(exclude="text") for x in message.inputs.record]
-                #             break
+                logger.debug(f"SpyAgent received message of type: {type(message)} on topic {ctx.topic_id}")
                 await self.manager.add(message)
             else:
                 logger.debug(f"SpyAgent received message with no outputs: {message} on topic {ctx.topic_id}")

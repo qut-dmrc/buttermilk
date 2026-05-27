@@ -7,11 +7,8 @@ from typing import Union
 
 import regex as re
 from aioconsole import ainput  # For asynchronous console input
-from autogen_core import (
-    CancellationToken,
-    MessageContext,
-    message_handler,
-)  # Autogen types (used by base Agent)
+from buttermilk._core.runtime_types import MessageContext, message_handler
+from buttermilk._core.tool_types import CancellationToken
 from rich.console import Console
 from rich.highlighter import JSONHighlighter  # Specific highlighter for JSON
 from rich.pretty import pretty_repr  # For formatted output of complex objects

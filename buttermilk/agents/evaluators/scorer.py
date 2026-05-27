@@ -9,10 +9,7 @@ criteria, individual assessments, and the overall scoring output.
 
 from typing import Any
 
-from autogen_core import (
-    MessageContext,  # Autogen cancellation token
-    message_handler,
-)
+from buttermilk._core.runtime_types import MessageContext, message_handler
 from pydantic import BaseModel, Field  # Pydantic components
 
 # Buttermilk core imports
