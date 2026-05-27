@@ -28,7 +28,6 @@ from pydantic import BaseModel, Field, PrivateAttr, model_validator
 from buttermilk import bm, logger
 from buttermilk._core.contract import ErrorEvent
 from buttermilk._core.exceptions import FatalError, ProcessingError
-
 from buttermilk._core.processor_core import ObservabilityMixin, TraceParams
 
 if TYPE_CHECKING:

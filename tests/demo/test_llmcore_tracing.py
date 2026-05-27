@@ -12,7 +12,6 @@ import asyncio
 import datetime
 import json
 import re
-from typing import Any
 
 import pytest
 from pydantic import BaseModel, Field
@@ -473,7 +472,9 @@ async def test_llmcore_with_bigquery_trace(real_bm, sample_record: BaseRecord, r
 
     assert "inputs" in hashes_metadata, f"Hashes should contain 'inputs' array. Got: {hashes_metadata.keys()}"
     assert "message_hashes" in hashes_metadata, f"Hashes should contain 'message_hashes' array. Got: {hashes_metadata.keys()}"
-    assert set(hashes_metadata.keys()) == {"inputs", "message_hashes"}, f"Hashes should only have inputs and message_hashes. Got: {hashes_metadata.keys()}"
+    assert set(hashes_metadata.keys()) == {"inputs", "message_hashes"}, (
+        f"Hashes should only have inputs and message_hashes. Got: {hashes_metadata.keys()}"
+    )
 
     # Validate template entry in inputs
     template_entries = [e for e in hashes_metadata["inputs"] if e["type"] == "template"]

@@ -651,9 +651,16 @@ class TMDBTool:
                         # only available when working with raw dicts (e.g.
                         # from cached API responses or when the SDK is
                         # bypassed). Using .get() handles both cases safely.
-                        provider_dict = provider if isinstance(provider, dict) else (
-                            asdict(provider) if hasattr(provider, '__dataclass_fields__') else
-                            {k: getattr(provider, k, None) for k in ['provider_id', 'provider_name', 'price', 'currency', 'presentation_type']}
+                        provider_dict = (
+                            provider
+                            if isinstance(provider, dict)
+                            else (
+                                asdict(provider)
+                                if hasattr(provider, "__dataclass_fields__")
+                                else {
+                                    k: getattr(provider, k, None) for k in ["provider_id", "provider_name", "price", "currency", "presentation_type"]
+                                }
+                            )
                         )
                         obs = Observation(
                             record_id=str(record_id),
