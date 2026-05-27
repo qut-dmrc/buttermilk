@@ -10,7 +10,7 @@ def create_tool_functions(tool_cfg: dict[str, Any]) -> list[Tool]:
         tool_cfg: Dictionary of tool configurations, keyed by tool name.
 
     Returns:
-        A list of Tool objects for consistency with autogen's tool system.
+        A list of Tool objects.
     """
     tools = []
     from buttermilk._core.log import logger

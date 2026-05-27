@@ -576,7 +576,7 @@ class LLMCore(ObservabilityMixin):
         with tracer.start_as_current_span("llm_core.call_llm", attributes=span_attributes) as span:
             try:
                 # Get LLM client from global BM instance
-                model_client = bm.llms.get_autogen_chat_client(self.model)
+                model_client = bm.llms.get_client(self.model)
 
                 logger.debug(
                     f"LLMCore: Calling {self.model} with {len(messages)} messages, {len(self.tools)} tools, schema={self._resolved_output_model}",

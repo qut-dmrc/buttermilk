@@ -19,7 +19,7 @@ class AgentToolDefinition(BaseModel):
     - Input validation schema
     - Documentation and description
 
-    This class implements the autogen Tool protocol, making it directly usable
+    This class implements the Tool protocol, making it directly usable
     with LLM create() calls while remaining non-executable (execution is handled
     by the host agent routing to actual agents).
     """
@@ -56,7 +56,7 @@ class AgentToolDefinition(BaseModel):
 
     @property
     def schema(self) -> ToolSchema:
-        """Return the tool schema in autogen format for the Tool protocol."""
+        """Return the tool schema in Tool protocol format for the Tool protocol."""
         return ToolSchema(
             name=self.name,
             description=self.description,

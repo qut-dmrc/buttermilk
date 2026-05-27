@@ -112,7 +112,7 @@ from pydantic import (
 
 from buttermilk import bm, logger
 
-# ToolOutput import removed - using autogen's FunctionExecutionResult directly
+
 from buttermilk._core.constants import CONFIG_CACHE_FILENAME, cache, get_base_cache_dir  # Models cache constants
 from buttermilk._core.exceptions import ContentBlockedError, ProcessingError  # Custom Buttermilk exceptions
 from buttermilk._core.json_schema import make_all_properties_required, resolve_json_schema_refs  # Schema $ref resolution for Azure compatibility
@@ -571,7 +571,7 @@ async def _parse_structured_output(  # noqa: PLR0912
 # =============================================================================
 
 
-def autogen_to_litellm_messages(messages: Sequence[LLMMessage]) -> list[dict[str, Any]]:
+def to_litellm_messages(messages: Sequence[LLMMessage]) -> list[dict[str, Any]]:
     """Convert Autogen LLMMessage objects to LiteLLM message format.
 
     Args:
@@ -627,7 +627,7 @@ def autogen_to_litellm_messages(messages: Sequence[LLMMessage]) -> list[dict[str
     return litellm_messages
 
 
-def litellm_to_autogen_result(response: Any, usage: Any, model: str, schema: type[BaseModel] | None = None) -> ModelOutput:
+def litellm_to_model_output(response: Any, usage: Any, model: str, schema: type[BaseModel] | None = None) -> ModelOutput:
     """Convert LiteLLM response to Autogen ModelOutput.
 
     Args:
@@ -853,7 +853,7 @@ class LiteLLMWrapper(BaseModel):
             CreateResult or ModelOutput
         """
         # Convert messages to LiteLLM format
-        litellm_messages = autogen_to_litellm_messages(messages)
+        litellm_messages = to_litellm_messages(messages)
 
         # Merge default parameters with runtime kwargs (runtime takes precedence)
         merged_params = self.default_parameters.to_api_params()
@@ -1081,7 +1081,7 @@ class LiteLLMWrapper(BaseModel):
                             logger.debug(f"LiteLLMWrapper: Converted XML params to JSON: {arguments_json[:200]}...")
 
                         # Replace the message content with the tool arguments
-                        # and clear tool_calls so litellm_to_autogen_result treats it as text
+                        # and clear tool_calls so litellm_to_model_output treats it as text
                         message.content = arguments_json
                         message.tool_calls = None  # Clear tool calls
                         choice.finish_reason = "stop"  # Set finish_reason to stop
@@ -1089,10 +1089,10 @@ class LiteLLMWrapper(BaseModel):
                         logger.warning(f"LiteLLMWrapper: Expected fake tool '{fake_tool_name}', got '{tool_call.function.name}'")
 
         # Convert response to Autogen format (always returns ModelOutput now)
-        result = litellm_to_autogen_result(response, usage, self.litellm_model_name, schema)
+        result = litellm_to_model_output(response, usage, self.litellm_model_name, schema)
 
         # Add pricing metadata (result is always ModelOutput now)
-        # Preserve actual_model that was set in litellm_to_autogen_result()
+        # Preserve actual_model that was set in litellm_to_model_output()
         result.metadata["pricing"] = pricing_metadata
 
         # Parse structured output if schema was provided
@@ -1634,9 +1634,6 @@ class LLMs(BaseModel):
 
         self.cached_clients[name] = wrapped_client
         return wrapped_client
-
-    # Alias for backwards compatibility
-    get_autogen_chat_client = get_client
 
     def __getattr__(self, __name: str) -> LiteLLMWrapper:
         """Provides attribute-style access to LLM clients (e.g., `llms.my_model`)."""

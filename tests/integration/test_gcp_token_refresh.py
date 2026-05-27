@@ -23,7 +23,7 @@ async def test_litellm_vertex_uses_token_provider(real_bm):
     This integration test verifies the complete token refresh implementation:
 
     ARRANGE:
-    - Get LiteLLMWrapper for a Vertex model via get_autogen_chat_client()
+    - Get LiteLLMWrapper for a Vertex model via get_client()
     - Verify model is actually a Vertex type (GEMINI_VERTEX or VERTEX_OPENAI)
 
     ACT:
@@ -63,8 +63,8 @@ async def test_litellm_vertex_uses_token_provider(real_bm):
         f"Model {model_name} uses {config.client_type}, expected a Vertex type. This test requires a Vertex model to verify token_provider works."
     )
 
-    # Get wrapper via get_autogen_chat_client
-    wrapper = llms.get_autogen_chat_client(model_name)
+    # Get wrapper via get_client
+    wrapper = llms.get_client(model_name)
 
     # ASSERT: Should be LiteLLMWrapper for Vertex models
     assert isinstance(wrapper, LiteLLMWrapper), f"Expected LiteLLMWrapper, got {type(wrapper).__name__}"

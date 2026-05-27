@@ -104,7 +104,7 @@ class ExecutionContext(BaseModel):
     datasets: dict[str, BaseStorageConfig] = Field(default_factory=dict, description="Shared dataset configurations.")
     default_llm_wrapper: str = Field(
         default="litellm",
-        description="Default LLM wrapper type (autogen or litellm). Passed to LLMs instance.",
+        description="Default LLM wrapper type. Passed to LLMs instance.",
     )
     llm_model_parameters: dict[str, Any] = Field(
         default_factory=dict,
@@ -692,7 +692,7 @@ async def from_config_async(
     Args:
         infrastructure: Typed InfrastructureConfig from ButtermilkConfig
         project_name: Optional project name
-        default_llm_wrapper: Default LLM wrapper type (autogen or litellm).
+        default_llm_wrapper: Default LLM wrapper type.
         llms_config: Optional root-level llms config dict (for extracting model_parameters when llms is at config root instead of infrastructure.llms)
 
     Returns:

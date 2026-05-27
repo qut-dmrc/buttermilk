@@ -1080,7 +1080,7 @@ class TMDBTool:
                 self.titles_uploader.shutdown()
 
     def as_tool(self) -> FunctionTool:
-        """Return as autogen FunctionTool for agent integration."""
+        """Return as FunctionTool for agent integration."""
         return FunctionTool(
             name="tmdb_search",
             description=(

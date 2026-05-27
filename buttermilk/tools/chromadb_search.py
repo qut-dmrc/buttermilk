@@ -135,7 +135,7 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
         return "\n---\n".join(formatted_parts) if formatted_parts else "No results found."
 
     def get_tool(self) -> FunctionTool:
-        """Get this as an autogen FunctionTool.
+        """Get this as a FunctionTool.
 
         Returns:
             FunctionTool that can be used by agents

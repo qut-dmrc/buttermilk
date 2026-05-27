@@ -132,7 +132,7 @@ class TestLLMCore:
             usage=RequestUsage(prompt_tokens=50, completion_tokens=50),
             cached=False,
         )
-        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.get_client.return_value = mock_client
         mock_client.call_chat.return_value = mock_result
 
         with patch("buttermilk._core.llm_core.bm", mock_bm):
@@ -154,7 +154,7 @@ class TestLLMCore:
         mock_bm = MagicMock()
         mock_client = AsyncMock()
         mock_client.call_chat.side_effect = Exception("API error")
-        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.get_client.return_value = mock_client
 
         with patch("buttermilk._core.llm_core.bm", mock_bm), pytest.raises(ProcessingError, match="LLM call to 'gpt-4' failed"):
             await core._call_llm_with_trace(
@@ -177,7 +177,7 @@ class TestLLMCore:
             usage=RequestUsage(prompt_tokens=25, completion_tokens=25),
             cached=False,
         )
-        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.get_client.return_value = mock_client
 
         with patch("buttermilk._core.llm_core.bm", mock_bm):
             result = await core.process_with_llm(
@@ -215,7 +215,7 @@ class TestLLMCore:
             usage=RequestUsage(prompt_tokens=40, completion_tokens=35),
             cached=False,
         )
-        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.get_client.return_value = mock_client
 
         with patch("buttermilk._core.llm_core.bm", mock_bm):
             result = await core.process_with_llm(template_vars={"text": "analyze this"})
@@ -267,7 +267,7 @@ class TestLLMCore:
             usage=RequestUsage(prompt_tokens=10, completion_tokens=10),
             cached=False,
         )
-        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.get_client.return_value = mock_client
 
         with patch("buttermilk._core.llm_core.bm", mock_bm):
             # Pass records as template variables since there's no separate records param
@@ -307,7 +307,7 @@ class TestLLMCore:
             usage=RequestUsage(prompt_tokens=25, completion_tokens=15),
             cached=False,
         )
-        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.get_client.return_value = mock_client
 
         with patch("buttermilk._core.llm_core.bm", mock_bm):
             result = await core.process_with_llm(template_vars={"var": "test input"})
@@ -351,7 +351,7 @@ class TestLLMCore:
             usage=RequestUsage(prompt_tokens=25, completion_tokens=15),
             cached=False,
         )
-        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.get_client.return_value = mock_client
 
         with patch("buttermilk._core.llm_core.bm", mock_bm):
             result = await core.process_with_llm(template_vars={"var": "test input"}, record=record)
@@ -527,7 +527,7 @@ class TestLLMCore:
             usage=RequestUsage(prompt_tokens=10, completion_tokens=10),
             cached=False,
         )
-        mock_bm.llms.get_autogen_chat_client.return_value = mock_client
+        mock_bm.llms.get_client.return_value = mock_client
 
         with patch("buttermilk._core.llm_core.bm", mock_bm):
             result = await core.process_with_llm(
