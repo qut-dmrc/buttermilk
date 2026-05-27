@@ -80,6 +80,8 @@ class TestMessageFormatConversion:
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = "Hello! I'm doing well."
+        mock_response.choices[0].message.tool_calls = None
+        mock_response.choices[0].message.reasoning_content = None
         mock_response.choices[0].finish_reason = "stop"
         mock_response.cached = False
 
