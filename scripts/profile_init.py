@@ -53,12 +53,6 @@ def profile_imports():
     with timer("Import chromadb"):
         import chromadb  # noqa: F401
 
-    with timer("Import autogen-core"):
-        try:
-            import autogen_core  # noqa: F401
-        except ImportError:
-            print("    (not installed)")
-
     with timer("Import buttermilk._core"):
         from buttermilk._core import config_bootstrap  # noqa: F401
 
