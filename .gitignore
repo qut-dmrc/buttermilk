@@ -239,3 +239,4 @@ gs:/
 
 # Performance benchmark results (generated locally)
 .benchmarks/
+.antigravitycli
