@@ -644,36 +644,25 @@ class TMDBTool:
                         continue
 
                     for provider in providers:
-                        # Extract price fields from the provider dict.
-                        # The TMDB API returns price, currency, and
-                        # presentation_type (HD/SD/4K) for rent and buy
-                        # providers. The themoviedb SDK's WatchProviderData
-                        # dataclass doesn't model these fields, so they are
-                        # only available when working with raw dicts (e.g.
-                        # from cached API responses or when the SDK is
-                        # bypassed). Using .get() handles both cases safely.
-                        provider_dict = (
-                            provider
-                            if isinstance(provider, dict)
-                            else (
-                                asdict(provider)
-                                if hasattr(provider, "__dataclass_fields__")
-                                else {
-                                    k: getattr(provider, k, None) for k in ["provider_id", "provider_name", "price", "currency", "presentation_type"]
-                                }
-                            )
-                        )
+                        # TMDB's /watch/providers endpoint returns only provider
+                        # identity (provider_id, provider_name, logo_path,
+                        # display_priority) -- never price, currency, or
+                        # presentation_type, even for rent/buy. Confirmed live
+                        # against movie 98 on 2026-05-28. We deliberately leave
+                        # price/currency/format unset rather than imply data the
+                        # API does not supply (guarded by TestTMDBLivePricing in
+                        # tests/endtoend/test_tmdb_live.py).
                         obs = Observation(
                             record_id=str(record_id),
                             title=title,
                             year=year,
-                            provider_id=str(provider_dict.get("provider_id")) if provider_dict.get("provider_id") is not None else None,
-                            provider_name=provider_dict.get("provider_name"),
+                            provider_id=str(provider.get("provider_id")) if provider.get("provider_id") is not None else None,
+                            provider_name=provider.get("provider_name"),
                             provider_type=provider_type,
                             region=normalized_region,
-                            price=provider_dict.get("price"),
-                            currency=provider_dict.get("currency"),
-                            format=provider_dict.get("presentation_type"),
+                            price=None,
+                            currency=None,
+                            format=None,
                             available=True,
                             source="TMDB",
                             metadata={
