@@ -126,7 +126,7 @@ The full documentation site is on the roadmap. For now:
 
 Buttermilk is actively under development. We welcome contributions and feedback — including bug reports, design discussions, and code.
 
-- Read [**CONTRIBUTING.md**](CONTRIBUTING.md) for development setup, tests, and the PR process.
+- Read [**CONTRIBUTING.md**](CONTRIBUTING.md) for development setup, tests, and the PR process — including the [automated review pipeline](CONTRIBUTING.md#automated-review-pipeline).
 - Read the [**Code of Conduct**](CODE_OF_CONDUCT.md).
 - Report security issues privately — see [**SECURITY.md**](SECURITY.md).
 
