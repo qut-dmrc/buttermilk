@@ -22,6 +22,7 @@ pytestmark = pytest.mark.slow
 from pydantic import BaseModel
 
 from buttermilk import logger
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord
 from buttermilk.agents.classifier import HuggingFaceClassifier, ZentropiClassifier
 from buttermilk.utils.templating import load_template
@@ -62,7 +63,8 @@ async def test_huggingface_classifier_e2e(real_bm, session_runner, text_record: 
 
     # ACT: Process text record through real classifier
     results = []
-    async for result in classifier.process(text_record, processor_stage="test_hf_classify"):
+    context = ProcessingContext(session_id="test_hf_classify", record=text_record)
+    async for result in classifier.process(context):
         results.append(result)
 
     # ASSERT: Verify complete classification workflow
@@ -121,7 +123,8 @@ async def test_zentropi_classifier_e2e(real_bm, session_runner, text_record: Bas
 
     # ACT: Process text record through real classifier
     results = []
-    async for result in classifier.process(text_record, processor_stage="test_zentropi_classify"):
+    context = ProcessingContext(session_id="test_zentropi_classify", record=text_record)
+    async for result in classifier.process(context):
         results.append(result)
 
     # ASSERT: Verify complete classification workflow
@@ -184,7 +187,8 @@ async def test_huggingface_classifier_input_tracing(real_bm, session_runner, tex
 
     # ACT: Process text record
     results = []
-    async for result in classifier.process(text_record, processor_stage=processor_stage):
+    context = ProcessingContext(session_id=processor_stage, record=text_record)
+    async for result in classifier.process(context):
         results.append(result)
 
     # ASSERT: Basic classification worked
@@ -284,7 +288,8 @@ async def test_zentropi_classifier_input_tracing(real_bm, session_runner, text_r
 
     # ACT: Process text record
     results = []
-    async for result in classifier.process(text_record, processor_stage=processor_stage):
+    context = ProcessingContext(session_id=processor_stage, record=text_record)
+    async for result in classifier.process(context):
         results.append(result)
 
     # ASSERT: Basic classification worked

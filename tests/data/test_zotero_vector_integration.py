@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import Record
 from buttermilk.data.vector import ChromaDBEmbeddings, SemanticSplitter
 
@@ -50,7 +51,8 @@ class TestZoteroVectorIntegration:
         # Step 2: Use SemanticSplitter to create chunks (produces dict chunks)
         splitter = SemanticSplitter(chunk_size=50, chunk_overlap=10)
         chunked_records = []
-        async for chunked_record in splitter.process(record, processor_stage="chunk"):
+        chunk_context = ProcessingContext(session_id="chunk", record=record)
+        async for chunked_record in splitter.process(chunk_context):
             chunked_records.append(chunked_record)
 
         assert len(chunked_records) == 1

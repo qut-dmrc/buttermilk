@@ -573,8 +573,13 @@ class Record(BaseRecord):
         elif isinstance(self.content, Sequence):
             processed_parts: list[Any] = []
             for item in self.content:
-                if isinstance(item, (str, Image)):
+                if isinstance(item, str):
                     processed_parts.append(item)
+                elif isinstance(item, Image):
+                    from buttermilk.utils.utils import image_to_base64
+
+                    b64 = image_to_base64(item)
+                    processed_parts.append(f"data:image/png;base64,{b64}")
             message_content = processed_parts
         else:  # Fallback if content type is unexpected
             message_content = str(self.content)

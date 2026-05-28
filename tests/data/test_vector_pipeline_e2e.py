@@ -18,6 +18,7 @@ from pathlib import Path
 
 import pytest
 
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import Record
 from buttermilk.data.vector import ChromaDBEmbeddings, SemanticSplitter
 from buttermilk.processors.embeddings import EmbeddingGenerator
@@ -68,7 +69,8 @@ class TestVectorPipelineE2E:
         )
 
         chunked_records = []
-        async for chunked_record in splitter.process(test_record, processor_stage="chunk"):
+        chunk_context = ProcessingContext(session_id="chunk", record=test_record)
+        async for chunked_record in splitter.process(chunk_context):
             chunked_records.append(chunked_record)
 
         assert len(chunked_records) == 1
@@ -88,7 +90,8 @@ class TestVectorPipelineE2E:
         )
 
         embedded_records = []
-        async for embedded_record in embedding_gen.process(chunked_record, processor_stage="embed"):
+        embed_context = ProcessingContext(session_id="embed", record=chunked_record)
+        async for embedded_record in embedding_gen.process(embed_context):
             embedded_records.append(embedded_record)
 
         assert len(embedded_records) == 1
@@ -187,7 +190,8 @@ class TestVectorPipelineE2E:
         splitter = SemanticSplitter(chunk_size=50, chunk_overlap=10)
 
         chunked_records = []
-        async for rec in splitter.process(test_record, processor_stage="chunk"):
+        chunk_context = ProcessingContext(session_id="chunk", record=test_record)
+        async for rec in splitter.process(chunk_context):
             chunked_records.append(rec)
 
         assert len(chunked_records) == 1
@@ -201,7 +205,8 @@ class TestVectorPipelineE2E:
         )
 
         embedded_records = []
-        async for rec in embedding_gen.process(chunked_record, processor_stage="embed"):
+        embed_context = ProcessingContext(session_id="embed", record=chunked_record)
+        async for rec in embedding_gen.process(embed_context):
             embedded_records.append(rec)
 
         assert len(embedded_records) == 1
@@ -251,7 +256,8 @@ class TestVectorPipelineE2E:
 
         # Real splitter
         splitter = SemanticSplitter(chunk_size=50, chunk_overlap=10)
-        chunked_records = [rec async for rec in splitter.process(test_record, processor_stage="chunk")]
+        chunk_context = ProcessingContext(session_id="chunk", record=test_record)
+        chunked_records = [rec async for rec in splitter.process(chunk_context)]
         chunked_record = chunked_records[0]
 
         # Convert chunks to dicts explicitly to test the fix
@@ -277,7 +283,8 @@ class TestVectorPipelineE2E:
             embedding_batch_size=10,
         )
 
-        embedded_records = [rec async for rec in embedding_gen.process(chunked_record, processor_stage="embed")]
+        embed_context = ProcessingContext(session_id="embed", record=chunked_record)
+        embedded_records = [rec async for rec in embedding_gen.process(embed_context)]
         embedded_record = embedded_records[0]
 
         # Verify chunks are still dicts with embeddings

@@ -370,14 +370,14 @@ class TestVertexBatchProcessorConfigInheritance:
 
         # Create processor with max_tokens=None
         processor = VertexBatchProcessor(
-            model="claude-sonnet-4-5@20250929",
+            model="claude-sonnet-4-6",
             template="test_template",
             max_tokens=None,  # Should inherit from config
         )
 
         # Mock get_bm() to return a mock BM with llms.connections
         mock_bm_instance = MagicMock()
-        mock_bm_instance.llms.connections = {"claude-sonnet-4-5@20250929": mock_model_config}
+        mock_bm_instance.llms.connections = {"claude-sonnet-4-6": mock_model_config}
 
         with patch("buttermilk._core.dmrc.get_bm", return_value=mock_bm_instance):
             # Get the resolved max_tokens value
@@ -395,14 +395,14 @@ class TestVertexBatchProcessorConfigInheritance:
 
         # Create processor with explicit max_tokens
         processor = VertexBatchProcessor(
-            model="claude-sonnet-4-5@20250929",
+            model="claude-sonnet-4-6",
             template="test_template",
             max_tokens=4096,  # Explicit override
         )
 
         # Mock get_bm() to return a mock BM with llms.connections
         mock_bm_instance = MagicMock()
-        mock_bm_instance.llms.connections = {"claude-sonnet-4-5@20250929": mock_model_config}
+        mock_bm_instance.llms.connections = {"claude-sonnet-4-6": mock_model_config}
 
         with patch("buttermilk._core.dmrc.get_bm", return_value=mock_bm_instance):
             # Get the resolved max_tokens value
@@ -420,13 +420,13 @@ class TestVertexBatchProcessorConfigInheritance:
         from buttermilk.processors.vertex_batch import VertexBatchProcessor
 
         processor = VertexBatchProcessor(
-            model="claude-sonnet-4-5@20250929",
+            model="claude-sonnet-4-6",
             template="test_template",
         )
 
         # Mock get_bm() to return a mock BM with llms.connections
         mock_bm_instance = MagicMock()
-        mock_bm_instance.llms.connections = {"claude-sonnet-4-5@20250929": mock_model_config}
+        mock_bm_instance.llms.connections = {"claude-sonnet-4-6": mock_model_config}
 
         with patch("buttermilk._core.dmrc.get_bm", return_value=mock_bm_instance):
             # Get the resolved region value

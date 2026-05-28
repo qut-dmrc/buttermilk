@@ -11,3 +11,9 @@ judgers:
 synthesisers:
   - google/gemini-3.1-flash-lite
   - claude-haiku-4-5@20251001
+
+# Model-specific parameter overrides for testing
+model_parameters:
+  google/gemini-3.1-flash-lite:
+    temperature: 0.5
+    max_tokens: 2048

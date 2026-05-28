@@ -11,6 +11,10 @@ VALIDATION APPROACH:
 - Uses log-based validation via caplog fixture (not span capture)
 - Buttermilk uses Google Cloud Trace exporter, so InMemorySpanExporter won't capture spans
 - Logs contain trace_id and session_id information sufficient for validation
+
+NOTE: The 'trans' flow and its dependencies (criteria templates, TJA storage config)
+were removed in commit 44c233d9 ("remove 'tasks' in favour of variants").
+These tests are skipped until a replacement flow is configured in testing.yaml.
 """
 
 import re
@@ -20,7 +24,7 @@ import pytest
 from buttermilk import logger
 from buttermilk.runner.flowrunner import FlowRunner, RunRequest
 
-pytestmark = pytest.mark.slow
+pytestmark = [pytest.mark.slow, pytest.mark.skip(reason="No flows configured: 'trans' flow removed in commit 44c233d9")]
 
 
 @pytest.fixture(scope="function")

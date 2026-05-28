@@ -14,5 +14,4 @@ def test_config_llms(real_bm: BM):
     """Test that LLMs are properly configured and accessible."""
     models = real_bm.llms
     assert models
-    # Verify we can access at least one model
-    assert len(models) > 0
+    assert len(models.connections) > 0

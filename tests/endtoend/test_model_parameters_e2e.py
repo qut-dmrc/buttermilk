@@ -1,7 +1,7 @@
 """TRUE end-to-end test for model_parameters configuration.
 
 This test uses REAL components:
-- Real LLMs instance from testing.yaml (via debug.yaml llms config)
+- Real LLMs instance from testing.yaml (via lite.yaml llms config)
 - Real model_parameters from YAML config
 - Real API calls to verify parameters are passed through
 
@@ -19,23 +19,23 @@ from buttermilk._core.messages import UserMessage
 async def test_model_parameters_loaded_from_yaml(real_llms: LLMs):
     """Verify model_parameters from YAML config are loaded into LLMs instance.
 
-    The debug.yaml config sets:
+    The lite.yaml config sets:
       model_parameters:
-        google/gemini-3-flash-preview:
+        google/gemini-3.1-flash-lite:
           temperature: 0.5
           max_tokens: 2048
     """
     # Verify model_parameters dict is populated
     assert real_llms.model_parameters, "model_parameters should be loaded from YAML"
 
-    # Check google/gemini-3-flash-preview has expected parameters from debug.yaml
-    if "google/gemini-3-flash-preview" in real_llms.model_parameters:
-        params = real_llms.model_parameters["google/gemini-3-flash-preview"]
+    # Check google/gemini-3.1-flash-lite has expected parameters from lite.yaml
+    if "google/gemini-3.1-flash-lite" in real_llms.model_parameters:
+        params = real_llms.model_parameters["google/gemini-3.1-flash-lite"]
         if isinstance(params, dict):
             params = ModelParameters(**params)
 
-        assert params.temperature == 0.5, f"Expected temperature=0.5 from debug.yaml, got {params.temperature}"
-        assert params.max_tokens == 2048, f"Expected max_tokens=2048 from debug.yaml, got {params.max_tokens}"
+        assert params.temperature == 0.5, f"Expected temperature=0.5 from lite.yaml, got {params.temperature}"
+        assert params.max_tokens == 2048, f"Expected max_tokens=2048 from lite.yaml, got {params.max_tokens}"
 
 
 @pytest.mark.anyio
@@ -47,7 +47,7 @@ async def test_get_merged_parameters_returns_yaml_values(real_llms: LLMs):
     2. LLMs.model_parameters (from YAML config) - highest priority
     """
     # Get merged parameters for a model with YAML overrides
-    merged = real_llms.get_merged_parameters("google/gemini-3-flash-preview")
+    merged = real_llms.get_merged_parameters("google/gemini-3.1-flash-lite")
 
     assert isinstance(merged, ModelParameters), f"Expected ModelParameters, got {type(merged)}"
 
@@ -91,7 +91,7 @@ async def test_parameters_passed_to_llm_api_call(real_llm, session_runner):
 @pytest.mark.anyio
 async def test_model_parameters_to_api_params_conversion(real_llms: LLMs):
     """Verify to_api_params() correctly converts ModelParameters to API dict."""
-    merged = real_llms.get_merged_parameters("google/gemini-3-flash-preview")
+    merged = real_llms.get_merged_parameters("google/gemini-3.1-flash-lite")
 
     api_params = merged.to_api_params()
 
@@ -112,7 +112,7 @@ async def test_model_parameters_to_api_params_conversion(real_llms: LLMs):
 @pytest.mark.anyio
 async def test_model_parameters_merge_with(real_llms: LLMs):
     """Verify merge_with() correctly merges parameters with override precedence."""
-    base = real_llms.get_merged_parameters("google/gemini-3-flash-preview")
+    base = real_llms.get_merged_parameters("google/gemini-3.1-flash-lite")
 
     # Create override parameters
     override = ModelParameters(temperature=0.1, top_p=0.95)

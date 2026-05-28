@@ -88,18 +88,12 @@ class TestPDFExtractionWithRealFile:
             return pdf_path
         pytest.skip("L5BK5MEM.pdf not found in cache")
 
-    def test_l5bk5mem_pdf_extraction_error(self, l5bk5mem_pdf):
-        """Test that L5BK5MEM.pdf raises a ProcessingError with PDFObjRef message.
+    def test_l5bk5mem_pdf_extraction_succeeds(self, l5bk5mem_pdf):
+        """Test that L5BK5MEM.pdf can be extracted successfully.
 
-        This test will only run if the actual PDF file exists in the cache.
-        It documents the real-world error case.
+        This PDF previously triggered a PDFObjRef error, but the extraction
+        code has since been fixed to handle it.
         """
-        with pytest.raises(ProcessingError) as exc_info:
-            get_pdf_text(str(l5bk5mem_pdf))
-
-        # Verify we get the expected error
-        error_msg = str(exc_info.value)
-        assert "L5BK5MEM.pdf" in error_msg
-        # The error might be PDFObjRef or another pdfminer error
-        # Just verify it's a ProcessingError with details
-        assert len(error_msg) > 50  # Should have substantial error details
+        text = get_pdf_text(str(l5bk5mem_pdf))
+        assert text is not None
+        assert len(text) > 0

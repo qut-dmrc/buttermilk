@@ -371,7 +371,7 @@ CHAT_MODELS = [
     "gpt-5-nano",
     "gpt-4o",
     "meta/llama-4-maverick-17b-128e-instruct-maas",
-    "claude-sonnet-4-5@20250929",
+    "claude-sonnet-4-6",
     "deepseek-ai/deepseek-v3.2-maas",
 ]
 

@@ -8,7 +8,7 @@ and `Agent` provides the execution logic and state management.
 import asyncio
 import warnings
 from abc import abstractmethod
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping
 from typing import Any
 
 from opentelemetry import trace
@@ -44,7 +44,7 @@ from buttermilk._core.runtime_types import (
     message_handler,
 )
 from buttermilk._core.tool_types import CancellationToken, Tool
-from buttermilk._core.types import BaseRecord  # Data record structure
+from buttermilk._core.types import BaseRecord, RunRequest  # Data record structure
 from buttermilk.utils.templating import (
     KeyValueCollector,
 )  # Utility for managing state data
@@ -437,6 +437,41 @@ class Agent:
         logger.debug(f"Agent {self.agent_name} finished task {message}.")
 
         return trace_object
+
+    async def run_flows(
+        self,
+        *,
+        run_request: RunRequest,
+    ) -> AsyncGenerator[ExecutionTrace, None]:
+        """Run the agent as a single-step flow, yielding ExecutionTrace results.
+
+        This method bridges the RunRequest-based flow API (used by stream.py and
+        tests) to the agent's invoke() method. It converts the RunRequest into
+        an AgentInput, invokes the agent, and yields the resulting ExecutionTrace.
+
+        Args:
+            run_request: The RunRequest containing flow name, inputs, and parameters.
+
+        Yields:
+            ExecutionTrace: The execution trace from processing the request.
+
+        """
+        # Extract record from inputs if present
+        inputs = dict(run_request.inputs) if run_request.inputs else {}
+        record = inputs.pop("record", None)
+
+        # Build AgentInput from RunRequest
+        agent_input = AgentInput(
+            inputs=inputs,
+            parameters=run_request.parameters or {},
+            record=record,
+        )
+
+        # Invoke the agent and yield the result
+        trace_object = await self.invoke(agent_input)
+        if trace_object is None:
+            raise ProcessingError(f"Agent {self.agent_name} invoke() returned None — processing failed")
+        yield trace_object
 
     async def trace_and_execute(
         self,
