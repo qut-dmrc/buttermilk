@@ -41,6 +41,35 @@ Test markers are declared in `pyproject.toml`:
 5. CI will run linting, tests, and an automated PR review pipeline. Address feedback.
 6. Once approved, a maintainer will merge.
 
+### Automated review pipeline
+
+Two GitHub Actions stages review every PR to `dev`:
+
+1. **PR Checks** ([`pr-checks.yml`](.github/workflows/pr-checks.yml)) — lint,
+   type-check, unit tests, plus an **advisory** Gatekeeper (scope/alignment).
+2. **PR Pipeline** ([`pr-review-pipeline.yml`](.github/workflows/pr-review-pipeline.yml))
+   — three LLM reviewers in parallel: **Strategic Review** (design/direction),
+   **Enforcer / RBG** (axiom compliance — e.g. the no-mocking-business-logic rule
+   below), and **QA** (does the change do what it claims; do the tests exercise
+   the real code path?). It is triggered via `workflow_run` *only after PR Checks
+   succeeds*, and GitHub runs the workflow copy from the **default branch (`dev`)**.
+
+The Enforcer is a reusable workflow consumed from
+[`nicsuzor/academicOps`](https://github.com/nicsuzor/academicOps)
+(`agent-enforcer.yml`, currently pinned to `@main`). Its `workflow_call` contract
+(required inputs and secrets) must stay in sync with the caller in
+`pr-review-pipeline.yml`. **If the caller drifts from the contract, GitHub fails
+the entire PR Pipeline at startup (`startup_failure`) — silently, taking Strategic
+Review and QA down with it, so PRs can merge with no deep review.**
+
+Operational checks:
+
+- If review comments stop appearing on PRs, run
+  `gh run list --workflow "PR Pipeline" --limit 10` and look for `startup_failure`.
+- Because deep review is gated on PR Checks *succeeding*, a PR with unrelated red
+  CI is skipped — trigger review manually with
+  `gh workflow run "PR Pipeline" -f pr_number=<N>`.
+
 ## Coding conventions
 
 - **No mocks of `buttermilk.*` code or business logic.** Mock only at system boundaries — network, filesystem, time, environment variables. See `.agent/workflows/TESTING.md`.
