@@ -567,25 +567,13 @@ class TestTMDBLivePricing:
         ),
     )
     @pytest.mark.anyio
-    async def test_rent_buy_observations_have_price_and_currency(
-        self, tmdb_tool_live: TMDBTool
-    ) -> None:
+    async def test_rent_buy_observations_have_price_and_currency(self, tmdb_tool_live: TMDBTool) -> None:
         # record_id is passed straight through to client.movie(98).watch/providers.
-        results = [
-            obs
-            async for obs in tmdb_tool_live.get_availability_by_id(
-                record_id=98, title="Gladiator", year=2000
-            )
-        ]
+        results = [obs async for obs in tmdb_tool_live.get_availability_by_id(record_id=98, title="Gladiator", year=2000)]
 
-        purchasable = [
-            o for o in results if o.available and o.provider_type in ("rent", "buy")
-        ]
+        purchasable = [o for o in results if o.available and o.provider_type in ("rent", "buy")]
         # The invariant is only meaningful if the title actually has paid offers.
-        assert purchasable, (
-            "movie 98 returned no available rent/buy providers in any region; "
-            "cannot validate the price/currency invariant"
-        )
+        assert purchasable, "movie 98 returned no available rent/buy providers in any region; cannot validate the price/currency invariant"
 
         missing = [
             {
