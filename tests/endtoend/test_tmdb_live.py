@@ -537,6 +537,62 @@ class TestTMDBConfigurationLive:
         assert tool.api_key == os.getenv("TMDB_API_KEY")
 
 
+class TestTMDBLivePricing:
+    """Live guard for the rent/buy price+currency invariant (movie 98 = Gladiator).
+
+    Context: a collection recorded movie 98's AU buy providers (Fetch TV 436,
+    YouTube 192) with empty price/currency and no errors. PR #414 claimed to fix
+    this, but its unit tests fed *fabricated* raw provider dicts that bypass the
+    themoviedb SDK, so the green tests never exercised the real production path.
+
+    This test hits the REAL TMDB API with NO mocks and NO cached fixtures: it
+    reproduces production exactly and detects if/when TMDB's watch/providers
+    payload changes. The themoviedb SDK opens a fresh aiohttp session per call
+    with no HTTP cache, so every run is genuinely live.
+
+    Invariant: every *available* rent/buy observation must carry both price and
+    currency. CONFIRMED 2026-05-28 (live, movie 98): TMDB does NOT supply pricing
+    on this endpoint, so the invariant cannot currently hold -- the test is marked
+    xfail(strict=True). If TMDB ever starts returning price/currency, this test
+    XPASSes and (being strict) fails the suite, signalling us to wire it through
+    rather than leave the columns silently empty.
+    """
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "TMDB /watch/providers returns no price/currency/presentation_type, even "
+            "for rent/buy (confirmed live against movie 98 on 2026-05-28). A strict "
+            "XPASS is the intended tripwire if the API ever begins supplying pricing."
+        ),
+    )
+    @pytest.mark.anyio
+    async def test_rent_buy_observations_have_price_and_currency(self, tmdb_tool_live: TMDBTool) -> None:
+        # record_id is passed straight through to client.movie(98).watch/providers.
+        results = [obs async for obs in tmdb_tool_live.get_availability_by_id(record_id=98, title="Gladiator", year=2000)]
+
+        purchasable = [o for o in results if o.available and o.provider_type in ("rent", "buy")]
+        # The invariant is only meaningful if the title actually has paid offers.
+        assert purchasable, "movie 98 returned no available rent/buy providers in any region; cannot validate the price/currency invariant"
+
+        missing = [
+            {
+                "region": o.region,
+                "type": o.provider_type,
+                "provider": o.provider_name,
+                "price": o.price,
+                "currency": o.currency,
+            }
+            for o in purchasable
+            if o.price is None or o.currency is None
+        ]
+        assert not missing, (
+            f"{len(missing)} of {len(purchasable)} available rent/buy observations are "
+            f"missing price and/or currency (TMDB watch/providers may not supply "
+            f"pricing): {missing}"
+        )
+
+
 if __name__ == "__main__":
     # Allow running this file directly for quick testing
     pytest.main([__file__, "-v"])
