@@ -113,7 +113,7 @@ from buttermilk._core.messages import (
     RequestUsage,
 )
 from buttermilk._core.tool_types import CancellationToken, Tool, ToolSchema
-from buttermilk.utils.pricing import calculate_token_cost  # Token cost calculation
+from buttermilk.utils.pricing import calculate_token_cost, extract_cached_tokens  # Token cost calculation
 
 
 class ClientType(Enum):
@@ -698,6 +698,7 @@ def litellm_to_model_output(response: Any, usage: Any, model: str, schema: type[
         request_usage = RequestUsage(
             prompt_tokens=usage.prompt_tokens or 0,
             completion_tokens=usage.completion_tokens or 0,
+            cached_tokens=extract_cached_tokens(usage),
         )
     else:
         request_usage = RequestUsage(prompt_tokens=0, completion_tokens=0)
@@ -1149,6 +1150,7 @@ class LiteLLMWrapper(BaseModel):
         aggregated_pricing = {
             "prompt_tokens": initial_pricing.get("prompt_tokens") or 0,
             "completion_tokens": initial_pricing.get("completion_tokens") or 0,
+            "cached_tokens": initial_pricing.get("cached_tokens") or 0,
             "total_cost": initial_pricing.get("total_cost") or 0.0,
         }
 
@@ -1192,6 +1194,7 @@ class LiteLLMWrapper(BaseModel):
                     synthesis_pricing = synthesis_result.metadata["pricing"]
                     aggregated_pricing["prompt_tokens"] += synthesis_pricing.get("prompt_tokens") or 0
                     aggregated_pricing["completion_tokens"] += synthesis_pricing.get("completion_tokens") or 0
+                    aggregated_pricing["cached_tokens"] += synthesis_pricing.get("cached_tokens") or 0
                     aggregated_pricing["total_cost"] += synthesis_pricing.get("total_cost") or 0.0
                     synthesis_result.metadata["pricing"] = aggregated_pricing
 
@@ -1251,17 +1254,21 @@ class LiteLLMWrapper(BaseModel):
 
         prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
         completion_tokens = getattr(usage, "completion_tokens", 0) or 0
+        cached_tokens = extract_cached_tokens(usage)
 
-        # Use existing pricing calculation utility
+        # Use existing pricing calculation utility; pass cached tokens so the
+        # cache-read discount is applied to total_cost.
         prompt_tokens, completion_tokens, total_cost = calculate_token_cost(
             model=self.litellm_model_name,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
+            cached_tokens=cached_tokens,
         )
 
         return {
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
+            "cached_tokens": cached_tokens,
             "total_cost": total_cost,
         }
 

@@ -125,10 +125,20 @@ LLMMessage = Annotated[
 
 @dataclass
 class RequestUsage:
-    """Token usage for a single LLM request."""
+    """Token usage for a single LLM request.
+
+    ``cached_tokens`` is the subset of ``prompt_tokens`` that was served from a
+    context cache (Gemini implicit/explicit caching, Anthropic prompt caching,
+    OpenAI automatic caching). It is reported by providers under the OpenAI usage
+    schema at ``usage.prompt_tokens_details.cached_tokens`` and is billed at a
+    reduced cache-read rate. Capturing it lets cost accounting reflect the cache
+    discount and lets traces show the cache hit-rate. ``prompt_tokens`` remains
+    the TOTAL input (cached + uncached), matching the provider usage object.
+    """
 
     prompt_tokens: int
     completion_tokens: int
+    cached_tokens: int = 0
 
 
 FinishReasons = Literal["stop", "length", "function_calls", "content_filter", "unknown"]

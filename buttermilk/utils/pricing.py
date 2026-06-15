@@ -80,23 +80,77 @@ def _simple_model_resolution(model_name: str | None) -> str:
     return model_name
 
 
+def extract_cached_tokens(usage: Any) -> int:
+    """Extract the cache-read (cached prompt) token count from a usage object or dict.
+
+    Providers report the subset of input tokens served from a context cache under
+    several schemas. We check, in order:
+    - OpenAI / Vertex-OpenAI / Gemini: ``prompt_tokens_details.cached_tokens``
+      (object attribute or nested dict). This is what the Vertex OpenAI-compat
+      layer and litellm normalise Gemini implicit-cache hits into.
+    - Anthropic-style flat field: ``cache_read_input_tokens``.
+    - Gemini native batch schema: ``cachedContentTokenCount`` / ``cached_content_token_count``.
+    - Flat ``cached_tokens``.
+
+    Returns 0 when no cache hit is reported (the common no-cache case).
+    """
+    if usage is None:
+        return 0
+
+    def _coerce(value: Any) -> int:
+        try:
+            return int(value or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    # Nested prompt_tokens_details.cached_tokens (object or dict)
+    details = getattr(usage, "prompt_tokens_details", None)
+    if details is None and isinstance(usage, dict):
+        details = usage.get("prompt_tokens_details") or usage.get("promptTokensDetails")
+    if details is not None:
+        if isinstance(details, dict):
+            cached = details.get("cached_tokens") or details.get("cachedTokens")
+        else:
+            cached = getattr(details, "cached_tokens", None)
+        if cached:
+            return _coerce(cached)
+
+    # Flat fields across providers
+    for attr in ("cache_read_input_tokens", "cachedContentTokenCount", "cached_content_token_count", "cached_tokens"):
+        if isinstance(usage, dict):
+            if usage.get(attr):
+                return _coerce(usage.get(attr))
+        else:
+            value = getattr(usage, attr, None)
+            if value:
+                return _coerce(value)
+
+    return 0
+
+
 def calculate_token_cost(
     model: str,
     prompt_tokens: int = 0,
     completion_tokens: int = 0,
     usage_dict: dict[str, Any] | None = None,
+    cached_tokens: int = 0,
 ) -> tuple[int, int, float]:
-    """Compute USD token cost for a model.
+    """Compute USD token cost for a model, applying any cache-read discount.
 
     Args:
         model: Model name (used for logging)
-        prompt_tokens: Number of prompt tokens
+        prompt_tokens: Number of prompt tokens (TOTAL input, including cached)
         completion_tokens: Number of completion tokens
-        usage_dict: Optional usage dictionary with token counts
-        litellm_model: Optional pre-resolved litellm model name for cost calculation
+        usage_dict: Optional usage dictionary with token counts. If it carries a
+            cached-token count (any supported schema), it is extracted and the
+            cache-read discount applied.
+        cached_tokens: Subset of ``prompt_tokens`` served from cache. Billed at the
+            provider's reduced cache-read rate. Overridden by usage_dict if that
+            carries a cached count.
 
     Returns:
-        Tuple of (prompt_tokens, completion_tokens, total_cost)
+        Tuple of (prompt_tokens, completion_tokens, total_cost). ``total_cost``
+        reflects the cache-read discount when cached_tokens > 0.
     """
     cost_per_token = _get_cost_per_token()
     if cost_per_token is None:
@@ -110,19 +164,30 @@ def calculate_token_cost(
         elif "input_tokens" in usage_dict:
             prompt_tokens = usage_dict.get("input_tokens", 0)
             completion_tokens = usage_dict.get("output_tokens", 0)
+        # Prefer cached count carried in the usage dict over the explicit arg
+        usage_cached = extract_cached_tokens(usage_dict)
+        if usage_cached:
+            cached_tokens = usage_cached
+
+    # Cached tokens are a subset of prompt_tokens; guard against bad inputs.
+    cached_tokens = max(0, min(int(cached_tokens or 0), int(prompt_tokens or 0)))
 
     # Resolve model name if necessary
     cost_model = _simple_model_resolution(model)
 
     try:
+        # litellm bills prompt_tokens at the full rate then re-prices the
+        # cache_read_input_tokens subset at the model's cache-read rate.
         prompt_cost, completion_cost_val = cost_per_token(
             model=cost_model,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
+            cache_read_input_tokens=cached_tokens,
         )
         total_cost = prompt_cost + completion_cost_val
         logger.debug(
-            f"Token cost for {model} (cost model: {cost_model}): {prompt_tokens} prompt + {completion_tokens} completion = ${total_cost:.6f}",
+            f"Token cost for {model} (cost model: {cost_model}): {prompt_tokens} prompt "
+            f"({cached_tokens} cached) + {completion_tokens} completion = ${total_cost:.6f}",
         )
         return prompt_tokens, completion_tokens, total_cost
     except Exception as e:
@@ -143,6 +208,7 @@ def extract_usage_from_metadata(metadata: dict[str, Any]) -> dict[str, Any] | No
             return {
                 "prompt_tokens": getattr(usage, "prompt_tokens", 0),
                 "completion_tokens": getattr(usage, "completion_tokens", 0),
+                "cached_tokens": extract_cached_tokens(usage),
             }
         if isinstance(usage, dict):
             return usage
