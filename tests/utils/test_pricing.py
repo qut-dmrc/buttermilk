@@ -123,7 +123,9 @@ class TestCalculateTokenCost:
 
             calculate_token_cost(model=buttermilk_model, prompt_tokens=100, completion_tokens=50)
 
-            mock_cost_per_token.assert_called_once_with(model=expected_litellm_model, prompt_tokens=100, completion_tokens=50, cache_read_input_tokens=0)
+            mock_cost_per_token.assert_called_once_with(
+                model=expected_litellm_model, prompt_tokens=100, completion_tokens=50, cache_read_input_tokens=0
+            )
 
 
 class TestExtractUsageFromMetadata:
@@ -229,7 +231,10 @@ class TestCacheReadDiscount:
         """Pricing an identical prompt with cached tokens costs strictly less."""
         _, _, full = calculate_token_cost("gemini/gemini-2.5-flash", prompt_tokens=10_000, completion_tokens=100)
         _, _, cached = calculate_token_cost(
-            "gemini/gemini-2.5-flash", prompt_tokens=10_000, completion_tokens=100, cached_tokens=8_000,
+            "gemini/gemini-2.5-flash",
+            prompt_tokens=10_000,
+            completion_tokens=100,
+            cached_tokens=8_000,
         )
         assert full > 0
         assert cached < full, (full, cached)
