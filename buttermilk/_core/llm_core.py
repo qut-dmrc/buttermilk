@@ -601,11 +601,14 @@ class LLMCore(ObservabilityMixin):
                 if hasattr(result, "usage") and result.usage:
                     prompt_tokens = getattr(result.usage, "prompt_tokens", None)
                     completion_tokens = getattr(result.usage, "completion_tokens", None)
+                    cached_tokens = getattr(result.usage, "cached_tokens", None)
 
                     if prompt_tokens is not None:
                         span.set_attribute("llm.usage.prompt_tokens", prompt_tokens)
                     if completion_tokens is not None:
                         span.set_attribute("llm.usage.completion_tokens", completion_tokens)
+                    if cached_tokens:
+                        span.set_attribute("llm.usage.cached_tokens", cached_tokens)
 
                     # Calculate total tokens from prompt + completion
                     if prompt_tokens is not None and completion_tokens is not None:

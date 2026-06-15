@@ -27,7 +27,7 @@ from buttermilk._core.types import AssistantMessage, Record
 from buttermilk.agents.differences import Differences
 from buttermilk.agents.judge import JudgeReasons
 from buttermilk.agents.rag import ResearchResult
-from buttermilk.utils.pricing import calculate_token_cost, extract_usage_from_metadata
+from buttermilk.utils.pricing import calculate_token_cost, extract_cached_tokens, extract_usage_from_metadata
 
 PREVIEW_LENGTH = 200
 
@@ -58,6 +58,7 @@ class ChatMessage(BaseModel):
     tracing_link: str | None = Field(None, description="Link to the tracing information")
     prompt_tokens: int = Field(default=0, description="Number of prompt/input tokens used")
     completion_tokens: int = Field(default=0, description="Number of completion/output tokens used")
+    cached_tokens: int = Field(default=0, description="Subset of prompt_tokens served from cache (cache-read)")
     cost_usd: float = Field(default=0.0, description="Estimated cost in USD for this message")
 
 
@@ -108,6 +109,7 @@ class MessageService:
             # Initialize token/cost tracking variables
             prompt_tokens = 0
             completion_tokens = 0
+            cached_tokens = 0
             cost_usd = 0.0
 
             if isinstance(message, ExecutionTrace) or isinstance(message, AgentOutput):
@@ -140,7 +142,11 @@ class MessageService:
                             model=model_for_pricing,
                             usage_dict=usage,
                         )
-                        logger.debug(f"[MessageService] Pricing computed: {prompt_tokens} prompt, {completion_tokens} completion, ${cost_usd:.6f}")
+                        cached_tokens = extract_cached_tokens(usage)
+                        logger.debug(
+                            f"[MessageService] Pricing computed: {prompt_tokens} prompt ({cached_tokens} cached), "
+                            f"{completion_tokens} completion, ${cost_usd:.6f}",
+                        )
                     except Exception as e:
                         logger.debug(f"[MessageService] Failed to calculate token cost: {e}")
 
@@ -211,6 +217,7 @@ class MessageService:
                 timestamp=datetime.datetime.now(),
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
+                cached_tokens=cached_tokens,
                 cost_usd=cost_usd,
             )
             return output

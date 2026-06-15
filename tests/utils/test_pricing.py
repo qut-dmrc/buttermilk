@@ -1,8 +1,10 @@
 """Tests for the pricing utility module."""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-from buttermilk.utils.pricing import calculate_token_cost, extract_usage_from_metadata
+import pytest
+
+from buttermilk.utils.pricing import calculate_token_cost, extract_cached_tokens, extract_usage_from_metadata
 
 
 class TestCalculateTokenCost:
@@ -32,6 +34,7 @@ class TestCalculateTokenCost:
             model="azure/gpt-4.1",  # Should map to azure model
             prompt_tokens=100,
             completion_tokens=50,
+            cache_read_input_tokens=0,
         )
 
     @patch("buttermilk.utils.pricing._get_cost_per_token")
@@ -53,6 +56,7 @@ class TestCalculateTokenCost:
             model="vertex_ai/claude-sonnet-4@20250514",  # Should map to vertex AI model
             prompt_tokens=200,
             completion_tokens=75,
+            cache_read_input_tokens=0,
         )
 
     @patch("buttermilk.utils.pricing._get_cost_per_token")
@@ -68,7 +72,7 @@ class TestCalculateTokenCost:
         assert prompt_tokens == 150
         assert completion_tokens == 100
         assert total_cost == 0.003
-        mock_cost_per_token.assert_called_once_with(model="gpt-3.5-turbo", prompt_tokens=150, completion_tokens=100)
+        mock_cost_per_token.assert_called_once_with(model="gpt-3.5-turbo", prompt_tokens=150, completion_tokens=100, cache_read_input_tokens=0)
 
     @patch("buttermilk.utils.pricing._get_cost_per_token")
     def test_calculate_token_cost_with_error(self, mock_get_cost_per_token):
@@ -119,7 +123,9 @@ class TestCalculateTokenCost:
 
             calculate_token_cost(model=buttermilk_model, prompt_tokens=100, completion_tokens=50)
 
-            mock_cost_per_token.assert_called_once_with(model=expected_litellm_model, prompt_tokens=100, completion_tokens=50)
+            mock_cost_per_token.assert_called_once_with(
+                model=expected_litellm_model, prompt_tokens=100, completion_tokens=50, cache_read_input_tokens=0
+            )
 
 
 class TestExtractUsageFromMetadata:
@@ -159,3 +165,97 @@ class TestExtractUsageFromMetadata:
 
         usage = extract_usage_from_metadata(metadata)
         assert usage is None
+
+    def test_extract_includes_cached_tokens_from_object(self):
+        """Usage objects carrying prompt_tokens_details.cached_tokens surface the cached count."""
+
+        class _Details:
+            cached_tokens = 700
+
+        class _Usage:
+            prompt_tokens = 1000
+            completion_tokens = 50
+            prompt_tokens_details = _Details()
+
+        metadata = {"usage": _Usage()}
+        usage = extract_usage_from_metadata(metadata)
+        assert usage == {"prompt_tokens": 1000, "completion_tokens": 50, "cached_tokens": 700}
+
+
+class TestExtractCachedTokens:
+    """Cache-read token counts arrive under several provider schemas; all must be handled."""
+
+    @pytest.mark.parametrize(
+        ("usage", "expected"),
+        [
+            # OpenAI / Vertex-OpenAI / Gemini implicit-cache (nested dict)
+            ({"prompt_tokens": 1000, "prompt_tokens_details": {"cached_tokens": 800}}, 800),
+            # camelCase nested variant
+            ({"promptTokensDetails": {"cachedTokens": 600}}, 600),
+            # Anthropic-style flat field
+            ({"cache_read_input_tokens": 500}, 500),
+            # Gemini native batch schema
+            ({"cachedContentTokenCount": 400}, 400),
+            ({"cached_content_token_count": 300}, 300),
+            # flat cached_tokens
+            ({"cached_tokens": 200}, 200),
+            # no-cache case (the pre-fix default)
+            ({"prompt_tokens": 1000, "completion_tokens": 50}, 0),
+            (None, 0),
+            ({}, 0),
+        ],
+    )
+    def test_extract_cached_tokens_schemas(self, usage, expected):
+        assert extract_cached_tokens(usage) == expected
+
+    def test_extract_cached_tokens_from_object_attr(self):
+        """A usage object exposing prompt_tokens_details.cached_tokens as an attribute."""
+
+        class _Details:
+            cached_tokens = 1234
+
+        class _Usage:
+            prompt_tokens_details = _Details()
+
+        assert extract_cached_tokens(_Usage()) == 1234
+
+
+class TestCacheReadDiscount:
+    """The cache-read discount must reach litellm and reduce the total cost.
+
+    These use the REAL litellm pricing tables (local, deterministic — no network)
+    rather than mocks, so they verify the actual billing contract end to end.
+    """
+
+    def test_cached_tokens_reduce_cost(self):
+        """Pricing an identical prompt with cached tokens costs strictly less."""
+        _, _, full = calculate_token_cost("gemini/gemini-2.5-flash", prompt_tokens=10_000, completion_tokens=100)
+        _, _, cached = calculate_token_cost(
+            "gemini/gemini-2.5-flash",
+            prompt_tokens=10_000,
+            completion_tokens=100,
+            cached_tokens=8_000,
+        )
+        assert full > 0
+        assert cached < full, (full, cached)
+
+    def test_cached_count_from_usage_dict_applies_discount(self):
+        """A cached count carried inside usage_dict (OpenAI schema) is honoured."""
+        _, _, baseline = calculate_token_cost("gemini/gemini-2.5-flash", prompt_tokens=10_000, completion_tokens=100)
+        _, _, discounted = calculate_token_cost(
+            "gemini/gemini-2.5-flash",
+            usage_dict={
+                "prompt_tokens": 10_000,
+                "completion_tokens": 100,
+                "prompt_tokens_details": {"cached_tokens": 8_000},
+            },
+        )
+        assert discounted < baseline, (baseline, discounted)
+
+    def test_cached_tokens_clamped_to_prompt_tokens(self):
+        """cached_tokens > prompt_tokens is clamped, not forwarded raw to litellm."""
+        mock_cost = MagicMock(return_value=(0.001, 0.002))
+        with patch("buttermilk.utils.pricing._get_cost_per_token", return_value=mock_cost):
+            calculate_token_cost("gpt-4", prompt_tokens=100, completion_tokens=50, cached_tokens=99999)
+        # cache_read_input_tokens must be clamped to prompt_tokens (100), never exceed it
+        assert mock_cost.call_args.kwargs["cache_read_input_tokens"] == 100
