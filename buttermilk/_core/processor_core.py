@@ -219,6 +219,12 @@ class ObservabilityMixin(BaseModel):
         JMESPath over the dumped record envelope sees a uniform shape regardless of how the
         record is later serialized. The typed ``StepResult`` enforces the shape at
         construction time; this helper never mutates the input record's metadata in place.
+
+        NB: ``agent_id`` follows two conventions that legitimately coexist in one history
+        list — positional ``"<step>#<index>"`` for synthetic producers (LLMProcessor,
+        FanInLLMProcessor) and the real agent identity for GroupchatProcessor. Both are
+        opaque labels; downstream selectors filter by ``step`` first (``index`` is unique
+        only within a step), so the two conventions never need to be reconciled.
         """
         existing = list(record.metadata.get("history", [])) if record.metadata else []
         for sr in step_results:
