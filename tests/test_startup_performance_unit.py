@@ -108,7 +108,7 @@ class TestLazyRouteManager:
 
         assert lazy_manager._core_routes_registered
         # Should have health check route
-        route_paths = [route.path for route in app.routes]
+        route_paths = [route.path for route in app.routes if hasattr(route, "path")]
         assert "/health" in route_paths
 
     def test_router_deferral(self):
@@ -151,7 +151,7 @@ class TestLazyRouteManager:
 
         assert lazy_manager._heavy_routes_registered
         # Should now have the heavy route
-        route_paths = [route.path for route in app.routes]
+        route_paths = [route.path for route in app.routes if hasattr(route, "path")]
         assert "/api/heavy" in route_paths
 
     def test_needs_heavy_routes_detection(self):
