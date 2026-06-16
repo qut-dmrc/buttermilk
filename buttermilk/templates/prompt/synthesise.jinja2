@@ -5,8 +5,9 @@ Inputs:
   - instructions: The original task instructions given to the agents.
   - q: (Implied) The original question or topic being addressed.
   - content: (Implied) The original content being analyzed.
-  - answers: A list of draft answers, expected to be ExecutionTraces from previous steps (e.g., Judge agents).
-             The template accesses `answer.outputs.reasons`.
+  - answers: A list of draft answers — StepResult entries from prior steps (e.g. Judge agents),
+             selected via JMESPath over record.metadata.history (filter `error==null`).
+             The template addresses the typed fields `answer.agent_id` and `answer.outputs`.
   - feedback: (Optional) Additional feedback to incorporate.
   - criteria: The evaluation criteria to apply during synthesis.
   - record: (Placeholder) Likely contains the original data record(s). Used as placeholder in template.
@@ -50,7 +51,9 @@ Your response should be written for an external audience. Do not mention our int
 {# --- User Message Construction --- #}
 # User:
 {# Raise an error if answers do not exist: #}{%- if not answers -%}{{ answers }}{% endif -%}
-{# Loop through each provided draft answer, using simplified formatting. #}
+{# Loop through each draft answer (a StepResult), addressing its typed fields. #}
 {% for answer in answers %}
-{{ answer }}
+<BEGIN DRAFT ANSWER #{{ answer.agent_id }}>
+{{ answer.outputs }}
+<END DRAFT ANSWER #{{ answer.agent_id }}>
 {% endfor %}

@@ -202,6 +202,6 @@ class TestOpenAIBatchProcessor:
             results = await processor._process_batch([context])
 
             assert len(results) == 1
-            assert results[0].metadata["llm_output"] == "LLM says hello"
+            assert results[0].metadata["history"][-1]["outputs"] == "LLM says hello"
             assert results[0].metadata["cost_usd"] == 0.001
             mock_manager.run_batch_and_wait.assert_called_once()

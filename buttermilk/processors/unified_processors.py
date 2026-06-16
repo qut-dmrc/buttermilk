@@ -27,8 +27,8 @@ from pydantic import Field, PrivateAttr
 # For ChromaDBProcessor remote storage support
 # Import bm for session_info access (same pattern as chromadb_uploader.py)
 from buttermilk import bm, logger
-from buttermilk._core.contract import ExecutionTrace, TaskProcessingComplete
-from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.contract import ExecutionTrace, StepResult, TaskProcessingComplete
+from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk._core.llm_core import LLMCore
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.processor_core import ProcessorCore, TraceParams
@@ -104,35 +104,31 @@ class LLMProcessor(ProcessorCore):
             fail_on_unfilled_parameters=self.fail_on_unfilled_parameters,
         )
 
-    async def _process_record(
+    def _optional_input_keys(self) -> set[str]:
+        """Config-field overrides (model/template/...) fall back to processor defaults.
+
+        They are genuinely optional: ``inputs: {model: record.metadata.model}`` means
+        "use the per-record model if present, else the configured default". Data inputs
+        (template variables, prior-step references) remain required-by-default (fail-loud).
+        """
+        return super()._optional_input_keys() | self._OVERRIDABLE_CONFIG_FIELDS
+
+    def _resolve_call_config(
         self,
         context: ProcessingContext,
-    ) -> AsyncGenerator[Any, None]:
-        """Process a record through LLM inference.
+    ) -> tuple[str, str, dict[str, Any], dict[str, Any]]:
+        """Resolve the per-record model/template, extra template vars, and record-derived vars.
 
         Resolution order for config fields (model, template, etc.):
         1. ``inputs`` JMESPath mappings (per-record, from record envelope)
         2. ``context.variant_params`` (from BatchAccumulator / pipeline orchestrator)
         3. Processor config defaults (from YAML)
 
-        Args:
-            context: Processing context containing the record to process
-
-        Yields:
-            BaseRecord: The input record enriched with LLM output in metadata.
-
-        Raises:
-            ProcessingError: If LLM processing fails
+        Returns:
+            (resolved_model, resolved_template, extra_template_vars, record_template_vars)
         """
-        start_time = time.time()
-
-        # Safely get record_id for typed objects
-        record_id = getattr(context.record, "record_id", None) or str(type(context.record).__name__)
-
-        # Resolve per-record overrides via JMESPath inputs
         resolved = self._resolve_inputs(context)
 
-        # Separate config overrides from additional template variables
         config_overrides: dict[str, Any] = {}
         extra_template_vars: dict[str, Any] = {}
         for key, value in resolved.items():
@@ -141,88 +137,81 @@ class LLMProcessor(ProcessorCore):
             else:
                 extra_template_vars[key] = value
 
-        # Also check variant_params (from BatchAccumulator / pipeline orchestrator)
         if context.variant_params:
             for key, value in context.variant_params.items():
                 if key in self._OVERRIDABLE_CONFIG_FIELDS:
-                    # Config overrides (model, template, etc.) — inputs JMESPath takes priority
                     if key not in config_overrides:
                         config_overrides[key] = value
-                # Non-config params (e.g., criteria) go to template vars — inputs JMESPath takes priority
                 elif key not in extra_template_vars:
                     extra_template_vars[key] = value
 
-        resolved_model = config_overrides["model"] if "model" in config_overrides else self.model
-        resolved_template = config_overrides["template"] if "template" in config_overrides else self.template
-
-        logger.debug(
-            "LLMProcessor starting",
-            record_id=record_id,
-            model=resolved_model,
-            template=resolved_template,
-        )
+        resolved_model = config_overrides.get("model", self.model)
+        resolved_template = config_overrides.get("template", self.template)
 
         # Build template variables by flattening record data
         if hasattr(context.record, "model_dump"):
             record_dict = context.record.model_dump()
-            template_vars = {
+            record_template_vars = {
                 **record_dict.get("metadata", {}),  # Flatten metadata fields
                 **{k: v for k, v in record_dict.items() if k != "metadata"},  # Top-level fields
             }
         else:
-            # For non-Pydantic records
-            template_vars = {"record": context.record}
+            record_template_vars = {"record": context.record}
 
-        # Build LLMCore per-record (trivially cheap — no network calls at init)
-        llm_core = self._build_llm_core(
-            model=resolved_model,
-            template=resolved_template,
-            extra_template_vars=extra_template_vars,
-        )
+        return resolved_model, resolved_template, extra_template_vars, record_template_vars
 
-        # Processor stage name for trace emission
-        processor_stage = f"LLMProcessor/{resolved_model}"
+    async def _run_one(
+        self,
+        context: ProcessingContext,
+        *,
+        model: str,
+        template: str,
+        extra_template_vars: dict[str, Any],
+        record_template_vars: dict[str, Any],
+        step: str,
+        index: int,
+    ) -> StepResult:
+        """Run a single LLM call, emit its trace, and project a StepResult from it.
+
+        Never raises on LLM failure: returns an error-bearing StepResult (outputs=None)
+        so fan-in callers can apply a completeness gate. Linear callers inspect
+        ``result.error`` and decide whether to raise. The success/error trace is emitted
+        exactly once here, and the StepResult is projected from that same trace
+        (single-projection guarantee).
+        """
+        start_time = time.time()
+        record_id = getattr(context.record, "record_id", None) or str(type(context.record).__name__)
+        agent_id = f"{step}#{index}"
+        processor_stage = f"{self.__class__.__name__}/{model}"
+
+        llm_core = self._build_llm_core(model=model, template=template, extra_template_vars=extra_template_vars)
 
         try:
-            # Use LLMCore.process_with_llm() for LLM inference
             llm_result = await llm_core.process_with_llm(
-                template_vars=template_vars,
+                template_vars=record_template_vars,
                 record=context.record,
                 parent_trace_id=context.session_id,
             )
-
-            # Check for errors
             if llm_result.error:
                 raise ProcessingError(f"LLM processing failed: {llm_result.error}")
 
-            logger.debug(
-                "LLMProcessor yielding output",
-                record_id=record_id,
-                output_type=type(llm_result.content).__name__,
-            )
-
-            # Emit execution trace to BigQuery for observability
             duration_ms = (time.time() - start_time) * 1000
 
             # Build metadata with model config for complete traceability
             model_configs = {}
             try:
-                if resolved_model in bm.llms.connections:
-                    llm_config = bm.llms.connections[resolved_model]
+                if model in bm.llms.connections:
+                    llm_config = bm.llms.connections[model]
                     model_configs = llm_config.configs.copy() if llm_config.configs else {}
             except RuntimeError:
                 pass  # BM not initialized (unit tests) — model_configs stays empty
 
             extra_metadata = {
                 **llm_result.metadata,
-                "llm_config": {
-                    "model": resolved_model,
-                    "template": resolved_template,
-                    **model_configs,
-                },
+                "llm_config": {"model": model, "template": template, **model_configs},
             }
 
-            await self._emit_success_trace(
+            trace = await self._emit_success_trace(
                 record=context.record,
                 outputs=llm_result.content,
                 tp=TraceParams(
@@ -230,47 +219,169 @@ class LLMProcessor(ProcessorCore):
                     parent_trace_id=context.session_id,
                     duration_ms=duration_ms,
                     messages=llm_result.messages,
-                    inputs=llm_result.resolved_inputs if llm_result.resolved_inputs else template_vars,
+                    inputs=llm_result.resolved_inputs if llm_result.resolved_inputs else record_template_vars,
                     extra_metadata=extra_metadata,
                     execution_type="llm_processing",
                     trace_id=llm_result.trace_id,
-                    component_name=f"LLMProcessor({resolved_model})",
+                    component_name=f"{self.__class__.__name__}({model})",
+                    step=step,
+                    agent_id=agent_id,
                 ),
             )
+            return StepResult.from_execution_trace(trace, step=step, index=index, agent_id=agent_id)
 
-            # Enrich original record with LLM output in metadata
-            # (matches GroupchatProcessor pattern — preserves full execution context)
-            enriched_metadata = {
-                **(context.record.metadata if context.record.metadata else {}),
-                "llm_output": {
-                    "content": llm_result.content,
-                    "model": resolved_model,
-                    "template": resolved_template,
-                    "trace_id": llm_result.trace_id,
-                },
-            }
-
-            yield context.record.model_copy(update={"metadata": enriched_metadata})
-
-        except ProcessingError:
-            # Emit error trace for observability
+        except FatalError:
+            # Fatal errors must always propagate — never captured as a per-step error entry.
+            raise
+        except Exception as error:
+            # Any other failure becomes a retained error StepResult (outputs=None) so a
+            # fan-in panel can apply its completeness gate; linear callers re-raise.
             duration_ms = (time.time() - start_time) * 1000
-            import sys
-
-            error = sys.exc_info()[1]
-            await self._emit_error_trace(
+            logger.warning(
+                "LLM step failed",
+                record_id=record_id,
+                step=step,
+                index=index,
+                error=str(error),
+            )
+            error_trace = await self._emit_error_trace(
                 record=context.record,
                 error=error,
                 tp=TraceParams(
                     processor_stage=processor_stage,
                     parent_trace_id=context.session_id,
                     duration_ms=duration_ms,
-                    inputs=template_vars,
+                    inputs=record_template_vars,
+                    extra_metadata={"llm_config": {"model": model, "template": template}},
                     execution_type="llm_processing",
-                    component_name=f"LLMProcessor({resolved_model})",
+                    component_name=f"{self.__class__.__name__}({model})",
+                    step=step,
+                    agent_id=agent_id,
                 ),
             )
-            raise
+            return StepResult.from_execution_trace(error_trace, step=step, index=index, agent_id=agent_id)
+
+    async def _process_record(
+        self,
+        context: ProcessingContext,
+    ) -> AsyncGenerator[Any, None]:
+        """Process a record through a single LLM inference, appending one StepResult to history.
+
+        Args:
+            context: Processing context containing the record to process
+
+        Yields:
+            BaseRecord: The input record with one StepResult appended to ``metadata.history``.
+
+        Raises:
+            ProcessingError: If LLM processing fails (linear steps stay fail-fast).
+        """
+        model, template, extra_template_vars, record_template_vars = self._resolve_call_config(context)
+        step = self.name or "llm"
+
+        logger.debug("LLMProcessor starting", record_id=context.record.record_id, model=model, template=template)
+
+        result = await self._run_one(
+            context,
+            model=model,
+            template=template,
+            extra_template_vars=extra_template_vars,
+            record_template_vars=record_template_vars,
+            step=step,
+            index=0,
+        )
+
+        # Linear steps stay fail-fast: a failed call halts the record (routes to failed_queue).
+        if result.error is not None:
+            raise ProcessingError(f"LLMProcessor step '{step}' failed: {result.error.get('event', result.error)}")
+
+        enriched_metadata = self._append_history(context.record, result)
+        yield context.record.model_copy(update={"metadata": enriched_metadata})
+
+
+class FanInLLMProcessor(LLMProcessor):
+    """Run an independent panel of N LLM members concurrently and append N StepResults.
+
+    Use for a HOMOGENEOUS-role panel whose members do NOT see each other while producing
+    their output (e.g. 8 distinct judges, different models/criteria, no inter-agent comms).
+    Members run via ``asyncio.gather``; concurrency is auto-bounded by the global API
+    semaphore that ``LLMCore.process_with_llm`` acquires per call — no orchestrator, no
+    conductor instantiation per record.
+
+    Boundary rule (the canonical decision): "Do panel members need to see each other's
+    outputs while producing their own?" No → FanInLLMProcessor. Yes → GroupchatProcessor.
+
+    Each member appends one StepResult sharing this processor's ``name`` as ``step`` and a
+    STABLE ``index`` from its position in ``members`` (config order, never arrival order).
+    Failed members are retained as error entries (outputs=None); downstream selectors must
+    filter ``error==null``. ``min_results`` is a fail-loud completeness gate, not list
+    compaction.
+    """
+
+    members: list[dict[str, Any]] = Field(
+        ...,
+        description=(
+            "Per-member config overrides merged onto the base config. Each entry may set "
+            "`model`, `template`, and additional template variables. One StepResult per "
+            "member, indexed by list position."
+        ),
+    )
+    min_results: int | None = Field(
+        default=None,
+        description=(
+            "Minimum number of successful members required. None (default) means ALL "
+            "members must succeed (fail-loud). A researcher MAY relax this — a methodology "
+            "choice (P#84), never a silent default."
+        ),
+    )
+
+    async def _process_record(
+        self,
+        context: ProcessingContext,
+    ) -> AsyncGenerator[Any, None]:
+        """Run all members concurrently, append their StepResults, gate on completeness."""
+        base_model, base_template, base_extra, record_template_vars = self._resolve_call_config(context)
+        step = self.name or "panel"
+
+        if not self.members:
+            raise ProcessingError(f"FanInLLMProcessor step '{step}' has no members configured.")
+
+        logger.debug(
+            "FanInLLMProcessor starting",
+            record_id=context.record.record_id,
+            step=step,
+            members=len(self.members),
+        )
+
+        async def run_member(index: int, member: dict[str, Any]) -> StepResult:
+            member_model = member.get("model", base_model)
+            member_template = member.get("template", base_template)
+            member_extra = {**base_extra, **{k: v for k, v in member.items() if k not in self._OVERRIDABLE_CONFIG_FIELDS}}
+            return await self._run_one(
+                context,
+                model=member_model,
+                template=member_template,
+                extra_template_vars=member_extra,
+                record_template_vars=record_template_vars,
+                step=step,
+                index=index,
+            )
+
+        # Concurrency is bounded by the global API semaphore acquired inside each LLM call.
+        results: list[StepResult] = await asyncio.gather(*[run_member(i, m) for i, m in enumerate(self.members)])
+
+        successes = sum(1 for r in results if r.error is None)
+        required = self.min_results if self.min_results is not None else len(self.members)
+        if successes < required:
+            failed = [r.agent_id for r in results if r.error is not None]
+            raise ProcessingError(
+                f"FanInLLMProcessor step '{step}' completeness gate failed: "
+                f"{successes}/{len(self.members)} members succeeded, required {required}. "
+                f"Failed members: {failed}."
+            )
+
+        enriched_metadata = self._append_history(context.record, *results)
+        yield context.record.model_copy(update={"metadata": enriched_metadata})
 
 
 class GroupchatProcessor(ProcessorCore):
@@ -372,33 +483,39 @@ class GroupchatProcessor(ProcessorCore):
                 error_details = [f"{t.agent_id}: {t.error or 'unknown error'}" for t in task_errors]
                 raise ProcessingError(f"Orchestrator had {len(task_errors)} agent error(s): {'; '.join(error_details)}")
 
-            # Build outputs from collected traces
-            outputs = []
-            for trace in traces:
-                if trace.outputs is not None:
-                    outputs.append(trace.outputs)
-
             # Check if we got any meaningful outputs - no outputs likely means early termination
-            if not outputs:
+            if not any(trace.outputs is not None for trace in traces):
                 raise ProcessingError("Orchestrator completed but produced no outputs (early termination or all agents failed)")
 
-            # Enrich record metadata with orchestrator results
-            enriched_metadata = {
-                **(context.record.metadata if context.record.metadata else {}),
-                "groupchat": {
-                    "status": "processed",
-                    "flow_name": self.flow_name,
-                    "trace_count": len(traces),
-                    "outputs": outputs,
-                },
-            }
+            # Project each collected ExecutionTrace into a StepResult and append to the
+            # unified `history` accumulator (conductor-driven fan-in producer, Proposal v4).
+            # The orchestrator already emits these traces to BigQuery; here we only mirror
+            # them onto the record. `index` is assigned from a STABLE ordering (sorted by
+            # agent identity, then call_id) — never callback-arrival order, which is
+            # non-deterministic.
+            step = self.name or self.flow_name
+            ordered_traces = sorted(
+                traces,
+                key=lambda t: (str(t.agent_info.get("agent_id", t.agent_info.get("component_name", ""))), t.call_id),
+            )
+            step_results = [
+                StepResult.from_execution_trace(
+                    trace,
+                    step=step,
+                    index=i,
+                    agent_id=str(trace.agent_info.get("agent_id", f"{step}#{i}")),
+                )
+                for i, trace in enumerate(ordered_traces)
+            ]
+
+            enriched_metadata = self._append_history(context.record, *step_results)
 
             logger.debug(
                 "GroupchatProcessor completed",
                 record_id=record_id,
                 flow_name=self.flow_name,
                 trace_count=len(traces),
-                output_count=len(outputs),
+                output_count=sum(1 for r in step_results if r.error is None),
             )
 
             yield context.record.model_copy(update={"metadata": enriched_metadata})

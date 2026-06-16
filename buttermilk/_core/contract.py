@@ -743,6 +743,118 @@ class ExecutionTrace(BaseModel):
         )
 
 
+class StepResult(BaseModel):
+    """One entry in a record's multi-step execution ``history``.
+
+    A processor pipeline accumulates a flat, ordered list of ``StepResult`` entries on
+    ``record.metadata["history"]``. Any downstream step can address any prior step's
+    output by role label or position via JMESPath over that list, e.g.::
+
+        history[?step=='judge' && error==null]          # all successful judges (N=1..N)
+        history[?step=='critic' && error==null] | [0]    # the successful critic
+        history[-1]                                       # most recent step
+
+    The entry is a **lean mirror** of the load-bearing fields of :class:`ExecutionTrace`
+    (``agent_id``, ``outputs``, ``error``, provenance ``metadata``) so that ONE shape spans
+    the on-record accumulator, the synthesise/differences templates, and the BigQuery
+    ``tja.traces`` table. It deliberately does NOT reuse ExecutionTrace: that would put
+    ``session_info``/``messages``/``record`` on every per-step copy and bloat
+    ``record.model_copy`` at panel scale. Drift between the two models is prevented
+    structurally — both the trace path and the history path construct from a single
+    source via :meth:`from_execution_trace`, and a correspondence test asserts the shared
+    fields line up.
+
+    Failure semantics (see Proposal v4): a failed member is ALWAYS retained as an
+    ``error``-bearing entry (``outputs`` is None); ``index`` is a STABLE identity assigned
+    from declared config order and is NEVER reindexed on failure. Selectors that feed
+    templates MUST filter ``error==null`` to exclude failed members.
+    """
+
+    step: str = Field(
+        ...,
+        description="Role label of the producing step, taken from the processor's configured name (dynamic; no hardcoded vocabulary). Primary JMESPath selector.",
+    )
+    index: int = Field(
+        default=0,
+        description="Stable ordinal within a fan-out (0 for a linear step; 0..N-1 for an N-member panel), assigned from declared config order, never from arrival/callback order.",
+    )
+    agent_id: str = Field(
+        ...,
+        description="Identity of the producing agent/member, '<step>#<index>' by default. Satisfies the template `answer.agent_id` contract.",
+    )
+    outputs: Any | None = Field(
+        default=None,
+        description="The structured result object (the single canonical store). None when the step failed.",
+    )
+    error: dict[str, Any] | None = Field(
+        default=None,
+        description="Error info ({'event', 'details'}) when the step failed; None on success. Mirrors ExecutionTrace.error.",
+    )
+    metadata: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Lean provenance: trace_id, model, template, template_hash. NOT the full record metadata.",
+    )
+
+    model_config = ConfigDict(
+        extra="forbid",
+        arbitrary_types_allowed=True,  # outputs may be a structured (possibly non-pydantic) object
+        validate_assignment=True,
+        # NB: do NOT exclude_none — every entry must carry an explicit `error` key (null on
+        # success) so the `error==null` JMESPath filter is predictable on the dumped dict.
+    )
+
+    @property
+    def content(self) -> str:
+        """String form of ``outputs`` — computed on access, deliberately NOT stored.
+
+        Keeping this out of the serialized entry bounds ``record.model_copy`` cost at panel
+        scale (the structured ``outputs`` is the only payload persisted on the record; the
+        full string/message history already lives in BigQuery via the trace path).
+        """
+        if self.error is not None:
+            return f"StepResult({self.agent_id}, ERROR: {self.error})"
+        return str(self.outputs) if self.outputs is not None else ""
+
+    @classmethod
+    def from_execution_trace(
+        cls,
+        trace: "ExecutionTrace",
+        *,
+        step: str,
+        index: int = 0,
+        agent_id: str | None = None,
+    ) -> "StepResult":
+        """Project a :class:`StepResult` from an :class:`ExecutionTrace` (the single, canonical projection).
+
+        Extracts only the lean provenance keys from ``trace.metadata`` — never the bulky
+        ``input`` (record metadata) the trace carries — to avoid recursive bloat on the record.
+
+        Args:
+            trace: The ExecutionTrace produced for this step.
+            step: Role label for the step (the producer's configured name).
+            index: Stable ordinal from declared config order.
+            agent_id: Explicit agent identity; defaults to ``f"{step}#{index}"``.
+        """
+        md = trace.metadata if isinstance(trace.metadata, dict) else {}
+        llm_config = md.get("llm_config", {}) if isinstance(md.get("llm_config"), dict) else {}
+        template_md = md.get("template", {}) if isinstance(md.get("template"), dict) else {}
+        lean_meta = {
+            "trace_id": trace.call_id,
+            "model": llm_config.get("model"),
+            "template": llm_config.get("template"),
+            "template_hash": template_md.get("template_hash"),
+        }
+        lean_meta = {k: v for k, v in lean_meta.items() if v is not None}
+        return cls(
+            step=step,
+            index=index,
+            agent_id=agent_id or f"{step}#{index}",
+            outputs=trace.outputs,
+            error=trace.error,
+            metadata=lean_meta,
+        )
+
+
 # --- Manager / Conductor / UI Interaction Messages ---
 
 

@@ -169,9 +169,9 @@ class TestLLMProcessorProcessing:
             # Verify record ID is preserved
             assert output_record.record_id == "llm-001"
 
-            # Verify LLM output is in the configured output column (default "llm_output")
-            assert "llm_output" in output_record.metadata
-            assert output_record.metadata["llm_output"]["content"] == "LLM generated response"
+            # Verify LLM output is appended to the unified `history` accumulator
+            assert "history" in output_record.metadata
+            assert output_record.metadata["history"][-1]["outputs"] == "LLM generated response"
 
     @pytest.mark.anyio
     async def test_llm_processor_uses_template(self):
@@ -257,10 +257,10 @@ class TestLLMProcessorProcessing:
             assert len(outputs) == 1
             output_record = outputs[0]
 
-            # Verify metadata contains LLM execution info
-            assert "llm_output" in output_record.metadata
-            assert output_record.metadata["llm_output"]["model"] == "gpt-4"
-            assert output_record.metadata["llm_output"]["template"] == "test/simple"
+            # Verify metadata contains LLM execution info (lean StepResult provenance)
+            assert "history" in output_record.metadata
+            assert output_record.metadata["history"][-1]["metadata"]["model"] == "gpt-4"
+            assert output_record.metadata["history"][-1]["metadata"]["template"] == "test/simple"
 
     @pytest.mark.anyio
     async def test_llm_processor_with_input_variables(self):
@@ -360,10 +360,10 @@ class TestLLMProcessorIntegration:
             assert output_record.content == "This is test content that needs LLM processing."
             assert output_record.metadata["source"] == "test"
 
-            # Verify LLM output was added
-            assert "llm_output" in output_record.metadata
-            assert output_record.metadata["llm_output"]["content"] == "Processed output from LLM"
-            assert output_record.metadata["llm_output"]["model"] == "gpt-4"
+            # Verify LLM output was appended to history
+            assert "history" in output_record.metadata
+            assert output_record.metadata["history"][-1]["outputs"] == "Processed output from LLM"
+            assert output_record.metadata["history"][-1]["metadata"]["model"] == "gpt-4"
 
     @pytest.mark.anyio
     async def test_llm_processor_with_structured_output(self):
@@ -412,8 +412,8 @@ class TestLLMProcessorIntegration:
             assert len(outputs) == 1
             output_record = outputs[0]
 
-            # Structured output is stored in metadata.llm_output.content
-            assert "llm_output" in output_record.metadata
+            # Structured output is stored as history[-1].outputs
+            assert "history" in output_record.metadata
             # Original record fields preserved
             assert output_record.record_id == "structured-001"
 
@@ -472,7 +472,7 @@ class TestLLMProcessorInputs:
             # The LLM client should have been fetched with the overridden model
             mock_bm.llms.get_client.assert_called_with("claude-3-opus")
             # Enriched metadata should reflect the resolved model
-            assert outputs[0].metadata["llm_output"]["model"] == "claude-3-opus"
+            assert outputs[0].metadata["history"][-1]["metadata"]["model"] == "claude-3-opus"
 
     @pytest.mark.anyio
     async def test_inputs_overrides_template_per_record(self):
@@ -509,7 +509,7 @@ class TestLLMProcessorInputs:
 
             assert len(outputs) == 1
             # Enriched metadata should reflect the resolved template
-            assert outputs[0].metadata["llm_output"]["template"] == "test/structured_output"
+            assert outputs[0].metadata["history"][-1]["metadata"]["template"] == "test/structured_output"
 
     @pytest.mark.anyio
     async def test_inputs_injects_extra_template_vars(self):
@@ -546,7 +546,7 @@ class TestLLMProcessorInputs:
 
             assert len(outputs) == 1
             # Model stays as default since we didn't override it
-            assert outputs[0].metadata["llm_output"]["model"] == "gpt-4"
+            assert outputs[0].metadata["history"][-1]["metadata"]["model"] == "gpt-4"
 
     @pytest.mark.anyio
     async def test_inputs_falls_back_to_default_when_missing(self):
@@ -585,7 +585,7 @@ class TestLLMProcessorInputs:
             assert len(outputs) == 1
             # Should fall back to configured default
             mock_bm.llms.get_client.assert_called_with("gpt-4")
-            assert outputs[0].metadata["llm_output"]["model"] == "gpt-4"
+            assert outputs[0].metadata["history"][-1]["metadata"]["model"] == "gpt-4"
 
     @pytest.mark.anyio
     async def test_no_inputs_behaves_identically_to_before(self):
@@ -620,8 +620,8 @@ class TestLLMProcessorInputs:
                 outputs.append(output)
 
             assert len(outputs) == 1
-            assert outputs[0].metadata["llm_output"]["model"] == "gpt-4"
-            assert outputs[0].metadata["llm_output"]["template"] == "test/simple"
+            assert outputs[0].metadata["history"][-1]["metadata"]["model"] == "gpt-4"
+            assert outputs[0].metadata["history"][-1]["metadata"]["template"] == "test/simple"
 
     def test_resolve_inputs_with_top_level_record_fields(self):
         """Verify _resolve_inputs can access top-level record fields."""

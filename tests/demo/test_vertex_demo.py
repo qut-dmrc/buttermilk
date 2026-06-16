@@ -225,13 +225,13 @@ class TestVertexBatchProcessorDemo:
                 print(f"   Match: {'✅ YES' if match else '❌ NO'}")
 
         elif hasattr(result, "metadata"):
-            # Record with metadata - check for error or llm_output
+            # Record with metadata - check for error or the `history` accumulator
             if "error" in result.metadata:
                 print(f"\n❌ ERROR: {result.metadata['error']}")
                 pytest.fail(f"LLM call failed: {result.metadata['error']}")
-            elif "llm_output" in result.metadata:
+            elif result.metadata.get("history"):
                 print("\n⚠️  RAW OUTPUT (not parsed):")
-                output = result.metadata["llm_output"]
+                output = str(result.metadata["history"][-1]["outputs"])
                 print(f"   {output[:500]}...")
                 # Still a success, just not structured
             else:
