@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, computed_field
 
 from buttermilk import logger
 from buttermilk._core.contract import ExecutionTrace
+from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord
 from buttermilk.pipeline import RecordBufferedException
@@ -42,6 +43,10 @@ class TraceParams:
     inputs: dict[str, Any] | None = None
     extra_metadata: dict[str, Any] | None = None
     trace_id: str | None = None
+    # Multi-step provenance: stamped into agent_info so tja.traces is scorable by
+    # role+index, not only template_hash (Proposal v4).
+    step: str | None = None
+    agent_id: str | None = None
 
 
 class ObservabilityMixin(BaseModel):
@@ -123,26 +128,38 @@ class ObservabilityMixin(BaseModel):
             metadata.update(extra_metadata)
         return metadata
 
+    def _stamp_identity(self, agent_info: dict[str, Any], tp: TraceParams) -> None:
+        """Stamp multi-step role/agent identity into agent_info for scorability."""
+        if tp.component_name:
+            agent_info["component_name"] = tp.component_name
+        if tp.step is not None:
+            agent_info["step"] = tp.step
+        if tp.agent_id is not None:
+            agent_info["agent_id"] = tp.agent_id
+
     async def _emit_success_trace(
         self,
         record: BaseRecord,
         outputs: Any,
         tp: TraceParams,
-    ) -> str:
-        """Emit a success execution trace.
+    ) -> ExecutionTrace:
+        """Emit a success execution trace and return it (for StepResult projection).
 
         Args:
             record: The record being processed.
             outputs: The processing outputs.
             tp: Trace parameters (stage, timing, metadata, etc.).
+
+        Returns:
+            The emitted ExecutionTrace, so callers can project a StepResult from the
+            same source (single-projection guarantee, Proposal v4).
         """
         import uuid
 
         trace_id = tp.trace_id or str(uuid.uuid4())
 
         agent_info = self._build_agent_info(tp.processor_stage, tp.execution_type)
-        if tp.component_name:
-            agent_info["component_name"] = tp.component_name
+        self._stamp_identity(agent_info, tp)
 
         execution_trace = ExecutionTrace(
             call_id=trace_id,
@@ -156,38 +173,66 @@ class ObservabilityMixin(BaseModel):
         )
 
         await self._emit_trace(execution_trace)
-        return trace_id
+        return execution_trace
 
     async def _emit_error_trace(
         self,
         record: BaseRecord | None,
         error: Exception,
         tp: TraceParams,
-    ) -> None:
-        """Emit an error execution trace.
+    ) -> ExecutionTrace:
+        """Emit an error execution trace and return it (for StepResult projection).
 
         Args:
             record: The record being processed (may be None).
             error: The exception that occurred.
             tp: Trace parameters (stage, timing, metadata, etc.).
+
+        Returns:
+            The emitted error ExecutionTrace.
         """
         agent_info = self._build_agent_info(tp.processor_stage, tp.execution_type)
-        if tp.component_name:
-            agent_info["component_name"] = tp.component_name
+        self._stamp_identity(agent_info, tp)
 
         error_trace = ExecutionTrace(
+            **({"call_id": tp.trace_id} if tp.trace_id else {}),
             agent_info=agent_info,
             inputs=tp.inputs,
             error={
                 "event": str(error),
                 "details": {"error_type": type(error).__name__},
             },
-            metadata=self._build_trace_metadata(record, tp.duration_ms),
+            metadata=self._build_trace_metadata(record, tp.duration_ms, tp.extra_metadata),
             parent_call_id=tp.parent_trace_id,
             record=record,
         )
 
         await self._emit_trace(error_trace)
+        return error_trace
+
+    @staticmethod
+    def _append_history(record: BaseRecord, *step_results: Any) -> dict[str, Any]:
+        """Return updated metadata with one or more StepResults appended to ``history``.
+
+        ``history`` is the single, ordered accumulator of per-step outputs on the record
+        (Proposal v4). Entries are stored as plain dicts (``StepResult.model_dump()``) so
+        JMESPath over the dumped record envelope sees a uniform shape regardless of how the
+        record is later serialized. The typed ``StepResult`` enforces the shape at
+        construction time; this helper never mutates the input record's metadata in place.
+
+        NB: ``agent_id`` follows two conventions that legitimately coexist in one history
+        list — positional ``"<step>#<index>"`` for synthetic producers (LLMProcessor,
+        FanInLLMProcessor) and the real agent identity for GroupchatProcessor. Both are
+        opaque labels; downstream selectors filter by ``step`` first (``index`` is unique
+        only within a step), so the two conventions never need to be reconciled.
+        """
+        existing = list(record.metadata.get("history", [])) if record.metadata else []
+        for sr in step_results:
+            existing.append(sr.model_dump())
+        return {
+            **(record.metadata if record.metadata else {}),
+            "history": existing,
+        }
 
 
 class ProcessorCore(ObservabilityMixin, ABC):
@@ -218,15 +263,36 @@ class ProcessorCore(ObservabilityMixin, ABC):
         description=(
             "JMESPath mappings from record fields to processor inputs. "
             "Paths are evaluated against {'record': record.model_dump()}. "
-            "E.g. {'model': 'record.metadata.model', 'content': 'record.text'}"
+            "E.g. {'answers': 'record.metadata.history[?step==`judge` && error==null]'}. "
+            "Inputs are REQUIRED by default: a path that resolves to None or an empty "
+            "list raises ProcessingError (fail-loud, research integrity). Declare keys "
+            "that may legitimately be absent in `optional_inputs`."
         ),
     )
 
-    def _resolve_inputs(self, context: ProcessingContext) -> dict[str, Any]:
-        """Resolve ``inputs`` from the record via JMESPath.
+    optional_inputs: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Input keys that are OPTIONAL: silently dropped when their JMESPath yields "
+            "None or an empty list, instead of raising. All other inputs are required."
+        ),
+    )
 
-        Returns a dict of resolved values (only keys whose JMESPath expression
-        matched a non-None value in the record envelope).
+    def _optional_input_keys(self) -> set[str]:
+        """Keys exempt from fail-loud resolution. Subclasses may widen this set."""
+        return set(self.optional_inputs)
+
+    def _resolve_inputs(self, context: ProcessingContext) -> dict[str, Any]:
+        """Resolve ``inputs`` from the record via JMESPath, fail-loud on missing required inputs.
+
+        A required input whose JMESPath expression resolves to ``None`` OR an empty list
+        ``[]`` raises :class:`ProcessingError`. The empty-list case is essential: a no-match
+        JMESPath filter (e.g. a panel selector that matched nothing) returns ``[]``, not
+        ``None`` — silently keeping it would let a missing/short panel flow into a template,
+        a validity threat. Optional inputs (declared in ``optional_inputs``) are dropped
+        silently when missing so callers fall back to defaults.
+
+        Returns a dict of resolved values (only keys whose JMESPath expression matched).
         """
         if not self.inputs:
             return {}
@@ -236,11 +302,22 @@ class ProcessorCore(ObservabilityMixin, ABC):
         else:
             envelope = {"record": context.record}
 
+        optional = self._optional_input_keys()
+        record_id = getattr(context.record, "record_id", None) or type(context.record).__name__
+
         resolved: dict[str, Any] = {}
         for name, path in self.inputs.items():
             value = jmespath.search(path, envelope)
-            if value is not None:
-                resolved[name] = value
+            if value is None or value == []:
+                if name in optional:
+                    continue
+                raise ProcessingError(
+                    f"Required input '{name}' (JMESPath '{path}') for "
+                    f"{self.__class__.__name__} resolved to missing (None or empty list) "
+                    f"on record '{record_id}'. If this input may legitimately be absent, "
+                    f"declare it in `optional_inputs`."
+                )
+            resolved[name] = value
         return resolved
 
     async def process(

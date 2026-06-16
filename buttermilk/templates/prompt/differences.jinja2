@@ -1,8 +1,9 @@
 {# --- Prompty Frontmatter ---
 Defines metadata and expected inputs for this prompt template.
 Inputs:
-  - answers: A list of answers (ExecutionTraces) from previous steps (e.g., judge, synth) to compare.
-             The template accesses `answer.agent_id` and `answer.outputs.reasons`.
+  - answers: A list of answers — StepResult entries from prior steps (e.g. judge, synth),
+             selected via JMESPath over record.metadata.history (filter `error==null`).
+             The template addresses the typed fields `answer.agent_id` and `answer.outputs`.
   - record: (Placeholder) Likely contains the original data record(s).
   - context: (Placeholder) Alternative context placeholder if 'answers' isn't defined.
 --- #}
@@ -59,9 +60,11 @@ When referring to a draft answer, ALWAYS use the the full ID of the answer. The 
 {% if answers %}
 # User:
 Analyse the underlying reasons behind differences among the answers below.
-{# Loop through the provided answers, using simplified formatting. #}
+{# Loop through the provided answers (StepResult entries), addressing typed fields. #}
 {% for answer in answers %}
-{{ answer }}
+<BEGIN DRAFT ANSWER #{{ answer.agent_id }}>
+{{ answer.outputs }}
+<END DRAFT ANSWER #{{ answer.agent_id }}>
 
 {% endfor %}
 {% else %}

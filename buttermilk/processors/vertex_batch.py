@@ -42,6 +42,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel, Field, PrivateAttr
 
 from buttermilk import logger
+from buttermilk._core.contract import StepResult
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.processor_core import BatchProcessorCore, TraceParams
@@ -608,11 +609,12 @@ class BatchLLMProcessor(BatchProcessorCore):
                     logger.warning(f"Failed to parse output for {record.record_id}: {e}")
 
             # Emit success trace with batch_job_id
-            await self._emit_success_trace(
+            step = self.name or "batch_llm"
+            trace = await self._emit_success_trace(
                 record=record,
                 outputs=final_output,
                 tp=TraceParams(
-                    processor_stage=self.name or "batch_llm",
+                    processor_stage=step,
                     parent_trace_id=None,
                     duration_ms=duration_ms / len(records),
                     messages=[],  # Batch API doesn't return full message history
@@ -627,6 +629,8 @@ class BatchLLMProcessor(BatchProcessorCore):
                         "cost_usd": result.cost_usd,
                     },
                     execution_type="llm_processing (batch)",
+                    step=step,
+                    agent_id=f"{step}#0",
                 ),
             )
 
@@ -634,9 +638,10 @@ class BatchLLMProcessor(BatchProcessorCore):
             if self._output_class and isinstance(final_output, self._output_class):
                 output_records.append(final_output)
             else:
-                # Enrich record with LLM output
-                updated_metadata = record.metadata.copy() if record.metadata else {}
-                updated_metadata["llm_output"] = response
+                # Enrich record by appending one StepResult to the unified `history`
+                # accumulator (Proposal v4 — same shape as LLMProcessor/FanIn/Groupchat).
+                step_result = StepResult.from_execution_trace(trace, step=step, index=0)
+                updated_metadata = self._append_history(record, step_result)
                 updated_metadata["batch_job_id"] = batch_job_id
                 if result.cost_usd is not None:
                     updated_metadata["cost_usd"] = result.cost_usd

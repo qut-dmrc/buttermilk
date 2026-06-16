@@ -978,16 +978,19 @@ class TestGroupchatProcessor:
             # Verify original metadata is preserved
             assert output_record.metadata["original"] == "data"
 
-            # Verify groupchat metadata was added
-            assert "groupchat" in output_record.metadata
-            groupchat_meta = output_record.metadata["groupchat"]
+            # Verify collected traces were projected into the unified `history` accumulator
+            assert "history" in output_record.metadata
+            history = output_record.metadata["history"]
 
-            assert groupchat_meta["status"] == "processed"
-            assert groupchat_meta["flow_name"] == "test_flow"
-            assert groupchat_meta["trace_count"] == 2
-            assert len(groupchat_meta["outputs"]) == 2
-            assert groupchat_meta["outputs"][0] == {"result": "output1"}
-            assert groupchat_meta["outputs"][1] == {"result": "output2"}
+            assert len(history) == 2
+            # All entries share the step label (processor name → flow_name) and are error-free
+            assert all(h["step"] == "test_flow" for h in history)
+            assert all(h["error"] is None for h in history)
+            # Stable indices assigned 0..N-1 (derived from a stable key, not callback arrival)
+            assert sorted(h["index"] for h in history) == [0, 1]
+            # Both orchestrator outputs are captured (order-independent)
+            captured = {str(h["outputs"]) for h in history}
+            assert captured == {str({"result": "output1"}), str({"result": "output2"})}
 
 
 class TestBatchProcessor:
