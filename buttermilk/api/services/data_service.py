@@ -249,6 +249,14 @@ class DataService:
         messages_data = json.loads(row["messages"]) if row["messages"] else []
         error_data = json.loads(row["error"]) if row["error"] else None
 
+        # Source record comes from the canonical top-level `record` column (a RECORD),
+        # not from a copy embedded in `inputs`. The `inputs` blob no longer carries the
+        # record/context (canonical-once, task buttermilk-1e23cce6); the record column is
+        # the single authoritative copy and now also carries ground_truth.
+        record_data = row.get("record") or {}
+        if isinstance(record_data, str):
+            record_data = json.loads(record_data) if record_data else {}
+
         # Create AgentConfig
         agent_config = AgentConfig(**agent_info_data)
 
@@ -257,7 +265,7 @@ class DataService:
             inputs=inputs_data.get("inputs", {}),
             parameters=inputs_data.get("parameters", {}),
             context=inputs_data.get("context", []),
-            record=Record(**inputs_data.get("records", {})),
+            record=Record(**record_data),
             parent_call_id=row.get("parent_call_id"),
         )
 
@@ -319,7 +327,7 @@ class DataService:
                 raise ValueError(f"Flow '{flow_name}' is missing required 'table_id' in save configuration")
 
             # Build the query for scores using the correct table reference
-            where_clause = f"WHERE record_id = '{record_id}'"
+            where_clause = f"WHERE record.record_id = '{record_id}'"
             if session_id:
                 where_clause += f" AND session_id = '{session_id}'"
 
@@ -337,11 +345,12 @@ class DataService:
                     parent_call_id,
                     tracing_link,
                     error,
-                    messages
+                    messages,
+                    record
                 FROM `{bq_client.project}.{dataset_id}.{table_id}`
                 {where_clause}
                 AND JSON_VALUE(agent_info, '$.role') IN ('JUDGE', 'SYNTHESISER', 'SCORERS')
-                AND JSON_QUERY_ARRAY(inputs, '$.record') IS NOT NULL
+                AND record IS NOT NULL
                 ORDER BY timestamp DESC
             """
 
@@ -359,8 +368,11 @@ class DataService:
                     agent_trace = DataService._reconstruct_agent_trace_from_row(row)
                     agent_traces.append(agent_trace)
                 except Exception as e:
-                    logger.warning(f"Error reconstructing ExecutionTrace from row: {e}")
-                    continue
+                    # Fail loud (CLAUDE.md): a reconstruction failure means the trace shape
+                    # no longer matches what we read (e.g. the record column migration) —
+                    # surface it rather than silently dropping rows and under-reporting scores.
+                    logger.error(f"Error reconstructing ExecutionTrace from row: {e}")
+                    raise
 
             return agent_traces
 
@@ -415,7 +427,7 @@ class DataService:
                 raise ValueError(f"Flow '{flow_name}' is missing required 'table_id' in save configuration")
 
             # Build the query for detailed responses
-            where_clause = f"WHERE record_id = '{record_id}'"
+            where_clause = f"WHERE record.record_id = '{record_id}'"
             if session_id:
                 where_clause += f" AND session_id = '{session_id}'"
 
@@ -434,11 +446,12 @@ class DataService:
                 parent_call_id,
                 tracing_link,
                 error,
-                messages
+                messages,
+                record
             FROM `{bq_client.project}.{dataset_id}.{table_id}`
             {where_clause}
             AND JSON_VALUE(agent_info, '$.role') IN ('JUDGE', 'SYNTHESISER', 'SCORERS')
-            AND JSON_QUERY_ARRAY(inputs, '$.record') IS NOT NULL
+            AND record IS NOT NULL
             ORDER BY timestamp DESC
             """
 
@@ -456,8 +469,11 @@ class DataService:
                     agent_trace = DataService._reconstruct_agent_trace_from_row(row)
                     agent_traces.append(agent_trace)
                 except Exception as e:
-                    logger.warning(f"Error reconstructing ExecutionTrace from row: {e}")
-                    continue
+                    # Fail loud (CLAUDE.md): a reconstruction failure means the trace shape
+                    # no longer matches what we read (e.g. the record column migration) —
+                    # surface it rather than silently dropping rows and under-reporting scores.
+                    logger.error(f"Error reconstructing ExecutionTrace from row: {e}")
+                    raise
 
             return agent_traces
 

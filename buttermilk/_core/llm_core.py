@@ -305,25 +305,36 @@ class LLMCore(ObservabilityMixin):
 
         return template_vars, context
 
-    def _build_resolved_inputs(
-        self,
-        template_vars: dict[str, Any],
-        context: list[LLMMessage],
-        record: BaseRecord | None,
-        _template_vars_derived_from_record: bool,
-    ) -> dict[str, Any]:
-        """Build resolved inputs dict for traceability."""
-        if _template_vars_derived_from_record and record:
-            bulky_fields = {"text", "content", "metadata", "images", "attachments", "embedding"}
-            template_vars_for_trace = {k: v for k, v in template_vars.items() if k not in bulky_fields}
-        else:
-            template_vars_for_trace = template_vars
+    def _build_resolved_inputs(self, template_vars: dict[str, Any]) -> dict[str, Any]:
+        """Build the resolved-inputs dict persisted on the trace (provenance projection).
 
-        return {
-            **self.template_vars,
-            **template_vars_for_trace,
-            "context": context,
+        This is the trace-only copy of inputs, NOT the rendering inputs. It must hold only
+        render *parameters* — never a second copy of an artifact that already has its own
+        canonical home on the trace (canonical-once):
+          - the source record + its content/metadata/ground_truth live in the ``record`` column;
+          - the exact prompt sent lives in ``messages`` (verified by ``message_hashes``);
+          - prior-step outputs live in ``record.metadata.history``.
+
+        So we unconditionally strip record-derived bulky fields and never persist the context
+        message list (the prompt is canonical in ``messages``; ``compute_input_hashes`` already
+        skips ``context``). Genuine render variables (criteria, instructions, ...) are retained
+        and remain covered by ``input_hashes``. Applied unconditionally so both the agent and
+        the processor-pipeline producers emit the same shape (DRY).
+        """
+        # These have a canonical home elsewhere on the trace; never persist a 2nd copy here.
+        record_derived = {
+            "text",
+            "content",
+            "metadata",
+            "images",
+            "attachments",
+            "embedding",
+            "record",
+            "records",
+            "context",
         }
+        merged = {**self.template_vars, **template_vars}
+        return {k: v for k, v in merged.items() if k not in record_derived}
 
     def _collect_result_metadata(self, result: LLMResult, llm_result: Any, record: BaseRecord | None) -> None:
         """Populate result with template metadata, hashes, and LLM response metadata."""
@@ -444,12 +455,7 @@ class LLMCore(ObservabilityMixin):
                     _template_vars_derived_from_record,
                 )
 
-                result.resolved_inputs = self._build_resolved_inputs(
-                    template_vars,
-                    context,
-                    record,
-                    _template_vars_derived_from_record,
-                )
+                result.resolved_inputs = self._build_resolved_inputs(template_vars)
                 result.metadata["_template_vars_from_record"] = _template_vars_derived_from_record
 
                 # Fill template and call LLM

@@ -217,12 +217,14 @@ def test_hash_fields_are_pure_properties():
     assert record.metadata["existing"] == "data"
 
 
-def test_record_hash_included_ground_truth_hash_excluded_from_dump():
+def test_record_hash_and_ground_truth_hash_included_in_dump():
     """Test that computed hash fields follow BigQuery schema requirements.
 
-    - record_hash: INCLUDED (required by traces.schema.json for BigQuery)
-    - ground_truth_hash: EXCLUDED (not needed in BQ schema)
-    - Hash values are NOT stored in metadata (pure properties)
+    Both hashes are now INCLUDED in the dump because the trace `record` column has a
+    canonical home for each (traces.schema.json: record.record_hash, record.ground_truth_hash).
+    This is the canonical-once change (task buttermilk-1e23cce6): the true label and its
+    tamper-evidence hash live in the hashed canonical record, not only in the inputs blob.
+    Hash values remain pure properties — never stored back into metadata.
     """
     record = Record(content="Test content", ground_truth={"test": "data"})
 
@@ -237,8 +239,11 @@ def test_record_hash_included_ground_truth_hash_excluded_from_dump():
     assert "record_hash" in dumped, "record_hash is required by traces.schema.json"
     assert len(dumped["record_hash"]) == 64, "record_hash should be valid SHA256"
 
-    # ground_truth_hash should be excluded (not in BQ schema)
-    assert "ground_truth_hash" not in dumped
+    # ground_truth_hash is now ALSO included (canonical home: record.ground_truth_hash)
+    assert "ground_truth_hash" in dumped, "ground_truth_hash is now required by traces.schema.json"
+    assert len(dumped["ground_truth_hash"]) == 64, "ground_truth_hash should be valid SHA256"
+    # ...and ground_truth itself is carried for the canonical record column
+    assert dumped.get("ground_truth") == {"test": "data"}
 
     # Metadata should NOT contain hash values (properties are pure)
     assert "record_hash" not in dumped["metadata"]

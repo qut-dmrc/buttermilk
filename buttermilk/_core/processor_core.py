@@ -121,10 +121,15 @@ class ObservabilityMixin(BaseModel):
         duration_ms: float,
         extra_metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Build standardized metadata dict."""
+        """Build standardized metadata dict.
+
+        Note: the record's own metadata is NOT copied in here. It is already emitted
+        canonically via the top-level ``record`` column (ExecutionTrace.record). Copying
+        it into ``metadata.input`` produced a byte-identical duplicate (including the
+        #424 ``history`` lineage), which is the redundancy this trace-schema change removes
+        — one authoritative copy per artifact (canonical-once).
+        """
         metadata: dict[str, Any] = {"duration_ms": duration_ms}
-        if record is not None and hasattr(record, "metadata") and record.metadata:
-            metadata["input"] = record.metadata
         if extra_metadata:
             metadata.update(extra_metadata)
         return metadata

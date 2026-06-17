@@ -86,6 +86,18 @@
         "name": "metadata",
         "type": "JSON",
         "mode": "NULLABLE"
+      },
+      {
+        "name": "ground_truth",
+        "type": "JSON",
+        "mode": "NULLABLE",
+        "description": "Canonical home for the record's ground-truth/expected label (academic-integrity: the true label belongs in the hashed canonical record, not re-embedded in inputs)"
+      },
+      {
+        "name": "ground_truth_hash",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": "SHA256 hash of ground_truth values, for tamper-evidence of the true label"
       }
     ]
   },

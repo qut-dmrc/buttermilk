@@ -383,9 +383,10 @@ class Record(BaseRecord):
             current_exclude = {current_exclude}
 
         # Add computed fields to exclusion for simple text content
-        # Note: record_hash is NOT excluded - it's required for BQ traces (traces.schema.json)
+        # Note: record_hash and ground_truth_hash are NOT excluded - they're required for
+        # BQ traces (traces.schema.json: record.record_hash, record.ground_truth_hash).
         if isinstance(self.content, str):
-            current_exclude.update({"title", "images", "ground_truth_hash"})
+            current_exclude.update({"title", "images"})
 
         kwargs["exclude"] = current_exclude
         return super().model_dump(**kwargs)
@@ -458,8 +459,8 @@ class Record(BaseRecord):
         exclude={
             "title",
             "images",
-            # Note: record_hash included for BQ tracing (required per traces.schema.json)
-            "ground_truth_hash",
+            # Note: record_hash and ground_truth_hash included for BQ tracing
+            # (required per traces.schema.json: record.record_hash, record.ground_truth_hash)
         },  # Exclude computed properties from model_dump
         # positional_args=True, # Removed as it's less common and can be ambiguous
     )
