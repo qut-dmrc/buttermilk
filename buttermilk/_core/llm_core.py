@@ -320,6 +320,11 @@ class LLMCore(ObservabilityMixin):
         skips ``context``). Genuine render variables (criteria, instructions, ...) are retained
         and remain covered by ``input_hashes``. Applied unconditionally so both the agent and
         the processor-pipeline producers emit the same shape (DRY).
+
+        NOT YET stripped (deferred — task buttermilk-1e23cce6 "cut 2"): history-derived render
+        vars such as ``answers``/``history`` still persist here even though their canonical home
+        is ``record.metadata.history``. Dropping them needs separating the input-hash source
+        from the persisted projection (``resolved_inputs`` is currently both); tracked separately.
         """
         # These have a canonical home elsewhere on the trace; never persist a 2nd copy here.
         record_derived = {
