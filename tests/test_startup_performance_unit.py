@@ -131,6 +131,7 @@ class TestLazyRouteManager:
 
     async def test_heavy_routes_loaded_on_demand(self):
         """Test that heavy routes are loaded when needed."""
+        import httpx
         from fastapi import APIRouter, FastAPI
 
         from buttermilk.api.lazy_routes import LazyRouteManager
@@ -150,9 +151,12 @@ class TestLazyRouteManager:
         await lazy_manager.load_heavy_routes_on_demand()
 
         assert lazy_manager._heavy_routes_registered
-        # Should now have the heavy route
-        route_paths = [route.path for route in app.routes if hasattr(route, "path")]
-        assert "/api/heavy" in route_paths
+        # Starlette 1.3+ uses lazy _IncludedRouter wrappers without a `.path` attribute,
+        # so checking app.routes for flat paths no longer works. Test via HTTP instead.
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get("/api/heavy")
+            assert response.status_code == 200
 
     def test_needs_heavy_routes_detection(self):
         """Test detection of paths that need heavy routes."""
