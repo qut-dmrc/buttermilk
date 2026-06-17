@@ -18,6 +18,7 @@ from tenacity import (
     wait_exponential,
 )
 
+from buttermilk._core.cloud_config import CloudProvider
 from buttermilk._core.config import CloudProviderCfg
 from buttermilk._core.exceptions import FatalError
 from buttermilk._core.log import logger
@@ -30,7 +31,7 @@ from buttermilk._core.utils.lazy_loading import (
 class CloudManager:
     """Manages cloud provider connections and client instances."""
 
-    def __init__(self, clouds: list[CloudProviderCfg]) -> None:
+    def __init__(self, clouds: list[CloudProvider]) -> None:
         """Initialize the cloud manager with cloud configuration.
 
         Args:
@@ -38,7 +39,7 @@ class CloudManager:
 
         """
         self.clouds = clouds or []
-        self._gcp_project = ""
+        self._gcp_project: str | None = ""
         # Instance-level lock for thread-safe token refresh
         self._refresh_lock = threading.Lock()
 
@@ -282,7 +283,7 @@ class CloudManager:
             if cloud.type == "gcp" and hasattr(cloud, "has_service") and cloud.has_service("vertex"):
                 self._init_vertex_ai(cloud)
 
-    def _init_vertex_ai(self, cloud: CloudProviderCfg) -> None:
+    def _init_vertex_ai(self, cloud: CloudProvider) -> None:
         """Initialize Vertex AI connection."""
         from vertexai import init as aiplatform_init
 

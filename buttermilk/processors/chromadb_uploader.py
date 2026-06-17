@@ -13,11 +13,12 @@ from typing import Any
 import chromadb
 import pydantic
 from chromadb.api import ClientAPI
+from chromadb.api.types import Metadata
 from pydantic import BaseModel, Field, PrivateAttr
 
 from buttermilk import bm, logger
 from buttermilk._core.processing_context import ProcessingContext
-from buttermilk._core.types import BaseRecord
+from buttermilk._core.types import BaseRecord, Record
 from buttermilk.data.vector import _sanitize_metadata_for_chroma
 from buttermilk.utils.utils import scrub_serializable, upload_chromadb_cache
 
@@ -128,6 +129,9 @@ class ChromaDBUploader(BaseModel):
             return
 
         # Upload chunks to ChromaDB
+        # Only Record (not the BaseRecord base) carries the `chunks` field; the guards
+        # above guarantee chunks are present, so this is a Record at runtime.
+        assert isinstance(record, Record)
         start_time = time.time()
         try:
             await self._store_chunks_for_record(record)
@@ -225,7 +229,7 @@ class ChromaDBUploader(BaseModel):
 
         return local_cache_path
 
-    async def _store_chunks_for_record(self, record: BaseRecord) -> None:
+    async def _store_chunks_for_record(self, record: Record) -> None:
         """Store record chunks with metadata in ChromaDB."""
         if not self._collection:
             raise ValueError("Collection not initialized")
@@ -252,7 +256,7 @@ class ChromaDBUploader(BaseModel):
         ids = []
         documents = []
         embeddings_list = []
-        metadatas = []
+        metadatas: list[Metadata] = []
 
         for chunk in chunks_to_upsert:
             ids.append(chunk["chunk_id"])

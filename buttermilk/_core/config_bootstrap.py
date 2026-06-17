@@ -8,14 +8,22 @@ variable access and configuration initialization throughout the codebase.
 from __future__ import annotations
 
 import os
+from collections.abc import Coroutine
 from pathlib import Path
+from typing import TYPE_CHECKING, Any, TypeVar
 
-import yaml
+import yaml  # type: ignore[import-untyped]  # PyYAML: stubs (types-PyYAML) not installed in this env
 from hydra import compose, initialize_config_dir
 from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig
 
 from buttermilk.utils.utils import load_dotenv
+
+if TYPE_CHECKING:
+    from buttermilk._core.bm_init import BM
+    from buttermilk._core.main_config import ButtermilkConfig
+
+_T = TypeVar("_T")
 
 
 def register_library_configs_in_store(library_config_dir: Path) -> None:
@@ -180,7 +188,7 @@ class ConfigurationBootstrapper:
 
         load_dotenv()
 
-    def _load_configuration(self, config: DictConfig | None = None):
+    def _load_configuration(self, config: DictConfig | None = None) -> ButtermilkConfig:
         """Load configuration via Hydra with ConfigStore fallback.
 
         This method implements project → library config fallback by:
@@ -306,7 +314,7 @@ async def init_async(
     config: DictConfig | None = None,
     base_dir: str | None = None,
     config_source_dir: str | None = None,
-):
+) -> BM:
     """PRIMARY async initialization function for Buttermilk.
 
     This is the recommended way to initialize Buttermilk in async contexts.
@@ -346,7 +354,7 @@ async def init_async(
         >>> script_dir = Path(__file__).parent
         >>> _ = await init_async(config_dir=str(script_dir / "conf"))
     """
-    bm, config = await bootstrap_session_with_config_async(
+    bm, _typed_config = await bootstrap_session_with_config_async(
         job=job,
         project_name=project_name,
         config_dir=config_dir,
@@ -359,7 +367,7 @@ async def init_async(
     return bm
 
 
-def _run_coro_sync(coro):
+def _run_coro_sync(coro: Coroutine[Any, Any, _T]) -> _T:
     """Run a coroutine from sync code.
 
     - If no event loop is running, use asyncio.run.
@@ -380,7 +388,7 @@ def _run_coro_sync(coro):
     # A loop is running in this thread: use a separate thread + loop
     fut: cf.Future = cf.Future()
 
-    def _thread_runner():
+    def _thread_runner() -> None:
         try:
             loop = asyncio.new_event_loop()
             try:
@@ -406,7 +414,7 @@ def init(
     overrides: list[str] | None = None,
     config: DictConfig | None = None,
     base_dir: str | None = None,
-):
+) -> BM:
     """Lightweight sync wrapper for init_async() - DEPRECATED.
 
     This is a simple wrapper that exists for backward compatibility only.
@@ -465,7 +473,7 @@ async def bootstrap_session_with_config_async(
     config: DictConfig | None = None,
     base_dir: str | None = None,
     config_source_dir: str | None = None,
-):
+) -> tuple[BM, ButtermilkConfig]:
     """Simplified unified async session bootstrap.
 
     This is the primary async bootstrap pathway using the new simplified architecture.
@@ -503,9 +511,13 @@ async def bootstrap_session_with_config_async(
     if job is not None:
         bootstrap_overrides.append(f"++job={job}")
 
-    # Load config - single instantiation pathway via Pydantic
+    # Load config - single instantiation pathway via Pydantic.
+    # When `config` is pre-loaded, `config_dir` may still be None (the resolution
+    # above is skipped). In that case `config_path` is unused because the
+    # bootstrapper consumes the provided `config` directly, so fall back to the
+    # same default the bootstrapper itself declares.
     bootstrapper = ConfigurationBootstrapper(
-        config_path=config_dir,
+        config_path=config_dir or "conf",
         config_name=config_name,
         overrides=bootstrap_overrides,
         config=config,

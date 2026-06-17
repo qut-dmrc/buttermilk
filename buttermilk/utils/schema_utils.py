@@ -1,7 +1,7 @@
 """Utilities for converting Pydantic models to BigQuery schemas."""
 
 import datetime
-from typing import Union
+from typing import Any, Union
 
 from google.cloud import bigquery
 from PIL.Image import Image
@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from pydantic.fields import FieldInfo
 
 
-def pydantic_to_bigquery_schema(model_class: type[BaseModel], extra_fields: list[dict[str, str]] = None) -> list[bigquery.SchemaField]:
+def pydantic_to_bigquery_schema(model_class: type[BaseModel], extra_fields: list[dict[str, str]] | None = None) -> list[bigquery.SchemaField]:
     """Convert a Pydantic model to BigQuery schema fields.
 
     Args:
@@ -49,11 +49,12 @@ def pydantic_to_bigquery_schema(model_class: type[BaseModel], extra_fields: list
     return schema_fields
 
 
-def _convert_pydantic_field_to_bq(field_name: str, field_info: FieldInfo) -> bigquery.SchemaField:
+def _convert_pydantic_field_to_bq(field_name: str, field_info: FieldInfo) -> bigquery.SchemaField | None:
     """Convert a single Pydantic field to BigQuery SchemaField."""
 
-    # Get the field type
-    field_type = field_info.annotation
+    # Get the field type. Pydantic exposes the resolved annotation as a runtime
+    # typing object, so introspection (__args__/__origin__) is inherently dynamic.
+    field_type: Any = field_info.annotation
 
     # Handle Optional types (Union[T, None] or T | None)
     is_optional = False
@@ -101,11 +102,17 @@ def _convert_pydantic_field_to_bq(field_name: str, field_info: FieldInfo) -> big
     else:
         mode = "NULLABLE" if is_optional or field_info.default is not None else "REQUIRED"
 
+    if field_info.description is not None:
+        return bigquery.SchemaField(
+            name=field_name,
+            field_type=bq_type,
+            mode=mode,
+            description=field_info.description,
+        )
     return bigquery.SchemaField(
         name=field_name,
         field_type=bq_type,
         mode=mode,
-        description=field_info.description,
     )
 
 

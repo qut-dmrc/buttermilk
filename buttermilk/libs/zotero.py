@@ -572,6 +572,8 @@ class ZoteroDownloadProcessor(BaseModel):
                     content = f"[PDF Document: {pdf_file.name}, Size: {pdf_size:,} bytes, Path: {pdf_file.as_posix()}]"
                     logger.debug(f"Set PDF metadata as content for {key}: {content}")
             else:
+                # have_fulltext is True here, which is only set alongside a non-None content (see above).
+                assert content is not None
                 logger.debug(f"Skipping PDF download for {key} - already have fulltext with {len(content)} chars")
 
         else:

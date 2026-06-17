@@ -56,7 +56,7 @@ class AgentToolDefinition(BaseModel):
     # Implement Tool protocol properties and methods
 
     @property
-    def schema(self) -> ToolSchema:
+    def schema(self) -> ToolSchema:  # type: ignore[override]  # intentional override of pydantic's deprecated BaseModel.schema() classmethod; this property is the load-bearing Tool-protocol accessor used by agent/host/llms
         """Return the tool schema in Tool protocol format for the Tool protocol."""
         return ToolSchema(
             name=self.name,

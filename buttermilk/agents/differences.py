@@ -99,7 +99,7 @@ class Differences(BaseModel):
         description="A list of specific topics where divergences or disagreements were identified.",
     )
 
-    def as_markdown(self, agent_id: str = None, call_id: str = None) -> str:
+    def as_markdown(self, agent_id: str | None = None, call_id: str | None = None) -> str:
         """Returns a Markdown formatted string for insertion into templates.
 
         Format follows the standard: agent identifier on first line, followed by
@@ -217,7 +217,7 @@ class Differentiator(LLMAgent):
 
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: object) -> None:
         """Initializes the Differentiator agent with its specific configuration and output model."""
         # Fail explicitly if config tries to override output_model - Differentiator requires Differences
         if "output_model" in kwargs and kwargs["output_model"] is not None:

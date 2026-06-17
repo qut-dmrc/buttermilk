@@ -18,10 +18,12 @@ from buttermilk._core.contract import (  # Buttermilk message contracts
     AgentOutput,  # Used as return type hint for _process
     ExecutionTrace,
 )
+from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.message_data import (
     extract_message_data,
 )  # Utility for data extraction
 from buttermilk._core.runtime_types import MessageContext, message_handler
+from buttermilk._core.tool_types import CancellationToken
 from buttermilk.agents.judge import (
     JudgeReasons,
 )  # Expected input model from Judge agent
@@ -218,7 +220,7 @@ class LLMScorer(LLMAgent):
 
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         """Initializes the Scorer agent with its specific configuration and output model."""
         # Fail explicitly if config tries to override output_model - Scorer requires QualScore
         if "output_model" in kwargs and kwargs["output_model"] is not None:
@@ -283,10 +285,13 @@ class LLMScorer(LLMAgent):
         # Extract data based on `self.inputs` mappings.
         # These mappings should define how to get 'records', 'answers' (from JudgeReasons),
         # and 'criteria' (if the criteria template is dynamic).
+        source_agent_id = message.agent_info.get("agent_id")
+        if not source_agent_id:
+            raise ProcessingError(f"Scorer {self.agent_id}: scored ExecutionTrace is missing agent_info['agent_id']; cannot extract scoring data.")
         extracted_data = extract_message_data(
             message=message,  # The ExecutionTrace from the Judge
-            source=message.agent_info.get("agent_id"),  # The Judge agent's ID/name
-            input_mappings=self.inputs,  # Configured mappings for the Scorer
+            source=source_agent_id,  # The Judge agent's ID/name
+            input_mappings=self.inputs or {},  # Configured mappings for the Scorer
         )
 
         # `records` for scoring should come from the original input to the agent being judged.
@@ -318,8 +323,9 @@ class LLMScorer(LLMAgent):
         self,
         *,
         message: AgentInput,  # Input for the Scorer LLM
+        cancellation_token: CancellationToken | None = None,
         **kwargs: Any,
-    ) -> AgentOutput | None:
+    ) -> AgentOutput:
         """Performs the LLM-based scoring and formats the output.
 
         This method overrides the base `LLMAgent._process`. It first calls
@@ -346,6 +352,7 @@ class LLMScorer(LLMAgent):
         # Call the base LLMAgent's _process to get the LLM's structured score (QualScore)
         llm_output_base = await super()._process(
             message=message,  # This message is the input for the Scorer's LLM
+            cancellation_token=cancellation_token,
             **kwargs,
         )
 

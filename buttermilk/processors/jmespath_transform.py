@@ -5,9 +5,10 @@ transform data declaratively without writing custom Python code.
 """
 
 from collections.abc import AsyncGenerator
+from typing import Any
 
-import jmespath
-from jmespath.exceptions import JMESPathError
+import jmespath  # type: ignore[import-untyped]  # jmespath: no stubs available
+from jmespath.exceptions import JMESPathError  # type: ignore[import-untyped]  # jmespath: no stubs available
 from pydantic import BaseModel, Field
 
 from buttermilk import logger
@@ -47,7 +48,7 @@ class JMESPathTransform(BaseModel):
     # Cache compiled JMESPath expressions for performance
     _compiled_expressions: dict[str, jmespath.parser.ParsedResult] | None = None
 
-    def model_post_init(self, __context) -> None:
+    def model_post_init(self, __context: Any) -> None:
         """Compile JMESPath expressions once during initialization."""
         self._compiled_expressions = {}
         for field_name, expression in self.mappings.items():
@@ -87,6 +88,8 @@ class JMESPathTransform(BaseModel):
         record_dict = record.model_dump()
 
         # Apply each JMESPath expression
+        # _compiled_expressions is always populated by model_post_init before process runs.
+        assert self._compiled_expressions is not None
         transformed_fields = {}
         for field_name, compiled_expr in self._compiled_expressions.items():
             try:

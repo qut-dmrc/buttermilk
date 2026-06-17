@@ -23,7 +23,7 @@ class HFInferenceClient:
         return f"hf-{self.hf_model_path}"
 
     @property
-    def client(self):
+    def client(self) -> Any:
         if self.hf_client is None:
             self.hf_client = self.get_client()
         return self.hf_client
@@ -47,14 +47,14 @@ class HFInferenceClient:
         return res.strip()
 
 
-def hf_pipeline(hf_model_path, **model_kwargs):
+def hf_pipeline(hf_model_path: str, **model_kwargs: Any) -> Any:
     from huggingface_hub import login
-    from transformers import pipeline
+    from transformers import pipeline  # type: ignore[import-not-found]  # transformers: optional dep, not installed
 
     # access token with permission to access the model
     login(token=os.environ["HUGGINGFACEHUB_API_TOKEN"], new_session=False)
     try:
-        import torch
+        import torch  # type: ignore[import-not-found]  # torch: optional dep, not installed
 
         if not (device := model_kwargs.pop("device", None)):
             device = "auto" if torch.cuda.is_available() else "cpu"

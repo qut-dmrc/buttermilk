@@ -16,12 +16,12 @@ import asyncio
 import time
 from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import chromadb
-import jmespath
+import jmespath  # type: ignore[import-untyped]  # jmespath: no stubs available
 from google import genai
-from jmespath.exceptions import JMESPathError
+from jmespath.exceptions import JMESPathError  # type: ignore[import-untyped]  # jmespath: no stubs available
 from pydantic import Field, PrivateAttr
 
 # For ChromaDBProcessor remote storage support
@@ -32,7 +32,7 @@ from buttermilk._core.exceptions import FatalError, ProcessingError
 from buttermilk._core.llm_core import LLMCore
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.processor_core import ProcessorCore, TraceParams
-from buttermilk._core.types import BaseRecord, RunRequest
+from buttermilk._core.types import BaseRecord, Record, RunRequest
 from buttermilk.data.vector import _sanitize_metadata_for_chroma
 from buttermilk.runner.flowrunner import OrchestratorFactory
 from buttermilk.utils.utils import scrub_serializable, upload_chromadb_cache
@@ -198,7 +198,7 @@ class LLMProcessor(ProcessorCore):
             duration_ms = (time.time() - start_time) * 1000
 
             # Build metadata with model config for complete traceability
-            model_configs = {}
+            model_configs: dict[str, Any] = {}
             try:
                 if model in bm.llms.connections:
                     llm_config = bm.llms.connections[model]
@@ -593,7 +593,7 @@ class ExpanderProcessor(ProcessorCore):
         # Expand logic
         for i, value in enumerate(values):
             # Create updates dictionary
-            updates = {"record_id": f"{context.record.record_id}_{i}"}
+            updates: dict[str, Any] = {"record_id": f"{context.record.record_id}_{i}"}
 
             # Prepare metadata update
             # We copy existing metadata to avoid mutating the original record's metadata if it's shared
@@ -1092,7 +1092,7 @@ class EmbeddingProcessor(ProcessorCore):
         # Build list of (record_idx, chunk_idx, text) tuples
         embeddings_input = []
         for record_idx, record in enumerate(records):
-            for chunk_idx, chunk in enumerate(record.chunks):
+            for chunk_idx, chunk in enumerate(cast(Record, record).chunks):
                 text = self._get_chunk_text(chunk)
                 if text is not None:
                     embeddings_input.append((record_idx, chunk_idx, text))
@@ -1107,7 +1107,7 @@ class EmbeddingProcessor(ProcessorCore):
         success_count = 0
         for record_idx, chunk_idx, embedding in embedding_results:
             if embedding is not None:
-                chunk = records[record_idx].chunks[chunk_idx]
+                chunk = cast(Record, records[record_idx]).chunks[chunk_idx]
                 self._set_chunk_embedding(chunk, embedding)
                 success_count += 1
 
@@ -1124,7 +1124,7 @@ class EmbeddingProcessor(ProcessorCore):
             )
             # Clear embeddings to avoid partial state
             for record in records:
-                for chunk in record.chunks:
+                for chunk in cast(Record, record).chunks:
                     self._set_chunk_embedding(chunk, None)
             raise ValueError(f"Partial embedding failure: {success_count}/{total_chunks} succeeded")
 
@@ -1143,7 +1143,7 @@ class EmbeddingProcessor(ProcessorCore):
             List of (context_idx, chunk_idx, embedding) tuples where embedding can be None on failure
         """
 
-        async def _run_embed_batch(batch_texts: list[str], attempt: int = 0):
+        async def _run_embed_batch(batch_texts: list[str], attempt: int = 0) -> list[Any]:
             """Run embedding for a batch with semaphore."""
             async with self._embedding_semaphore:
                 try:
@@ -1157,7 +1157,8 @@ class EmbeddingProcessor(ProcessorCore):
                     )
 
                     # Extract embeddings from response
-                    embeddings = []
+                    embeddings: list[Any] = []
+                    assert response.embeddings is not None, "embed_content returned no embeddings"
                     for embedding in response.embeddings:
                         embeddings.append(scrub_serializable(embedding.values))
 
@@ -1463,7 +1464,7 @@ class ChromaDBProcessor(ProcessorCore):
         chunks_to_upsert = []
 
         # Convert chunks to dicts if needed and filter for embeddings
-        for c in record.chunks:
+        for c in cast(Record, record).chunks:
             if hasattr(c, "model_dump"):
                 # Convert ChunkedDocument to dict
                 chunk_dict = c.model_dump()

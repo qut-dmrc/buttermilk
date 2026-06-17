@@ -2,6 +2,7 @@ import asyncio
 import socket
 from collections.abc import Callable
 from logging import DEBUG
+from types import ModuleType
 from typing import Any
 
 import aiohttp
@@ -32,6 +33,7 @@ from openai import (
 )
 from pydantic import BaseModel
 
+zotero_errors: ModuleType | None
 try:
     from pyzotero import zotero_errors
 
@@ -105,7 +107,7 @@ class RetryWrapper(BaseModel):
         ]
 
         # Add pyzotero exceptions if available
-        if PYZOTERO_AVAILABLE:
+        if PYZOTERO_AVAILABLE and zotero_errors is not None:
             retry_exceptions.extend(
                 [
                     zotero_errors.HTTPError,
@@ -143,7 +145,10 @@ class RetryWrapper(BaseModel):
         except RetryError as e:
             logger.error(f"All retry attempts failed: {e!s}")
             # Re-raise the last exception
-            raise e.last_attempt.exception()
+            last_exc = e.last_attempt.exception()
+            if last_exc is not None:
+                raise last_exc
+            raise
 
     def __getattr__(self, name: str) -> Any:
         """Delegate attributes to the wrapped client only if they don't exist on self.

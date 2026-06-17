@@ -85,7 +85,6 @@ class LLMCore(ObservabilityMixin):
     output_model: str | type[BaseModel] | None = None  # String path or class for config
     tools: list[Any] = Field(default_factory=list)
     fail_on_unfilled_parameters: bool = True
-    fail_on_unfilled_parameters: bool = True
     human_in_loop: bool = False  # Whether to require human approval before LLM calls
 
     # LLM inference parameters (all optional)
@@ -205,7 +204,7 @@ class LLMCore(ObservabilityMixin):
 
                 # Get model configuration for complete traceability
                 # model_configs contains temperature, api_version, safety_settings, etc. from models.json
-                model_configs = {}
+                model_configs: dict[str, Any] = {}
                 if self.model in bm.llms.connections:
                     llm_config = bm.llms.connections[self.model]
                     model_configs = llm_config.configs.copy() if llm_config.configs else {}
@@ -493,7 +492,7 @@ class LLMCore(ObservabilityMixin):
         self,
         template_vars: dict[str, Any],
         *,
-        record: BaseRecord = None,
+        record: BaseRecord | None = None,
         context: list[LLMMessage] | None = None,
     ) -> list[LLMMessage]:
         """Render the template with provided data.
@@ -564,7 +563,7 @@ class LLMCore(ObservabilityMixin):
         tracer = trace.get_tracer("buttermilk.llm_core")
 
         # Build span attributes
-        span_attributes = {
+        span_attributes: dict[str, str | bool | int | float] = {
             "llm.model": self.model,
             "llm.message_count": len(messages),
             "llm.has_tools": len(self.tools) > 0,

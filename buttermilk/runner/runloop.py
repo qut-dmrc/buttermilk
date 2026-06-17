@@ -1,8 +1,10 @@
 import asyncio
 import time
 from asyncio import Semaphore
+from collections.abc import AsyncIterable, Coroutine
+from typing import Any
 
-from humanfriendly import format_timespan
+from humanfriendly import format_timespan  # type: ignore[import-untyped]  # humanfriendly: no py.typed marker
 
 from buttermilk import FatalError, logger
 
@@ -12,10 +14,10 @@ A wrapper for the main execution loop, handling errors and interrupts (hopefully
 
 
 async def run_tasks(
-    task_generator,
-    num_runs=1,
-    max_concurrency=32,
-):
+    task_generator: AsyncIterable[Coroutine[Any, Any, Any]],
+    num_runs: int = 1,
+    max_concurrency: int = 32,
+) -> None:
     """Starts the run, managing the consumers and collecting results."""
     _sem = Semaphore(max_concurrency)
 

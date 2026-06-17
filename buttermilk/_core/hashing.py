@@ -312,7 +312,7 @@ def compute_message_hashes(messages: list) -> list[dict[str, str | int]]:
         List of dicts with keys: role (str), index (int), hash (str)
     """
     role_map = _get_role_map()
-    result = []
+    result: list[dict[str, str | int]] = []
     for i, msg in enumerate(messages):
         role = role_map.get(type(msg), type(msg).__name__.lower())
         content = getattr(msg, "content", "")

@@ -36,7 +36,7 @@ class ComponentHealth:
     error_message: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
-    def update_health(self, status: HealthStatus, error_message: str | None = None, **metadata):
+    def update_health(self, status: HealthStatus, error_message: str | None = None, **metadata: Any) -> None:
         """Update component health status."""
         self.status = status
         self.last_check = datetime.now()
@@ -47,7 +47,7 @@ class ComponentHealth:
 class HealthMonitor:
     """Simplified health monitoring for basic status checks."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize simplified health monitor."""
         self.component_health: dict[str, ComponentHealth] = {}
 
@@ -81,7 +81,7 @@ class HealthMonitor:
         """Get basic health summary."""
         overall_status = self.get_overall_health_status()
 
-        components_by_status = {
+        components_by_status: dict[str, list[dict[str, Any]]] = {
             "healthy": [],
             "degraded": [],
             "unhealthy": [],
@@ -104,10 +104,10 @@ class HealthMonitor:
             "last_check": datetime.now().isoformat(),
         }
 
-    def check_basic_system_health(self):
+    def check_basic_system_health(self) -> None:
         """Perform basic system health check."""
         try:
-            import psutil
+            import psutil  # type: ignore[import-untyped]  # psutil: no stubs available
 
             # Basic memory check
             memory = psutil.virtual_memory()
@@ -157,7 +157,7 @@ class HealthMonitor:
             )
             logger.error("System health check failed", error=e)
 
-    def _register_basic_system_check(self):
+    def _register_basic_system_check(self) -> None:
         """Register basic system health component."""
         self.component_health["system_resources"] = ComponentHealth(component_name="system_resources")
         # Perform initial check

@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from buttermilk._core.contract import AgentInput
 from buttermilk._core.log import logger
 from buttermilk._core.processing_context import ProcessingContext
-from buttermilk._core.types import Record
+from buttermilk._core.types import BaseRecord
 from buttermilk.agents.llm import LLMAgent
 
 CITATION_TEXT_CHAR_LIMIT = 4000  # characters
@@ -25,7 +25,7 @@ class FormattedCitation(BaseModel):
 class Citator(LLMAgent):
     """Generates a citation for a given text using an LLM."""
 
-    def __init__(self, output_model: type[pydantic.BaseModel] = None, **kwargs: Any):
+    def __init__(self, output_model: type[pydantic.BaseModel] | None = None, **kwargs: Any):
         # Extract model and template from kwargs if not already in parameters
         if "parameters" not in kwargs:
             kwargs["parameters"] = {}
@@ -49,7 +49,7 @@ class Citator(LLMAgent):
         # Initialize parent class - kwargs are passed through to AgentConfig
         super().__init__(output_model=output_model, **kwargs)
 
-    async def process(self, context: ProcessingContext) -> AsyncGenerator[Record, None]:
+    async def process(self, context: ProcessingContext) -> AsyncGenerator[BaseRecord, None]:
         """
         Process a Record to generate a citation using the LLM.
 
@@ -61,6 +61,12 @@ class Citator(LLMAgent):
         """
         item = context.record
         processor_stage = context.session_id
+
+        # Citation generation requires textual content; fail loud if it is missing or multimodal.
+        if not isinstance(item.content, str):
+            raise ValueError(
+                f"Citator requires text content for record {item.record_id}, got {type(item.content).__name__}",
+            )
 
         # Take the first N characters for citation generation
         citation_text = item.content[:CITATION_TEXT_CHAR_LIMIT]

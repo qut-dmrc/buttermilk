@@ -1,9 +1,10 @@
 import json
+from typing import Any
 
 from rich.console import Console
 
 
-def json_to_slack_format(data):
+def json_to_slack_format(data: Any) -> str:
     """Convert JSON data to Slack-friendly format."""
     # Create an in-memory console
     console = Console(record=True, width=80)

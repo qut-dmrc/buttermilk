@@ -4,6 +4,7 @@ This module handles streaming API requests to flows, using the unified RunReques
 """
 
 from collections.abc import AsyncGenerator
+from typing import Any
 
 from buttermilk import logger
 from buttermilk._core.log import logger
@@ -11,9 +12,9 @@ from buttermilk._core.types import RunRequest  # Import RunRequest
 
 
 async def flow_stream(
-    flow,
+    flow: Any,
     run_request: RunRequest,  # Changed parameter name and type hint
-    return_json=True,
+    return_json: bool = True,
 ) -> AsyncGenerator[str, None]:
     """Stream a flow execution.
 

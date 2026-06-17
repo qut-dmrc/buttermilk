@@ -24,7 +24,7 @@ import datetime
 import json
 import uuid
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
@@ -32,6 +32,9 @@ from buttermilk.utils.pricing import calculate_token_cost
 from buttermilk.utils.save import scrub_serializable, upload_json, upload_text
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
+    from cloudpathlib import CloudPath
     from google.genai.types import BatchJob
 
 from buttermilk._core.log import logger
@@ -183,8 +186,8 @@ class GeminiMessageConverter(BatchMessageConverter):
         system_parts = []
 
         for msg in request.messages:
-            role = msg.get("role")
-            content = msg.get("content")
+            role: Any = msg.get("role")
+            content: Any = msg.get("content")
 
             if role == "system":
                 system_parts.append({"text": content})
@@ -250,8 +253,8 @@ class ClaudeMessageConverter(BatchMessageConverter):
         system_parts = []
 
         for msg in request.messages:
-            role = msg.get("role")
-            content = msg.get("content")
+            role: Any = msg.get("role")
+            content: Any = msg.get("content")
 
             if role == "system":
                 system_parts.append(content)
@@ -594,7 +597,7 @@ class BatchJobManager(BaseModel):
 
         from cloudpathlib import AnyPath
 
-        path = AnyPath(uri)
+        path = cast("CloudPath | Path", AnyPath(uri))
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content)
         return str(path)
@@ -748,7 +751,7 @@ class BatchJobManager(BaseModel):
         """
         from cloudpathlib import AnyPath
 
-        path = AnyPath(uri)
+        path = cast("CloudPath | Path", AnyPath(uri))
         return path.read_text()
 
     def _resolve_model_alias(self, model: str) -> str:
@@ -950,9 +953,10 @@ class BatchJobManager(BaseModel):
         results = []
 
         try:
-            output_path = AnyPath(output_uri)
+            output_path = cast("CloudPath | Path", AnyPath(output_uri))
 
             # Find all JSONL files in output directory (recursive - Vertex AI nests in subdirectories)
+            jsonl_files: list[CloudPath | Path]
             if output_path.is_dir():
                 jsonl_files = list(output_path.glob("**/*.jsonl"))
             else:
@@ -1054,6 +1058,7 @@ class BatchJobManager(BaseModel):
         await self.wait_for_completion(job)
 
         # Get output URI from active jobs registry
+        assert job.name is not None, "Submitted batch job must have a resource name"
         output_uri = self._get_output_uri_for_job(job.name)
 
         return self.parse_results(output_uri, requests)
@@ -1248,7 +1253,7 @@ class BatchJobManager(BaseModel):
         # Strategy 2: Check current session path (Legacy/Fallback)
         if not manifest_path and session.save_dir:
             try:
-                session_path = AnyPath(f"{session.save_dir}/batch/{job_id}/manifest.json")
+                session_path = cast("CloudPath | Path", AnyPath(f"{session.save_dir}/batch/{job_id}/manifest.json"))
                 if session_path.exists():
                     manifest_path = session_path
                     logger.debug(f"Found manifest in current session: {manifest_path}")
@@ -1265,7 +1270,7 @@ class BatchJobManager(BaseModel):
                     bucket = parts[2]
                     runs_root = f"gs://{bucket}/runs"
                     logger.info(f"Searching for manifest in {runs_root}...")
-                    runs_path = AnyPath(runs_root)
+                    runs_path = cast("CloudPath | Path", AnyPath(runs_root))
                     found_manifests = list(runs_path.glob(f"**/batch/{job_id}/manifest.json"))
                     if found_manifests:
                         manifest_path = found_manifests[0]
@@ -1381,7 +1386,7 @@ class BatchJobManager(BaseModel):
 
         for result in results:
             # Combine result with key manifest/request info
-            entry = {
+            entry: dict[str, Any] = {
                 "record_id": result.record_id,
                 "custom_id": result.custom_id,
                 "model": result.model or manifest.model,
@@ -1627,7 +1632,7 @@ class OpenAIBatchJobManager(BaseModel):
 
         from cloudpathlib import AnyPath
 
-        path = AnyPath(uri)
+        path = cast("CloudPath | Path", AnyPath(uri))
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content)
         return str(path)
@@ -2063,7 +2068,7 @@ class OpenAIBatchJobManager(BaseModel):
         # Check current session path
         if not manifest_path and session.save_dir:
             try:
-                session_path = AnyPath(f"{session.save_dir}/batch/{job_id}/manifest.json")
+                session_path = cast("CloudPath | Path", AnyPath(f"{session.save_dir}/batch/{job_id}/manifest.json"))
                 if session_path.exists():
                     manifest_path = session_path
             except Exception:
@@ -2120,7 +2125,7 @@ class OpenAIBatchJobManager(BaseModel):
         total_cost_usd = 0.0
 
         for result in results:
-            entry = {
+            entry: dict[str, Any] = {
                 "record_id": result.record_id,
                 "custom_id": result.custom_id,
                 "model": result.model or manifest.model,

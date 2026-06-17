@@ -124,8 +124,8 @@ class OrchestratorProtocol(BaseModel):
         "observers",
         mode="before",
     )(
-        convert_omegaconf_objects,
-    )  # type: ignore
+        convert_omegaconf_objects,  # type: ignore[arg-type]  # pydantic accepts a plain callable; stub requires classmethod
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -320,9 +320,9 @@ class Orchestrator(OrchestratorProtocol, ABC):
             attributes={
                 "flow.name": self.name,
                 "flow.display_name": display_name,
-                "session_id": getattr(bm.session_info, "session_id", None),
-                "platform": getattr(bm.session_info, "platform", None),
-                "job": getattr(bm.session_info, "job", None),
+                "session_id": bm.session_info.session_id,
+                "platform": bm.session_info.platform,
+                "job": bm.session_info.job,
             },
         ) as otel_span:
             try:

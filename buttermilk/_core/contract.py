@@ -624,7 +624,7 @@ class ExecutionTrace(BaseModel):
         exclude_none=True,
     )
 
-    def model_dump(self, *args, **kwargs) -> dict[str, Any]:
+    def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         """Override model_dump to exclude empty collections and prepare for BigQuery."""
         raw_dump = super().model_dump(*args, **kwargs)
         # Apply the cleaning function to the result
@@ -1200,7 +1200,7 @@ class AgentAnnouncement(FlowEvent):
     )
     model_config = ConfigDict(arbitrary_types_allowed=True)  # Allow Tool types
 
-    def model_post_init(self, __context) -> None:
+    def model_post_init(self, __context: Any) -> None:
         """Set agent_info to match agent_config after initialization."""
         super().model_post_init(__context)
         # Ensure agent_info matches agent_config

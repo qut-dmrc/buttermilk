@@ -9,7 +9,7 @@ import asyncio
 import warnings
 from abc import abstractmethod
 from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping
-from typing import Any
+from typing import Any, cast
 
 from opentelemetry import trace
 
@@ -25,6 +25,7 @@ from buttermilk._core.contract import (
     ConductorRequest,
     ErrorEvent,
     ExecutionTrace,
+    HeartBeat,
     StepRequest,  # Request to execute a specific step
     TaskProcessingComplete,
     TaskProcessingStarted,
@@ -44,7 +45,7 @@ from buttermilk._core.runtime_types import (
     message_handler,
 )
 from buttermilk._core.tool_types import CancellationToken, Tool
-from buttermilk._core.types import BaseRecord, RunRequest  # Data record structure
+from buttermilk._core.types import BaseRecord, Record, RunRequest  # Data record structure
 from buttermilk.utils.templating import (
     KeyValueCollector,
 )  # Utility for managing state data
@@ -228,7 +229,7 @@ class Agent:
 
         self._model_context = ChatHistory()
         self._data = KeyValueCollector()
-        self._heartbeat = asyncio.Queue(maxsize=1)
+        self._heartbeat: asyncio.Queue[HeartBeat] = asyncio.Queue(maxsize=1)
         self._announced = False
         self._tools = self._get_available_tools()
         self._handler_registry: dict[type, str] | None = None
@@ -375,6 +376,12 @@ class Agent:
         )
 
         # --- Prepare the input state for processing ---
+        # _add_state_to_input (and the downstream _process) operate on AgentInput.
+        # StepRequest is a subclass of AgentInput, so both valid runtime inputs satisfy
+        # this; a bare str would be a programming error and must fail loud.
+        assert isinstance(message, AgentInput), (
+            f"Agent.invoke expected an AgentInput (or StepRequest subclass), got {type(message).__name__}"
+        )
         try:
             final_input = await self._add_state_to_input(message)
         except Exception as e:
@@ -525,7 +532,7 @@ class Agent:
         )
 
         # Build OTEL span attributes from agent trace info
-        span_attributes = {
+        span_attributes: dict[str, Any] = {
             # Core agent identity
             "agent.name": self.agent_name,
             "agent.id": self.agent_id,
@@ -860,7 +867,10 @@ class Agent:
                 if record_values:
                     record_data = record_values[-1]  # Get most recent
                     if isinstance(record_data, dict):
-                        updated_inputs.record = BaseRecord.from_dict(record_data)
+                        # from_dict reconstructs the concrete subclass (typically Record);
+                        # validate_assignment=True on AgentInput re-validates it against the
+                        # `record: Record | None` field, so the stored value is a Record.
+                        updated_inputs.record = cast(Record, BaseRecord.from_dict(record_data))
                     else:
                         updated_inputs.record = record_data
             except Exception as e:

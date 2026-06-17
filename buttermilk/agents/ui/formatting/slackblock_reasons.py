@@ -1,4 +1,5 @@
 import pprint
+from typing import Any
 
 from buttermilk._core.constants import SLACK_MAX_MESSAGE_LENGTH
 from buttermilk._core.contract import ExecutionTrace
@@ -7,11 +8,12 @@ from buttermilk.agents.ui.formatting.slackblock import format_response
 
 def format_slack_reasons(result: ExecutionTrace) -> dict:
     """Format message for Slack API with attractive blocks for structured data"""
-    blocks = []
+    blocks: list[dict[str, Any]] = []
     result_copy = result.model_copy(deep=True)
 
     # Add header with model identifier
-    header_text = f"Model: :robot_face: {result_copy.metadata.get('name')} {result_copy.metadata.get('model')}"
+    metadata = result_copy.metadata or {}
+    header_text = f"Model: :robot_face: {metadata.get('name')} {metadata.get('model')}"
     blocks.append(
         {
             "type": "header",
@@ -22,30 +24,31 @@ def format_slack_reasons(result: ExecutionTrace) -> dict:
             },
         },
     )
+    inputs = result_copy.inputs or {}
     blocks.append(
         {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": ", ".join(result_copy.inputs.values()),
+                "text": ", ".join(inputs.values()),
             },
         },
     )
 
     # Handle error case
-    if result_copy.outputs.get("error"):
+    outputs = result_copy.outputs or {}
+    if outputs.get("error"):
         blocks.append(
             {
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": "*Error!*\n" + "\n".join(format_response(result_copy.outputs.get("error"))),
+                    "text": "*Error!*\n" + "\n".join(format_response(outputs.get("error"))),
                 },
             },
         )
 
     else:
-        outputs = result_copy.outputs
         if isinstance(outputs, dict):
             # Extract reasons for special handling
             reasons = outputs.pop("reasons", []) if isinstance(outputs, dict) else []

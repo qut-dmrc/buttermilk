@@ -3,7 +3,7 @@ from typing import (
     ClassVar,
 )
 
-import regex as re
+import regex as re  # type: ignore[import-untyped]  # regex: types-regex not installed
 from pydantic import Field
 
 from buttermilk.utils import read_text
@@ -26,7 +26,7 @@ class Wildguard(ToxicityClassifierCore):
     )
 
     def init_client(self) -> None:
-        from transformers import pipeline
+        from transformers import pipeline  # type: ignore[import-not-found]  # transformers: optional dep, not installed
 
         self._client = pipeline(
             "text-generation",
@@ -42,7 +42,7 @@ class Wildguard(ToxicityClassifierCore):
     def call_client(
         self,
         prompt: str,
-        **kwargs,
+        **kwargs: Any,
     ) -> Any:
         response = self._client(prompt)
         return str(response[0]["generated_text"]).strip()

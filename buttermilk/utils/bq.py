@@ -14,11 +14,13 @@ It uses the `google-cloud-bigquery` and `google-cloud-bigquery-storage` client l
 
 import asyncio
 import datetime
+import json
 from collections.abc import (
+    AsyncIterator,  # For type hinting async generators
     Mapping,  # For type hinting
     Sequence,  # For type hinting sequences
 )
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 import pydantic  # Pydantic core, though less used directly in this file now
@@ -38,11 +40,13 @@ try:
 
     BIGQUERY_AVAILABLE = True
 except ImportError:
-    # BigQuery not available - create placeholder types
-    bigquery = None
-    bigquery_storage_v1beta2 = None
-    BigQueryWriteAsyncClient = None
-    ProtoRows = None
+    # BigQuery not available - create placeholder values. These names are either the
+    # imported modules/classes or None depending on whether the optional deps are
+    # installed, so annotate them as Any to reflect that runtime duality.
+    bigquery: Any = None  # type: ignore[no-redef]
+    bigquery_storage_v1beta2: Any = None  # type: ignore[no-redef]
+    BigQueryWriteAsyncClient: Any = None  # type: ignore[no-redef,misc]
+    ProtoRows: Any = None  # type: ignore[no-redef,misc]
     BIGQUERY_AVAILABLE = False
 
 from pydantic import (
@@ -54,7 +58,7 @@ from pydantic import (
 
 from buttermilk._core.log import logger  # Centralized logger
 
-from .utils import make_serialisable, remove_punctuation  # Utility functions
+from .utils import chunks, make_serialisable, remove_punctuation  # Utility functions
 
 # This constant is also in _core/constants.py. Define here if specific to bq utils,
 # or ensure single source of truth. For now, keeping as it was in original.
@@ -422,7 +426,7 @@ class TableWriter(BaseModel):
 
         write_stream_path = f"{self.table_path}/streams/{self.stream or '_default'}"
 
-        prepared_batch: list[Mapping[str, Any]]
+        prepared_batch: list[dict[str, Any]]
         if isinstance(rows, pd.DataFrame):
             # Deduplicate columns if necessary
             df_to_process = rows.copy()  # Work on a copy
@@ -431,7 +435,8 @@ class TableWriter(BaseModel):
                     x[1] if x[1] not in df_to_process.columns[: x[0]] else f"{x[1]}_{list(df_to_process.columns[: x[0]]).count(x[1])}"
                     for x in enumerate(df_to_process.columns)
                 ]
-            prepared_batch = df_to_process.to_dict(orient="records")
+            # to_dict(orient="records") yields one dict per row keyed by column labels.
+            prepared_batch = cast("list[dict[str, Any]]", df_to_process.to_dict(orient="records"))
         elif isinstance(rows, list) and all(isinstance(r, dict) for r in rows):
             prepared_batch = [r.copy() for r in rows]  # List of dicts
         elif isinstance(rows, dict):  # Single dict row
@@ -510,7 +515,7 @@ class TableWriter(BaseModel):
         # that itself takes an iterable/generator of `AppendRowsRequest` objects.
         # We need to create these requests.
 
-        async def request_generator():
+        async def request_generator() -> "AsyncIterator[Any]":
             for chunk_of_rows in chunks(serializable_batch, 100):  # Example chunk size
                 proto_data = bigquery_storage_v1beta2.types.ProtoData()
                 proto_data.rows.serialized_rows.extend(

@@ -1,7 +1,8 @@
 from pathlib import Path
 from typing import Any, ClassVar, Literal
 
-import regex as re
+import regex as re  # type: ignore[import-untyped]  # regex: no stubs available
+from langchain_core.prompts import ChatPromptTemplate
 
 from buttermilk._core.llms import LLMs
 from buttermilk.utils.json_parser import ChatParser
@@ -9,14 +10,16 @@ from buttermilk.utils.utils import read_yaml
 
 from .toxicity import EvalRecord, Score, ToxicityClassifierCore
 
+NemoStandard = Literal[
+    "nemo_self_check.input",
+    "nemo_self_check.output",
+    "nemo_self_check.input_simple",
+    "nemo_self_check.output_simple",
+]
+
 
 class Nemo(ToxicityClassifierCore):
-    standard: Literal[
-        "nemo_self_check.input",
-        "nemo_self_check.output",
-        "nemo_self_check.input_simple",
-        "nemo_self_check.output_simple",
-    ]
+    standard: NemoStandard
 
     def make_prompt(self, content: str) -> str:
         return content
@@ -35,7 +38,7 @@ class Nemo(ToxicityClassifierCore):
                         reasons=[response.get("reasoning", str(response))],
                     ),
                 )
-                outcome.labels = "violating"
+                outcome.labels = ["violating"]
                 outcome.prediction = True
             elif answer[:2] == "no":
                 outcome.scores.append(
@@ -68,8 +71,8 @@ class NemoLangchain(Nemo):
     def call_client(
         self,
         prompt: str,
-        **kwargs,
-    ) -> str:
+        **kwargs: Any,
+    ) -> Any:
         input_vars = dict(content=prompt)
         input_vars.update({k: v for k, v in kwargs.items() if v})
 
@@ -95,45 +98,45 @@ class NemoLangchain(Nemo):
             template_format="jinja2",
         )
 
-        chain = langchain_template | llm | ChatParser()
+        chain: Any = langchain_template | llm | ChatParser()
         self._client = chain
 
 
 class NemoInputSimpleGPT4o(NemoLangchain):
-    standard: str = "nemo_self_check.input_simple"
+    standard: NemoStandard = "nemo_self_check.input_simple"
     model: str = "gpt4o"
 
 
 class NemoInputComplexGPT4o(NemoLangchain):
-    standard: str = "nemo_self_check.input"
+    standard: NemoStandard = "nemo_self_check.input"
     model: str = "gpt4o"
 
 
 class NemoOutputSimpleGPT4o(NemoLangchain):
-    standard: str = "nemo_self_check.output_simple"
+    standard: NemoStandard = "nemo_self_check.output_simple"
     model: str = "gpt4o"
 
 
 class NemoOutputComplexGPT4o(NemoLangchain):
-    standard: str = "nemo_self_check.output"
+    standard: NemoStandard = "nemo_self_check.output"
     model: str = "gpt4o"
 
 
 class NemoInputSimpleLlama31_70b(NemoLangchain):
-    standard: str = "nemo_self_check.input_simple"
+    standard: NemoStandard = "nemo_self_check.input_simple"
     model: str = "llama31_70b"
 
 
 class NemoInputComplexLlama31_70b(NemoLangchain):
-    standard: str = "nemo_self_check.input"
+    standard: NemoStandard = "nemo_self_check.input"
     model: str = "llama31_70b"
 
 
 class NemoOutputSimpleLlama31_70b(NemoLangchain):
-    standard: str = "nemo_self_check.output_simple"
+    standard: NemoStandard = "nemo_self_check.output_simple"
     model: str = "llama31_70b"
 
 
 class NemoOutputComplexLlama31_70b(NemoLangchain):
-    standard: str = "nemo_self_check.output"
+    standard: NemoStandard = "nemo_self_check.output"
     model: str = "llama31_70b"

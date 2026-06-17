@@ -14,6 +14,7 @@ Usage:
 import json
 import sys
 from pathlib import Path
+from typing import Any, cast
 
 import click
 
@@ -43,7 +44,7 @@ def submit(config: Path, json_output: bool) -> None:
     """
     import asyncio
 
-    import yaml
+    import yaml  # type: ignore[import-untyped]  # PyYAML: no stubs available
 
     from buttermilk import init_async
 
@@ -220,7 +221,7 @@ def fetch(job_id: str, json_output: bool, output: str | None, save_dir: str | No
 
     from buttermilk import init_async
 
-    async def run_fetch() -> dict | list:
+    async def run_fetch() -> dict[str, Any]:
         bm = await init_async(job="batch-fetch")
 
         from buttermilk._core.vertex_batch import BatchJobManager
@@ -325,7 +326,7 @@ def list_jobs(json_output: bool, limit: int, save_dir: str | None) -> None:
     """
     import asyncio
 
-    from cloudpathlib import AnyPath
+    from cloudpathlib import AnyPath, CloudPath
 
     from buttermilk import init_async
     from buttermilk._core.vertex_batch import BatchJobManifest
@@ -337,14 +338,18 @@ def list_jobs(json_output: bool, limit: int, save_dir: str | None) -> None:
         if not effective_save_dir:
             raise RuntimeError("No save_dir configured. Use --save-dir to specify.")
 
-        batch_dir = AnyPath(effective_save_dir) / "batch"
+        # cloudpathlib.AnyPath is a factory returning a concrete CloudPath or
+        # pathlib.Path; its __new__ is type-ignored upstream so mypy cannot see
+        # the real return type. Cast to the documented runtime union.
+        save_root = cast("CloudPath | Path", AnyPath(effective_save_dir))
+        batch_dir: CloudPath | Path = save_root / "batch"
 
         if not batch_dir.exists():
             return []
 
         jobs = []
         # List job directories
-        job_dirs = sorted(batch_dir.iterdir(), reverse=True)[:limit]
+        job_dirs = cast("list[CloudPath | Path]", sorted(batch_dir.iterdir(), reverse=True)[:limit])
 
         for job_dir in job_dirs:
             if not job_dir.is_dir():

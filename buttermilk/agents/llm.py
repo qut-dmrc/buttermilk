@@ -66,7 +66,7 @@ class LLMAgent(Agent):
 
     """
 
-    def __init__(self, *, output_model: type[pydantic.BaseModel] = None, **kwargs: Any) -> None:
+    def __init__(self, *, output_model: type[pydantic.BaseModel] | None = None, **kwargs: Any) -> None:
         """Initialize an LLMAgent with the provided configuration.
 
         Extracts the model name from parameters and stores it in `_model`.
@@ -89,7 +89,7 @@ class LLMAgent(Agent):
             raise ValueError(f"Agent {self.agent_name}: 'template' is required in agent parameters.")
 
         # Initialize private attributes
-        self.output_model: type[pydantic.BaseModel] = output_model or None
+        self.output_model: type[pydantic.BaseModel] | None = output_model or None
 
         # Initialize the shared LLM core
         # LLMCore.template_vars receives all non-LLM-config parameters for template rendering
@@ -138,7 +138,7 @@ class LLMAgent(Agent):
         *,
         message: AgentInput,
         cancellation_token: CancellationToken | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> AgentOutput:
         """Core processing logic: uses LLMCore to process and wraps result in AgentOutput.
 

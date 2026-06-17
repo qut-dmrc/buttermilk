@@ -45,7 +45,7 @@ class Aegis(LlamaGuardTox):
     )
     options: ClassVar[dict] = {}
 
-    def init_client(self):
+    def init_client(self) -> None:
         from peft.config import PeftConfig
         from peft.peft_model import PeftModel
         from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -70,7 +70,7 @@ class Aegis(LlamaGuardTox):
     def call_client(
         self,
         prompt: str,
-        **kwargs,
+        **kwargs: Any,
     ) -> Any:
         inputs = self.tokenizer(
             prompt,

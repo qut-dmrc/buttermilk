@@ -7,11 +7,12 @@ It can be swapped out for different embedding models or strategies.
 import asyncio
 import time
 from collections.abc import AsyncGenerator
-from typing import Any
+from typing import Any, cast
 
 import pydantic
 from chromadb import Documents, EmbeddingFunction, Embeddings
 from google import genai
+from google.genai.types import ContentListUnion
 from pydantic import BaseModel, Field, PrivateAttr
 from vertexai.language_models import (
     TextEmbeddingInput,
@@ -43,7 +44,7 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
     def __call__(self, input: Documents) -> Embeddings:
         response = self.client.models.embed_content(
             model=self._embedding_model,
-            contents=input,
+            contents=cast("ContentListUnion", input),
             config={
                 "output_dimensionality": self.dimensionality,
                 "auto_truncate": False,
@@ -51,7 +52,9 @@ class GeminiEmbeddingFunction(EmbeddingFunction):
         )
 
         # Extract embeddings from response
-        embeddings = []
+        embeddings: list[Any] = []
+        if response.embeddings is None:
+            raise ValueError("Gemini embed_content returned no embeddings")
         for embedding in response.embeddings:
             # Convert to list if it's a numpy array
             embeddings.append(scrub_serializable(embedding.values))
@@ -258,7 +261,7 @@ class EmbeddingGenerator(BaseModel):
         """
         embedding_function = GeminiEmbeddingFunction(self.embedding_model, self.dimensionality)
 
-        async def _run_embed_batch(batch_docs, attempt: int = 0):
+        async def _run_embed_batch(batch_docs: list[Any], attempt: int = 0) -> list[Any]:
             """Run embedding for a batch with semaphore."""
             async with self._embedding_semaphore:
                 try:

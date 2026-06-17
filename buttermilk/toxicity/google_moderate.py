@@ -1,3 +1,5 @@
+from typing import Any
+
 from google.cloud import language_v2
 
 from .toxicity import EvalRecord, Score, ToxicityClassifierCore
@@ -25,7 +27,7 @@ class GoogleModerate(ToxicityClassifierCore):
     def make_prompt(self, content: str) -> str:
         return content
 
-    def call_client(self, prompt: str, **kwargs) -> language_v2.ModerateTextResponse:
+    def call_client(self, prompt: str, **kwargs: Any) -> language_v2.ModerateTextResponse:
         document = language_v2.Document(
             content=prompt,
             type_=language_v2.Document.Type.PLAIN_TEXT,

@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from buttermilk import logger
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.processing_context import ProcessingContext
-from buttermilk._core.types import Record
+from buttermilk._core.types import BaseRecord
 from buttermilk.utils.text_quality import is_document_corrupt
 
 
@@ -61,7 +61,7 @@ class QualityFilterProcessor(BaseModel):
         description="Minimum repetitive pattern rate (%) to consider corrupt. Currently used by verification logic, reserved for future use.",
     )
 
-    async def process(self, context: ProcessingContext) -> AsyncGenerator[Record, None]:
+    async def process(self, context: ProcessingContext) -> AsyncGenerator[BaseRecord, None]:
         """Process a record by analyzing document quality and filtering if corrupt.
 
         This processor expects the record to have a `chunks` attribute from a prior

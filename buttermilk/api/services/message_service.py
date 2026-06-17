@@ -31,25 +31,27 @@ from buttermilk.utils.pricing import calculate_token_cost, extract_cached_tokens
 
 PREVIEW_LENGTH = 200
 
+MessageType = Literal[
+    "chat_message",
+    "record",
+    "system_prompt",
+    "user_response",
+    "system_message",
+    "system_update",
+    "system_error",
+    "assessments",
+    "research_result",
+    "differences",
+    "judge_reasons",
+    "start_flow",
+    "agent_output",
+]
+
 
 class ChatMessage(BaseModel):
     """Chat message model"""
 
-    type: Literal[
-        "chat_message",
-        "record",
-        "system_prompt",
-        "user_response",
-        "system_message",
-        "system_update",
-        "system_error",
-        "assessments",
-        "research_result",
-        "differences",
-        "judge_reasons",
-        "start_flow",
-        "agent_output",  # Generic fallback for external BaseModel types
-    ] = Field(..., description="Type of message")
+    type: MessageType = Field(..., description="Type of message")
     message_id: str = Field(default_factory=lambda: uuid())
     preview: str | None = Field(default="", description="Short (one-line) abstract of message")
     outputs: Any | None = Field(None, description="Message outputs")
@@ -84,9 +86,9 @@ class MessageService:
 
             # Handle messages that need special processing
             if isinstance(message, (ChatMessage, StepRequest)):
-                message_type = type(message).__name__
+                incoming_type = type(message).__name__
                 action = "returning as-is" if isinstance(message, ChatMessage) else "not sending to UI"
-                logger.debug(f"[MessageService] {message_type} received, {action}")
+                logger.debug(f"[MessageService] {incoming_type} received, {action}")
                 return message if isinstance(message, ChatMessage) else None
 
             # Convert UserResponseMessage to user_response for display
@@ -173,7 +175,7 @@ class MessageService:
                     logger.warning(f"[MessageService] ExecutionTrace object with no outputs: {message}, returning None.")
                     return None
 
-            message_type = None
+            message_type: MessageType | None = None
             if isinstance(message, Record):
                 message_type = "record"
             elif isinstance(message, ConductorRequest):

@@ -24,7 +24,7 @@ class UIAgent(Agent):
     It handles the basic initialization and resource management for UI agents.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         """Initialize UIAgent with callback configuration."""
         super().__init__(**kwargs)
 
@@ -35,7 +35,7 @@ class UIAgent(Agent):
         self._input_task: asyncio.Task | None = None
         self._trace_this = False  # Controls whether this agent's messages are traced
 
-    async def initialize(self, callback_to_groupchat: Callable[..., Awaitable[None]], **kwargs) -> None:
+    async def initialize(self, callback_to_groupchat: Callable[..., Awaitable[None]], **kwargs: Any) -> None:
         """Initialize the UI agent with necessary callbacks and session info.
 
         Args:
@@ -78,7 +78,7 @@ class UIAgent(Agent):
         cancellation_token: CancellationToken | None = None,
         public_callback: Callable | None = None,
         source: str = "",
-        **kwargs,
+        **kwargs: Any,
     ) -> OOBMessages | None:
         """Process out-of-band control messages.
 

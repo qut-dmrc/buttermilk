@@ -1,6 +1,7 @@
 """DuckDB storage implementation for unified storage operations."""
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
+from typing import Any
 
 from buttermilk._core.exceptions import StorageError
 from buttermilk._core.log import logger
@@ -40,13 +41,14 @@ class DuckDBStorage(Storage):
         if not self.table_name and not self.custom_query:
             raise StorageError("DuckDB storage requires either table_name or custom_query")
 
-        self._conn = None
+        # duckdb.DuckDBPyConnection (untyped third-party; lazily imported) -> Any
+        self._conn: Any = None
 
-    def _get_connection(self):
+    def _get_connection(self) -> Any:
         """Get or create DuckDB connection."""
         if self._conn is None:
             try:
-                import duckdb
+                import duckdb  # type: ignore[import-not-found]  # duckdb: optional dependency, no stubs
 
                 self._conn = duckdb.connect(self.database, read_only=self.read_only)
                 # Load JSON extension for handling JSON columns
@@ -122,18 +124,17 @@ class DuckDBStorage(Storage):
             raise StorageError("Cannot save to DuckDB without table_name (custom_query not supported for writes)")
 
         # Normalize to list
-        if not isinstance(records, list):
-            records = [records]
+        record_list: Sequence[BaseRecord | dict] = records if isinstance(records, list) else [records]
 
-        if not records:
+        if not record_list:
             return
 
         try:
             conn = self._get_connection()
 
             # Convert records to dicts if they're BaseRecord objects
-            rows = []
-            for record in records:
+            rows: list[dict] = []
+            for record in record_list:
                 if isinstance(record, BaseRecord):
                     rows.append(record.model_dump())
                 elif isinstance(record, dict):
@@ -206,14 +207,14 @@ class DuckDBStorage(Storage):
 
         return Path(self.database).exists()
 
-    def close(self):
+    def close(self) -> None:
         """Close DuckDB connection."""
         if hasattr(self, "_conn") and self._conn:
             self._conn.close()
             self._conn = None
             logger.debug(f"Closed DuckDB connection to {self.database}")
 
-    def __del__(self):
+    def __del__(self) -> None:
         """Cleanup connection on deletion."""
         # Only close if object was fully initialized
         if hasattr(self, "_conn"):

@@ -1,5 +1,5 @@
 import importlib.metadata
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from opentelemetry import trace
@@ -35,24 +35,24 @@ class BMAccessor:
     """Descriptor that provides access to the singleton BM instance."""
 
     @property
-    def __class__(self):
+    def __class__(self) -> type:
         """Make isinstance(bm, BM) work correctly."""
         from ._core.bm_init import BM  # noqa: PLC0415
 
         return BM
 
-    def __class_getitem__(cls, item):
+    def __class_getitem__(cls, item: Any) -> type:
         """Support type hints like bm: BM."""
         from ._core.bm_init import BM  # noqa: PLC0415
 
         return BM
 
-    def __getattr__(self, name):  # -> Any:
+    def __getattr__(self, name: str) -> Any:
         from ._core.dmrc import get_bm  # noqa: PLC0415
 
         return getattr(get_bm(), name)
 
-    def __get__(self, obj, objtype=None) -> "BM":
+    def __get__(self, obj: object, objtype: type | None = None) -> "BM":
         from ._core.dmrc import get_bm  # noqa: PLC0415
 
         if get_bm() is None:
@@ -60,7 +60,7 @@ class BMAccessor:
             raise RuntimeError(msg)
         return get_bm()
 
-    def __set__(self, obj, value: "BM") -> None:
+    def __set__(self, obj: object, value: "BM") -> None:
         from ._core.dmrc import set_bm  # noqa: PLC0415
 
         set_bm(value)
@@ -70,7 +70,7 @@ class BMAccessor:
 bm = BMAccessor()
 
 
-def __getattr__(name):
+def __getattr__(name: str) -> Any:
     """Module-level attribute access to handle runtime BM imports.
 
     This allows 'from buttermilk import BM' to work at runtime

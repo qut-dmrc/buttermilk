@@ -59,7 +59,7 @@ class BatchAccumulator(ProcessorCore):
     # Internal buffer
     _buffer: list[ProcessingContext] = PrivateAttr(default_factory=list)
     _batch_count: int = PrivateAttr(default=0)
-    _lock: asyncio.Lock = PrivateAttr(default=None)
+    _lock: asyncio.Lock | None = PrivateAttr(default=None)
 
     def model_post_init(self, __context: Any) -> None:
         """Validate batch_processors implement BatchProcessor."""
@@ -103,6 +103,7 @@ class BatchAccumulator(ProcessorCore):
         # and process the same batch multiple times
         batch_to_process: list[ProcessingContext] | None = None
 
+        assert self._lock is not None  # set in model_post_init
         async with self._lock:
             self._buffer.append(context)
 
@@ -215,7 +216,7 @@ class BatchAccumulator(ProcessorCore):
         output_records: list[BaseRecord] = []
         processor_name = getattr(processor, "name", None) or type(processor).__name__
         for ctx, result in zip(contexts, results):
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 record_id = getattr(ctx.record, "record_id", "unknown")
                 logger.error(
                     f"Live processor {processor_name} failed for record {record_id}",
@@ -238,6 +239,7 @@ class BatchAccumulator(ProcessorCore):
         # Take ownership of remaining buffer under lock
         batch_to_process: list[ProcessingContext] | None = None
 
+        assert self._lock is not None  # set in model_post_init
         async with self._lock:
             if self._buffer:
                 logger.info(

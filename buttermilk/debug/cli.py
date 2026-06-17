@@ -24,7 +24,7 @@ from .trace_analysis import (
 
 
 @click.group()
-def debug():
+def debug() -> None:
     """Debug utilities for buttermilk flows and components."""
 
 
@@ -33,7 +33,7 @@ def debug():
 @click.option("--timeout", default=60, help="Test timeout in seconds")
 @click.option("--output", help="Output file for results (JSON)")
 @click.option("--verbose", "-v", is_flag=True, help="Verbose output")
-def test_startup(flow, timeout, output, verbose):
+def test_startup(flow: tuple[str, ...], timeout: int, output: str | None, verbose: bool) -> None:
     """Test daemon startup and capture results."""
     flows_str = ",".join(flow) if flow else "osb"
 
@@ -44,7 +44,7 @@ def test_startup(flow, timeout, output, verbose):
     validation_errors = []
     startup_success = False
     api_reachable = False
-    flows_loaded = []
+    flows_loaded: list[str] = []
     error_details = None
 
     # Build command
@@ -73,6 +73,7 @@ def test_startup(flow, timeout, output, verbose):
         )
 
         output_lines = []
+        assert process.stdout is not None  # stdout=PIPE was requested above
         for line in iter(process.stdout.readline, ""):
             if not line:
                 break
@@ -340,7 +341,7 @@ def test_startup(flow, timeout, output, verbose):
 @click.option("--minutes-back", default=30, help="How many minutes back to analyze logs")
 @click.option("--project-id", help="GCP project ID (auto-detected if not provided)")
 @click.option("--include-warnings", is_flag=True, help="Include warning-level logs in analysis")
-def analyze_logs(minutes_back, project_id, include_warnings):
+def analyze_logs(minutes_back: int, project_id: str | None, include_warnings: bool) -> None:
     """Analyze GCP logs for Enhanced RAG agent and startup issues."""
     click.echo("🔍 ANALYZING GCP LOGS FOR BUTTERMILK ISSUES")
     click.echo("=" * 50)
@@ -394,7 +395,7 @@ def analyze_logs(minutes_back, project_id, include_warnings):
 
 @debug.command()
 @click.option("--filter", help="Log filter expression for GCP logs")
-def stream_logs(filter):
+def stream_logs(filter: str | None) -> None:
     """Stream GCP logs in real-time for debugging."""
     click.echo("🔍 STREAMING GCP LOGS (Press Ctrl+C to stop)")
     click.echo("=" * 50)
@@ -423,7 +424,7 @@ def stream_logs(filter):
 )
 @click.option("--logs-minutes", default=15, help="Minutes of logs to analyze")
 @click.option("--comprehensive", is_flag=True, help="Run full debugging suite")
-def diagnose_issue(flow, query, logs_minutes, comprehensive):
+def diagnose_issue(flow: str, query: str, logs_minutes: int, comprehensive: bool) -> None:
     """Complete diagnostic suite for the Enhanced RAG agent issue."""
     click.echo("🩺 COMPLETE ENHANCED RAG AGENT DIAGNOSTIC")
     click.echo("=" * 60)
@@ -477,6 +478,7 @@ def diagnose_issue(flow, query, logs_minutes, comprehensive):
         )
 
         # Check first few lines for immediate errors
+        assert process.stdout is not None  # stdout=PIPE was requested above
         for i in range(10):
             line = process.stdout.readline()
             if not line:
@@ -577,7 +579,7 @@ def diagnose_issue(flow, query, logs_minutes, comprehensive):
 )
 @click.option("--output", help="Output file for validation report (JSON)")
 @click.option("--verbose", "-v", is_flag=True, help="Show detailed validation results")
-def validate_config(config_path, output, verbose):
+def validate_config(config_path: str, output: str | None, verbose: bool) -> None:
     """Validate configuration files and dependencies."""
     click.echo("🔧 VALIDATING BUTTERMILK CONFIGURATION")
     click.echo("=" * 50)
@@ -653,7 +655,7 @@ def validate_config(config_path, output, verbose):
 @click.option("--call-id", help="Show specific trace by call_id")
 @click.option("--messages", is_flag=True, help="Show LLM messages for --call-id")
 @click.option("--json", "output_json", is_flag=True, help="Output as JSON")
-def trace(path, summary, errors, timeline, agent, call_id, messages, output_json):
+def trace(path: Path, summary: bool, errors: bool, timeline: bool, agent: str | None, call_id: str | None, messages: bool, output_json: bool) -> None:
     """Analyze execution trace files.
 
     PATH is the path to a trace file (JSON or JSONL format).
@@ -674,8 +676,8 @@ def trace(path, summary, errors, timeline, agent, call_id, messages, output_json
 
     try:
         tf = load_trace_file(path)
-    except Exception as e:
-        click.echo(f"Error loading trace file: {e}", err=True)
+    except Exception as exc:
+        click.echo(f"Error loading trace file: {exc}", err=True)
         sys.exit(1)
 
     # Default to summary if no specific option given
@@ -729,31 +731,31 @@ def trace(path, summary, errors, timeline, agent, call_id, messages, output_json
     if errors:
         errs = get_errors(traces)
         if output_json:
-            click.echo(json_module.dumps([e.model_dump() for e in errs], indent=2, default=str))
+            click.echo(json_module.dumps([err.model_dump() for err in errs], indent=2, default=str))
         else:
             if not errs:
                 click.echo("No errors found.")
-            for e in errs:
-                click.echo(f"\n[{e.agent_role}] {e.agent_name}")
-                click.echo(f"  Error: {e.error_message}")
-                click.echo(f"  Time: {e.timestamp}")
-                if e.error_details:
-                    click.echo(f"  Details: {e.error_details}")
+            for err in errs:
+                click.echo(f"\n[{err.agent_role}] {err.agent_name}")
+                click.echo(f"  Error: {err.error_message}")
+                click.echo(f"  Time: {err.timestamp}")
+                if err.error_details:
+                    click.echo(f"  Details: {err.error_details}")
 
     if timeline:
         events = get_timeline(traces)
         if output_json:
-            click.echo(json_module.dumps([e.model_dump() for e in events], indent=2, default=str))
+            click.echo(json_module.dumps([ev.model_dump() for ev in events], indent=2, default=str))
         else:
-            for e in events:
-                status = "X" if e.event_type == "error" else "+"
-                click.echo(f"[{status}] {e.timestamp.strftime('%H:%M:%S')} {e.agent_role}: {e.summary}")
+            for ev in events:
+                status = "X" if ev.event_type == "error" else "+"
+                click.echo(f"[{status}] {ev.timestamp.strftime('%H:%M:%S')} {ev.agent_role}: {ev.summary}")
 
 
 @debug.command()
 @click.option("--host", default="localhost", help="WebSocket server host")
 @click.option("--port", default=8000, type=int, help="WebSocket server port")
-def websocket(host, port):
+def websocket(host: str, port: int) -> None:
     """Interactive WebSocket debug client (no MCP required).
 
     This provides a standalone interactive CLI for debugging flows via WebSocket.

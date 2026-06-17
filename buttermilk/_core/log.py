@@ -10,11 +10,12 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 from rich.console import Console
+from structlog.typing import EventDict, WrappedLogger
 
 # Lazy imports for google.cloud.logging (heavy dependency)
 # Only imported when cloud logging is actually configured
 if TYPE_CHECKING:
-    pass
+    from buttermilk._core.bm_init import SessionInfo
 from rich.logging import RichHandler
 from structlog.processors import CallsiteParameter, CallsiteParameterAdder
 
@@ -35,11 +36,11 @@ logger = structlog.get_logger(_LOGGER_NAME)
 _console_logging_configured = False
 _file_logging_configured = False
 _structlog_configured = False
-_cloud_logging_sessions = set()  # Track which sessions have cloud logging configured
+_cloud_logging_sessions: set[str] = set()  # Track which sessions have cloud logging configured
 
 
 # Configure structlog for structured JSON logging
-def configure_structlog(min_level) -> None:
+def configure_structlog(min_level: int) -> None:
     """Configure structlog for structured JSON logging.
 
     Ensures structlog is configured only once to prevent reconfiguration issues
@@ -50,7 +51,7 @@ def configure_structlog(min_level) -> None:
     if _structlog_configured:
         return  # Already configured, skip to prevent breaking existing setup
 
-    def _inject_trace_ids(logger, method_name, event_dict):
+    def _inject_trace_ids(logger: WrappedLogger, method_name: str, event_dict: EventDict) -> EventDict:
         """Inject OTEL trace_id/span_id into logs if available."""
         try:
             if get_current_span is None:
@@ -72,7 +73,7 @@ def configure_structlog(min_level) -> None:
             return event_dict
         return event_dict
 
-    def _add_runtime_context(logger, method_name, event_dict):
+    def _add_runtime_context(logger: WrappedLogger, method_name: str, event_dict: EventDict) -> EventDict:
         """Inject common runtime context onto every log."""
         try:
             event_dict.setdefault("pid", os.getpid())
@@ -95,7 +96,7 @@ def configure_structlog(min_level) -> None:
             return event_dict
         return event_dict
 
-    def _extract_exception_fields(logger, method_name, event_dict):
+    def _extract_exception_fields(logger: WrappedLogger, method_name: str, event_dict: EventDict) -> EventDict:
         """When exc_info is present, add standardized exception fields."""
         try:
             exc_info = event_dict.get("exc_info")
@@ -111,10 +112,10 @@ def configure_structlog(min_level) -> None:
                 event_dict.setdefault("error_type", exc.__class__.__name__)
                 event_dict.setdefault("error_message", str(exc))
                 # Root cause (walk __cause__ / __context__)
-                cause = exc
-                while getattr(cause, "__cause__", None) is not None:
+                cause: BaseException | None = exc
+                while cause is not None and cause.__cause__ is not None:
                     cause = cause.__cause__
-                if cause is exc and getattr(exc, "__context__", None) is not None:
+                if cause is exc and exc.__context__ is not None:
                     cause = exc.__context__
                 if cause is not None and cause is not exc:
                     event_dict.setdefault("root_cause_type", cause.__class__.__name__)
@@ -160,7 +161,7 @@ def configure_structlog(min_level) -> None:
 
 
 class StructlogRichHandler(RichHandler):
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         # Convert structlog JSON back to rich format
         # CRITICAL: Create a copy to avoid modifying original record for other handlers
         display_record = copy.copy(record)
@@ -329,7 +330,7 @@ def setup_file_logging(execution_context_id: str, verbose: bool = False, project
     return log_files
 
 
-def setup_cloud_logging(logger_cfg, cloud_manager, session_info) -> None:
+def setup_cloud_logging(logger_cfg: Any, cloud_manager: Any, session_info: "SessionInfo") -> None:
     """Set up Google Cloud Logging with structured JSON.
 
     Uses the same structlog JSON format as file logging for consistency.
@@ -436,7 +437,7 @@ def setup_cloud_logging(logger_cfg, cloud_manager, session_info) -> None:
             )
 
 
-def validate_logging_state(verbose_expected: bool = None) -> dict[str, Any]:
+def validate_logging_state(verbose_expected: bool | None = None) -> dict[str, Any]:
     """Validate the current logging configuration state.
 
     This function checks that logging is properly configured and hasn't been
@@ -453,7 +454,7 @@ def validate_logging_state(verbose_expected: bool = None) -> dict[str, Any]:
     """
     global _console_logging_configured, _file_logging_configured
 
-    validation_results = {
+    validation_results: dict[str, Any] = {
         "console_configured": _console_logging_configured,
         "file_configured": _file_logging_configured,
         "root_logger_level": logging.getLogger().getEffectiveLevel(),

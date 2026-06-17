@@ -14,6 +14,8 @@
 #   Full logging informatoin saved to Google Cloud Logging
 
 
+from typing import Any
+
 import httpx
 
 from buttermilk._core.agent import SingleAgent  # Import SingleAgent
@@ -54,7 +56,7 @@ class Slurp(SingleAgent):
     async def process_job(  # Consider renaming this method to 'process' to align with Agent base class
         self,
         message: AgentInput,  # Changed parameter name and type
-        **kwargs,
+        **kwargs: Any,
     ) -> ExecutionTrace:  # Changed return type
         url = message.inputs["url"]  # Access inputs from message
         outputs_list = []  # Use a local list to collect outputs

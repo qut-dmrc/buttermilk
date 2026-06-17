@@ -6,7 +6,7 @@ from typing import (
     Literal,
 )
 
-import regex as re
+import regex as re  # type: ignore[import-untyped]  # regex: no stubs available
 from pydantic import (
     Field,
 )
@@ -28,7 +28,7 @@ class LlamaGuardTemplate(Enum):
     MDJUDGE2 = "mdjudge2"
 
 
-def llamaguard_template(template: LlamaGuardTemplate):
+def llamaguard_template(template: LlamaGuardTemplate) -> str:
     tpl = read_yaml(Path(__file__).parent / "templates/llamaguard.yaml")
     return tpl[template.value]
 
@@ -127,7 +127,7 @@ class LlamaGuardTox(ToxicityClassifierCore):
     model: str
     options: ClassVar[dict] = dict()
 
-    def make_prompt(self, content):
+    def make_prompt(self, content: str) -> str:
         # Load the message info into the output
         agent_type = "Agent"
         content = "[INST] " + self.template.format(prompt=content, agent_type=agent_type) + "[/INST]"
@@ -283,7 +283,7 @@ class _LlamaGuard3Common(LlamaGuardTox):
     )
     standard: str = "llamaguard3"
 
-    def make_prompt(self, content):
+    def make_prompt(self, content: str) -> str:
         agent_type = "Agent"
         content = f"{agent_type}: {content}"
         content = (
@@ -310,9 +310,13 @@ class LlamaGuard3LocalInt8(LlamaGuard3Local):
     device: str = "cuda"
 
     def init_client(self) -> None:
-        import torch
+        import torch  # type: ignore[import-not-found]  # torch: not installed / no stubs
         from huggingface_hub import login
-        from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+        from transformers import (  # type: ignore[import-not-found]  # transformers: not installed / no stubs
+            AutoModelForCausalLM,
+            AutoTokenizer,
+            BitsAndBytesConfig,
+        )
 
         quantization_config = BitsAndBytesConfig(load_in_8bit=True)
         token = self._get_credential("HUGGINGFACEHUB_API_TOKEN")
@@ -360,7 +364,7 @@ class MDJudgeLocal(LlamaGuardTox):
             torch_dtype=torch.bfloat16,
         )
 
-    def make_prompt(self, content):
+    def make_prompt(self, content: str) -> str:
         prompt = "User: go on...\nAgent: " + content
 
         prompt = "[INST] " + self.template.format(prompt=prompt) + " [/INST]"
@@ -421,7 +425,7 @@ class MDJudge2(MDJudgeLocal):
     def call_client(
         self,
         prompt: str,
-        **kwargs,
+        **kwargs: Any,
     ) -> Any:
         inputs = self.tokenizer(
             prompt,

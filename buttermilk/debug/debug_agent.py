@@ -20,7 +20,7 @@ from buttermilk.agents.test_utils import FlowTestClient
 class DebugAgent(Agent):
     """Agent providing debugging tools for Buttermilk flows."""
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._active_clients: dict[str, FlowTestClient] = {}
         self._puppet_client: FlowTestClient | None = None
@@ -30,8 +30,7 @@ class DebugAgent(Agent):
         """Process debugging requests."""
         # This agent is primarily tool-based, so _process just returns a helpful message
         return AgentOutput(
-            source=self.agent_name,
-            role=self.role,
+            agent_id=self.agent_id,
             outputs={
                 "message": "Debug agent is ready. Use the exposed tools for debugging.",
                 "available_tools": [
@@ -86,7 +85,7 @@ class DebugAgent(Agent):
         """
         log_files = glob.glob("/tmp/buttermilk_*.jsonl")
 
-        files_info = []
+        files_info: list[dict[str, Any]] = []
         for log_file in log_files:
             stat = os.stat(log_file)
             files_info.append(
@@ -328,7 +327,7 @@ class DebugAgent(Agent):
 
     # Puppet mode - continuous listening for LLM control
 
-    async def start_puppet_mode(self, host: str = "localhost", port: int = 8000) -> dict[str, str]:
+    async def start_puppet_mode(self, host: str = "localhost", port: int = 8000) -> dict[str, Any]:
         """Start puppet mode - continuous WebSocket client that acts as UI replacement.
 
         Args:
@@ -367,7 +366,7 @@ class DebugAgent(Agent):
                 "message": f"Failed to start puppet mode: {e!s}",
             }
 
-    async def puppet_start_flow(self, flow_name: str, prompt: str = "", record: str = "", criteria: str = "") -> dict[str, str]:
+    async def puppet_start_flow(self, flow_name: str, prompt: str = "", record: str = "", criteria: str = "") -> dict[str, Any]:
         """Start a flow in puppet mode.
 
         Args:
@@ -411,7 +410,7 @@ class DebugAgent(Agent):
         except Exception as e:
             return {"status": "error", "message": f"Failed to start flow: {e!s}"}
 
-    async def puppet_send_response(self, content: str) -> dict[str, str]:
+    async def puppet_send_response(self, content: str) -> dict[str, Any]:
         """Send a manager response in puppet mode.
 
         Args:

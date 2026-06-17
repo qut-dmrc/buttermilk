@@ -14,12 +14,13 @@ from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from typing import Any
 
-import jmespath
+import jmespath  # type: ignore[import-untyped]  # jmespath: types-jmespath stubs not installed
 from opentelemetry import trace
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, computed_field
 
 from buttermilk import logger
 from buttermilk._core.contract import ExecutionTrace
+from buttermilk._core.messages import LLMMessage
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord
@@ -39,7 +40,7 @@ class TraceParams:
     duration_ms: float
     execution_type: str = "processing"
     component_name: str | None = None
-    messages: list | None = None
+    messages: list[LLMMessage] | None = None
     inputs: dict[str, Any] | None = None
     extra_metadata: dict[str, Any] | None = None
     trace_id: str | None = None
@@ -69,7 +70,7 @@ class ObservabilityMixin(BaseModel):
         """Return processor type name for tracing. Defaults to class name."""
         return self.__class__.__name__
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]  # pydantic computed_field over property; mypy does not model this pattern
     @property
     def config_dict(self) -> dict[str, Any]:
         """Return processor config for tracing (JSON-serializable)."""
@@ -166,7 +167,7 @@ class ObservabilityMixin(BaseModel):
             agent_info=agent_info,
             inputs=tp.inputs,
             outputs=outputs,
-            messages=tp.messages,
+            messages=tp.messages or [],
             metadata=self._build_trace_metadata(record, tp.duration_ms, tp.extra_metadata),
             parent_call_id=tp.parent_trace_id,
             record=record,
@@ -194,8 +195,10 @@ class ObservabilityMixin(BaseModel):
         agent_info = self._build_agent_info(tp.processor_stage, tp.execution_type)
         self._stamp_identity(agent_info, tp)
 
+        # Omit call_id when no trace_id so ExecutionTrace's default_factory supplies one.
+        call_id_kwarg: dict[str, Any] = {"call_id": tp.trace_id} if tp.trace_id else {}
         error_trace = ExecutionTrace(
-            **({"call_id": tp.trace_id} if tp.trace_id else {}),
+            **call_id_kwarg,
             agent_info=agent_info,
             inputs=tp.inputs,
             error={
@@ -297,6 +300,7 @@ class ProcessorCore(ObservabilityMixin, ABC):
         if not self.inputs:
             return {}
 
+        envelope: dict[str, Any]
         if hasattr(context.record, "model_dump"):
             envelope = {"record": context.record.model_dump()}
         else:
@@ -419,7 +423,7 @@ class BatchProcessorCore(ObservabilityMixin, ABC):
         tracer = trace.get_tracer("buttermilk.processor")
         processor_name = self.name or self.processor_type
 
-        attributes = {
+        attributes: dict[str, str | int] = {
             "processor.name": processor_name,
             "processor.type": self.processor_type,
             "batch.size": len(contexts),

@@ -15,6 +15,7 @@ from buttermilk import logger  # Buttermilk's centralized logger
 from buttermilk._core.agent import AgentInput  # Buttermilk AgentInput type
 from buttermilk._core.contract import AgentOutput  # Buttermilk contract types
 from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.tool_types import CancellationToken  # For cancellation token type
 from buttermilk.agents.llm import LLMAgent  # Base LLM Agent
 
 
@@ -38,7 +39,7 @@ class MediaDescription(BaseModel):
         description="Confidence level in the description accuracy",
     )
 
-    def as_markdown(self, agent_id: str = None, call_id: str = None) -> str:
+    def as_markdown(self, agent_id: str | None = None, call_id: str | None = None) -> str:
         """Returns a Markdown formatted string for insertion into templates.
 
         Format follows the standard: agent identifier on first line, followed by
@@ -98,7 +99,7 @@ class Describer(LLMAgent):
 
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         """Initializes the Describer agent with its specific configuration and output model."""
         # Fail explicitly if config tries to override output_model - Describer requires MediaDescription
         if "output_model" in kwargs and kwargs["output_model"] is not None:
@@ -110,7 +111,13 @@ class Describer(LLMAgent):
         kwargs.pop("output_model", None)  # Remove None values to avoid duplicate kwarg
         super().__init__(output_model=MediaDescription, **kwargs)
 
-    async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentOutput | None:
+    async def _process(
+        self,
+        *,
+        message: AgentInput,
+        cancellation_token: CancellationToken | None = None,
+        **kwargs: Any,
+    ) -> AgentOutput:
         """Process the input to generate a media description.
 
         This method checks if the record already has alt text or if it's purely
@@ -122,8 +129,8 @@ class Describer(LLMAgent):
             **kwargs: Additional keyword arguments passed to the LLM agent.
 
         Returns:
-            AgentOutput | None: Contains the generated description or an appropriate
-                message if no description was needed.
+            AgentOutput: Contains the generated description. Every code path either
+                returns an ``AgentOutput`` or raises; ``None`` is never returned.
 
         Raises:
             ProcessingError: If no records provided or no content to describe.
@@ -159,7 +166,7 @@ class Describer(LLMAgent):
                     return self._create_text_response(record)
                 raise ProcessingError("Record has no media or text content to describe.")
             # Process media content
-            return await self._process_media(message, record, **kwargs)
+            return await self._process_media(message, record, cancellation_token=cancellation_token, **kwargs)
         if record.text:
             # No media, just text
             return self._create_text_response(record)
@@ -171,7 +178,13 @@ class Describer(LLMAgent):
         logger.debug("Creating text-only response", record_id=record.id)
         raise NotImplementedError("Text-only response handling not implemented yet.")
 
-    async def _process_media(self, message: AgentInput, record: Any, **kwargs: Any) -> AgentOutput | None:
+    async def _process_media(
+        self,
+        message: AgentInput,
+        record: Any,
+        cancellation_token: CancellationToken | None = None,
+        **kwargs: Any,
+    ) -> AgentOutput:
         """Process media content and generate description."""
         # Check if we need to download from URI
         uri = record.metadata.get("uri") if hasattr(record, "metadata") else None
@@ -202,7 +215,7 @@ class Describer(LLMAgent):
 
         # Now process with the parent LLMAgent's process method
         # which will use the template and model to generate a description
-        result = await super()._process(message=message, **kwargs)
+        result = await super()._process(message=message, cancellation_token=cancellation_token, **kwargs)
 
         # The parent's process should return structured MediaDescription
         # due to output_model setting

@@ -11,9 +11,9 @@ This module provides functions to:
 import contextlib  # For suppressing exceptions in specific blocks
 from typing import Any
 
-import regex as re  # For regular expression operations
+import regex as re  # type: ignore[import-untyped]  # regex: types-regex not installed  # For regular expression operations
 from bs4 import BeautifulSoup  # For HTML parsing
-from readabilipy import (
+from readabilipy import (  # type: ignore[import-untyped]  # readabilipy: no py.typed marker
     simple_json_from_html_string,
 )  # For extracting main content from HTML
 
@@ -244,7 +244,7 @@ def get_news_record_from_uri(uri: str) -> Record:
 
     """
     try:
-        import newspaper  # Dynamically import to keep as optional dependency
+        import newspaper  # type: ignore[import-untyped]  # newspaper3k: no py.typed marker  # Dynamically import to keep as optional dependency
     except ImportError as e:
         logger.error("The 'newspaper3k' library is required for get_news_record_from_uri. Please install it.")
         raise ImportError("newspaper3k library not found. Please install with `pip install newspaper3k`.") from e
@@ -338,7 +338,7 @@ def extract_main_content_bs(html: bytes | str) -> str:
             "aside",
         ],
     ):
-        element_type.decompose()  # Remove the element and its content
+        element.decompose()  # Remove the element and its content
 
     # Attempt to find the main content container using common tags and attributes
     main_content_element: Any = None  # Can be Tag or NavigableString

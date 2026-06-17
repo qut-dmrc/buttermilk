@@ -10,6 +10,7 @@ External monitoring tools handle detailed metrics and alerting.
 """
 
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -62,7 +63,7 @@ def get_health_monitor() -> SimpleHealthMonitor:
 @monitoring_router.get("/health", response_model=SimpleHealthCheckResponse)
 async def health_check(
     health_monitor: SimpleHealthMonitor = Depends(get_health_monitor),
-):
+) -> SimpleHealthCheckResponse:
     """
     Get basic system health status.
 
@@ -86,7 +87,7 @@ async def health_check(
 @monitoring_router.get("/fatal-errors")
 async def check_fatal_errors(
     health_monitor: SimpleHealthMonitor = Depends(get_health_monitor),
-):
+) -> dict[str, Any]:
     """
     Check for fatal errors that require system exit.
 
@@ -107,7 +108,7 @@ async def check_fatal_errors(
 async def report_fatal_error(
     error_message: str,
     health_monitor: SimpleHealthMonitor = Depends(get_health_monitor),
-):
+) -> dict[str, str]:
     """
     Report a fatal error that should cause system exit.
 
@@ -129,7 +130,7 @@ async def report_fatal_error(
 @monitoring_router.get("/metrics/basic", response_model=BasicMetricsResponse)
 async def get_basic_metrics(
     health_monitor: SimpleHealthMonitor = Depends(get_health_monitor),
-):
+) -> BasicMetricsResponse:
     """
     Get basic system metrics.
 
@@ -156,7 +157,7 @@ async def check_flow_responsiveness(
     flow_name: str,
     timeout_seconds: int = 300,
     health_monitor: SimpleHealthMonitor = Depends(get_health_monitor),
-):
+) -> dict[str, Any]:
     """
     Check if a flow is responsive.
 
@@ -181,7 +182,7 @@ async def check_interactive_ui_timeout(
     session_id: str,
     timeout_seconds: int = 1800,
     health_monitor: SimpleHealthMonitor = Depends(get_health_monitor),
-):
+) -> dict[str, Any]:
     """
     Check if interactive flow has been without UI for too long.
 
@@ -203,7 +204,7 @@ async def check_interactive_ui_timeout(
 
 # System status endpoint
 @monitoring_router.get("/status")
-async def get_monitoring_status():
+async def get_monitoring_status() -> dict[str, Any]:
     """
     Get monitoring system status.
 

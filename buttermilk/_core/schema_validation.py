@@ -6,7 +6,7 @@ used in tool definitions.
 
 from typing import Any
 
-from jsonschema import Draft7Validator, ValidationError
+from jsonschema import Draft7Validator, ValidationError  # type: ignore[import-untyped]  # jsonschema: types-jsonschema not installed
 
 
 class SchemaValidationError(Exception):

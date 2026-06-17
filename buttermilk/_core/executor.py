@@ -115,6 +115,9 @@ class PipelineExecutor:
             return
 
         processor = self.processors[processor_index]
+        # Only BatchProcessors get an entry in `_batch_buffers` (see `_build_pipeline`),
+        # so any index present here is guaranteed to be a BatchProcessor.
+        assert isinstance(processor, BatchProcessor)
 
         # Process the batch — process_batch returns a list, not an async generator
         output_records = await processor.process_batch(buffer)

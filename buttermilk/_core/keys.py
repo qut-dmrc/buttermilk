@@ -1,14 +1,15 @@
 import json
+from typing import Any
 
 # Optional Azure imports - fail gracefully if not available
 try:
-    from azure.identity import DefaultAzureCredential
-    from azure.keyvault.secrets import SecretClient
+    from azure.identity import DefaultAzureCredential  # type: ignore[import-not-found]  # azure-identity: no stubs available
+    from azure.keyvault.secrets import SecretClient  # type: ignore[import-not-found]  # azure-keyvault-secrets: no stubs available
 
     AZURE_AVAILABLE = True
 except ImportError:
-    DefaultAzureCredential = None
-    SecretClient = None
+    DefaultAzureCredential = None  # type: ignore[assignment,misc]
+    SecretClient = None  # type: ignore[assignment,misc]
     AZURE_AVAILABLE = False
 
 # Optional Google Cloud imports - fail gracefully if not available
@@ -17,7 +18,7 @@ try:
 
     GCP_SECRETS_AVAILABLE = True
 except ImportError:
-    secretmanager = None
+    secretmanager = None  # type: ignore[assignment]
     GCP_SECRETS_AVAILABLE = False
 
 import os
@@ -29,9 +30,10 @@ from buttermilk.utils.utils import load_json_flexi
 
 class SecretsManager(CloudProviderCfg):
     _path: str = ""
+    vault: str | None = None  # Azure Key Vault URL (required when type == "azure")
 
     @cached_property
-    def client(self):
+    def client(self) -> Any:
         """Initialize secrets manager client with project ID - deferred until first secret access."""
         client = None
 
@@ -52,9 +54,9 @@ class SecretsManager(CloudProviderCfg):
     # @lru_cache
     def get_secret(
         self,
-        secret_name: str = None,
-        secret_class: str = None,
-        cfg_key: str = None,  # Get the secret name from the config passed in earlier
+        secret_name: str | None = None,
+        secret_class: str | None = None,
+        cfg_key: str | None = None,  # Get the secret name from the config passed in earlier
         version: str = "latest",
     ) -> str:
         """Retrieve latest version of a secret by ID"""
@@ -63,7 +65,9 @@ class SecretsManager(CloudProviderCfg):
         if cfg_key and (env_var := os.environ.get(cfg_key)):
             return env_var
 
-        secret_name = secret_name or secret_class or getattr(self, cfg_key)
+        secret_name = secret_name or secret_class or (getattr(self, cfg_key) if cfg_key is not None else None)
+        if not secret_name:
+            raise ValueError("get_secret requires one of secret_name, secret_class, or cfg_key to resolve a secret name")
 
         _client = self.client
 

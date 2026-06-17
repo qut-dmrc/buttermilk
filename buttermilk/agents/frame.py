@@ -6,6 +6,8 @@ frame elements at the statement level, including speakers, problem definitions,
 causal attributions, moral evaluations, and treatment recommendations.
 """
 
+from typing import Any
+
 from pydantic import BaseModel, Field  # Pydantic components
 
 # Buttermilk core imports
@@ -57,7 +59,7 @@ class FramedStatement(BaseModel):
         description="Confidence level in the frame identification (0-1)",
     )
 
-    def as_markdown(self, agent_id: str = None, call_id: str = None) -> str:
+    def as_markdown(self, agent_id: str | None = None, call_id: str | None = None) -> str:
         """Returns a Markdown formatted string for insertion into templates.
 
         Note: This is for a single statement. Usually used within FrameAnalysisResults.
@@ -108,7 +110,7 @@ class FrameAnalysisResults(BaseModel):
     article_summary: str = Field(..., description="Brief summary of the article being analyzed")
     dominant_frame: str | None = Field(None, description="The predominant framing pattern identified in the article")
 
-    def as_markdown(self, agent_id: str = None, call_id: str = None) -> str:
+    def as_markdown(self, agent_id: str | None = None, call_id: str | None = None) -> str:
         """Returns a Markdown formatted string for insertion into templates.
 
         Format follows the standard: agent identifier on first line, followed by
@@ -186,7 +188,7 @@ class Frame(LLMAgent):
 
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         """Initializes the Frame agent with its specific configuration and output model."""
         super().__init__(**kwargs)
         # Set the expected output model for the LLM's response

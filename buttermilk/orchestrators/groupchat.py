@@ -61,7 +61,7 @@ class TerminationHandler:
             logger.info(f"Termination message received: {message}")
             self._termination_value = message
 
-    def request_termination(self):
+    def request_termination(self) -> None:
         self._termination_value = StepRequest(role="END", content="Termination requested")
 
     @property
@@ -100,6 +100,7 @@ class Orchestrator(BaseOrchestrator):
 
     async def _dispatch_message(self, message: Any, topic: str) -> None:
         """Dispatch a message to all agents subscribed to the given topic."""
+        assert self._termination_handler is not None, "_dispatch_message called before _setup initialized the termination handler"
         self._termination_handler.check(message)
         if self._interrupt_handler is not None:
             await self._interrupt_handler.on_publish(message, message_context=None)
@@ -142,7 +143,7 @@ class Orchestrator(BaseOrchestrator):
 
         return publish_fn
 
-    async def _setup(self, request: RunRequest) -> tuple[TerminationHandler, InterruptHandler]:
+    async def _setup(self, request: RunRequest) -> None:
         """Initialize orchestrator and register all configured agents."""
         if not self._topic:
             from buttermilk._core.execution_context import get_execution_context
@@ -198,8 +199,6 @@ class Orchestrator(BaseOrchestrator):
                 await self._publish(pending_message, topic_id)
         self._pending_messages.clear()
 
-        return self._termination_handler, self._interrupt_handler
-
     async def _register_agents(self, params: RunRequest) -> None:
         """Register all configured agents."""
         logger.debug("Registering agents with native orchestrator...")
@@ -209,7 +208,7 @@ class Orchestrator(BaseOrchestrator):
         # Sequential: _create_agent is synchronous and mutates shared state (_agents, _subscriptions);
         # asyncio.gather would require locks around those mutations.
         for role_name, step_config in itertools.chain(self.agents.items(), self.observers.items()):
-            for agent_cls, variant_config in step_config.get_configs(params=params, flow_default_params=self.parameters):
+            for agent_cls, variant_config in step_config.get_configs(params=params, flow_default_params=dict(self.parameters)):
                 actual_role = step_config.role.upper()
                 try:
                     agent_instance = self._create_agent(
@@ -263,7 +262,7 @@ class Orchestrator(BaseOrchestrator):
             )
         return agent_cls(**variant_config.parameters)
 
-    async def _register_ui(self, callback_to_ui: Callable[..., Awaitable[None]]) -> None:
+    async def _register_ui(self, callback_to_ui: Callable[..., Awaitable[None]] | None) -> None:
         """Register the UI callback as a subscriber."""
         if not callback_to_ui:
             logger.warning("No UI callback provided. Messages will not be sent to the UI.")
@@ -307,10 +306,16 @@ class Orchestrator(BaseOrchestrator):
         try:
             try:
                 logger.debug(f"[Orchestrator._run] Calling _setup with request.callback_to_ui: {request.callback_to_ui is not None}")
-                termination_handler, interrupt_handler = await self._setup(request)
+                await self._setup(request)
             except Exception as e:
                 logger.error(f"Error during setup: {e}")
                 raise FatalError(f"Orchestrator setup failed: {e}") from e
+
+            # _setup populates these instance attrs; assert for the type checker.
+            assert self._termination_handler is not None
+            assert self._interrupt_handler is not None
+            termination_handler = self._termination_handler
+            interrupt_handler = self._interrupt_handler
 
             while True:
                 try:

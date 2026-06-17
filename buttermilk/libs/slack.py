@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from pydantic import BaseModel
@@ -31,11 +32,11 @@ class SlackContext(BaseModel):
 async def post_message_with_retry(
     app: AsyncApp,
     context: SlackContext,
-    text,
-    blocks=None,
-    **kwargs,
+    text: str,
+    blocks: list[dict[str, Any]] | None = None,
+    **kwargs: Any,
 ) -> AsyncSlackResponse:
-    message = {
+    message: dict[str, Any] = {
         "channel": context.channel_id,
         "text": text,
         "blocks": blocks,
@@ -45,11 +46,11 @@ async def post_message_with_retry(
     return await app.client.chat_postMessage(**message)
 
 
-async def request_with_retry(request_fn):
+async def request_with_retry(request_fn: Callable[[], Awaitable[Any]]) -> Any:
     @retry(
         stop=stop_after_attempt(2),
         wait=wait_exponential(multiplier=1, min=4, max=10),
         before_sleep=before_sleep_log(logger, logging.WARNING),
     )
-    async def _request_with_retry():
+    async def _request_with_retry() -> Any:
         return await request_fn()

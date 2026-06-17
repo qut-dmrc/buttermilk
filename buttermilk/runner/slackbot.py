@@ -30,9 +30,9 @@ ALLPATTERNS = re.compile(r"mod(.*)")
 
 def initialize_slack_bot(
     *,
-    bot_token,
-    app_token,
-    loop=None,
+    bot_token: str,
+    app_token: str,
+    loop: asyncio.AbstractEventLoop | None = None,
 ) -> tuple[AsyncApp, AsyncSocketModeHandler]:
     """Initialize the Slack bot and its dependencies."""
     # Initializes app with your bot token and socket mode handler
@@ -49,7 +49,7 @@ def initialize_slack_bot(
     from buttermilk.agents.ui.slackthreadchat import reregister_all_active_threads
 
     @slack_app.event("hello")
-    async def on_connect():
+    async def on_connect() -> None:
         logger.info("Socket Mode client reconnected")
         # Re-register handlers for all active threads
         reregister_all_active_threads()
@@ -61,8 +61,8 @@ async def register_handlers(
     slack_app: AsyncApp,
     flows: Mapping[str, OrchestratorProtocol],
     orchestrator_tasks: asyncio.Queue,
-):
-    async def _flow_start_matcher(body):
+) -> None:
+    async def _flow_start_matcher(body: dict[str, Any]) -> bool:
         logger.debug(f"Received request: {json.dumps(body)}")
         # don't trigger on self-messages or within a thread
         if body and body["event"].get("subtype") != "bot_message" and (body["event"].get("event_ts") != body["event"].get("thread_ts")):
@@ -82,7 +82,7 @@ async def register_handlers(
                     return True
         return False
 
-    async def handle_mentions(body, say, logger):
+    async def handle_mentions(body: dict[str, Any], say: Any, logger: Any) -> None:
         await say.client.reactions_add(
             channel=say.channel,
             name="eyes",
@@ -183,7 +183,7 @@ async def register_handlers(
             except Exception:
                 pass
 
-    async def say_hello(message, say):
+    async def say_hello(message: dict[str, Any], say: Any) -> None:
         user = message["user"]
         await say(f"Hi there, <@{user}>!")
 
@@ -198,19 +198,21 @@ async def register_handlers(
         # self._framework_logger.warning(warning_unhandled_request(req))
         return resp
 
-    slack_app._handle_unmatched_requests = _handle_unmatched_requests
+    # Deliberate monkey-patch of slack_bolt AsyncApp internals to suppress its
+    # default "unhandled request" warning; mypy forbids reassigning a method.
+    slack_app._handle_unmatched_requests = _handle_unmatched_requests  # type: ignore[method-assign]
 
 
 async def read_thread_history(
     slack_app: AsyncApp,
     context: SlackContext,
-) -> list[dict[str, str]]:
+) -> list[UserMessage | AssistantMessage]:
     # Read thread history
     replies = await slack_app.client.conversations_replies(
         channel=context.channel_id,
         ts=context.thread_ts,
     )
-    history = []
+    history: list[UserMessage | AssistantMessage] = []
     if replies and "messages" in replies:
         for message in replies["messages"]:
             if message.get("text", "").startswith("<@") or message.get("text", "").startswith("!"):
@@ -249,6 +251,10 @@ async def start_flow_thread(
     # Instantiate the slack thread agent before the orchestrator
     try:
         _config = flow_cfg  # OmegaConf.to_container(flow_cfg, resolve=True)
+        if _config.orchestrator is None:
+            raise ValueError(
+                f"Flow '{_config.name}' has no orchestrator configured; cannot start Slack thread flow.",
+            )
         orchestrator_name = _config.orchestrator.split(".")[-1]
         thread_agent_name = f"slack_thread_{context.thread_ts}"
         # partially fill the SlackUIAgent object and add it to the registry
