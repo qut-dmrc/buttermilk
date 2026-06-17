@@ -33,7 +33,7 @@ from tempfile import mkdtemp  # For creating temporary directories
 
 # Lazy import cloudpathlib (it pulls in google.cloud.storage at import time)
 # Import TYPE_CHECKING guard for type hints
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import psutil  # For system utilities like getting username
 import pydantic  # Pydantic core
@@ -632,7 +632,7 @@ class BM(BaseModel):
         - 8-char UUID slug from session
         """
         # Lazy import to avoid loading google.cloud at module level
-        from cloudpathlib import AnyPath
+        from cloudpathlib import AnyPath, CloudPath
 
         from buttermilk._core.execution_context import get_execution_context
 
@@ -652,8 +652,11 @@ class BM(BaseModel):
             # No ExecutionContext — use session-only components
             collapsed_dir = f"{session_timestamp}-{session_slug}"
 
-        # Construct full save directory path
-        save_dir_path = AnyPath(self.save_dir_base) / self.session_info.project_name / self.session_info.job / collapsed_dir
+        # Construct full save directory path.
+        # AnyPath() returns a concrete Path or CloudPath at runtime (both support `/`),
+        # but mypy infers the abstract AnyPath base; cast to the real return union.
+        base_path = cast("Path | CloudPath", AnyPath(self.save_dir_base))
+        save_dir_path = base_path / self.session_info.project_name / self.session_info.job / collapsed_dir
         self.session_info.save_dir = str(save_dir_path)
         logger.debug(f"Finalized session save_dir: {self.session_info.save_dir}")
 
@@ -960,7 +963,7 @@ class BM(BaseModel):
             return_df=return_df,
         )
 
-    def get_storage(self, config: StorageConfig | dict | DictConfig | None = None) -> Any:
+    def get_storage(self, config: StorageConfig | BaseStorageConfig | dict | DictConfig | None = None) -> Any:
         """Factory method to create unified storage instances.
 
         Creates the appropriate storage class based on the configuration type,
@@ -1047,7 +1050,11 @@ class BM(BaseModel):
             "dataset_name": dataset_name,
             **kwargs,
         }
-        config = StorageConfig(**config_data)
+        # StorageConfig is a discriminated-union type alias (not callable); build the
+        # concrete config via the factory, which validates against the union.
+        from buttermilk._core.storage_config import StorageFactory  # noqa: import here to avoid loop
+
+        config = StorageFactory.create_config(config_data)
         return self.get_storage(config)
 
     async def graceful_shutdown(self, timeout: float = 10.0) -> None:

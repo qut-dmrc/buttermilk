@@ -1,4 +1,5 @@
-from typing import Any
+from collections.abc import Mapping
+from typing import Any, cast
 from urllib.error import HTTPError
 
 import openai
@@ -19,29 +20,36 @@ from buttermilk._core.exceptions import RateLimit
 # to handle instances where we get blocked and want to know the reason.
 #
 ########
-def extract_error_info(e, process_info: dict = {}) -> dict[str, Any]:
+def extract_error_info(e: BaseException, process_info: dict[str, Any] = {}) -> dict[str, Any]:
     args = [str(x) for x in e.args]
-    error_dict = dict(message=str(e), type=type(e).__name__, args=args)
+    error_dict: dict[str, Any] = dict(message=str(e), type=type(e).__name__, args=args)
     error_dict.update(process_info)
+    # `status_code`/`request_id` exist on some SDK exceptions (e.g. openai/httpx)
+    # but not on `BaseException`; probe dynamically, guarded by AttributeError.
+    err_probe: Any = e
     try:
-        error_dict["status_code"] = e.status_code
-        error_dict["request_id"] = e.request_id
+        error_dict["status_code"] = err_probe.status_code
+        error_dict["request_id"] = err_probe.request_id
     except AttributeError:
         pass
 
     try:
         if isinstance(e, openai.APIStatusError):
+            # openai types `body` as `object | None`; at runtime it is the parsed
+            # JSON error body (a mapping). The enclosing try/except guards the case
+            # where this assumption does not hold.
+            body = cast(Mapping[str, Any], e.body)
             if e.status_code == 400:
                 error_dict.update(
                     {
                         "error": "blocked",
-                        "metadata": e.body.get("innererror", {}).get("content_filter_result", {}),
-                        "code": e.body.get("innererror", {}).get("code"),
+                        "metadata": body.get("innererror", {}).get("content_filter_result", {}),
+                        "code": body.get("innererror", {}).get("code"),
                     }
                 )
 
             else:
-                error_dict.update(e.body)
+                error_dict.update(body)
         elif isinstance(e, IndexError):
             # Gemini sometimes doesn't return a result?
             pass
@@ -82,8 +90,10 @@ def extract_error_info(e, process_info: dict = {}) -> dict[str, Any]:
     return error_dict
 
 
-def try_extract_vertex_error(e):
-    info = []
+def try_extract_vertex_error(
+    e: ResponseBlockedError | ResponseValidationError,
+) -> list[Any] | str:
+    info: list[Any] = []
     try:
         for resp in e.responses:
             try:
@@ -91,10 +101,11 @@ def try_extract_vertex_error(e):
             except (KeyError, AttributeError) as err:
                 logger.debug(f"Could not extract prompt_feedback from response: {err}")
             for cand in resp.candidates:
-                candidate = {}
+                candidate: dict[str, Any] = {}
+                cand_probe: Any = cand
                 try:
-                    candidate["finish_reason"] = cand.finish_reason
-                    candidate["partial"] = cand.parts.content
+                    candidate["finish_reason"] = cand_probe.finish_reason
+                    candidate["partial"] = cand_probe.parts.content
                 except (AttributeError, IndexError) as err:
                     logger.debug(f"Could not extract candidate info: {err}")
                     continue

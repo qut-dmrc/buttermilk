@@ -56,7 +56,7 @@ class SimpleHealthMonitor:
         self.fatal_error_detected = False
         self.fatal_error_message: str | None = None
 
-    def report_fatal_error(self, error_message: str):
+    def report_fatal_error(self, error_message: str) -> None:
         """Report a fatal error that should cause system exit."""
         self.fatal_error_detected = True
         self.fatal_error_message = error_message
@@ -102,11 +102,11 @@ class SimpleHealthMonitor:
         )
         return True
 
-    async def start_monitoring(self):
+    async def start_monitoring(self) -> None:
         """Compatibility method - simplified version doesn't need async startup."""
         logger.info("Started basic health monitoring")
 
-    async def stop_monitoring(self):
+    async def stop_monitoring(self) -> None:
         """Compatibility method - simplified version doesn't need async shutdown."""
         logger.info("Stopped basic health monitoring")
 
@@ -159,11 +159,11 @@ class SimpleHealthMonitor:
                 error_message=f"Health check failed: {e}",
             )
 
-    async def start_monitoring(self):
+    async def start_monitoring(self) -> None:
         """Compatibility method - simplified version doesn't need async startup."""
         logger.info("Started basic health monitoring")
 
-    async def stop_monitoring(self):
+    async def stop_monitoring(self) -> dict[str, Any]:
         """Compatibility method - simplified version doesn't need async shutdown."""
         logger.info("Stopped basic health monitoring")
         """Get basic metrics summary for simple monitoring."""
@@ -200,7 +200,7 @@ def get_simple_health_monitor() -> SimpleHealthMonitor:
     return get_observability_manager()
 
 
-async def shutdown_observability_manager():
+async def shutdown_observability_manager() -> None:
     """Shutdown global health monitor."""
     global _global_health_monitor
     if _global_health_monitor:

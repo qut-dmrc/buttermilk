@@ -5,6 +5,8 @@ from __future__ import annotations
 import copy
 from typing import Any
 
+from pydantic import BaseModel
+
 
 def resolve_json_schema_refs(schema: dict) -> dict:
     """Resolve $ref references in a JSON schema by inlining definitions.
@@ -147,7 +149,7 @@ def convert_enum_values_to_strings(obj: Any) -> Any:
         Processed schema with string enum values
     """
     if isinstance(obj, dict):
-        new_obj = {}
+        new_obj: dict[str, Any] = {}
         for k, v in obj.items():
             if k == "enum" and isinstance(v, list):
                 new_obj[k] = [str(item) for item in v]
@@ -165,7 +167,7 @@ def convert_enum_values_to_strings(obj: Any) -> Any:
     return obj
 
 
-def prepare_schema_for_vertex(schema: type, is_gemini: bool = False) -> dict[str, Any]:
+def prepare_schema_for_vertex(schema: type[BaseModel], is_gemini: bool = False) -> dict[str, Any]:
     """Prepare a Pydantic model's JSON schema for use with Vertex AI APIs.
 
     Applies all necessary transforms: resolve $refs, make all properties required,

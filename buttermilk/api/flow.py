@@ -1,8 +1,10 @@
 import asyncio
 import contextlib
 import uuid
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,8 +12,9 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.websockets import WebSocketState
+from starlette.responses import Response
 
-from buttermilk import create_session_bm_async, logger
+from buttermilk import BM, create_session_bm_async, logger
 from buttermilk._core.config import FatalError
 from buttermilk._core.context import session_id_var
 from buttermilk.runner.flowrunner import FlowRunner
@@ -27,7 +30,7 @@ STATIC_DIR = BASE_DIR / "static"
 INPUT_SOURCE = "api"
 
 
-def create_app(flows: FlowRunner, bm) -> FastAPI:
+def create_app(flows: FlowRunner, bm: BM) -> FastAPI:
     """Create and configure the FastAPI application.
 
     Args:
@@ -43,7 +46,7 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
     logger.info("API server using BM instance from CLI bootstrap")
 
     @asynccontextmanager
-    async def lifespan(app: FastAPI):
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         """Lifespan event handler for startup and shutdown events."""
         try:
             # API functions might take a few more seconds
@@ -111,7 +114,7 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
     logger.info("Defining exception handler.")
 
     @app.exception_handler(Exception)
-    async def generic_exception_handler(request: Request, exc: Exception):
+    async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         return JSONResponse(
             status_code=500,
             content={"detail": str(exc)},
@@ -141,17 +144,17 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
 
     # Custom middleware to log CORS failures
     @app.middleware("http")
-    async def log_cors_failures(request: Request, call_next):
+    async def log_cors_failures(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         response = await call_next(request)
         return response
 
     # Production monitoring middleware
     @app.middleware("http")
-    async def monitoring_middleware(request: Request, call_next):
+    async def monitoring_middleware(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         """Middleware to collect request metrics and system performance data."""
         import time
 
-        import psutil
+        import psutil  # type: ignore[import-untyped]  # psutil: no stubs available
 
         from buttermilk.monitoring import get_metrics_collector
 
@@ -188,7 +191,7 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
 
     # WebSocket endpoint - essential for frontend terminal functionality
     @app.websocket("/ws/{session_id}")
-    async def websocket_endpoint(websocket: WebSocket, session_id: str):
+    async def websocket_endpoint(websocket: WebSocket, session_id: str) -> None:
         """WebSocket endpoint for client communication with the WebUIAgent.
 
         Args:
@@ -245,6 +248,10 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
                     # Get the existing ExecutionContext to reuse infrastructure
                     execution_context = get_execution_context()
 
+                    # By the time a flow is running, the execution context has an
+                    # established project name; a None here is a real initialization bug.
+                    assert execution_context.project_name is not None, "ExecutionContext.project_name must be set before running a flow"
+
                     session_bm = await create_session_bm_async(
                         project_name=execution_context.project_name,  # Use same project
                         job=run_request.flow,  # Use flow name as job
@@ -267,7 +274,7 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
                     )
 
                     # Add callback to handle unhandled task exceptions
-                    def handle_task_exception(task_future):
+                    def handle_task_exception(task_future: "asyncio.Future[None]") -> None:
                         if task_future.exception() is not None:
                             exc = task_future.exception()
                             # Log the exception with full traceback
@@ -279,7 +286,7 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
                             logger.critical(f"💥 FATAL ERROR: {fatal_msg}")
 
                             # Send error message to UI if session is still active - schedule as async task
-                            async def notify_ui():
+                            async def notify_ui() -> None:
                                 try:
                                     session = await flow_runner.session_manager.get_or_create_session(session_id)
                                     if session and session.websocket and session.websocket.client_state == WebSocketState.CONNECTED:
@@ -360,7 +367,7 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
 
     # Session management routes - essential for frontend functionality
     @app.get("/api/session")
-    async def create_session():
+    async def create_session() -> dict[str, str]:
         """Generates a unique session ID for new web clients.
 
         Returns:
@@ -370,7 +377,7 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
 
     # Session management endpoints
     @app.get("/api/session/{session_id}/status")
-    async def get_session_status(session_id: str, request: Request):
+    async def get_session_status(session_id: str, request: Request) -> dict[str, Any]:
         """Get the status of a specific session.
 
         Returns:
@@ -394,7 +401,7 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
         raise HTTPException(status_code=404, detail="Session not found")
 
     @app.delete("/api/session/{session_id}")
-    async def cleanup_session(session_id: str, request: Request):
+    async def cleanup_session(session_id: str, request: Request) -> dict[str, str]:
         """Manually clean up a specific session.
 
         Returns:
@@ -411,7 +418,7 @@ def create_app(flows: FlowRunner, bm) -> FastAPI:
         raise HTTPException(status_code=404, detail="Session not found")
 
     @app.get("/api/sessions")
-    async def list_sessions(request: Request):
+    async def list_sessions(request: Request) -> dict[str, Any]:
         """List all active sessions.
 
         Returns:

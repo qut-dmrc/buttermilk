@@ -62,7 +62,6 @@ class EvalRecord(BaseModel):
     error: str | None = None
     response: str | None = None  # when we receive an invalid response, log it in this field
 
-    metadata: dict | None = {}
     model_config = ConfigDict(
         extra="forbid",
         arbitrary_types_allowed=True,
@@ -73,7 +72,7 @@ class EvalRecord(BaseModel):
 
     @field_validator("prediction")
     @classmethod
-    def validate_result(cls, v) -> bool | None:
+    def validate_result(cls, v: object) -> bool | None:
         if v is None:
             return None
         return TypeAdapter(bool).validate_python(v)
@@ -107,7 +106,7 @@ class EvalRecord(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def check_types(cls, values):
+    def check_types(cls, values: dict) -> dict:
         if isinstance(values.get("scores"), dict):
             values["scores"] = [Score(measure=k, score=v) for k, v in values["scores"].items()]
 

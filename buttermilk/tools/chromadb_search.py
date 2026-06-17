@@ -86,26 +86,43 @@ class ChromaDBSearchTool(ChromaDBEmbeddings, ToolConfig):
         if results["ids"] and results["ids"][0]:
             seen_docs = set()
 
+            # These keys are guaranteed present because they were requested via
+            # the `include=[...]` argument to `collection.query` above; ChromaDB
+            # types them as Optional only because they are conditionally returned.
+            documents = results["documents"]
+            metadatas = results["metadatas"]
+            distances = results["distances"]
+            assert documents is not None
+            assert metadatas is not None
+            assert distances is not None
+
             for i, (doc_id, doc, metadata, distance) in enumerate(
                 zip(
                     results["ids"][0],
-                    results["documents"][0],
-                    results["metadatas"][0],
-                    results["distances"][0],
+                    documents[0],
+                    metadatas[0],
+                    distances[0],
                 )
             ):
+                # ChromaDB metadata values are typed as a broad scalar union;
+                # coerce to the concrete types expected by SearchResult.
+                metadata_dict: dict[str, Any] = dict(metadata)
+
                 # Filter duplicates if requested
-                parent_doc_id = metadata.get("document_id", doc_id)
+                parent_doc_id = str(metadata_dict.get("document_id", doc_id))
 
                 seen_docs.add(parent_doc_id)
+
+                raw_title = metadata_dict.get("document_title")
+                document_title = str(raw_title) if raw_title is not None else None
 
                 search_results.append(
                     SearchResult(
                         id=doc_id,
                         content=doc,
                         document_id=parent_doc_id,
-                        document_title=metadata.get("document_title"),
-                        metadata=metadata,
+                        document_title=document_title,
+                        metadata=metadata_dict,
                         score=1.0 - distance,  # Convert distance to similarity
                     )
                 )

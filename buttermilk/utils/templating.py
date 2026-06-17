@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 from weakref import WeakValueDictionary
 
-import regex as re  # For regular expression operations, used in _parse_prompty
+import regex as re  # type: ignore[import-untyped]  # regex: no stubs available  # For regular expression operations, used in _parse_prompty
 from jinja2 import (  # Jinja2 templating components
     FileSystemLoader,
     Undefined,
@@ -140,11 +140,11 @@ class TrackingFileSystemLoader(FileSystemLoader):
     enabling per-include hashing for input-component provenance.
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._loaded_files: list[tuple[str, str]] = []
 
-    def get_source(self, environment, template):
+    def get_source(self, environment: Any, template: str) -> tuple[str, str, Any]:
         source, filename, uptodate = super().get_source(environment, template)
         self._loaded_files.append((template, filename))
         return source, filename, uptodate
@@ -152,7 +152,7 @@ class TrackingFileSystemLoader(FileSystemLoader):
     def get_loaded_files(self) -> list[tuple[str, str]]:
         return list(self._loaded_files)
 
-    def reset_tracking(self):
+    def reset_tracking(self) -> None:
         self._loaded_files.clear()
 
 
@@ -379,8 +379,8 @@ def get_template_names(pattern: str = "", parent: str = "", extension: str = "ji
         file_path.stem  # .stem gives filename without final suffix
         for file_path in list_files(
             TEMPLATES_PATH,
-            filename_pattern=pattern,  # Assuming list_files takes filename_pattern
-            parent_dir=parent,
+            filename=pattern,
+            parent=parent,
             extension=extension,  # list_files might expect with or without dot
         )
     ]
@@ -483,7 +483,7 @@ def load_template(
 
     class KeepUndefinedAndCollect(Undefined):
         def __str__(self) -> str:
-            collected_undefined_vars.append(self._undefined_name)
+            collected_undefined_vars.append(str(self._undefined_name))
             return "{{" + str(self._undefined_name) + "}}"
 
     render_env = sandbox.SandboxedEnvironment(
@@ -562,9 +562,9 @@ class TemplateRenderResult:
     template_name: str
     template_hash: str
     unfilled_vars: list[str]
-    included_files: list[IncludedFile] = None
+    included_files: list[IncludedFile] | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.included_files is None:
             self.included_files = []
 

@@ -107,12 +107,12 @@ class GCPConfig(CloudProviderConfig):
 
     def get_client_config(self, service: str) -> dict[str, Any]:
         """Get GCP service client configuration."""
-        base_config = {
+        base_config: dict[str, Any] = {
             "project_id": self.project_id,
             "location": self.location,
         }
 
-        service_configs = {
+        service_configs: dict[str, dict[str, Any]] = {
             "bigquery": {
                 **base_config,
                 "default_query_job_config": {

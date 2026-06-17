@@ -68,7 +68,7 @@ def extract_message_data(
     # The message content is nested under a key derived from the source.
     # e.g., if source is "AgentName-xyz", key becomes "AgentName".
     source_key = source.split("-", maxsplit=1)[0]
-    message_dict = scrub_serializable(message.model_dump())  # Serialize to dict, handling complex types
+    message_dict: dict[str, Any] = scrub_serializable(message.model_dump())  # Serialize to dict, handling complex types
 
     data_for_jmespath = {source_key: message_dict}
 

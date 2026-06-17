@@ -64,6 +64,9 @@ class BashProcessor(BaseModel):
 
     async def process(self, context: ProcessingContext) -> AsyncGenerator[Record, None]:
         record = context.record
+        # This processor operates on full Record instances (it reads `file_path`
+        # and yields Record); narrow the BaseRecord declared on ProcessingContext.
+        assert isinstance(record, Record)
         processor_stage = context.session_id
         """Execute bash command on record's file.
 
@@ -78,6 +81,8 @@ class BashProcessor(BaseModel):
             ProcessingError: If command fails or times out
         """
         # Verify input file exists
+        if record.file_path is None:
+            raise FileNotFoundError(f"Record {record.record_id} has no file_path to process")
         input_path = Path(record.file_path)
         if not input_path.exists():
             raise FileNotFoundError(f"Input file not found: {input_path}")
@@ -193,6 +198,9 @@ class PDFToTextProcessor(BashProcessor):
 
     async def process(self, context: ProcessingContext) -> AsyncGenerator[Record, None]:
         record = context.record
+        # This processor operates on full Record instances; narrow the
+        # BaseRecord declared on ProcessingContext.
+        assert isinstance(record, Record)
         processor_stage = context.session_id
         """Extract text from PDF using pdftotext.
 
@@ -210,7 +218,9 @@ class PDFToTextProcessor(BashProcessor):
         """
         # Skip if content exists and is NOT a PDF placeholder
         # PDF placeholders look like: "[PDF Document: filename.pdf, Size: 123 bytes, Path: /path]"
-        if record.content and not (isinstance(record.content, str) and record.content.startswith("[PDF Document:")):
+        # Cached fulltext is always a plain string; non-str (multimodal) content
+        # is never treated as cached fulltext and falls through to extraction.
+        if isinstance(record.content, str) and record.content and not record.content.startswith("[PDF Document:"):
             # QUALITY GATE 3: Validate cached fulltext before skipping extraction
             # This ensures corrupt fulltext from previous runs doesn't bypass validation
             from buttermilk.utils.text_quality import detect_text_corruption

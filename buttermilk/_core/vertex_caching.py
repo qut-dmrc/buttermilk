@@ -110,7 +110,9 @@ class CriteriaCacheManager(BaseModel):
         Raises:
             RuntimeError: If cache creation fails
         """
-        from google.genai.types import Content, CreateCachedContentConfig, Part
+        from typing import cast
+
+        from google.genai.types import Content, ContentListUnion, CreateCachedContentConfig, Part
 
         effective_model = model or self.model
         cache_key = self._compute_cache_key(effective_model, system_instruction, criteria_content)
@@ -139,12 +141,17 @@ class CriteriaCacheManager(BaseModel):
 
         # Build content structure for caching
         # The criteria content becomes a user message that will be cached
-        contents = [
-            Content(
-                role="user",
-                parts=[Part(text=criteria_content)],
-            )
-        ]
+        # cast bridges list invariance: a list[Content] is a valid ContentListUnion
+        # at runtime, but mypy cannot prove it through the invariant list parameter.
+        contents = cast(
+            ContentListUnion,
+            [
+                Content(
+                    role="user",
+                    parts=[Part(text=criteria_content)],
+                )
+            ],
+        )
 
         try:
             config = CreateCachedContentConfig(

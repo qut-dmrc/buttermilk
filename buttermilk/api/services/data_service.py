@@ -120,7 +120,7 @@ class DataService:
             return []
 
     @staticmethod
-    async def get_run_history(flow_name: str, criteria: str, record_id: str, flow_runner) -> list[dict[str, Any]]:
+    async def get_run_history(flow_name: str, criteria: str, record_id: str, flow_runner: FlowRunner) -> list[dict[str, Any]]:
         """Get run history for a flow, criteria, and record
 
         Args:
@@ -136,7 +136,7 @@ class DataService:
         raise NotImplementedError("Run history retrieval is not yet implemented")
 
     @classmethod
-    def safely_get_session_data(cls, websocket_manager, session_id: str) -> dict[str, Any]:
+    def safely_get_session_data(cls, websocket_manager: Any, session_id: str) -> dict[str, Any]:
         """Safely get session data, ensuring default values if keys don't exist
 
         Args:
@@ -177,7 +177,7 @@ class DataService:
             return cls._session_config.defaults.model_dump()
 
     @staticmethod
-    async def get_record_by_id(record_id: str, flow_name: str, flow_runner, dataset_key: str | None = None) -> Record | None:
+    async def get_record_by_id(record_id: str, flow_name: str, flow_runner: FlowRunner, dataset_key: str | None = None) -> Record | None:
         """Get a single record by ID for a specific flow
 
         Args:
@@ -247,7 +247,7 @@ class DataService:
         metadata_data = json.loads(row["metadata"]) if row["metadata"] else {}
         session_info_data = json.loads(row["session_info"]) if row["session_info"] else {}
         messages_data = json.loads(row["messages"]) if row["messages"] else []
-        error_data = json.loads(row["error"]) if row["error"] else []
+        error_data = json.loads(row["error"]) if row["error"] else None
 
         # Create AgentConfig
         agent_config = AgentConfig(**agent_info_data)
@@ -268,7 +268,7 @@ class DataService:
             metadata=metadata_data,
             outputs=outputs_data,
             session_info=session_info_data,
-            agent_info=agent_config,
+            agent_info=agent_config.model_dump(),
             session_id=row["session_id"],
             parent_call_id=row.get("parent_call_id"),
             inputs=agent_input,
@@ -349,6 +349,9 @@ class DataService:
 
             if not result:
                 return []
+
+            # return_df=False yields a RowIterator; a bool here would signal query failure/misuse.
+            assert not isinstance(result, bool), "run_query(return_df=False) returned a bool instead of a RowIterator"
 
             agent_traces = []
             for row in result:
@@ -443,6 +446,9 @@ class DataService:
 
             if not result:
                 return []
+
+            # return_df=False yields a RowIterator; a bool here would signal query failure/misuse.
+            assert not isinstance(result, bool), "run_query(return_df=False) returned a bool instead of a RowIterator"
 
             agent_traces = []
             for row in result:

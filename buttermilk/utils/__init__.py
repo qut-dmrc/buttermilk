@@ -1,3 +1,5 @@
+from typing import Any
+
 from .flows import col_mapping_hydra_to_local
 from .utils import (
     download_limited,
@@ -37,7 +39,7 @@ __all__ = [
 ]
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> Any:
     """Lazy import for heavy BigQuery utilities and optional viz dependencies."""
     if name == "construct_dict_from_schema":
         from .bq import construct_dict_from_schema

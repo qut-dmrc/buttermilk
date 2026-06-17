@@ -222,7 +222,9 @@ class RecordCache:
 
         try:
             # Store complete record data with chunks included
-            record_data = scrub_serializable(record.model_dump()) if hasattr(record, "model_dump") else record
+            # `record` is always a BaseRecord (pydantic), so the `model_dump` branch
+            # is always taken at runtime; the result is a plain dict suitable for `**`.
+            record_data: dict[str, Any] = scrub_serializable(record.model_dump())
             payload: dict[str, Any] = {
                 "_schema_version": CACHE_VERSION,
                 "stage": stage,

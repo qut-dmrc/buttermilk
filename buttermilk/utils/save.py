@@ -15,9 +15,9 @@ import io  # For in-memory binary streams (BytesIO)
 import json
 import pickle  # For serializing Python objects
 import tempfile  # For creating temporary files/directories
-from collections.abc import Callable, Hashable, Mapping  # For type hinting
+from collections.abc import Callable, Mapping  # For type hinting
 from pathlib import Path  # For local path manipulation
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import pandas as pd
 import shortuuid  # For generating short unique IDs
@@ -158,8 +158,9 @@ def save(
         final_uri_str = str(uri)
     elif final_save_dir_str:  # Construct URI from save_dir, basename, extension
         try:
-            # Convert string path to AnyPath for consistent handling
-            base_path = AnyPath(final_save_dir_str)
+            # Convert string path to AnyPath for consistent handling.
+            # AnyPath.__new__ returns a concrete Path or CloudPath at runtime.
+            base_path: Path | CloudPath = cast("Path | CloudPath", AnyPath(final_save_dir_str))
             file_id = parameters.get("uuid", shortuuid.uuid())
             effective_basename = "_".join(filter(None, [basename, file_id])) or f"data_{file_id}"
 
@@ -285,7 +286,7 @@ def upload_dataframe_json(data: pd.DataFrame, uri: str, **kwargs: Any) -> str:
 
     """
     # Lazy import to avoid loading google.cloud at module level
-    import google.cloud.storage
+    import google.cloud.storage  # type: ignore[import-untyped]  # google-cloud-storage: no py.typed marker
     from google.cloud import storage
 
     if not isinstance(data, pd.DataFrame):
@@ -313,7 +314,7 @@ def upload_dataframe_json(data: pd.DataFrame, uri: str, **kwargs: Any) -> str:
         gcs_client = storage.Client()
         # Serialize DataFrame to newline-delimited JSON string
         rows_dict = data.to_dict(orient="records")
-        scrubbed_rows = scrub_serializable(rows_dict)  # Ensure all data is JSON serializable
+        scrubbed_rows: list[Any] = scrub_serializable(rows_dict)  # Ensure all data is JSON serializable
 
         json_data_str = "\n".join([json.dumps(row) for row in scrubbed_rows])
         json_data_bytes = json_data_str.encode("utf-8")
@@ -350,7 +351,7 @@ def upload_dataframe_json(data: pd.DataFrame, uri: str, **kwargs: Any) -> str:
 def data_to_export_rows(
     data: pd.DataFrame | dict[str, Any] | list[Mapping[str, Any]] | BaseModel,
     schema: list,  # Expecting BigQuery SchemaField objects
-) -> list[Mapping[Hashable, Any]]:
+) -> list[dict[str, Any]]:
     """Converts various data types into a list of dictionaries suitable for BigQuery row insertion.
 
     This function handles:
@@ -377,7 +378,7 @@ def data_to_export_rows(
 
     from .bq import construct_dict_from_schema  # Deferred import
 
-    bq_rows: list[Mapping[str, Any]] | Mapping[str, Any]  # Adjusted type hint
+    bq_rows: list[dict[str, Any]] | dict[str, Any]  # Adjusted type hint
 
     if isinstance(data, pd.DataFrame):
         # Deduplicate columns if necessary
@@ -385,13 +386,13 @@ def data_to_export_rows(
             data.columns = [  # type: ignore
                 x[1] if x[1] not in data.columns[: x[0]] else f"{x[1]}_{list(data.columns[: x[0]]).count(x[1])}" for x in enumerate(data.columns)
             ]
-        bq_rows = data.to_dict(orient="records")
+        bq_rows = cast("list[dict[str, Any]]", data.to_dict(orient="records"))
     elif isinstance(data, BaseModel):  # Check for Pydantic BaseModel
         bq_rows = [data.model_dump()]  # Use model_dump for Pydantic v2
     elif isinstance(data, dict):  # Single dictionary row
         bq_rows = [data.copy()]
     elif isinstance(data, list) and all(isinstance(i, dict) for i in data):  # List of dictionaries
-        bq_rows = [d.copy() for d in data]  # Create copies of dicts
+        bq_rows = [cast("dict[str, Any]", d).copy() for d in data]  # Create copies of dicts (guarded by isinstance dict above)
     else:
         raise TypeError(
             f"Unsupported data type for data_to_export_rows: {type(data)}. Expected DataFrame, Pydantic BaseModel, dict, or list of dicts."
@@ -572,7 +573,7 @@ def upload_rows(
         table=final_dataset,
     )
 
-    all_errors = []
+    all_errors: list[Any] = []
     for row_chunk in chunks(bq_prepared_rows, 100):  # Process in chunks of 100 rows
         chunk_errors = bq_client.insert_rows(table_ref, row_chunk, selected_fields=final_schema)
         if chunk_errors:
@@ -732,10 +733,10 @@ def read_pickle(filename: str | GSPath) -> Any:
     # Lazy import cloudpathlib
     from cloudpathlib import AnyPath, GSPath
 
-    path_to_read: AnyPath
+    path_to_read: Path | CloudPath
     if isinstance(filename, str):
         # Determine if it's a GCS path string or local path string
-        path_to_read = AnyPath(filename)  # AnyPath handles gs:// or local
+        path_to_read = cast("Path | CloudPath", AnyPath(filename))  # AnyPath handles gs:// or local
     elif isinstance(filename, GSPath):  # Already a GSPath
         path_to_read = filename
     else:
@@ -818,7 +819,7 @@ def upload_json(data: Any, *, uri: str, **kwargs: Any) -> str:
         logger.warning(f"Data for upload_json is not a DataFrame, list of dicts, or dict (type: {type(data)}). Attempting direct serialization.")
         rows_to_serialize = data  # Will be scrubbed next
 
-    scrubbed_rows = scrub_serializable(rows_to_serialize)  # Ensure serializability
+    scrubbed_rows: Any = scrub_serializable(rows_to_serialize)  # Ensure serializability
 
     # Convert to newline-delimited JSON string
     # If scrubbed_rows is not a list (e.g., a single dict was passed and scrubbed), wrap it for join

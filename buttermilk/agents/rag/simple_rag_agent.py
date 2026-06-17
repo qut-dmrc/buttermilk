@@ -36,7 +36,7 @@ class ResearchResult(BaseModel):
         description="A brief summary (plain text)",
     )
 
-    def as_markdown(self, agent_id: str = None, call_id: str = None) -> str:
+    def as_markdown(self, agent_id: str | None = None, call_id: str | None = None) -> str:
         """Returns a Markdown formatted string for insertion into templates.
 
         Format follows the standard: agent identifier on first line, followed by
@@ -101,7 +101,7 @@ class RagAgent(LLMAgent):
     5. Returning in ResearchResult format
     """
 
-    def __init__(self, *, output_model: type[BaseModel] = None, **kwargs: Any) -> None:
+    def __init__(self, *, output_model: type[BaseModel] | None = None, **kwargs: Any) -> None:
         """Initialize RagAgent with template configuration."""
         if output_model is None:
             output_model = ResearchResult

@@ -33,6 +33,7 @@ from typing import Any
 from pydantic import Field
 
 from buttermilk import logger
+from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.processor_core import BatchProcessorCore
 from buttermilk._core.types import BaseRecord
 
@@ -102,17 +103,17 @@ class VariantBatchProcessor(BatchProcessorCore):
 
     async def _process_batch(
         self,
-        records: list[BaseRecord],
+        records: list[ProcessingContext],
     ) -> list[BaseRecord]:
         """Expand models x templates and run each variant sequentially.
 
         For each (model, template) pair in the cartesian product:
         1. Instantiate a VertexBatchProcessor with shared config
-        2. Run its _process_batch on the same records
+        2. Run its _process_batch on the same contexts
         3. Collect all output records
 
         Args:
-            records: List of BaseRecord objects to process
+            records: List of ProcessingContext objects to process
 
         Returns:
             Combined list of output records from all variants

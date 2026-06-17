@@ -1,6 +1,7 @@
 import json
 import re
 from pathlib import Path
+from typing import Any
 
 from pdfminer.high_level import extract_text
 from pdfminer.layout import LAParams
@@ -18,7 +19,7 @@ class PdfTextExtractor(BaseModel):
         default_factory=LAParams,
     )  # Allow customization if needed
 
-    async def process(self, item: Record, **kwargs) -> Record | None:
+    async def process(self, item: Record, **kwargs: Any) -> Record | None:
         if isinstance(item.content, str) and item.content.strip():
             # Got it already; return
             return item

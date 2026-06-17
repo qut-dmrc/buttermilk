@@ -12,11 +12,12 @@ from functools import cached_property  # For lazy-loading properties
 from typing import Any  # For type hinting
 
 import google.auth  # For Google Cloud authentication
-import googleapiclient.discovery  # For Google API client discovery (though less used with gspread directly)
-import googleapiclient.errors  # For Google API errors
+import googleapiclient.discovery  # type: ignore[import-untyped]  # googleapiclient: no stubs available
+import googleapiclient.errors  # type: ignore[import-untyped]  # googleapiclient: no stubs available
 import gspread  # The primary library for Google Sheets interaction
 import pandas as pd
-import yaml  # For converting complex Python objects to YAML strings
+import yaml  # type: ignore[import-untyped]  # PyYAML: stubs (types-PyYAML) not resolvable in this env  # For converting complex Python objects to YAML strings
+from gspread.utils import ValueInputOption
 from pydantic import BaseModel, ConfigDict  # Pydantic components
 
 from buttermilk._core.log import logger  # Centralized logger
@@ -234,7 +235,7 @@ class GSheet(BaseModel):
         if isinstance(serialisable_rows, list) and all(isinstance(r, dict) for r in serialisable_rows):
             rows_to_append = [list(r.values()) for r in serialisable_rows]
             if rows_to_append:  # Only append if there's data
-                worksheet.append_rows(rows_to_append, value_input_option="USER_ENTERED")
+                worksheet.append_rows(rows_to_append, value_input_option=ValueInputOption.user_entered)
                 logger.info(f"Appended {len(rows_to_append)} rows to worksheet '{worksheet.title}'.")
             else:
                 logger.info(f"No rows to append to worksheet '{worksheet.title}' after serialization.")

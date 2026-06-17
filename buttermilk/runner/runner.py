@@ -59,7 +59,7 @@ import datetime
 import time
 from abc import abstractmethod
 from asyncio import Queue, QueueEmpty, TaskGroup
-from collections.abc import AsyncGenerator, Coroutine
+from collections.abc import AsyncGenerator
 from functools import cached_property
 from typing import (
     Any,
@@ -67,7 +67,7 @@ from typing import (
 
 import pandas as pd
 import shortuuid
-from humanfriendly import format_timespan
+from humanfriendly import format_timespan  # type: ignore[import-untyped]  # humanfriendly: no stubs available
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -76,7 +76,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from tqdm.asyncio import tqdm as atqdm
+from tqdm.asyncio import tqdm as atqdm  # type: ignore[import-untyped]  # tqdm: no stubs available
 
 from buttermilk import logger
 from buttermilk._core.agent import Agent
@@ -126,7 +126,7 @@ class Consumer(BaseModel):
     agent: str | None = ""  # This is model, or client, or whatever is used to get the result
     step_name: str  # This is the step in the process that includes this particular task
     input_queue: Queue[RunRequest] = Field(default_factory=Queue)  # Replaced Job with RunRequest
-    output_queue: Queue[RunRequest] = None  # Replaced Job with RunRequest
+    output_queue: Queue[RunRequest] | None = None  # Replaced Job with RunRequest
     task_num: int | None = None
     session_info: Agent
     init_vars: dict = {}  # Vars to use when initialising the client
@@ -152,7 +152,7 @@ class Consumer(BaseModel):
         self._sem = asyncio.Semaphore(value=self.concurrent)
         return self
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]  # pydantic computed_field over cached_property; mypy does not model this pattern
     @cached_property
     def pbar(self) -> atqdm:
         colours = ["yellow", "green", "cyan", "blue", "magenta"]
@@ -169,7 +169,7 @@ class Consumer(BaseModel):
             colour=colour,
         )
 
-    async def run(self):
+    async def run(self) -> None:
         try:
             async with asyncio.TaskGroup() as tg:
                 while not self.done:
@@ -195,7 +195,7 @@ class Consumer(BaseModel):
             self.done = True
             self.pbar.close()
 
-    async def process_wrapper(self):
+    async def process_wrapper(self) -> None:
         """Wrapper for the process method.
 
         This method is used to catch and log any errors that occur during processing.
@@ -220,6 +220,8 @@ class Consumer(BaseModel):
                     job.timestamp = pd.to_datetime(datetime.datetime.now())
                     job.agent_info = self.model_dump()
 
+                    # output_queue is attached by TaskDistributor.register_task before run.
+                    assert self.output_queue is not None, "output_queue not attached to Consumer"
                     await self.output_queue.put(job)
 
                 # mark input job done
@@ -263,7 +265,7 @@ class TaskDistributor(BaseModel):
 
     _consumers: dict[str, Consumer] = {}
     shutdown: bool = False
-    _tasks: list[Coroutine] = []
+    _tasks: list[asyncio.Task[None]] = []
     total_tasks: int = 0
     _collector: ResultsCollector | None = None
 
@@ -273,15 +275,15 @@ class TaskDistributor(BaseModel):
         self,
         collector: ResultsCollector | None = None,
         /,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> None:
         """Add a results saving worker and its input/outqut queues."""
         if not collector:
             collector = ResultsCollector(**kwargs)
 
         self._collector = collector
 
-    def register_task(self, consumer: Consumer):
+    def register_task(self, consumer: Consumer) -> None:
         """Add a consumer worker and its input/outqut queues."""
         if not self._collector:
             raise ValueError("Collector not registered. Do that first.")
@@ -296,15 +298,20 @@ class TaskDistributor(BaseModel):
             # By default, attach the main results queue to the consumer
             consumer.output_queue = self._collector.results
 
+        # `agent` is always a non-None str after Consumer validation
+        # (validate_agent coerces to str, validate_concurrent rebuilds it).
+        assert consumer.agent is not None
         self._consumers[consumer.agent] = consumer
 
-    def add_job(self, task_name: str, job: RunRequest):  # Replaced Job with RunRequest
+    def add_job(self, task_name: str, job: RunRequest) -> None:  # Replaced Job with RunRequest
         """Add a task to the corresponding queue."""
         self._consumers[task_name].input_queue.put_nowait(job)
         self.total_tasks += 1
 
-    async def run(self):
+    async def run(self) -> None:
         """Starts the run, managing the consumers and collecting results."""
+        # A collector must be registered before run() (register_task enforces this).
+        assert self._collector is not None, "Collector not registered. Call register_collector() first."
         t0 = time.perf_counter()
         try:
             global_pbar = atqdm(

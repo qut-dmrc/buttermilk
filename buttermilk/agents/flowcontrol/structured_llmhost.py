@@ -5,6 +5,7 @@ This is the refactored version of LLMHostAgent that implements Phase 3 of Issue 
 
 import asyncio
 from collections.abc import AsyncGenerator
+from typing import Any
 
 import pydantic
 
@@ -30,7 +31,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
     a predefined sequence.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         """Initialize StructuredLLMHostAgent."""
         super().__init__(**kwargs)
 
@@ -85,7 +86,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         # This handles the race condition where UserResponseMessage arrives before ConductorRequest processing completes
         max_wait = 5  # seconds
         wait_interval = 0.1
-        waited = 0
+        waited = 0.0
 
         while waited < max_wait:
             if self._tools:
@@ -150,7 +151,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
         model_client = bm.llms.get_client(self.parameters["model"])
 
         # Deduplicate tools by name (handle both Tool objects and ToolSchema dicts)
-        def get_tool_name(tool):
+        def get_tool_name(tool: Any) -> str:
             if hasattr(tool, "name"):
                 return tool.name  # Tool object
             return tool["name"]  # ToolSchema dict
@@ -168,7 +169,7 @@ class StructuredLLMHostAgent(HostAgent, LLMAgent):
             intercept_tools=True,  # This is the key flag
         )
 
-    async def _process(self, *, message: AgentInput, **kwargs) -> AgentOutput | None:
+    async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentOutput:
         """Process the message using the LLM with intercepted tool calls."""
         # Fill template and call LLM
         try:

@@ -52,7 +52,7 @@ class QueryRunner(BaseModel):
         save_to_gcs: bool = False,
         return_df: bool = True,
         save_dir: str | None = None,
-    ) -> pd.DataFrame | bigquery.table.RowIterator | bool | None:
+    ) -> pd.DataFrame | bigquery.QueryJob | bool | None:
         """Runs a BigQuery SQL query with options for destination, result handling, and cost tracking.
 
         Args:
@@ -76,10 +76,11 @@ class QueryRunner(BaseModel):
                 generated within this directory.
 
         Returns:
-            pd.DataFrame | bigquery.table.RowIterator | bool | None:
+            pd.DataFrame | bigquery.QueryJob | bool | None:
             - If `return_df` is True and results are fetched: A Pandas DataFrame.
               Returns an empty DataFrame if the query yields no rows.
-            - If `return_df` is False and results are fetched: A `bigquery.table.RowIterator`.
+            - If `return_df` is False and results are fetched: The `bigquery.QueryJob`,
+              from which a `RowIterator` can be obtained via `.result()`.
             - If `do_not_return_results` is True: `True` for successful execution,
               `False` for failure.
             - `None` or `False` can also indicate failure in other scenarios.

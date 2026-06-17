@@ -154,7 +154,7 @@ class CharacterGenerator(BaseModel):
         return data
 
     @property
-    def _characteristics(self) -> ProtectedCharacteristics:
+    def _characteristics(self) -> dict[str, list[str]]:
         characteristics = self._identities["identities"]
         return characteristics
 

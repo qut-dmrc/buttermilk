@@ -4,7 +4,8 @@ from pathlib import Path
 
 import hydra
 import pyarrow.parquet as pq
-from tqdm.asyncio import tqdm
+from omegaconf import DictConfig
+from tqdm.asyncio import tqdm  # type: ignore[import-untyped]  # tqdm: no stubs available
 
 from buttermilk import logger
 from buttermilk.data.vector import (
@@ -16,10 +17,10 @@ from buttermilk.data.vector import (
 
 async def import_parquet_files_to_chroma(
     vector_store: ChromaDBEmbeddings,
-    parquet_dir=None,
-    concurrency=10,
-    batch_size=20,
-):
+    parquet_dir: str | Path | None = None,
+    concurrency: int = 10,
+    batch_size: int = 20,
+) -> None:
     """Import parquet files to ChromaDB with parallel batch document upserts.
 
     Args:
@@ -45,7 +46,7 @@ async def import_parquet_files_to_chroma(
     # Semaphore to control concurrency
     sem = asyncio.Semaphore(concurrency)
 
-    async def process_batch(batch_files):
+    async def process_batch(batch_files: list[Path]) -> None:
         nonlocal successful_docs, failed_docs, total_chunks
 
         # Read batch of parquet files and convert to InputDocument objects
@@ -153,7 +154,7 @@ async def import_parquet_files_to_chroma(
 
 
 @hydra.main(version_base="1.3", config_path="../conf", config_name="config")
-def main(cfg) -> None:
+def main(cfg: DictConfig) -> None:
     objs = hydra.utils.instantiate(cfg)
     vectoriser: ChromaDBEmbeddings = objs.vectoriser
 

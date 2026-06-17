@@ -11,8 +11,8 @@ class Scorer:
         col: str,
         groundtruth: str = "expected",
         prediction: str = COL_PREDICTION,
-    ):
-        df.loc[:, "preds"] = pd.json_normalize(df[col])[prediction].astype(int).to_numpy()
+    ) -> pd.DataFrame:
+        df["preds"] = pd.json_normalize(df[col].tolist())[prediction].astype(int).to_numpy()
         df["correct"] = df.apply(lambda x: x[col][prediction] == x[groundtruth]["answer"], axis="columns")
         return df
 
@@ -20,7 +20,7 @@ class Scorer:
 class Metriciser:
     def evaluate_results(
         self,
-        dataset,
+        dataset: pd.DataFrame,
         levels: list[str] = [],
         groundtruth: str = "expected",
         prediction: str = COL_PREDICTION,

@@ -73,7 +73,7 @@ TOXCLIENTS = [
 TOXCLIENTS_NOT_AVAILABLE = [
     LlamaGuard2HF,
 ]
-BAD_MODELS = []
+BAD_MODELS: list[type[ToxicityClassifierCore]] = []
 
 TOXCLIENTS_LOCAL = [
     REGARD,
@@ -95,11 +95,11 @@ TOXCLIENTS_LOCAL = [
 
 
 # Let's provide an interface for all the various toxicity models
-def get_tox_flow(flow: str, **kwargs) -> ToxicityClassifierCore:
+def get_tox_flow(flow: str, **kwargs: object) -> ToxicityClassifierCore:
     return globals()[flow]
 
 
-def load_tox_flow(flow: str, credentials: dict[str, str] | None = None, **kwargs) -> ToxicityClassifierCore:
+def load_tox_flow(flow: str, credentials: dict[str, str] | None = None, **kwargs: object) -> ToxicityClassifierCore:
     """Load a toxicity model with optional credential injection.
 
     Args:

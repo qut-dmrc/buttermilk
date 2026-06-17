@@ -20,12 +20,14 @@ Note:
 
 import logging
 import os
-from contextlib import contextmanager
+from collections.abc import Iterator
+from contextlib import AbstractContextManager, contextmanager
+from typing import TYPE_CHECKING, cast
 
 import google.auth
 import google.auth.transport.grpc
 import google.auth.transport.requests
-import grpc
+import grpc  # type: ignore[import-untyped]  # grpc: no stubs available
 from google.auth.transport.grpc import AuthMetadataPlugin
 from opentelemetry import baggage as otel_baggage
 from opentelemetry import context as otel_context
@@ -55,11 +57,18 @@ from opentelemetry.trace import (
 from buttermilk import bm, logger
 from buttermilk._core.config import Tracing
 
+if TYPE_CHECKING:
+    from opentelemetry.context import Context, Token
+    from opentelemetry.sdk.trace import ReadableSpan
+    from opentelemetry.trace import Span
+
+    from buttermilk._core.execution_context import ExecutionContext
+
 # Suppress noisy OpenTelemetry instrumentation debug logs for non-OpenAI models
 logging.getLogger("opentelemetry.instrumentation.openai.shared").setLevel(logging.WARNING)
 
 
-def setup_tracing_otel_with_execution_context(tracing_cfg: Tracing, execution_context) -> None:
+def setup_tracing_otel_with_execution_context(tracing_cfg: Tracing, execution_context: "ExecutionContext") -> None:
     """Initialize OpenTelemetry with OTLP exporters using ExecutionContext infrastructure."""
     # Get credentials from ExecutionContext instead of BM singleton
     creds = execution_context.gcp_credentials
@@ -79,7 +88,10 @@ def setup_tracing_otel_with_execution_context(tracing_cfg: Tracing, execution_co
     # This preserves the service name that was set in config_bootstrap.py
     os.environ["OTEL_RESOURCE_ATTRIBUTES"] = f"service.name={service_name},gcp.project_id={project_id}"
     os.environ["GOOGLE_CLOUD_QUOTA_PROJECT"] = project_id
-    os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = tracing_cfg.endpoint
+    endpoint = tracing_cfg.endpoint
+    if endpoint is None:
+        raise RuntimeError("OTEL tracing requires an endpoint but none found in tracing config")
+    os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = endpoint
 
     # Request used to refresh credentials upon expiry
     request = google.auth.transport.requests.Request()
@@ -151,7 +163,7 @@ def _clean_attrs(attrs: dict | None) -> dict:
     return {k: v for k, v in attrs.items() if v is not None}
 
 
-def attach_session_baggage(session_id: str | None, extra: dict | None = None) -> object | None:
+def attach_session_baggage(session_id: str | None, extra: dict | None = None) -> "Token[Context] | None":
     """Attach session metadata as OTEL baggage to current context.
 
     Returns a context token that must be detached later. Safe no-op if session_id is None.
@@ -166,7 +178,7 @@ def attach_session_baggage(session_id: str | None, extra: dict | None = None) ->
     return otel_context.attach(baggage)
 
 
-def detach_session_baggage(token: object | None) -> None:
+def detach_session_baggage(token: "Token[Context] | None") -> None:
     """Detach previously attached baggage token (if any)."""
     if token is not None:
         try:
@@ -181,7 +193,7 @@ def span_with_session(
     name: str,
     attributes: dict | None = None,
     kind: str | _SpanKind | None = None,
-):
+) -> "Iterator[Span]":
     """Context manager that binds session baggage and starts a span.
 
     - Attaches buttermilk.session.id as baggage so nested spans/logs inherit context.
@@ -233,7 +245,7 @@ def start_root_span(
     name: str,
     attributes: dict | None = None,
     kind: str | _SpanKind | None = None,
-):
+) -> "Iterator[Span]":
     """Context manager that starts a ROOT span (detached from any parent context).
 
     This is crucial for batch jobs running in the same worker process - it ensures
@@ -286,7 +298,7 @@ def start_root_span(
         yield span
 
 
-def begin_span(name: str, attributes: dict | None = None, kind: str | _SpanKind | None = None):
+def begin_span(name: str, attributes: dict | None = None, kind: str | _SpanKind | None = None) -> "AbstractContextManager[Span]":
     """Simple span context manager without session baggage binding."""
     if isinstance(kind, str):
         kind_map = {
@@ -303,7 +315,7 @@ def begin_span(name: str, attributes: dict | None = None, kind: str | _SpanKind 
     return tracer.start_as_current_span(name, kind=span_kind, attributes=_clean_attrs(attributes))
 
 
-def start_session_root_span(session_id: str | None, attributes: dict | None = None):
+def start_session_root_span(session_id: str | None, attributes: dict | None = None) -> "tuple[Span, Token[Context]]":
     """Start a long-lived session root span and set it as current.
 
     Returns (span, token). Call end_session_root_span(span, token) to close.
@@ -316,7 +328,7 @@ def start_session_root_span(session_id: str | None, attributes: dict | None = No
     return span, token
 
 
-def end_session_root_span(span, token: object | None = None) -> None:
+def end_session_root_span(span: "Span | None", token: "Token[Context] | None" = None) -> None:
     """End a previously started session root span and detach context token."""
     try:
         if span is not None:
@@ -336,17 +348,19 @@ class BaggageToAttributesSpanProcessor(_SpanProcessor):
     def __init__(self, keys: list[str] | None = None) -> None:
         self._keys = keys or []
 
-    def on_start(self, span, parent_context) -> None:  # type: ignore[override]
+    def on_start(self, span: "Span", parent_context: "Context | None" = None) -> None:
         try:
             for k in self._keys:
                 v = otel_baggage.get_baggage(k, parent_context)
                 if v is not None:
-                    span.set_attribute(k, v)
+                    # Baggage values for the configured keys are always strings
+                    # (see attach_session_baggage, which stringifies before storing).
+                    span.set_attribute(k, cast("str", v))
         except Exception:
             # Never fail user code due to telemetry
             pass
 
-    def on_end(self, span) -> None:  # type: ignore[override]
+    def on_end(self, span: "ReadableSpan") -> None:
         return
 
     def shutdown(self) -> None:  # type: ignore[override]

@@ -15,7 +15,7 @@ from typing import (
     Self,
 )
 
-import jmespath  # For JSON query language processing
+import jmespath  # type: ignore[import-untyped]  # jmespath: no stubs installed in this env
 
 # BigQuery import - now a core dependency
 from pydantic import (
@@ -85,12 +85,9 @@ class CloudProviderCfg(BaseModel):
     location: str | None = Field(default=None, description="Cloud region/location")
 
     model_config = ConfigDict(
-        exclude_none=True,
         arbitrary_types_allowed=True,
         populate_by_name=True,
         extra="allow",
-        exclude_unset=True,
-        include_extra=True,
     )
 
 
@@ -166,7 +163,7 @@ class ToolConfig(BaseModel):
 
         from buttermilk._core.storage_config import StorageFactory
 
-        converted = {}
+        converted: dict[str, Any] = {}
         for key, config in v.items():
             if isinstance(config, dict):
                 # Convert dict from YAML to appropriate BaseStorageConfig subclass
@@ -370,7 +367,7 @@ class AgentConfig(BaseModel):
 
     # Private Attributes
     _agent_name: str = PrivateAttr()
-    _unique_identifier: str = PrivateAttr(default=None)  # Used in constructing `agent_id` and `agent_name`.
+    _unique_identifier: str | None = PrivateAttr(default=None)  # Used in constructing `agent_id` and `agent_name`.
 
     # Field Validators
     _validate_parameters = field_validator(
@@ -392,7 +389,7 @@ class AgentConfig(BaseModel):
 
         from buttermilk._core.storage_config import StorageFactory
 
-        converted = {}
+        converted: dict[str, Any] = {}
         for key, config in v.items():
             if isinstance(config, dict):
                 # Convert dict from YAML to appropriate BaseStorageConfig subclass
@@ -406,7 +403,7 @@ class AgentConfig(BaseModel):
                 converted[key] = config
         return converted
 
-    @computed_field(repr=False)  # repr=False to avoid circularity if used in name_components
+    @computed_field(repr=False)  # type: ignore[prop-decorator]  # pydantic computed_field over property; mypy does not model this pattern
     @property
     def agent_name(self) -> str:
         """A human-friendly name for the agent instance.
@@ -422,7 +419,7 @@ class AgentConfig(BaseModel):
         """
         # Ensure _agent_name is initialized, _generate_id_and_name might not have run if accessed early
         if not hasattr(self, "_agent_name") or not self._agent_name:
-            self._generate_id_and_name()  # Call the combined method
+            self._generate_id_and_name()  # type: ignore[operator]  # calling the after-validator directly; pydantic plugin types it as a descriptor proxy but it is callable at runtime
         return self._agent_name
 
     @model_validator(mode="after")

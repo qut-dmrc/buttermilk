@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 import httpx
 import pydantic
-from bleach import clean
+from bleach import clean  # type: ignore[import-untyped]  # bleach: no stubs available
 from markdown_it import MarkdownIt
 from omegaconf import DictConfig, ListConfig, OmegaConf
 
@@ -59,7 +59,7 @@ def make_list_validator() -> Callable[[Any], list]:
     return validator
 
 
-def convert_omegaconf_objects(v):
+def convert_omegaconf_objects(v: Any) -> Any:
     """Recursively convert OmegaConf objects to standard Python types."""
     if isinstance(v, (DictConfig, ListConfig)):
         return OmegaConf.to_container(v, resolve=True)
@@ -175,7 +175,7 @@ def import_class_from_path(class_path: str, expected_base_class: type | None = N
 
 def make_class_import_validator(
     expected_base_class: type | None = None,
-) -> Callable[[Any], type]:
+) -> Callable[[Any], type | None]:
     """Create a validator that imports a class from a string path or passes through existing classes.
 
     This validator is designed for Pydantic fields that accept either:

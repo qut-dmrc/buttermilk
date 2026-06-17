@@ -3,6 +3,7 @@
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 from buttermilk import bm, logger
 from buttermilk.api.services.message_service import ChatMessage
@@ -180,7 +181,7 @@ class SessionStorageService:
 
         try:
             # Convert message to dict and add metadata
-            message_dict = scrub_serializable(message.model_dump())
+            message_dict: dict[str, Any] = scrub_serializable(message.model_dump())
             message_dict["_type"] = "message"
             message_dict["_timestamp"] = datetime.now(UTC).isoformat()
 

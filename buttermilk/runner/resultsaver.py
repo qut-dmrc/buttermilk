@@ -27,17 +27,19 @@ class ResultsCollector(BaseModel):
     batch_size: int = 50  # rows
 
     # # The URI or path to save all results from this run
-    batch_path: CloudPath | Path = None
+    batch_path: CloudPath | Path | None = None
 
     @model_validator(mode="after")
     def get_path(self) -> "ResultsCollector":
         if self.batch_path is None:
-            self.batch_path = CloudPath(bm.save_dir)
+            # cloudpathlib.CloudPath is a factory that dispatches to a concrete
+            # subclass at runtime; mypy sees only the abstract base.
+            self.batch_path = CloudPath(bm.save_dir)  # type: ignore[abstract]  # cloudpathlib: factory dispatch not modelled
         return self
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    async def run(self):
+    async def run(self) -> None:
         try:
             # Collect results
             while not self.shutdown or not self.results.empty():
@@ -70,15 +72,17 @@ class ResultsCollector(BaseModel):
         # Assuming the response is an ExecutionTrace, dump it
         return response.model_dump()
 
-    def save_with_trace(self, **kwargs):
+    def save_with_trace(self, **kwargs: Any) -> str | None:
         return self._save(**kwargs)
 
-    def _save(self):
+    def _save(self) -> str | None:
         if self.to_save:
+            assert self.batch_path is not None  # set by get_path validator
             _save_path = self.batch_path / f"results_{self.n_results}.json"
             uri = bm.save(data=self.to_save, uri=_save_path.as_uri())
             self.to_save = []
             return uri
+        return None
 
 
 ################################
@@ -111,7 +115,7 @@ class ResultSaver(ResultsCollector):
 
         return output
 
-    def _save(self):
+    def _save(self) -> str | None:
         try:
             if self.to_save:
                 uri = upload_rows(
@@ -120,6 +124,7 @@ class ResultSaver(ResultsCollector):
                     dataset=self.dataset,
                 )
                 self.to_save = []  # Clear the batch after saving
+            return None
         except Exception as e:
             # emergency save
             uri = bm.save(self.to_save)

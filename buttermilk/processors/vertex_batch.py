@@ -293,6 +293,9 @@ class BatchLLMProcessor(BatchProcessorCore):
         """
         client_type = config.client_type.value
 
+        # AzureOpenAI is a subclass of OpenAI; annotate with the common base so both
+        # branches type-check.
+        client: OpenAI
         if client_type == "azure":
             from openai import AzureOpenAI
 

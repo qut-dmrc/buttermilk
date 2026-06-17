@@ -19,7 +19,7 @@ from buttermilk._core.runtime_types import (
     dispatch_message,
     message_handler,
 )
-from buttermilk._core.storage_config import StorageConfig, StorageFactory
+from buttermilk._core.storage_config import StorageFactory
 from buttermilk.utils.uploader import (
     AsyncDataUploader,
 )
@@ -32,12 +32,12 @@ class SpyAgent:
 
     def __init__(
         self,
-        save: StorageConfig,
+        save: dict[str, Any],
         publish_fn: Callable[..., Awaitable[None]] | None = None,
         **_kwargs: Any,
     ) -> None:
-        save = StorageFactory.create_config(save)
-        self.storage = bm.get_storage(save)
+        save_config = StorageFactory.create_config(save)
+        self.storage = bm.get_storage(save_config)
         self.manager = AsyncDataUploader(storage=self.storage, buffer_size=BATCH_SIZE)
         self._publish_fn = publish_fn
         self._handler_registry: dict[type, str] | None = None
@@ -57,7 +57,7 @@ class SpyAgent:
 
     async def close(self) -> None:
         """Flush pending writes."""
-        await self.manager.flush()
+        await self.manager._flush()
 
     @message_handler
     async def agent_output_handler(self, message: ExecutionTrace, ctx: MessageContext) -> ErrorEvent | None:

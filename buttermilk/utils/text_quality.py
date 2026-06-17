@@ -9,7 +9,7 @@ across the codebase, particularly for Zotero fulltext processing.
 
 import re
 
-from langdetect import DetectorFactory, LangDetectException, detect
+from langdetect import DetectorFactory, LangDetectException, detect  # type: ignore[import-untyped]  # langdetect: no py.typed marker
 
 # Pattern to detect PDF encoding artifacts like (cid:XX)
 CID_PATTERN = re.compile(r"\(cid:\d+\)")

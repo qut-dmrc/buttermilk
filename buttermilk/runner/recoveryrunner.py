@@ -5,6 +5,7 @@ saved to fallback storage (GCS or local disk) when the original upload failed.
 """
 
 import json
+from typing import Any
 
 from cloudpathlib import AnyPath
 from pydantic import BaseModel, Field
@@ -22,7 +23,7 @@ class RecoveryRunner(BaseModel):
     schema: str | None = Field(default=None, description="Path to BigQuery schema file")
     dataset: str | None = Field(default=None, description="BigQuery dataset ID (project.dataset.table)")
 
-    def __init__(self, **data):
+    def __init__(self, **data: Any) -> None:
         super().__init__(**data)
         if not self.backup_dir:
             # Use BM save_dir if no backup_dir specified
@@ -89,6 +90,6 @@ class RecoveryRunner(BaseModel):
         logger.info(f"Recovery complete: {successful_recoveries} successful, {failed_recoveries} failed")
 
 
-def create_recovery_runner(**kwargs) -> RecoveryRunner:
+def create_recovery_runner(**kwargs: Any) -> RecoveryRunner:
     """Factory function to create a RecoveryRunner instance."""
     return RecoveryRunner(**kwargs)

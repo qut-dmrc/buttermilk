@@ -6,7 +6,7 @@ from .bm_init import BM
 # The bm variable is initialized to None and will be set to an instance of BM
 # when the module is imported. This allows other modules to access the same
 # instance of BM without creating a new one.
-_bm_instance: BM = None  # Private storage  # type: ignore
+_bm_instance: BM | None = None  # Private storage; set via set_bm()
 
 
 def get_bm() -> BM:

@@ -6,7 +6,7 @@ criteria or a policy. It uses Pydantic models like `Reasons` and `JudgeReasons`
 to structure the LLM's output, ensuring a consistent and parsable evaluation format.
 """
 
-from typing import Literal  # For type hinting
+from typing import Any, Literal  # For type hinting
 
 from pydantic import BaseModel, Field  # Pydantic components
 
@@ -76,7 +76,7 @@ class JudgeReasons(Reasons):
         description="Assesses the scope for reasonable minds to differ on this conclusion (high, medium, or low uncertainty).",
     )
 
-    def as_markdown(self, agent_id: str = None, call_id: str = None) -> str:
+    def as_markdown(self, agent_id: str | None = None, call_id: str | None = None) -> str:
         """Returns a Markdown formatted string for insertion into templates.
 
         Format follows the standard: agent identifier on first line, followed by
@@ -159,7 +159,7 @@ class Judge(LLMAgent):
 
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         """Initializes the Judge agent with its specific configuration and output model."""
         # Fail explicitly if config tries to override output_model - Judge requires JudgeReasons
         if "output_model" in kwargs and kwargs["output_model"] is not None:

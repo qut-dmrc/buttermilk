@@ -6,7 +6,7 @@ from pydantic import validate_call
 
 
 @validate_call
-def extract_video_frames_b64(video_path: Path, seconds_per_frame: float = 2):
+def extract_video_frames_b64(video_path: Path, seconds_per_frame: float = 2) -> list[str]:
     """Extract frames from video for use in analysis."""
 
     base64Frames = []
@@ -24,7 +24,7 @@ def extract_video_frames_b64(video_path: Path, seconds_per_frame: float = 2):
         if not success:
             break
         _, buffer = cv2.imencode(".jpg", frame)
-        base64Frames.append(base64.b64encode(buffer).decode("utf-8"))
+        base64Frames.append(base64.b64encode(buffer.tobytes()).decode("utf-8"))
         curr_frame += frames_to_skip
     video.release()
 

@@ -1,6 +1,7 @@
 # Quickly initialise a notebook
 
 import os
+from collections.abc import Callable
 from typing import Any
 
 # flake8: noqa
@@ -10,21 +11,21 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pydantic
-import seaborn as sns
+import seaborn as sns  # type: ignore[import-untyped]  # seaborn: no stubs available
 from cmap import Colormap
 from rich.console import Console
 from IPython.display import display
-from rich import print
 
 from buttermilk import BM, bm, logger  # noqa
 from buttermilk.utils.viz import init_viz, quick_figure, save_figure, get_palette  # noqa
 
 console = Console()
-print = console.print
+# Alias the module-level `print` to Rich's Console.print for nicer notebook output.
+print: Callable[..., None] = console.print
 
 import hydra
 from hydra import compose, initialize_config_dir
-import nest_asyncio
+import nest_asyncio  # type: ignore[import-not-found]  # nest_asyncio: no stubs available
 
 # Apply nest_asyncio to handle potential event loop issues in notebooks
 nest_asyncio.apply()
@@ -39,9 +40,9 @@ def graph_defaults() -> None:
 
 def nb_init(
     job: str,
-    project: str = None,
+    project: str | None = None,
     overrides: list[str] = [],
-    config_dir: str = None,
+    config_dir: str | None = None,
     config_name: str = "config",
 ) -> BM:
     """Simple one-liner initialization for Buttermilk.

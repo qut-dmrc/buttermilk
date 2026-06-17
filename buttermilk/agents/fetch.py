@@ -16,7 +16,7 @@ from buttermilk._core.contract import (
     StepRequest,
 )  # Buttermilk message contracts
 from buttermilk._core.exceptions import ProcessingError
-from buttermilk._core.runtime_types import message_handler
+from buttermilk._core.runtime_types import MessageContext, message_handler
 from buttermilk._core.tool_types import FunctionTool, Tool
 from buttermilk._core.types import BaseRecord, Record
 from buttermilk.utils.media import download_and_convert  # Media utilities
@@ -37,7 +37,7 @@ class FetchAgent(Agent):
         storage (dict[str, BaseStorageConfig]): Datasets that can be used to fetch records.
     """
 
-    def __init__(self, **data):
+    def __init__(self, **data: Any) -> None:
         super().__init__(**data)
         if storage := data.get("parameters", {}).get("storage"):
             self._data_sources = {source_name: bm.get_storage(config) for source_name, config in storage.items()}
@@ -59,11 +59,11 @@ class FetchAgent(Agent):
         """
         record = await download_and_convert(uri)
         if record:  # Check if download_and_convert succeeded
-            # Ensure metadata exists and add provenance
-            if not record.metadata:
-                record.metadata = {}
+            # Add provenance. `metadata` always exists as a dict (default_factory)
+            # and the model is frozen, so we mutate the dict in place rather than
+            # reassigning the (read-only) attribute.
             record.metadata["fetch_source_uri"] = uri
-            record.metadata["fetch_timestamp_utc"] = datetime.now(datetime.UTC).isoformat()
+            record.metadata["fetch_timestamp_utc"] = datetime.datetime.now(datetime.UTC).isoformat()
             return record
         # Use original_uri for the error message
         raise ProcessingError(f"Record not found for URI: {uri}")
@@ -92,7 +92,7 @@ class FetchAgent(Agent):
             raise ProcessingError(f"Record not found for ID: {record_id}: {e}") from e
 
     @message_handler(match=lambda msg, ctx: msg.role == "FETCH")
-    async def fetch_request(self, message: StepRequest, ctx) -> AgentOutput | ExecutionTrace | None:
+    async def fetch_request(self, message: StepRequest, ctx: MessageContext) -> AgentOutput | ExecutionTrace | None:
         return await self.invoke(message=message)
 
     async def _process(self, *, message: AgentInput, **kwargs: Any) -> AgentOutput | None:
@@ -158,7 +158,7 @@ class FetchAgent(Agent):
         """Generate structured tool definitions for this agent.
 
         Returns list of tool definitions as Tool objects."""
-        internal_tools = [
+        internal_tools: list[Tool] = [
             FunctionTool(
                 name="fetch_uri",
                 description=("Get a record from a given URI."),

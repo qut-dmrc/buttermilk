@@ -5,7 +5,7 @@ Buttermilk configuration structure, making it clear what options control what
 and where they should go.
 """
 
-from typing import Any
+from typing import Any, cast
 
 from omegaconf import DictConfig
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -259,8 +259,14 @@ def create_config_from_hydra(cfg: DictConfig) -> ButtermilkConfig:
     """
     from omegaconf import OmegaConf
 
-    # Convert DictConfig to dict, resolving all interpolations
+    # Convert DictConfig to dict, resolving all interpolations.
+    # A DictConfig always converts to a mapping; assert to narrow the
+    # broad return type of OmegaConf.to_container for the type checker.
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
+    assert isinstance(cfg_dict, dict), f"Expected DictConfig to convert to a dict, got {type(cfg_dict)}"
+
+    # A resolved Hydra DictConfig always has string keys; narrow for the checker.
+    cfg_dict = cast(dict[str, Any], cfg_dict)
 
     # Create typed config
     return ButtermilkConfig(**cfg_dict)

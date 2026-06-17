@@ -18,21 +18,23 @@ Color themes:
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal, cast
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib import RcParams
+from matplotlib.figure import Figure
 
 try:
-    import seaborn as sns
+    import seaborn as sns  # type: ignore[import-untyped]  # seaborn: no stubs available
 
     SEABORN_AVAILABLE = True
 except ImportError:
     SEABORN_AVAILABLE = False
 
 try:
-    import plotly.graph_objects as go
-    import plotly.io as pio
+    import plotly.graph_objects as go  # type: ignore[import-untyped]  # plotly: no py.typed marker
+    import plotly.io as pio  # type: ignore[import-untyped]  # plotly: no py.typed marker
 
     PLOTLY_AVAILABLE = True
 except ImportError:
@@ -45,7 +47,7 @@ ThemeType = Literal["cyberpunk", "academic", "minimal"]
 
 # === COLOR PALETTES ===
 
-PALETTES = {
+PALETTES: dict[str, dict[str, str | list[str]]] = {
     "cyberpunk": {
         "primary": "#00FFF0",  # Bright cyan
         "secondary": "#FF006E",  # Hot pink
@@ -396,7 +398,8 @@ def get_categorical_colors(theme: ThemeType = "cyberpunk", n: int | None = None)
     Returns:
         List of hex color strings
     """
-    colors = PALETTES[theme]["categorical"]
+    # "categorical" always holds a list of hex strings (see PALETTES definition).
+    colors = cast("list[str]", PALETTES[theme]["categorical"])
     if n is None:
         return colors
     if n <= len(colors):
@@ -416,7 +419,8 @@ def get_sequential_colors(theme: ThemeType = "cyberpunk", n: int = 6, reverse: b
     Returns:
         List of hex color strings
     """
-    colors = PALETTES[theme]["sequential"]
+    # "sequential" always holds a list of hex strings (see PALETTES definition).
+    colors = cast("list[str]", PALETTES[theme]["sequential"])
     if reverse:
         colors = colors[::-1]
 
@@ -436,7 +440,7 @@ def quick_figure(
     ncols: int = 1,
     theme: ThemeType | None = None,
     profile: ProfileType | None = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> tuple:
     """Create figure with current style.
 
@@ -463,7 +467,7 @@ def quick_figure(
 
 
 def save_figure(
-    fig,
+    fig: Figure,
     filename: str,
     dpi: int | None = None,
     formats: list[str] | None = None,
@@ -519,12 +523,12 @@ class temp_style:
         >>> # Original style restored
     """
 
-    def __init__(self, profile: ProfileType | None = None, theme: ThemeType | None = None):
+    def __init__(self, profile: ProfileType | None = None, theme: ThemeType | None = None) -> None:
         self.profile = profile
         self.theme = theme
-        self.old_rc = None
+        self.old_rc: RcParams | None = None
 
-    def __enter__(self):
+    def __enter__(self) -> temp_style:
         # Save current state
         self.old_rc = plt.rcParams.copy()
         # Apply new style
@@ -532,8 +536,9 @@ class temp_style:
             init_viz(profile=self.profile or "hidpi", theme=self.theme or "cyberpunk")
         return self
 
-    def __exit__(self, *args):
-        # Restore old state
+    def __exit__(self, *args: Any) -> None:
+        # Restore old state. `old_rc` is always set by __enter__ before __exit__ runs.
+        assert self.old_rc is not None, "temp_style.__exit__ called without a matching __enter__"
         plt.rcParams.update(self.old_rc)
 
 

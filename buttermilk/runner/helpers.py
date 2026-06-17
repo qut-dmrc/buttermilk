@@ -1,5 +1,6 @@
 from collections.abc import Mapping, Sequence
 from tempfile import NamedTemporaryFile
+from typing import Any
 
 import cloudpathlib
 import pandas as pd
@@ -8,17 +9,19 @@ import pandas as pd
 def cache_data(uri: str) -> str:
     with NamedTemporaryFile(delete=False, suffix=".jsonl", mode="wb") as f:
         dataset = f.name
-        data = cloudpathlib.CloudPath(uri).read_bytes()
+        # CloudPath(...) dispatches to a concrete subclass (e.g. GSPath) at runtime.
+        path: cloudpathlib.CloudPath = cloudpathlib.CloudPath(uri)  # type: ignore[abstract]  # cloudpathlib: __new__ returns concrete subclass
+        data = path.read_bytes()
         f.write(data)
     return dataset
 
 
-def read_all_files(uri, pattern, columns: dict[str, str]):
+def read_all_files(uri: str, pattern: str, columns: dict[str, str]) -> pd.DataFrame:
     from buttermilk import logger
 
     filelist = cloudpathlib.GSPath(uri).glob(pattern)
     # Read each file into a DataFrame and store in a list
-    dataset = pd.DataFrame(columns=columns.keys())
+    dataset = pd.DataFrame(columns=list(columns.keys()))
     for file in filelist:
         logger.debug("Reading file", file_name=file.name, file_parent=file.parent)
         content = file.read_bytes().decode("utf-8")
@@ -47,7 +50,7 @@ def parse_flow_vars(
         else:
             flow_data[key] = value
 
-    def resolve_var(*, match_key: str, data_dict: dict):
+    def resolve_var(*, match_key: str, data_dict: Any) -> Any:
         """Find a key in dot notation from a hierarchical dict."""
         if not data_dict:
             return None
@@ -71,7 +74,7 @@ def parse_flow_vars(
             )
         return None
 
-    def descend(map, path):
+    def descend(map: Any, path: Any) -> Any:
         if path is None:
             return None
 

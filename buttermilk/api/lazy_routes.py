@@ -1,8 +1,9 @@
 """Lazy route loading system for Phase 2 startup optimizations."""
 
+from collections.abc import Awaitable, Callable
 from typing import Any
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Request, Response
 
 from buttermilk import logger
 
@@ -10,13 +11,13 @@ from buttermilk import logger
 class LazyRouteManager:
     """Manages lazy loading of FastAPI routes and routers."""
 
-    def __init__(self, app: FastAPI):
+    def __init__(self, app: FastAPI) -> None:
         self.app = app
         self._deferred_routers: list[dict[str, Any]] = []
         self._core_routes_registered = False
         self._heavy_routes_registered = False
 
-    def register_core_routes(self):
+    def register_core_routes(self) -> None:
         """Register only essential routes for immediate functionality."""
         if self._core_routes_registered:
             return
@@ -25,13 +26,13 @@ class LazyRouteManager:
 
         # Core health check route
         @self.app.get("/health")
-        async def health_check():
+        async def health_check() -> dict[str, str]:
             return {"status": "ok", "message": "Core routes loaded"}
 
         self._core_routes_registered = True
         logger.info("Core routes registered successfully")
 
-    def defer_router(self, router: APIRouter, prefix: str = "", **kwargs):
+    def defer_router(self, router: APIRouter, prefix: str = "", **kwargs: Any) -> None:
         """Defer registration of a heavy router until first request."""
         self._deferred_routers.append(
             {
@@ -42,7 +43,7 @@ class LazyRouteManager:
         )
         logger.info("Deferred router registration", prefix=prefix)
 
-    async def load_heavy_routes_on_demand(self):
+    async def load_heavy_routes_on_demand(self) -> None:
         """Load all deferred routes when first heavy request is made."""
         if self._heavy_routes_registered:
             return
@@ -67,11 +68,11 @@ class LazyRouteManager:
         self._heavy_routes_registered = True
         logger.info("All deferred routes loaded successfully")
 
-    def create_lazy_middleware(self):
+    def create_lazy_middleware(self) -> None:
         """Create middleware that loads heavy routes on first request."""
 
         @self.app.middleware("http")
-        async def lazy_route_loader(request, call_next):
+        async def lazy_route_loader(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
             # Check if this is a request that needs heavy routes
             path = request.url.path
             if self._needs_heavy_routes(path) and not self._heavy_routes_registered:
@@ -106,7 +107,7 @@ def create_core_router() -> APIRouter:
         request: Request,
         run_request: RunRequest | None = None,
         prompt: str | None = None,
-    ):
+    ) -> dict[str, str]:
         """Run a flow with provided inputs - core functionality."""
         # Access state via request.app.state
         if not hasattr(request.app.state.flow_runner, "flows") or flow_name not in request.app.state.flow_runner.flows:
