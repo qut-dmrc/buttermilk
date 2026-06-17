@@ -64,7 +64,7 @@
         "name": "record_hash",
         "type": "STRING",
         "mode": "NULLABLE",
-        "description": "SHA256 hash of record content (required by application, nullable for BQ compatibility)"
+        "description": "DEPRECATED legacy scalar (kept additively for old-row/back-compat reads). Canonical record hashes now live in record_hashes[] as tuples (content_type='record_markdown'). Migration: buttermilk-1e23cce6."
       },
       {
         "name": "content",
@@ -91,13 +91,33 @@
         "name": "ground_truth",
         "type": "JSON",
         "mode": "NULLABLE",
-        "description": "Canonical home for the record's ground-truth/expected label (academic-integrity: the true label belongs in the hashed canonical record, not re-embedded in inputs)"
+        "description": "Canonical home for the record's ground-truth/expected label (academic-integrity: the true label belongs in the canonical record, not re-embedded in inputs). Its hash is a tuple in record_hashes[] (content_type='ground_truth')."
       },
       {
-        "name": "ground_truth_hash",
-        "type": "STRING",
-        "mode": "NULLABLE",
-        "description": "SHA256 hash of ground_truth values, for tamper-evidence of the true label"
+        "name": "record_hashes",
+        "type": "RECORD",
+        "mode": "REPEATED",
+        "description": "Canonical list of record-identity hash tuples (convention: hashes are tuple-lists, not per-field scalar columns). One entry per logical unit: each content part (content_type='text'/'image' with part_index), the whole-record markdown (content_type='record_markdown'), and ground_truth (content_type='ground_truth'). Tamper-evidence + dedup layer.",
+        "fields": [
+          {
+            "name": "part_index",
+            "type": "INTEGER",
+            "mode": "NULLABLE",
+            "description": "Ordinal within a multi-part content record; null for whole-record/ground_truth units."
+          },
+          {
+            "name": "content_type",
+            "type": "STRING",
+            "mode": "NULLABLE",
+            "description": "Unit kind: 'text', 'image', 'record_markdown', or 'ground_truth'."
+          },
+          {
+            "name": "hash",
+            "type": "STRING",
+            "mode": "NULLABLE",
+            "description": "SHA256 of the unit."
+          }
+        ]
       }
     ]
   },

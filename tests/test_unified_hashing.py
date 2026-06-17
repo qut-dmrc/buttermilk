@@ -77,29 +77,43 @@ class TestRecordHashing:
         assert hash1 != hash2
 
     def test_record_hashes_determinism(self):
-        """Test that record_hashes is deterministic for text records."""
+        """The per-content-part hashes are content-only (metadata-independent).
+
+        record_hashes now also carries a whole-record `record_markdown` tuple (which DOES
+        depend on metadata) and, when present, a `ground_truth` tuple — the unified tuple-list
+        that replaces scalar *_hash columns (task buttermilk-1e23cce6). So determinism is
+        asserted on the content-part subset, not the whole list.
+        """
         record1 = Record(record_id="rec1", content="Hello World", metadata={"criteria": "A", "model": "GPT-4"})
         record2 = Record(record_id="rec1", content="Hello World", metadata={"criteria": "B", "model": "Claude"})
 
-        assert record1.record_hashes == record2.record_hashes
-        assert len(record1.record_hashes) == 1
-        assert record1.record_hashes[0]["content_type"] == "text"
-        assert len(record1.record_hashes[0]["hash"]) == 64
+        parts1 = [h for h in record1.record_hashes if h["content_type"] == "text"]
+        parts2 = [h for h in record2.record_hashes if h["content_type"] == "text"]
+        assert parts1 == parts2  # content-only → identical despite differing metadata
+        assert len(parts1) == 1
+        assert len(parts1[0]["hash"]) == 64
+        # whole-record markdown tuple present; metadata-sensitive so it differs here
+        md1 = [h for h in record1.record_hashes if h["content_type"] == "record_markdown"]
+        md2 = [h for h in record2.record_hashes if h["content_type"] == "record_markdown"]
+        assert len(md1) == 1 and len(md2) == 1
+        assert md1[0]["hash"] != md2[0]["hash"]
 
     def test_record_hashes_multimodal(self):
-        """Test that record_hashes produces N hashes for N parts."""
+        """Test that record_hashes produces one tuple per content part (+ whole-record)."""
         img = PILImage.new("RGB", (10, 10))
         record = Record(record_id="rec1", content=["Hello", img, "World"])
 
-        hashes = record.record_hashes
-        assert len(hashes) == 3
-        assert hashes[0]["content_type"] == "text"
-        assert hashes[1]["content_type"] == "image"
-        assert hashes[2]["content_type"] == "text"
-        assert hashes[0]["part_index"] == 0
-        assert hashes[1]["part_index"] == 1
-        assert hashes[2]["part_index"] == 2
-        assert len(hashes[1]["hash"]) == 64
+        parts = [h for h in record.record_hashes if h["content_type"] in ("text", "image")]
+        assert len(parts) == 3
+        assert parts[0]["content_type"] == "text"
+        assert parts[1]["content_type"] == "image"
+        assert parts[2]["content_type"] == "text"
+        assert parts[0]["part_index"] == 0
+        assert parts[1]["part_index"] == 1
+        assert parts[2]["part_index"] == 2
+        assert len(parts[1]["hash"]) == 64
+        # plus the whole-record markdown tuple
+        assert any(h["content_type"] == "record_markdown" for h in record.record_hashes)
 
 
 class TestGroundTruthHashing:

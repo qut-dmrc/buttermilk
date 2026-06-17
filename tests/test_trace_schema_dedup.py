@@ -20,23 +20,38 @@ from buttermilk._core.types import Record
 
 
 class TestGroundTruthCanonicalHome:
-    """ground_truth must survive in the record's serialized form (→ BQ `record` column)."""
+    """ground_truth value lives on the record; its HASH is a tuple in record_hashes[].
 
-    def test_model_dump_includes_ground_truth_and_hash(self):
+    Convention (tja-858fc5aa, buttermilk-855514df): hashes are tuple-lists, NOT per-field
+    scalar columns. So there is no ground_truth_hash dump key — the hash is an entry in
+    record_hashes with content_type='ground_truth'.
+    """
+
+    def test_ground_truth_value_present_hash_is_a_tuple_not_a_column(self):
         rec = Record(content="some article text", ground_truth={"violating": True})
         dumped = rec.model_dump()
 
-        # The true label is present...
+        # The true label VALUE is present (canonical home on the record → BQ record column).
         assert dumped.get("ground_truth") == {"violating": True}
-        # ...and its tamper-evidence hash is surfaced (like record_hash), not excluded.
-        assert dumped.get("ground_truth_hash")
-        assert isinstance(dumped["ground_truth_hash"], str)
+        # There is NO scalar ground_truth_hash dump key (anti-pattern we removed).
+        assert "ground_truth_hash" not in dumped
+        # Its hash lives as a tuple in record_hashes[].
+        gt_tuples = [h for h in dumped["record_hashes"] if h["content_type"] == "ground_truth"]
+        assert len(gt_tuples) == 1
+        assert len(gt_tuples[0]["hash"]) == 64  # SHA256
 
-    def test_no_ground_truth_yields_null_hash(self):
+    def test_record_hashes_includes_whole_record_markdown_tuple(self):
+        rec = Record(content="some article text", ground_truth={"violating": True})
+        dumped = rec.model_dump()
+        md = [h for h in dumped["record_hashes"] if h["content_type"] == "record_markdown"]
+        assert len(md) == 1 and len(md[0]["hash"]) == 64
+
+    def test_no_ground_truth_yields_no_ground_truth_tuple(self):
         rec = Record(content="x")
         dumped = rec.model_dump()
-        # No ground truth → hash is None (computed field), not a crash.
-        assert dumped.get("ground_truth_hash") is None
+        # No ground truth → no ground_truth tuple, no crash, no scalar hash key.
+        assert "ground_truth_hash" not in dumped
+        assert not [h for h in dumped["record_hashes"] if h["content_type"] == "ground_truth"]
 
 
 class TestTraceMetadataNoRecordCopy:

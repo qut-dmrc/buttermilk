@@ -217,14 +217,16 @@ def test_hash_fields_are_pure_properties():
     assert record.metadata["existing"] == "data"
 
 
-def test_record_hash_and_ground_truth_hash_included_in_dump():
-    """Test that computed hash fields follow BigQuery schema requirements.
+def test_record_hash_scalar_kept_ground_truth_hash_is_a_tuple():
+    """Test that computed hash fields follow the trace schema convention.
 
-    Both hashes are now INCLUDED in the dump because the trace `record` column has a
-    canonical home for each (traces.schema.json: record.record_hash, record.ground_truth_hash).
-    This is the canonical-once change (task buttermilk-1e23cce6): the true label and its
-    tamper-evidence hash live in the hashed canonical record, not only in the inputs blob.
-    Hash values remain pure properties — never stored back into metadata.
+    Convention (tja-858fc5aa, buttermilk-855514df, task buttermilk-1e23cce6): hashes are
+    tuple-lists, NOT per-field scalar columns.
+    - record_hash: legacy scalar, kept additively in the dump (record.record_hash column).
+    - ground_truth_hash: EXCLUDED from the dump — there is no such column; the ground-truth
+      hash is a tuple in record_hashes[] (content_type='ground_truth').
+    - The ground_truth VALUE is carried for the canonical record column.
+    - Hash values are NEVER stored back into metadata (pure properties).
     """
     record = Record(content="Test content", ground_truth={"test": "data"})
 
@@ -232,17 +234,18 @@ def test_record_hash_and_ground_truth_hash_included_in_dump():
     _ = record.record_hash
     _ = record.ground_truth_hash
 
-    # Dump behavior per BQ requirements
     dumped = record.model_dump()
 
-    # record_hash MUST be included for BigQuery tracing
-    assert "record_hash" in dumped, "record_hash is required by traces.schema.json"
+    # record_hash scalar kept additively for BigQuery tracing / old-row back-compat
+    assert "record_hash" in dumped, "record_hash legacy scalar is kept additively"
     assert len(dumped["record_hash"]) == 64, "record_hash should be valid SHA256"
 
-    # ground_truth_hash is now ALSO included (canonical home: record.ground_truth_hash)
-    assert "ground_truth_hash" in dumped, "ground_truth_hash is now required by traces.schema.json"
-    assert len(dumped["ground_truth_hash"]) == 64, "ground_truth_hash should be valid SHA256"
-    # ...and ground_truth itself is carried for the canonical record column
+    # NO ground_truth_hash scalar (anti-pattern removed); the hash is a tuple instead
+    assert "ground_truth_hash" not in dumped
+    gt_tuples = [h for h in dumped["record_hashes"] if h["content_type"] == "ground_truth"]
+    assert len(gt_tuples) == 1 and len(gt_tuples[0]["hash"]) == 64
+
+    # The ground_truth value is carried for the canonical record column
     assert dumped.get("ground_truth") == {"test": "data"}
 
     # Metadata should NOT contain hash values (properties are pure)
