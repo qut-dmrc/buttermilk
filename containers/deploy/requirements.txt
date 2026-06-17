@@ -4,7 +4,7 @@ aioconsole==0.8.2
     # via buttermilk (pyproject.toml)
 aiohappyeyeballs==2.6.2
     # via aiohttp
-aiohttp==3.13.5
+aiohttp==3.14.1
     # via
     #   google-genai
     #   kubernetes
@@ -16,13 +16,13 @@ annotated-doc==0.0.4
     # via typer
 annotated-types==0.7.0
     # via pydantic
-anthropic==0.104.1
+anthropic==0.109.2
     # via buttermilk (pyproject.toml)
 antlr4-python3-runtime==4.9.3
     # via
     #   hydra-core
     #   omegaconf
-anyio==4.13.0
+anyio==4.14.0
     # via
     #   buttermilk (pyproject.toml)
     #   anthropic
@@ -40,12 +40,12 @@ backoff==2.2.1
     # via gql
 bcrypt==5.0.0
     # via chromadb
-beautifulsoup4==4.14.3
+beautifulsoup4==4.15.0
     # via
     #   buttermilk (pyproject.toml)
     #   newspaper4k
     #   readabilipy
-bleach==6.3.0
+bleach==6.4.0
     # via buttermilk (pyproject.toml)
 brotli==1.2.0
     # via newspaper4k
@@ -53,6 +53,7 @@ build==1.5.0
     # via chromadb
 certifi==2026.5.20
     # via
+    #   google-cloud-aiplatform
     #   httpcore
     #   httpx
     #   kubernetes
@@ -64,7 +65,7 @@ charset-normalizer==3.4.7
     # via
     #   pdfminer-six
     #   requests
-chromadb==1.5.9
+chromadb==1.5.8
     # via buttermilk (pyproject.toml)
 click==8.4.1
     # via
@@ -79,21 +80,20 @@ coloredlogs==15.0.1
     # via buttermilk (pyproject.toml)
 contourpy==1.3.3
     # via matplotlib
-cryptography==48.0.0
+cryptography==49.0.0
     # via
     #   google-auth
     #   pdfminer-six
+    #   pyopenssl
     #   secretstorage
 cuid==0.4
     # via traceloop-sdk
 cycler==0.12.1
     # via matplotlib
-db-dtypes==1.4.4
+db-dtypes==1.7.0
     # via buttermilk (pyproject.toml)
 deprecated==1.3.1
     # via traceloop-sdk
-dill==0.4.1
-    # via multiprocess
 distro==1.9.0
     # via
     #   anthropic
@@ -111,7 +111,7 @@ fastuuid==0.14.0
     # via litellm
 feedparser==6.0.12
     # via newspaper4k
-filelock==3.29.0
+filelock==3.29.4
     # via
     #   huggingface-hub
     #   tldextract
@@ -123,11 +123,11 @@ frozenlist==1.8.0
     # via
     #   aiohttp
     #   aiosignal
-fsspec==2026.4.0
+fsspec==2026.6.0
     # via huggingface-hub
 google-ai-generativelanguage==0.6.15
     # via google-generativeai
-google-api-core==2.30.3
+google-api-core==2.31.0
     # via
     #   google-ai-generativelanguage
     #   google-api-python-client
@@ -145,9 +145,9 @@ google-api-core==2.30.3
     #   google-cloud-storage
     #   google-cloud-trace
     #   google-generativeai
-google-api-python-client==2.196.0
+google-api-python-client==2.197.0
     # via google-generativeai
-google-auth==2.53.0
+google-auth==2.55.0
     # via
     #   anthropic
     #   google-ai-generativelanguage
@@ -175,17 +175,17 @@ google-auth-httplib2==0.4.0
     # via google-api-python-client
 google-auth-oauthlib==1.4.0
     # via gspread
-google-cloud-aiplatform==1.153.1
+google-cloud-aiplatform==1.157.0
     # via buttermilk (pyproject.toml)
-google-cloud-appengine-logging==1.9.0
+google-cloud-appengine-logging==1.10.0
     # via google-cloud-logging
-google-cloud-audit-log==0.5.0
+google-cloud-audit-log==0.6.0
     # via google-cloud-logging
-google-cloud-bigquery==3.41.0
+google-cloud-bigquery==3.42.0
     # via
     #   buttermilk (pyproject.toml)
     #   google-cloud-aiplatform
-google-cloud-bigquery-storage==2.38.0
+google-cloud-bigquery-storage==2.39.0
     # via buttermilk (pyproject.toml)
 google-cloud-core==2.6.0
     # via
@@ -194,17 +194,17 @@ google-cloud-core==2.6.0
     #   google-cloud-storage
 google-cloud-language==2.20.0
     # via buttermilk (pyproject.toml)
-google-cloud-logging==3.15.0
+google-cloud-logging==3.16.0
     # via
     #   buttermilk (pyproject.toml)
     #   opentelemetry-exporter-gcp-logging
-google-cloud-monitoring==2.30.0
+google-cloud-monitoring==2.31.0
     # via opentelemetry-exporter-gcp-monitoring
-google-cloud-pubsub==2.38.0
+google-cloud-pubsub==2.39.0
     # via buttermilk (pyproject.toml)
 google-cloud-resource-manager==1.17.0
     # via google-cloud-aiplatform
-google-cloud-secret-manager==2.28.0
+google-cloud-secret-manager==2.29.0
     # via buttermilk (pyproject.toml)
 google-cloud-storage==3.5.0
     # via
@@ -217,13 +217,13 @@ google-crc32c==1.8.0
     #   buttermilk (pyproject.toml)
     #   google-cloud-storage
     #   google-resumable-media
-google-genai==2.6.0
+google-genai==2.8.0
     # via
     #   buttermilk (pyproject.toml)
     #   google-cloud-aiplatform
 google-generativeai==0.8.6
     # via buttermilk (pyproject.toml)
-google-resumable-media==2.9.0
+google-resumable-media==2.10.0
     # via
     #   google-cloud-bigquery
     #   google-cloud-storage
@@ -247,7 +247,7 @@ grpc-google-iam-v1==0.14.4
     #   google-cloud-pubsub
     #   google-cloud-resource-manager
     #   google-cloud-secret-manager
-grpcio==1.80.0
+grpcio==1.81.1
     # via
     #   chromadb
     #   google-api-core
@@ -274,7 +274,7 @@ h11==0.16.0
     # via
     #   httpcore
     #   uvicorn
-hf-xet==1.5.0
+hf-xet==1.5.1
     # via huggingface-hub
 html5lib==1.1
     # via readabilipy
@@ -302,9 +302,9 @@ huggingface-hub==0.36.2
     #   tokenizers
 humanfriendly==10.0
     # via coloredlogs
-hydra-core==1.3.2
+hydra-core==1.3.3
     # via buttermilk (pyproject.toml)
-idna==3.16
+idna==3.18
     # via
     #   anyio
     #   httpx
@@ -341,7 +341,7 @@ joblib==1.5.3
     # via nltk
 jq==1.11.0
     # via buttermilk (pyproject.toml)
-json-repair==0.59.10
+json-repair==0.61.0
     # via buttermilk (pyproject.toml)
 json5==0.14.0
     # via buttermilk (pyproject.toml)
@@ -360,7 +360,7 @@ keyring==25.7.0
     # via buttermilk (pyproject.toml)
 kiwisolver==1.5.0
     # via matplotlib
-kubernetes==36.0.1
+kubernetes==36.0.2
     # via chromadb
 langchain==0.3.30
     # via buttermilk (pyproject.toml)
@@ -374,11 +374,11 @@ langchain-text-splitters==0.3.11
     #   langchain
 langdetect==1.0.9
     # via buttermilk (pyproject.toml)
-langsmith==0.8.5
+langsmith==0.8.16
     # via
     #   langchain
     #   langchain-core
-litellm==1.86.1
+litellm==1.89.1
     # via buttermilk (pyproject.toml)
 lxml==6.1.1
     # via
@@ -394,7 +394,7 @@ markupsafe==3.0.3
     # via jinja2
 marshmallow==3.26.2
     # via buttermilk (pyproject.toml)
-matplotlib==3.10.9
+matplotlib==3.11.0
     # via buttermilk (pyproject.toml)
 mdurl==0.1.2
     # via markdown-it-py
@@ -404,14 +404,10 @@ more-itertools==11.1.0
     # via
     #   jaraco-classes
     #   jaraco-functools
-mpire==2.10.2
-    # via semchunk
 multidict==6.7.1
     # via
     #   aiohttp
     #   yarl
-multiprocess==0.70.19
-    # via mpire
 newspaper4k==0.9.4.1
     # via buttermilk (pyproject.toml)
 nltk==3.9.4
@@ -427,11 +423,11 @@ numpy==2.4.6
     #   pandas
 oauthlib==3.3.1
     # via requests-oauthlib
-omegaconf==2.3.0
+omegaconf==2.3.1
     # via hydra-core
-onnxruntime==1.26.0
+onnxruntime==1.27.0
     # via chromadb
-openai==2.38.0
+openai==2.41.1
     # via litellm
 opentelemetry-api==1.42.1
     # via
@@ -543,83 +539,83 @@ opentelemetry-instrumentation==0.63b1
     #   opentelemetry-instrumentation-watsonx
     #   opentelemetry-instrumentation-weaviate
     #   opentelemetry-instrumentation-writer
-opentelemetry-instrumentation-agno==0.60.0
+opentelemetry-instrumentation-agno==0.61.0
     # via traceloop-sdk
-opentelemetry-instrumentation-alephalpha==0.60.0
+opentelemetry-instrumentation-alephalpha==0.61.0
     # via traceloop-sdk
-opentelemetry-instrumentation-anthropic==0.60.0
+opentelemetry-instrumentation-anthropic==0.61.0
     # via traceloop-sdk
-opentelemetry-instrumentation-bedrock==0.60.0
+opentelemetry-instrumentation-bedrock==0.61.0
     # via traceloop-sdk
-opentelemetry-instrumentation-chromadb==0.60.0
+opentelemetry-instrumentation-chromadb==0.61.0
     # via traceloop-sdk
-opentelemetry-instrumentation-cohere==0.60.0
+opentelemetry-instrumentation-cohere==0.61.0
     # via traceloop-sdk
-opentelemetry-instrumentation-crewai==0.60.0
+opentelemetry-instrumentation-crewai==0.61.0
     # via traceloop-sdk
-opentelemetry-instrumentation-google-generativeai==0.60.0
+opentelemetry-instrumentation-google-generativeai==0.61.0
     # via traceloop-sdk
-opentelemetry-instrumentation-groq==0.60.0
+opentelemetry-instrumentation-groq==0.61.0
     # via traceloop-sdk
-opentelemetry-instrumentation-haystack==0.60.0
+opentelemetry-instrumentation-haystack==0.61.0
     # via traceloop-sdk
-opentelemetry-instrumentation-lancedb==0.60.0
+opentelemetry-instrumentation-lancedb==0.61.0
     # via traceloop-sdk
-opentelemetry-instrumentation-langchain==0.60.0
+opentelemetry-instrumentation-langchain==0.61.0
     # via traceloop-sdk
-opentelemetry-instrumentation-llamaindex==0.60.0
+opentelemetry-instrumentation-llamaindex==0.61.0
     # via traceloop-sdk
 opentelemetry-instrumentation-logging==0.63b1
     # via
     #   buttermilk (pyproject.toml)
     #   traceloop-sdk
-opentelemetry-instrumentation-marqo==0.60.0
+opentelemetry-instrumentation-marqo==0.61.0
     # via traceloop-sdk
-opentelemetry-instrumentation-mcp==0.60.0
+opentelemetry-instrumentation-mcp==0.61.0
     # via traceloop-sdk
 opentelemetry-instrumentation-milvus==0.60.0
     # via traceloop-sdk
-opentelemetry-instrumentation-mistralai==0.60.0
+opentelemetry-instrumentation-mistralai==0.61.0
     # via traceloop-sdk
-opentelemetry-instrumentation-ollama==0.60.0
+opentelemetry-instrumentation-ollama==0.61.0
     # via traceloop-sdk
-opentelemetry-instrumentation-openai==0.60.0
+opentelemetry-instrumentation-openai==0.61.0
     # via
     #   buttermilk (pyproject.toml)
     #   traceloop-sdk
-opentelemetry-instrumentation-openai-agents==0.60.0
+opentelemetry-instrumentation-openai-agents==0.61.0
     # via traceloop-sdk
 opentelemetry-instrumentation-pinecone==0.60.0
     # via traceloop-sdk
-opentelemetry-instrumentation-qdrant==0.60.0
+opentelemetry-instrumentation-qdrant==0.61.0
     # via traceloop-sdk
 opentelemetry-instrumentation-redis==0.63b1
     # via traceloop-sdk
-opentelemetry-instrumentation-replicate==0.60.0
+opentelemetry-instrumentation-replicate==0.61.0
     # via traceloop-sdk
 opentelemetry-instrumentation-requests==0.63b1
     # via traceloop-sdk
-opentelemetry-instrumentation-sagemaker==0.60.0
+opentelemetry-instrumentation-sagemaker==0.61.0
     # via traceloop-sdk
 opentelemetry-instrumentation-sqlalchemy==0.63b1
     # via traceloop-sdk
 opentelemetry-instrumentation-threading==0.63b1
     # via traceloop-sdk
-opentelemetry-instrumentation-together==0.60.0
+opentelemetry-instrumentation-together==0.61.0
     # via traceloop-sdk
-opentelemetry-instrumentation-transformers==0.60.0
+opentelemetry-instrumentation-transformers==0.61.0
     # via traceloop-sdk
 opentelemetry-instrumentation-urllib3==0.63b1
     # via traceloop-sdk
-opentelemetry-instrumentation-vertexai==0.60.0
+opentelemetry-instrumentation-vertexai==0.61.0
     # via traceloop-sdk
-opentelemetry-instrumentation-voyageai==0.60.0
+opentelemetry-instrumentation-voyageai==0.61.0
     # via traceloop-sdk
-opentelemetry-instrumentation-watsonx==0.60.0
+opentelemetry-instrumentation-watsonx==0.61.0
     # via traceloop-sdk
-opentelemetry-instrumentation-weaviate==0.60.0
+opentelemetry-instrumentation-weaviate==0.61.0
     # via traceloop-sdk
-opentelemetry-instrumentation-writer==0.60.0
+opentelemetry-instrumentation-writer==0.61.0
     # via traceloop-sdk
 opentelemetry-proto==1.42.1
     # via
@@ -832,9 +828,9 @@ pydantic-core==2.46.4
 pydantic-settings==2.14.1
     # via chromadb
 pygments==2.20.0
-    # via
-    #   mpire
-    #   rich
+    # via rich
+pyopenssl==26.3.0
+    # via google-auth
 pyparsing==3.3.2
     # via
     #   httplib2
@@ -914,17 +910,17 @@ rich==13.9.4
     #   buttermilk (pyproject.toml)
     #   chromadb
     #   typer
-rpds-py==0.30.0
+rpds-py==2026.5.1
     # via
     #   jsonschema
     #   referencing
 secretstorage==3.5.0
     # via keyring
-semchunk==4.0.0
+semchunk==4.1.1
     # via buttermilk (pyproject.toml)
 sentencepiece==0.2.1
     # via buttermilk (pyproject.toml)
-sentry-sdk==2.60.0
+sentry-sdk==2.63.0
     # via buttermilk (pyproject.toml)
 sgmllib3k==1.0.0
     # via feedparser
@@ -945,9 +941,9 @@ sniffio==1.3.1
     #   openai
 soupsieve==2.8.4
     # via beautifulsoup4
-sqlalchemy==2.0.50
+sqlalchemy==2.0.51
     # via langchain
-structlog==25.5.0
+structlog==26.1.0
     # via buttermilk (pyproject.toml)
 tenacity==9.1.4
     # via
@@ -963,21 +959,21 @@ tokenizers==0.23.1
     # via
     #   chromadb
     #   litellm
-tqdm==4.67.3
+tqdm==4.68.2
     # via
     #   chromadb
     #   google-generativeai
     #   huggingface-hub
-    #   mpire
     #   nltk
     #   openai
     #   semchunk
-traceloop-sdk==0.60.0
+traceloop-sdk==0.61.0
     # via buttermilk (pyproject.toml)
-typer==0.26.1
+typer==0.26.7
     # via chromadb
 typing-extensions==4.15.0
     # via
+    #   aiohttp
     #   aiosignal
     #   anthropic
     #   anyio
@@ -999,6 +995,7 @@ typing-extensions==4.15.0
     #   opentelemetry-semantic-conventions
     #   pydantic
     #   pydantic-core
+    #   pyopenssl
     #   referencing
     #   replicate
     #   sqlalchemy
@@ -1017,11 +1014,11 @@ urllib3==2.7.0
     #   kubernetes
     #   requests
     #   sentry-sdk
-uuid-utils==0.16.0
+uuid-utils==0.16.1
     # via
     #   langchain-core
     #   langsmith
-uvicorn==0.48.0
+uvicorn==0.49.0
     # via chromadb
 uvloop==0.22.1
     # via uvicorn
@@ -1038,6 +1035,7 @@ websocket-client==1.9.0
 websockets==16.0
     # via
     #   google-genai
+    #   langsmith
     #   uvicorn
 wrapt==2.2.1
     # via
