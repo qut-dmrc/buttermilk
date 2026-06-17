@@ -79,7 +79,7 @@ dependencies = [
   "gspread>=6.1.2,<7.0.0",
   "coloredlogs>=15.0.1,<16.0.0", # For GCP logging
   # Vector database and RAG
-  "chromadb>=0.5.0,<2.0.0",
+  "chromadb>=0.5.0,!=1.5.9,<2.0.0",
   "langchain>=0.3.21,<1.0.0",
   "langchain-text-splitters>=0.3.7",
   "semchunk>=3.2.2",
