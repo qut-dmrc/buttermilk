@@ -15,7 +15,7 @@ import io  # For in-memory binary streams (BytesIO)
 import json
 import pickle  # For serializing Python objects
 import tempfile  # For creating temporary files/directories
-from collections.abc import Callable, Hashable, Mapping  # For type hinting
+from collections.abc import Callable, Mapping  # For type hinting
 from pathlib import Path  # For local path manipulation
 from typing import TYPE_CHECKING, Any, cast
 

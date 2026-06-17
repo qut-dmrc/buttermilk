@@ -59,7 +59,7 @@ import datetime
 import time
 from abc import abstractmethod
 from asyncio import Queue, QueueEmpty, TaskGroup
-from collections.abc import AsyncGenerator, Coroutine
+from collections.abc import AsyncGenerator
 from functools import cached_property
 from typing import (
     Any,

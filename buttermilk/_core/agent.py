@@ -379,9 +379,7 @@ class Agent:
         # _add_state_to_input (and the downstream _process) operate on AgentInput.
         # StepRequest is a subclass of AgentInput, so both valid runtime inputs satisfy
         # this; a bare str would be a programming error and must fail loud.
-        assert isinstance(message, AgentInput), (
-            f"Agent.invoke expected an AgentInput (or StepRequest subclass), got {type(message).__name__}"
-        )
+        assert isinstance(message, AgentInput), f"Agent.invoke expected an AgentInput (or StepRequest subclass), got {type(message).__name__}"
         try:
             final_input = await self._add_state_to_input(message)
         except Exception as e:

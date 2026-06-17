@@ -48,104 +48,59 @@ def format_slack_reasons(result: ExecutionTrace) -> dict:
             },
         )
 
-    else:
-        if isinstance(outputs, dict):
-            # Extract reasons for special handling
-            reasons = outputs.pop("reasons", []) if isinstance(outputs, dict) else []
+    elif isinstance(outputs, dict):
+        # Extract reasons for special handling
+        reasons = outputs.pop("reasons", []) if isinstance(outputs, dict) else []
 
-            # Format prediction, confidence and severity with special styling if present
-            key_fields = ["prediction", "confidence", "severity"]
-            if any(k in outputs for k in key_fields):
-                special_text = ""
+        # Format prediction, confidence and severity with special styling if present
+        key_fields = ["prediction", "confidence", "severity"]
+        if any(k in outputs for k in key_fields):
+            special_text = ""
 
-                if "prediction" in outputs:
-                    prediction = outputs.pop("prediction", None)
-                    icon = ":white_check_mark:" if prediction else ":no_entry:"
-                    special_text += f"{icon} *Prediction:* {prediction!s}\n"
+            if "prediction" in outputs:
+                prediction = outputs.pop("prediction", None)
+                icon = ":white_check_mark:" if prediction else ":no_entry:"
+                special_text += f"{icon} *Prediction:* {prediction!s}\n"
 
-                if "confidence" in outputs:
-                    confidence = outputs.pop("confidence", "")
-                    special_text += f":bar_chart: *Confidence:* {confidence}\n"
+            if "confidence" in outputs:
+                confidence = outputs.pop("confidence", "")
+                special_text += f":bar_chart: *Confidence:* {confidence}\n"
 
-                if "severity" in outputs:
-                    severity = outputs.pop("severity", "")
-                    special_text += f":warning: *Severity:* {severity}\n"
+            if "severity" in outputs:
+                severity = outputs.pop("severity", "")
+                special_text += f":warning: *Severity:* {severity}\n"
 
-                if special_text:
-                    blocks.append(
-                        {
-                            "type": "section",
-                            "text": {
-                                "type": "mrkdwn",
-                                "text": special_text.strip(),
-                            },
-                        },
-                    )
-
-            # Add labels as chips if present
-            if outputs.get("labels"):
-                labels = outputs.pop("labels", [])
-                if labels:
-                    label_text = "*Labels:* " + " ".join([f"`{label}`" for label in labels])
-                    blocks.append(
-                        {
-                            "type": "section",
-                            "text": {
-                                "type": "mrkdwn",
-                                "text": label_text,
-                            },
-                        },
-                    )
-
-            # Handle any remaining fields in outputs
-            remaining_outputs = {k: v for k, v in outputs.items() if k not in ["reasons", "prediction", "confidence", "severity", "labels"]}
-
-            if remaining_outputs:
-                for text in format_response(remaining_outputs):
-                    blocks.append(
-                        {
-                            "type": "section",
-                            "text": {
-                                "type": "mrkdwn",
-                                "text": text,
-                            },
-                        },
-                    )
-
-            # Add divider before reasons if there are any
-            if reasons:
-                blocks.append(
-                    {
-                        "type": "divider",
-                    },
-                )
-
+            if special_text:
                 blocks.append(
                     {
                         "type": "section",
                         "text": {
                             "type": "mrkdwn",
-                            "text": "*Reasoning:*",
+                            "text": special_text.strip(),
                         },
                     },
                 )
 
-                # Add each reason as its own contextual block for better readability
-                for i, reason in enumerate(reasons):
-                    blocks.append(
-                        {
-                            "type": "context",
-                            "elements": [
-                                {
-                                    "type": "mrkdwn",
-                                    "text": f"{i + 1}. {reason}",
-                                },
-                            ],
+        # Add labels as chips if present
+        if outputs.get("labels"):
+            labels = outputs.pop("labels", [])
+            if labels:
+                label_text = "*Labels:* " + " ".join([f"`{label}`" for label in labels])
+                blocks.append(
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": label_text,
                         },
-                    )
-        else:
-            # Handle case where outputs is not a dict
-            for text in format_response(outputs):
+                    },
+                )
+
+        # Handle any remaining fields in outputs
+        remaining_outputs = {k: v for k, v in outputs.items() if k not in ["reasons", "prediction", "confidence", "severity", "labels"]}
+
+        if remaining_outputs:
+            for text in format_response(remaining_outputs):
                 blocks.append(
                     {
                         "type": "section",
@@ -155,6 +110,50 @@ def format_slack_reasons(result: ExecutionTrace) -> dict:
                         },
                     },
                 )
+
+        # Add divider before reasons if there are any
+        if reasons:
+            blocks.append(
+                {
+                    "type": "divider",
+                },
+            )
+
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": "*Reasoning:*",
+                    },
+                },
+            )
+
+            # Add each reason as its own contextual block for better readability
+            for i, reason in enumerate(reasons):
+                blocks.append(
+                    {
+                        "type": "context",
+                        "elements": [
+                            {
+                                "type": "mrkdwn",
+                                "text": f"{i + 1}. {reason}",
+                            },
+                        ],
+                    },
+                )
+    else:
+        # Handle case where outputs is not a dict
+        for text in format_response(outputs):
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": text,
+                    },
+                },
+            )
 
     # Slack has a limit on blocks, so ensure we don't exceed it
     blocks = blocks[:50]  # Slack's block limit

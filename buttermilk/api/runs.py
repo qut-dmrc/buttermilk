@@ -1,8 +1,7 @@
 from typing import Any
 
-from buttermilk._core.log import logger  # noqa
-
 from buttermilk import bm
+from buttermilk._core.log import logger  # noqa
 
 
 # Get recent Jobs from BQ

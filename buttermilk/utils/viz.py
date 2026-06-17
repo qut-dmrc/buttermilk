@@ -528,7 +528,7 @@ class temp_style:
         self.theme = theme
         self.old_rc: RcParams | None = None
 
-    def __enter__(self) -> "temp_style":
+    def __enter__(self) -> temp_style:
         # Save current state
         self.old_rc = plt.rcParams.copy()
         # Apply new style

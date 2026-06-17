@@ -20,8 +20,8 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, computed_field
 
 from buttermilk import logger
 from buttermilk._core.contract import ExecutionTrace
-from buttermilk._core.messages import LLMMessage
 from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.messages import LLMMessage
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import BaseRecord
 from buttermilk.pipeline import RecordBufferedException

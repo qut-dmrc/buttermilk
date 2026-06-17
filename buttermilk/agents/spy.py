@@ -19,7 +19,7 @@ from buttermilk._core.runtime_types import (
     dispatch_message,
     message_handler,
 )
-from buttermilk._core.storage_config import StorageConfig, StorageFactory
+from buttermilk._core.storage_config import StorageFactory
 from buttermilk.utils.uploader import (
     AsyncDataUploader,
 )
