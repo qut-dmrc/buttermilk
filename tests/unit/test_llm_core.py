@@ -535,7 +535,9 @@ class TestLLMCore:
                 record=None,
             )
 
-            # Should have only context key (no template vars, no record)
-            # With flat structure, empty template_vars means only "context" key is present
-            assert "context" in result.resolved_inputs
-            assert "record" not in result.resolved_inputs  # record is only in trace.record
+            # context and record are stripped (canonical-once): context is canonical
+            # in the messages column; record has its own trace.record column.
+            # With no genuine render vars provided, resolved_inputs is empty.
+            assert "context" not in result.resolved_inputs
+            assert "record" not in result.resolved_inputs
+            assert result.resolved_inputs == {}
