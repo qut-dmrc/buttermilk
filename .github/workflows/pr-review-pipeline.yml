@@ -80,7 +80,7 @@ jobs:
   enforcer:
     name: Enforcer
     needs: [setup]
-    uses: nicsuzor/academicOps/.github/workflows/agent-enforcer.yml@main
+    uses: nicsuzor/academicOps/.github/workflows/agent-enforcer.yml@dev
     with:
       pr_number: ${{ needs.setup.outputs.pr_number }}
       ref: ${{ needs.setup.outputs.head_ref }}
