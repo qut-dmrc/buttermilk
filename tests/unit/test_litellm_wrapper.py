@@ -14,7 +14,7 @@ from buttermilk._core.llms import (
     litellm_to_model_output,
     to_litellm_messages,
 )
-from buttermilk._core.messages import AssistantMessage, SystemMessage, UserMessage
+from buttermilk._core.messages import SystemMessage, UserMessage
 
 
 class TestLiteLLMWrapper:
@@ -507,6 +507,7 @@ class TestAnthropicCacheControlInCreate:
         with patch("litellm.acompletion", return_value=self._make_mock_response()):
             await wrapper.create(messages=messages)
             import litellm
+
             call_messages = litellm.acompletion.call_args[1]["messages"]
 
         sys_msg = call_messages[0]
@@ -535,6 +536,7 @@ class TestAnthropicCacheControlInCreate:
         with patch("litellm.acompletion", return_value=self._make_mock_response()):
             await wrapper.create(messages=messages)
             import litellm
+
             call_messages = litellm.acompletion.call_args[1]["messages"]
 
         sys_msg = call_messages[0]
@@ -558,6 +560,7 @@ class TestAnthropicCacheControlInCreate:
         with patch("litellm.acompletion", return_value=self._make_mock_response()):
             await wrapper.create(messages=messages)
             import litellm
+
             call_messages = litellm.acompletion.call_args[1]["messages"]
 
         sys_msg = call_messages[0]
@@ -583,6 +586,7 @@ class TestAnthropicCacheControlInCreate:
         with patch("litellm.acompletion", return_value=self._make_mock_response()):
             await wrapper.create(messages=messages)
             import litellm
+
             call_messages = litellm.acompletion.call_args[1]["messages"]
 
         sys_msg = call_messages[0]
@@ -607,6 +611,7 @@ class TestAnthropicCacheControlInCreate:
         with patch("litellm.acompletion", return_value=self._make_mock_response()):
             await wrapper.create(messages=messages)
             import litellm
+
             call_messages = litellm.acompletion.call_args[1]["messages"]
 
         assert call_messages[0]["role"] == "system"
