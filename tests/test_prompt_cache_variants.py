@@ -42,18 +42,18 @@ and reported — not raised — so the full matrix is always collected.
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock, patch
+
 import pytest
 
-from buttermilk._core.messages import SystemMessage, UserMessage
-from buttermilk.utils.pricing import extract_cached_tokens
-from unittest.mock import AsyncMock, MagicMock, patch
 from buttermilk._core.exceptions import ProcessingError
 from buttermilk._core.llms import (
     LiteLLMWrapper,
     ModelInfo,
-    ModelParameters,
     litellm_to_model_output,
 )
+from buttermilk._core.messages import SystemMessage, UserMessage
+from buttermilk.utils.pricing import extract_cached_tokens
 
 # NOTE: module-level pytestmark removed in the #432+#436 union so that the
 # reasoning-model UNIT tests (TestNullMessageDefensiveParse) are NOT marked
@@ -775,9 +775,7 @@ class TestNullMessageDefensiveParse:
                 await wrapper.create(messages=messages)
 
             # Must not retry — 1 call only, not max_retries+1=4
-            assert mock_acompletion.call_count == 1, (
-                f"Expected 1 call (no retry for deterministic parse failure), got {mock_acompletion.call_count}"
-            )
+            assert mock_acompletion.call_count == 1, f"Expected 1 call (no retry for deterministic parse failure), got {mock_acompletion.call_count}"
 
     @pytest.mark.slow
     @pytest.mark.anyio
