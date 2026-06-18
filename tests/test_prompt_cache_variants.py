@@ -1,8 +1,11 @@
 """Live caching-verification test: stuffed vs. separate-component prompts.
 
-Parameterised across all models in buttermilk's roster (discovered at runtime
-from ``real_bm.llms.connections``), this test empirically verifies prompt-cache
-behaviour by comparing two prompt-assembly styles.
+Parameterised across buttermilk's roster via the canonical ``real_llm`` fixture
+(``@pytest.fixture(params=CHEAP_CHAT_MODELS)`` in ``tests/conftest.py``), which
+yields one live client per cheap model. Pytest expands one parametrised case
+per model automatically — the test does NOT build any model list of its own;
+``CHEAP_CHAT_MODELS`` is the single source of truth. This test empirically
+verifies prompt-cache behaviour by comparing two prompt-assembly styles.
 
 Variant A — "stuffed"
     One single UserMessage containing the large reused prefix immediately
@@ -27,8 +30,12 @@ and reported — not raised — so the full matrix is always collected.
 
 from __future__ import annotations
 
+import pytest
+
 from buttermilk._core.messages import SystemMessage, UserMessage
 from buttermilk.utils.pricing import extract_cached_tokens
+
+pytestmark = [pytest.mark.integration, pytest.mark.slow]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Filler block: must exceed per-provider implicit-cache token minimums.
@@ -308,70 +315,61 @@ _VARIANTS: dict[str, object] = {
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-async def test_prompt_cache_matrix(real_bm, session_runner) -> None:
-    """Verify prompt-cache behaviour across all roster models × two variants.
+async def test_prompt_cache_matrix(real_llm, real_bm, session_runner) -> None:
+    """Verify prompt-cache behaviour for one roster model × two variants.
 
-    Issues two identical calls per (model × variant); reports cached_tokens
-    and cost delta in a matrix.  Never hard-fails on cache misses — the purpose
-    is discovery, not assertion.  Errors on Variant B (e.g. Gemini/Vertex
-    message-structure constraints) are captured and reported so the full matrix
-    is always collected.
+    Parametrised by the canonical ``real_llm`` fixture (one live client per
+    cheap model). For each variant, issues two identical calls and reports
+    cached_tokens and cost delta. Never hard-fails on cache misses — the
+    purpose is discovery, not assertion. Errors on Variant B (e.g. Gemini/Vertex
+    message-structure constraints) are captured and reported per-model so the
+    full matrix is always collected.
     """
-    llms = real_bm.llms
-    model_names: list[str] = sorted(llms.connections.keys())
+    client = real_llm
+    model_name: str = getattr(client, "model", None) or str(client)
 
-    # matrix[model_name][variant_name] = result dict
-    matrix: dict[str, dict[str, dict]] = {m: {} for m in model_names}
+    # row[variant_name] = result dict
+    rows: dict[str, dict] = {}
 
-    for model_name in model_names:
+    for variant_name, make_msgs in _VARIANTS.items():
+        # Identical message list used for both calls.
+        messages = make_msgs()  # type: ignore[operator]
+        row: dict = {}
         try:
-            client = llms.get_client(model_name)
+            # ── Call 1: warm the cache ────────────────────────────────
+            r1 = await client.create(messages=messages, max_tokens=64)
+            c1 = extract_cached_tokens(r1.usage)
+            p1: dict = r1.metadata.get("pricing") or {}
+            cost1: float = p1.get("total_cost") or 0.0
+
+            # ── Call 2: expect cache hit on second request ────────────
+            r2 = await client.create(messages=messages, max_tokens=64)
+            c2 = extract_cached_tokens(r2.usage)
+            p2: dict = r2.metadata.get("pricing") or {}
+            cost2: float = p2.get("total_cost") or 0.0
+            prompt2: int = getattr(r2.usage, "prompt_tokens", 0) or 0
+
+            row = {
+                "call1_cached": c1,
+                "call2_cached": c2,
+                "prompt_tokens": prompt2,
+                "cost1": cost1,
+                "cost2": cost2,
+                "cost_drop": cost1 - cost2,
+                "hit": c2 > 0,
+            }
         except Exception as exc:
-            for v in _VARIANTS:
-                matrix[model_name][v] = {"error": f"client_init: {exc}"}
-            continue
+            row = {"error": str(exc)[:400]}
 
-        for variant_name, make_msgs in _VARIANTS.items():
-            # Identical message list used for both calls.
-            messages = make_msgs()  # type: ignore[operator]
-            row: dict = {}
-            try:
-                # ── Call 1: warm the cache ────────────────────────────────
-                r1 = await client.create(messages=messages, max_tokens=64)
-                c1 = extract_cached_tokens(r1.usage)
-                p1: dict = r1.metadata.get("pricing") or {}
-                cost1: float = p1.get("total_cost") or 0.0
-                prompt1: int = getattr(r1.usage, "prompt_tokens", 0) or 0
+        rows[variant_name] = row
 
-                # ── Call 2: expect cache hit on second request ────────────
-                r2 = await client.create(messages=messages, max_tokens=64)
-                c2 = extract_cached_tokens(r2.usage)
-                p2: dict = r2.metadata.get("pricing") or {}
-                cost2: float = p2.get("total_cost") or 0.0
-                prompt2: int = getattr(r2.usage, "prompt_tokens", 0) or 0
+    _report(model_name, rows)
 
-                row = {
-                    "call1_cached": c1,
-                    "call2_cached": c2,
-                    "prompt_tokens": prompt2,
-                    "cost1": cost1,
-                    "cost2": cost2,
-                    "cost_drop": cost1 - cost2,
-                    "hit": c2 > 0,
-                }
-            except Exception as exc:
-                row = {"error": str(exc)[:400]}
-
-            matrix[model_name][variant_name] = row
-
-    _report(matrix, model_names)
-
-    # Structural assertion: a result row must exist for every model × variant.
-    # This confirms the test ran (even if every model errored or missed cache).
-    for model_name in model_names:
-        assert set(matrix[model_name].keys()) == set(_VARIANTS.keys()), (
-            f"Incomplete result for model '{model_name}': got {set(matrix[model_name].keys())}"
-        )
+    # Structural assertion: a result row must exist for every variant.
+    # This confirms the test ran (even if the model errored or missed cache).
+    assert set(rows.keys()) == set(_VARIANTS.keys()), (
+        f"Incomplete result for model '{model_name}': got {set(rows.keys())}"
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -379,29 +377,28 @@ async def test_prompt_cache_matrix(real_bm, session_runner) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _report(matrix: dict[str, dict[str, dict]], model_names: list[str]) -> None:
+def _report(model_name: str, rows: dict[str, dict]) -> None:
     sep = "=" * 122
     print(f"\n{sep}")
-    print("PROMPT CACHE VERIFICATION MATRIX")
+    print(f"PROMPT CACHE VERIFICATION — model: {model_name}")
     print("  Variant A = stuffed (single user message)   Variant B = separate (SystemMessage + UserMessage)")
     print(sep)
-    print(f"{'Model':<46} {'Variant':<12} {'Cached₁':>8} {'Cached₂':>8} {'Cost₁':>11} {'Cost₂':>11} {'Drop':>11} {'Hit':>5}")
+    print(f"{'Model':<46} {'Variant':<12} {'Cached1':>8} {'Cached2':>8} {'Cost1':>11} {'Cost2':>11} {'Drop':>11} {'Hit':>5}")
     print("-" * 122)
-    for model_name in sorted(model_names):
-        for variant in ("A_stuffed", "B_separate"):
-            row = matrix[model_name].get(variant, {})
-            if "error" in row:
-                err_preview = row["error"][:64]
-                print(f"{model_name:<46} {variant:<12}  ERROR: {err_preview}")
-            else:
-                hit_str = "YES" if row.get("hit") else "no"
-                print(
-                    f"{model_name:<46} {variant:<12}"
-                    f" {row.get('call1_cached', 0):>8}"
-                    f" {row.get('call2_cached', 0):>8}"
-                    f" ${row.get('cost1', 0.0):>10.6f}"
-                    f" ${row.get('cost2', 0.0):>10.6f}"
-                    f" ${row.get('cost_drop', 0.0):>10.6f}"
-                    f" {hit_str:>5}"
-                )
+    for variant in ("A_stuffed", "B_separate"):
+        row = rows.get(variant, {})
+        if "error" in row:
+            err_preview = row["error"][:64]
+            print(f"{model_name:<46} {variant:<12}  ERROR: {err_preview}")
+        else:
+            hit_str = "YES" if row.get("hit") else "no"
+            print(
+                f"{model_name:<46} {variant:<12}"
+                f" {row.get('call1_cached', 0):>8}"
+                f" {row.get('call2_cached', 0):>8}"
+                f" ${row.get('cost1', 0.0):>10.6f}"
+                f" ${row.get('cost2', 0.0):>10.6f}"
+                f" ${row.get('cost_drop', 0.0):>10.6f}"
+                f" {hit_str:>5}"
+            )
     print(sep)
