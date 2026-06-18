@@ -16,6 +16,18 @@ Variant B — "separate components"
     as a trailing UserMessage.  Simulates the structured-prefix style that
     providers can implicitly cache.
 
+Variant C — "separate same-role messages"
+    The reused block split across multiple consecutive same-role (user) messages,
+    with the variable content as the final user message.  PR #434 proved all
+    cheap providers ACCEPT consecutive same-role messages; this variant tests
+    whether that split actually survives litellm to the wire as a distinct
+    cacheable prefix (same benefit as A/B) or gets merged/wasted (less benefit).
+
+The reused prefix (criteria document + extended appendix) is >5000 tokens — well
+clear of every provider's implicit-cache floor (OpenAI 1024, Gemini 2048-4096,
+Anthropic-Haiku 4096) — so a reported non-hit is a genuine non-hit rather than a
+prefix that was simply too short to be cacheable.
+
 For each (model × variant) pair the test calls the client TWICE with identical
 messages and records:
   - cached_tokens on each call (via extract_cached_tokens from pricing.py)
@@ -271,6 +283,274 @@ Criterion 2.4; critical escalation required regardless of artistic framing.
 END OF CRITERIA DOCUMENT
 """
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Appendix block — appended verbatim to _CRITERIA_BLOCK so the reused prefix
+# comfortably clears the LARGEST provider implicit-cache floor.
+#   OpenAI:            1024 tokens
+#   Gemini 2.x/3.x:    2048 tokens (implicit), 4096 (some 3.x tiers)
+#   Anthropic Haiku:   4096 tokens (min cacheable prefix)
+# The prior ~2560-token prefix only cleared OpenAI's 1024 floor; Gemini-3.x and
+# Anthropic-Haiku floors (4096) were never exercised, so their zeros were
+# meaningless. This appendix lifts the combined prefix to ~6000+ tokens, well
+# clear of every floor, so a non-hit is a genuine non-hit. The content is a
+# fixed constant — identical across all calls — preserving prefix cacheability.
+# ─────────────────────────────────────────────────────────────────────────────
+_CRITERIA_APPENDIX = """\
+
+APPENDIX A — EXTENDED ADJUDICATION CASEBOOK
+=============================================
+
+The following annotated cases supplement Section 8. Each entry states the raw
+content (paraphrased), the criteria triggered, the assigned severity, and the
+adjudication rationale. Annotators should treat these as calibration anchors,
+not as an exhaustive enumeration of every possible fact pattern. Where a live
+item resembles a casebook entry but differs in a material respect, annotators
+must reason from the criteria in Sections 1–7 rather than mechanically copying
+the casebook severity.
+
+A.1  Coded ethnic dehumanisation in apparent satire
+     A post frames an ethnic group using an extended pest-control metaphor,
+     closing with an "it's just a joke" disclaimer. Applying the reasonable-
+     observer test from 6.8, a typical member of the targeted community would
+     recognise the dehumanising frame regardless of the disclaimer. Criterion
+     1.1 applies; severity 2, escalating to 3 if combined with any call to
+     action. The satire disclaimer does not lower severity because the metaphor
+     itself performs the dehumanisation independent of comedic framing.
+
+A.2  Doctrinal critique adjacent to incitement
+     A long essay critiques the theology of a faith. The first nine paragraphs
+     are lawful doctrinal disagreement (criterion 1.2 not met). The tenth
+     paragraph pivots to urging followers be "removed from public life." The
+     pivot triggers criterion 1.2 and, depending on specificity, 2.1. The
+     overall item is rated at the maximum applicable severity (3), but the
+     annotation record must note that the bulk of the text is permitted
+     critique — this distinction matters for any downstream appeal.
+
+A.3  Deadnaming in a news-reporting context
+     A news article reports on a public figure and includes their former name
+     in a single parenthetical for identification. Criterion 1.3 (deadnaming)
+     is assessed against the public-interest carve-out: where the former name
+     is necessary for unambiguous identification and is not used derogatorily,
+     severity is 0–1. Repeated, gratuitous use of the former name shifts the
+     assessment toward severity 2 and signals harassment intent.
+
+A.4  Inspiration-porn framing of a disabled athlete
+     A viral video frames a disabled athlete solely as an object of able-bodied
+     motivation ("if they can do it, what's your excuse?"). Criterion 1.4
+     applies at severity 1: the framing objectifies, but the content is not
+     itself hateful. Annotators must resist the instinct to rate uplifting-
+     seeming content at 0 merely because its surface affect is positive; the
+     objectification is the harm.
+
+A.5  Compounded racist misogyny
+     A thread targets a named woman of colour with both racial slurs and
+     gendered sexual degradation. Per criterion 1.5, both axes are coded
+     separately; the annotation enumerates 1.1 and 1.3. The overall severity
+     is the maximum single-axis severity (here 3), not a sum — but suppressing
+     either axis in the record understates the harm profile and is an error.
+
+A.6  Borderline self-harm support content
+     A user describes their own past suicidality in an explicitly recovery-
+     oriented frame and links a crisis resource. Criterion 2.3 distinguishes
+     harm-reduction/support-seeking content (severity 0–1) from promotional or
+     method-providing content (severity 3). The presence of the crisis resource
+     and the retrospective framing place this at severity 0–1. Removing such
+     content would itself cause harm by suppressing peer support.
+
+A.7  Newsworthy graphic conflict imagery
+     A photojournalist's image of a conflict casualty is posted with a content
+     warning and contextual caption. Criterion 2.2's public-interest carve-out
+     applies: severity 1 rather than 2, given evident newsworthiness and the
+     proportionate use of the graphic element. The same image stripped of
+     context and posted for shock value would be severity 2.
+
+A.8  AI-generated synthetic political media
+     A realistic AI-generated video depicts a candidate making statements they
+     never made, with no disclosure label, days before an election. Criteria
+     3.2 and 3.3 both apply. The absence of disclosure (3.3 condition a) and
+     the likelihood of misleading a reasonable observer (3.3 condition b) are
+     both satisfied; the electoral-suppression potential engages 3.2. Severity
+     3, escalating toward 4 if coordinated distribution (3.4) is evident.
+
+A.9  Aggregated public data constituting a harmful profile
+     An account compiles a target's individually-public data points — employer,
+     gym schedule, children's school — into a single dossier with hostile
+     commentary. Although each datum is individually public, criterion 4.1's
+     aggregation clause applies: the compilation creates a harmful profile
+     enabling stalking. Severity 3. The "it was all public anyway" defence does
+     not defeat the criterion.
+
+A.10 Educational fraud-typology explainer
+     A consumer-protection article explains how advance-fee scams operate so
+     readers can recognise them. Criterion 3.5's educational carve-out applies;
+     severity 0. Annotators must distinguish description-for-defence (permitted)
+     from instruction-for-perpetration (prohibited): the former empowers
+     potential victims, the latter equips offenders.
+
+APPENDIX B — EDGE-CASE DECISION PROCEDURE
+===========================================
+
+When an item does not map cleanly onto a single criterion, apply the following
+ordered procedure. Do not skip steps; record which step resolved the case.
+
+B.1  Identify every criterion whose indicators are present, however weakly.
+     Err toward over-inclusion at this enumeration stage; pruning happens later.
+
+B.2  For each enumerated criterion, ask whether a carve-out (educational,
+     newsworthy, artistic, harm-reduction, doctrinal-critique) plausibly
+     applies. A carve-out lowers severity within a criterion; it does not
+     remove the criterion from the record.
+
+B.3  Apply the reasonable-observer test (6.8) to any criterion whose
+     applicability turns on interpretation (satire, coded language, dog
+     whistles). The relevant observer is a typical member of the targeted
+     group, not the median platform user.
+
+B.4  Resolve severity per criterion using Section 5, defaulting to the lower
+     of two adjacent levels under genuine uncertainty (6.2).
+
+B.5  Set the item's overall severity to the maximum across surviving criteria.
+     Enumerate all surviving criteria in the record even though only the
+     maximum drives the action.
+
+B.6  If, after this procedure, the item cannot be assessed for lack of context,
+     mark "insufficient context" (6.4) rather than guessing. Insufficient-
+     context items are routed to human escalation, not auto-actioned.
+
+B.7  Document the deciding step and the textual or visual evidence relied upon
+     (6.7). A rating without recorded evidence is invalid and will be returned.
+
+APPENDIX C — RATER CALIBRATION NOTES
+======================================
+
+C.1  The single most common error is criterion substitution: rating the
+     content the annotator wishes were present rather than the content actually
+     present (6.1). Re-read the raw item before finalising.
+
+C.2  The second most common error is affect-driven leniency: rating
+     positive-affect content (uplifting framing, humour, apparent good
+     intentions) below its true severity. Surface affect is not a carve-out.
+
+C.3  The third most common error is aggregation blindness: treating each
+     individually-public or individually-mild element as benign while missing
+     the compounded harm (see A.5, A.9). Assess the whole as well as the parts.
+
+C.4  Annotators must apply criteria identically regardless of the political,
+     ideological, or religious orientation of the content (6.6). Symmetry of
+     application is a non-negotiable quality requirement; asymmetry is itself a
+     reportable QA failure.
+
+C.5  Inter-rater reliability below Cohen's κ = 0.70 triggers recalibration
+     (Section 7). Annotators should periodically self-audit against this
+     casebook to detect drift before the monthly κ computation surfaces it.
+
+APPENDIX D — CRITERION-BY-CRITERION SEVERITY ANCHORS
+======================================================
+
+The following table fixes a default severity anchor for each criterion under
+"typical" conditions, together with the contextual factors that move the anchor
+up or down. Anchors are starting points, not ceilings or floors; the ordered
+procedure in Appendix B always governs the final rating. The anchors exist to
+reduce drift, not to replace judgement.
+
+D.1  Criterion 1.1 (racial/ethnic targeting). Default anchor: 2. Moves to 3
+     when paired with any incitement (2.1) or call for exclusion; moves to 1
+     when the targeting is implicit/coded and a reasonable observer would
+     require contextual knowledge to perceive it. Holocaust denial anchors at 3
+     irrespective of tone, given its documented role in organised hate.
+
+D.2  Criterion 1.2 (religious hatred). Default anchor: 2. Moves to 0–1 when the
+     content is doctrinal critique that does not target believers; moves to 3
+     when it urges harm to or exclusion of worshippers. The pivot test from A.2
+     governs mixed essays: rate at the maximum applicable, record the split.
+
+D.3  Criterion 1.3 (gender/orientation). Default anchor: 2. Deadnaming in a
+     necessary-identification context anchors at 0–1 (see A.3); repeated
+     gratuitous deadnaming or non-consensual outing anchors at 2–3. Targeted
+     harassment campaigns anchor at 3.
+
+D.4  Criterion 1.4 (disability). Default anchor: 2. Inspiration-porn framing
+     anchors at 1 (see A.4); ableist slurs anchor at 2; medical misinformation
+     disproportionately harming disabled people is co-coded with Section 3 and
+     anchors at the higher of the two.
+
+D.5  Criterion 1.5 (intersectionality). No independent anchor: severity is the
+     maximum across the enumerated axes. The criterion's function is to force
+     enumeration of every axis, not to add severity.
+
+D.6  Criterion 1.6 (socioeconomic/class). Default anchor: 1. Moves to 2 when it
+     incites hostility toward a class of persons rather than critiquing a
+     system or policy. Legitimate policy critique anchors at 0.
+
+D.7  Criterion 2.1 (incitement). Default anchor: 3. Moves to 4 when the threat
+     is specific, credible, and imminent; moves to 2 when the call is diffuse
+     and non-specific but still threatening. Public-figure status does not
+     reduce the anchor (see body text of 2.1).
+
+D.8  Criterion 2.2 (graphic violence). Default anchor: 2. Newsworthy, content-
+     warned, proportionate imagery anchors at 1 (see A.7); shock-value reposts
+     stripped of context anchor at 2; torture depicted for entertainment
+     anchors at 3.
+
+D.9  Criterion 2.3 (self-harm/suicide). Default anchor: 3 for promotional or
+     method-providing content; 0–1 for harm-reduction or support-seeking
+     content carrying crisis resources (see A.6). The frame, not the topic,
+     drives the anchor.
+
+D.10 Criterion 2.4 (CSAM). Fixed at 4. No carve-out, no contextual reduction,
+     no artistic-framing exception. AI-generated and photographic material are
+     treated identically. Immediate escalation; do not attempt independent
+     adjudication.
+
+D.11 Criterion 2.5 (animal cruelty). Default anchor: 2 for gratuitous shock-
+     value cruelty; 0 for incidental harm in hunting, farming, or veterinary
+     contexts. Staged cruelty for entertainment anchors at 3.
+
+D.12 Criterion 3.1 (health misinformation). Default anchor: 2. Moves to 3 when
+     the false claim is actionable and likely to cause physical harm (e.g.,
+     fake cures for serious illness). Accurate characterisation of genuine
+     scientific debate anchors at 0.
+
+D.13 Criterion 3.2 (election/civic). Default anchor: 2. Moves to 3 when the
+     false claim is likely to suppress participation or delegitimise outcomes;
+     clearly-labelled satire anchors at 0.
+
+D.14 Criterion 3.3 (synthetic-media disclosure). Default anchor: 1 for
+     undisclosed synthetic media that could mislead; 0 for clearly fantastical
+     or stylised AI imagery. Co-codes with 3.2 in electoral contexts (see A.8).
+
+D.15 Criterion 3.4 (coordinated inauthentic behaviour). Default anchor: 2.
+     Moves to 3 when CIB amplifies harmful content (hate, election
+     misinformation). Organic virality is excluded and anchors at 0.
+
+D.16 Criterion 3.5 (fraud/scams). Default anchor: 3 for active deception
+     designed to extract money or credentials; 0 for educational explainers
+     (see A.10).
+
+D.17 Criterion 4.1 (doxxing). Default anchor: 3. The aggregation clause (see
+     A.9) extends the criterion to harmful compilations of individually-public
+     data. Single accidental disclosures with no hostile intent anchor at 1.
+
+D.18 Criterion 4.2 (NCII). Default anchor: 3, escalating toward 4 where the
+     subject is identifiable and distribution is wide. AI-generated NCII of real
+     people is treated identically to photographic NCII.
+
+D.19 Criterion 4.3 (outing). Default anchor: 2–3 depending on the harm exposure
+     created by disclosure. Applies even where the information is technically
+     discoverable elsewhere.
+
+D.20 Criterion 4.4 (surveillance/tracking). Default anchor: 2. Moves to 3 when
+     the content facilitates intimate-partner monitoring or stalkerware
+     deployment. Disclosed, consented monitoring (e.g., enterprise device
+     management with notice) anchors at 0.
+
+END OF APPENDIX
+"""
+
+# Reused prefix delivered to the model: criteria document + extended appendix.
+# Constant across every call so the implicit prefix cache can engage.
+_REUSED_PREFIX = _CRITERIA_BLOCK + _CRITERIA_APPENDIX
+
 # Small variable suffix that changes the query while keeping the large prefix
 # identical across both calls (enabling cache hits on the second invocation).
 _VARIABLE_QUERY = (
@@ -290,16 +570,37 @@ def _variant_a_messages() -> list:
     """Variant A — stuffed: single UserMessage containing prefix + query."""
     return [
         UserMessage(
-            content=_CRITERIA_BLOCK + "\n\n---\n\n" + _VARIABLE_QUERY,
+            content=_REUSED_PREFIX + "\n\n---\n\n" + _VARIABLE_QUERY,
             source="user",
         )
     ]
 
 
 def _variant_b_messages() -> list:
-    """Variant B — separate: SystemMessage for prefix, UserMessage for query."""
+    """Variant B — separate components: SystemMessage for the reused prefix,
+    UserMessage for the variable query."""
     return [
-        SystemMessage(content=_CRITERIA_BLOCK),
+        SystemMessage(content=_REUSED_PREFIX),
+        UserMessage(content=_VARIABLE_QUERY, source="user"),
+    ]
+
+
+def _variant_c_messages() -> list:
+    """Variant C — separate same-role messages: the reused prefix split across
+    multiple consecutive same-role (user) messages, with the variable query as
+    the final user message.
+
+    PR #434 proved all cheap providers ACCEPT consecutive same-role messages.
+    This variant tests whether that split still yields cache benefit, or whether
+    litellm merges the consecutive same-role messages back together (which would
+    keep the prefix cacheable) — versus the split breaking the cacheable prefix
+    so the benefit is lost. The split point is chosen at the criteria/appendix
+    boundary so each chunk is itself a large, stable, identical-across-calls
+    block.
+    """
+    return [
+        UserMessage(content=_CRITERIA_BLOCK, source="user"),
+        UserMessage(content=_CRITERIA_APPENDIX, source="user"),
         UserMessage(content=_VARIABLE_QUERY, source="user"),
     ]
 
@@ -307,6 +608,7 @@ def _variant_b_messages() -> list:
 _VARIANTS: dict[str, object] = {
     "A_stuffed": _variant_a_messages,
     "B_separate": _variant_b_messages,
+    "C_same_role": _variant_c_messages,
 }
 
 
@@ -380,11 +682,11 @@ def _report(model_name: str, rows: dict[str, dict]) -> None:
     sep = "=" * 122
     print(f"\n{sep}")
     print(f"PROMPT CACHE VERIFICATION — model: {model_name}")
-    print("  Variant A = stuffed (single user message)   Variant B = separate (SystemMessage + UserMessage)")
+    print("  A = stuffed (1 user msg)   B = separate (System + User)   C = separate same-role (User + User + User)")
     print(sep)
     print(f"{'Model':<46} {'Variant':<12} {'Cached1':>8} {'Cached2':>8} {'Cost1':>11} {'Cost2':>11} {'Drop':>11} {'Hit':>5}")
     print("-" * 122)
-    for variant in ("A_stuffed", "B_separate"):
+    for variant in ("A_stuffed", "B_separate", "C_same_role"):
         row = rows.get(variant, {})
         if "error" in row:
             err_preview = row["error"][:64]
