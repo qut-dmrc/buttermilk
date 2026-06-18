@@ -315,7 +315,8 @@ _VARIANTS: dict[str, object] = {
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-async def test_prompt_cache_matrix(real_llm, real_bm, session_runner) -> None:
+@pytest.mark.anyio
+async def test_prompt_cache_matrix(real_llm, llm_wrapper_type, real_bm, session_runner) -> None:
     """Verify prompt-cache behaviour for one roster model × two variants.
 
     Parametrised by the canonical ``real_llm`` fixture (one live client per
