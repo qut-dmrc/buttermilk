@@ -367,9 +367,7 @@ async def test_prompt_cache_matrix(real_llm, real_bm, session_runner) -> None:
 
     # Structural assertion: a result row must exist for every variant.
     # This confirms the test ran (even if the model errored or missed cache).
-    assert set(rows.keys()) == set(_VARIANTS.keys()), (
-        f"Incomplete result for model '{model_name}': got {set(rows.keys())}"
-    )
+    assert set(rows.keys()) == set(_VARIANTS.keys()), f"Incomplete result for model '{model_name}': got {set(rows.keys())}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
