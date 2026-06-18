@@ -1,3 +1,7 @@
+-- NOTE (task buttermilk-1e23cce6): the source record is now read from the canonical
+-- top-level `record` column (a RECORD/STRUCT), not from a copy embedded in `inputs`
+-- (`inputs.$.records` is no longer emitted — canonical-once). Re-apply this DDL manually
+-- and VALIDATE against the live table; the trace schema is traces.schema.json.
 CREATE VIEW `{DATASET}.judge_reasons`
 AS
   SELECT
@@ -5,10 +9,10 @@ AS
     call_id,
     timestamp,
     error,
-    records as record,
+    record,
     JSON_VALUE(run_info, "$.name") AS name,
     JSON_VALUE(run_info, "$.job") AS job,
-    JSON_VALUE(records, '$.record_id') AS record_id,
+    record.record_id AS record_id,
     JSON_VALUE(agent_info, "$.name") AS judge,
     JSON_VALUE(agent_info, "$.parameters.model") AS judge_model,
     JSON_VALUE(agent_info, "$.parameters.template") AS judge_template,
@@ -21,7 +25,6 @@ AS
     tracing_link, parent_call_id
   FROM
     `{DATASET}.{FLOWS_TABLE}`
-    LEFT JOIN UNNEST(JSON_QUERY_ARRAY(inputs, '$.records')) AS records
   WHERE
     timestamp >= DATETIME_SUB(CURRENT_TIMESTAMP(), INTERVAL 7 DAY)
     AND JSON_VALUE(agent_info, "$.role") IN ('JUDGE', 'SYNTHESISER')

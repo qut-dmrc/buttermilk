@@ -1,3 +1,7 @@
+-- NOTE (task buttermilk-1e23cce6): record + ground_truth are now read from the canonical
+-- top-level `record` column (a RECORD/STRUCT: record.record_id, record.ground_truth), not
+-- from a copy in `inputs.$.records` (no longer emitted). Re-apply manually and VALIDATE
+-- against the live table; trace schema is traces.schema.json (record.ground_truth is JSON).
 WITH SCORES_AGGREGATED AS (
   SELECT
     session_id,
@@ -24,9 +28,9 @@ PREDICTIONS AS (
     call_id,
     timestamp,
     error,
-    records as record,
+    record,
     tracing_link,
-    JSON_VALUE(records, '$.record_id') AS record_id,
+    record.record_id AS record_id,
     JSON_VALUE(agent_info, "$.name") AS judge,
     JSON_VALUE(agent_info, "$.parameters.model") AS judge_model,
     JSON_VALUE(metadata, "$.template_name") AS judge_template,
@@ -35,8 +39,8 @@ PREDICTIONS AS (
     JSON_VALUE(agent_info, "$.role") AS judge_role,
     -- Predicted Label
     CAST(JSON_VALUE(outputs, "$.prediction") AS BOOLEAN) AS predicted_violating,
-    -- True Label (extracted from the ground_truth field)
-    CAST(JSON_VALUE(records, '$.ground_truth.violating') AS BOOLEAN) AS expected_violating,
+    -- True Label (from the canonical record column; record.ground_truth is JSON)
+    CAST(JSON_VALUE(record.ground_truth, '$.violating') AS BOOLEAN) AS expected_violating,
     -- Calculate full_prediction_summary within this CTE
     CONCAT(
       IFNULL(JSON_VALUE(outputs, "$.conclusion"), ''),
@@ -46,7 +50,6 @@ PREDICTIONS AS (
     JSON_VALUE(outputs, "$.confidence") AS confidence
   FROM
     `prosocial-443205.testing.flow`
-    LEFT JOIN UNNEST(JSON_QUERY_ARRAY(inputs, '$.records')) AS records
   WHERE
     JSON_VALUE(agent_info, "$.role") IN ('JUDGE', 'SYNTHESISER')
 )

@@ -1,3 +1,7 @@
+-- NOTE (task buttermilk-1e23cce6): record_id + ground_truth are now read from the canonical
+-- top-level `record` column (record.record_id, record.ground_truth JSON), not from
+-- `inputs.$.records` (no longer emitted). Re-apply manually and VALIDATE against the live
+-- table; trace schema is traces.schema.json.
 WITH SCORES_AGGREGATED AS (
   -- This CTE is identical to the one in judge_scores.sql
   -- It gathers all the scores from SCORER agents.
@@ -21,18 +25,17 @@ PREDICTIONS_WITH_TRUTH AS (
     session_id,
     call_id,
     timestamp,
-    JSON_VALUE(records, '$.record_id') AS record_id,
+    record.record_id AS record_id,
     JSON_VALUE(agent_info, "$.name") AS judge,
     JSON_VALUE(agent_info, "$.parameters.model") AS judge_model,
     JSON_VALUE(metadata, "$.template_hash") AS judge_hash,
     JSON_VALUE(agent_info, "$.role") AS judge_role,
     -- Predicted Label
     CAST(JSON_VALUE(outputs, "$.prediction") AS BOOLEAN) AS predicted_violating,
-    -- True Label (extracted from the ground_truth field)
-    CAST(JSON_VALUE(records, '$.ground_truth.violating') AS BOOLEAN) AS true_violating
+    -- True Label (from the canonical record column; record.ground_truth is JSON)
+    CAST(JSON_VALUE(record.ground_truth, '$.violating') AS BOOLEAN) AS true_violating
   FROM
     `prosocial-443205.testing.flow`
-    LEFT JOIN UNNEST(JSON_QUERY_ARRAY(inputs, '$.records')) AS records
   WHERE
     JSON_VALUE(agent_info, "$.role") IN ('JUDGE', 'SYNTHESISER')
 ),

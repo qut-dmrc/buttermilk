@@ -242,6 +242,8 @@ class BaseRecord(BaseModel):
         Returns:
             list[dict[str, Any]]: List of per-part hashes.
         """
+        from buttermilk._core.hashing import compute_ground_truth_hash
+
         hashes = []
         if isinstance(self.content, str):
             hashes.append({"part_index": 0, "content_type": "text", "hash": hash_content(self.content)})
@@ -251,6 +253,18 @@ class BaseRecord(BaseModel):
                     hashes.append({"part_index": i, "content_type": "text", "hash": hash_content(item)})
                 elif isinstance(item, Image):
                     hashes.append({"part_index": i, "content_type": "image", "hash": hashlib.sha256(item.tobytes()).hexdigest()})
+
+        # Whole-record markdown hash as a tuple (canonical home; replaces the legacy scalar
+        # record_hash column — convention is hash tuple-lists, not per-field scalar columns).
+        hashes.append({"part_index": None, "content_type": "record_markdown", "hash": self.record_hash})
+
+        # Ground-truth (the true label) hash as a tuple, when present — tamper-evidence for
+        # the evidentiary label without a dedicated *_hash column (task buttermilk-1e23cce6).
+        # `ground_truth` lives on the Record subclass, not BaseRecord — guard the access.
+        gt_hash = compute_ground_truth_hash(getattr(self, "ground_truth", None))
+        if gt_hash is not None:
+            hashes.append({"part_index": None, "content_type": "ground_truth", "hash": gt_hash})
+
         return hashes
 
     @computed_field
@@ -382,8 +396,10 @@ class Record(BaseRecord):
         elif not isinstance(current_exclude, set):
             current_exclude = {current_exclude}
 
-        # Add computed fields to exclusion for simple text content
-        # Note: record_hash is NOT excluded - it's required for BQ traces (traces.schema.json)
+        # Add computed fields to exclusion for simple text content.
+        # record_hash stays in the dump (legacy scalar column, kept additively). ground_truth_hash
+        # is excluded: there is NO ground_truth_hash column — its hash lives as a tuple in
+        # record_hashes[] (convention: hash tuple-lists, not per-field scalar columns).
         if isinstance(self.content, str):
             current_exclude.update({"title", "images", "ground_truth_hash"})
 
@@ -458,7 +474,8 @@ class Record(BaseRecord):
         exclude={
             "title",
             "images",
-            # Note: record_hash included for BQ tracing (required per traces.schema.json)
+            # record_hash kept in dump (legacy scalar column, additive). ground_truth_hash
+            # excluded — no such column; its hash is a tuple in record_hashes[].
             "ground_truth_hash",
         },  # Exclude computed properties from model_dump
         # positional_args=True, # Removed as it's less common and can be ambiguous
