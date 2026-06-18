@@ -654,40 +654,42 @@ def litellm_to_model_output(response: Any, usage: Any, model: str, schema: type[
     if hasattr(response, "choices") and response.choices and len(response.choices) > 0:
         choice = response.choices[0]
         message = choice.message if hasattr(choice, "message") else choice
-
-        # Check for tool calls (check both existence and non-empty list)
-        tool_calls_attr = getattr(message, "tool_calls", None)
-        if tool_calls_attr is not None and isinstance(tool_calls_attr, list) and len(tool_calls_attr) > 0:
-            # Convert to FunctionCall objects
-            tool_calls: list[FunctionCall] = []
-            for tc in tool_calls_attr:
-                tool_calls.append(FunctionCall(id=tc.id, name=tc.function.name, arguments=tc.function.arguments))
-            content = tool_calls
-        else:
-            # Regular text content
-            content = message.content if hasattr(message, "content") else str(message)
-            # Route the response through ChatParser to (a) strip inline
-            # <think>...</think> blocks emitted by DeepSeek-R1 via Vertex MAAS
-            # and (b) capture any reasoning into the proper `thought` field.
-            # Providers that emit structured `reasoning_content` (DeepSeek
-            # reasoner, OpenAI o-series, Anthropic extended thinking, Gemini
-            # thinking) take precedence over inline-extracted text.
-            if isinstance(content, str):
-                parser = importlib.import_module("buttermilk.utils.json_parser").ChatParser()
-                content = parser.extract_reasoning(
-                    content,
-                    structured_reasoning=getattr(message, "reasoning_content", None),
-                )
-                thought = parser.thought
-
         raw_finish_reason = choice.finish_reason if hasattr(choice, "finish_reason") else "stop"
-        # Map LiteLLM finish_reason to native values
-        # LiteLLM uses "tool_calls", we use "function_calls"
         finish_reason_map = {
             "tool_calls": "function_calls",
             "tool_use": "function_calls",  # Some providers use this
         }
         finish_reason = finish_reason_map.get(raw_finish_reason, raw_finish_reason)
+
+        if message is None:
+            # Vertex returns message=null when a reasoning model hits finish_reason=length
+            # (hidden reasoning tokens consumed the entire budget before output tokens)
+            content = ""
+        else:
+            # Check for tool calls (check both existence and non-empty list)
+            tool_calls_attr = getattr(message, "tool_calls", None)
+            if tool_calls_attr is not None and isinstance(tool_calls_attr, list) and len(tool_calls_attr) > 0:
+                # Convert to FunctionCall objects
+                tool_calls: list[FunctionCall] = []
+                for tc in tool_calls_attr:
+                    tool_calls.append(FunctionCall(id=tc.id, name=tc.function.name, arguments=tc.function.arguments))
+                content = tool_calls
+            else:
+                # Regular text content
+                content = message.content if hasattr(message, "content") else str(message)
+                # Route the response through ChatParser to (a) strip inline
+                # <think>...</think> blocks emitted by DeepSeek-R1 via Vertex MAAS
+                # and (b) capture any reasoning into the proper `thought` field.
+                # Providers that emit structured `reasoning_content` (DeepSeek
+                # reasoner, OpenAI o-series, Anthropic extended thinking, Gemini
+                # thinking) take precedence over inline-extracted text.
+                if isinstance(content, str):
+                    parser = importlib.import_module("buttermilk.utils.json_parser").ChatParser()
+                    content = parser.extract_reasoning(
+                        content,
+                        structured_reasoning=getattr(message, "reasoning_content", None),
+                    )
+                    thought = parser.thought
     else:
         # Fallback for unexpected response format
         content = str(response)
@@ -821,6 +823,13 @@ class LiteLLMWrapper(BaseModel):
                 is_retryable = isinstance(e, retryable_types) or any(
                     keyword in error_msg for keyword in ["rate limit", "timeout", "503", "429", "502", "500", "name resolution"]
                 )
+
+                # AttributeError as the root cause means a deterministic parse failure
+                # (litellm wraps null-message parse as InternalServerError) — never retry
+                if is_retryable:
+                    cause = e.__cause__ or e.__context__
+                    if isinstance(cause, AttributeError):
+                        is_retryable = False
 
                 if attempt < self.max_retries and is_retryable:
                     # Calculate wait time with jitter
@@ -1047,8 +1056,8 @@ class LiteLLMWrapper(BaseModel):
             response = await self._execute_with_retry(_call_litellm)
         except Exception as e:
             # Check if it's a ContentPolicyViolationError (lazy check since litellm is lazy-loaded)
-            litellm = _get_litellm()
-            if litellm is not None and isinstance(e, litellm.ContentPolicyViolationError):
+            litellm_mod = _get_litellm()
+            if litellm_mod is not None and isinstance(e, litellm_mod.ContentPolicyViolationError):
                 # Handle content moderation errors from OpenAI/Azure without traceback
                 error_msg = f"Content blocked by provider safety filter: {e!s}"
                 logger.error(error_msg)
@@ -1056,6 +1065,24 @@ class LiteLLMWrapper(BaseModel):
                     message=error_msg,
                     filter_result={},  # LiteLLM doesn't provide detailed filter results
                 ) from e
+            # litellm wraps AttributeError (null message parse) as InternalServerError when
+            # finish_reason=length and a reasoning model exhausted its token budget —
+            # surface as a clean truncated ModelOutput instead of a fake 500
+            if litellm_mod is not None and isinstance(e, litellm_mod.InternalServerError):
+                cause = e.__cause__ or e.__context__
+                if isinstance(cause, AttributeError):
+                    error_str = str(e)
+                    logger.warning(
+                        "LiteLLM InternalServerError from null message parse "
+                        f"(finish_reason=length, insufficient max_tokens for reasoning model): {error_str}"
+                    )
+                    return ModelOutput(
+                        content="",
+                        finish_reason="length",
+                        usage=RequestUsage(prompt_tokens=0, completion_tokens=0),
+                        cached=False,
+                        error_message=error_str,
+                    )
             # Generic LiteLLM error
             error_msg = f"LiteLLM call failed: {e}"
             raise ProcessingError(error_msg) from e
