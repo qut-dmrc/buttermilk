@@ -508,6 +508,44 @@ async def _parse_structured_output(  # noqa: PLR0912
 # =============================================================================
 
 
+def _add_anthropic_cache_control(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Add an ephemeral cache_control breakpoint to the last system message.
+
+    Anthropic requires explicit cache_control breakpoints — without them nothing
+    is cached. This marks the stable system prefix as cacheable by placing a
+    ``{"type": "ephemeral"}`` breakpoint on the final system-role message, which
+    is the natural stable/variable boundary in a buttermilk prompt.
+
+    LiteLLM translates ``cache_control`` blocks to the Anthropic API format for
+    both ``client_type=anthropic`` and ``client_type=anthropic_vertex``.
+    """
+    last_system_idx = None
+    for i, msg in enumerate(messages):
+        if msg.get("role") == "system":
+            last_system_idx = i
+
+    if last_system_idx is None:
+        return messages
+
+    result = list(messages)
+    msg = result[last_system_idx]
+    content = msg["content"]
+
+    if isinstance(content, str):
+        result[last_system_idx] = {
+            **msg,
+            "content": [{"type": "text", "text": content, "cache_control": {"type": "ephemeral"}}],
+        }
+    elif isinstance(content, list) and content:
+        new_content = list(content)
+        last_block = new_content[-1]
+        if isinstance(last_block, dict) and "cache_control" not in last_block:
+            new_content[-1] = {**last_block, "cache_control": {"type": "ephemeral"}}
+        result[last_system_idx] = {**msg, "content": new_content}
+
+    return result
+
+
 def to_litellm_messages(messages: Sequence[LLMMessage]) -> list[dict[str, Any]]:
     """Convert LLMMessage objects to LiteLLM message format.
 
@@ -699,6 +737,7 @@ class LiteLLMWrapper(BaseModel):
     api_key: str | None = Field(default=None, description="API key for the provider")
     base_url: str | None = Field(default=None, description="Custom base URL")
     vertex_location: str | None = Field(default=None, description="GCP region for Vertex AI providers (litellm vertex_location)")
+    client_type: str | None = Field(default=None, description="Client type identifier (e.g., 'anthropic', 'vertex_ai')")
     default_parameters: ModelParameters = Field(
         default_factory=ModelParameters,
         description="Default inference parameters (temperature, max_tokens, etc.)",
@@ -803,6 +842,12 @@ class LiteLLMWrapper(BaseModel):
         """
         # Convert messages to LiteLLM format
         litellm_messages = to_litellm_messages(messages)
+
+        # Anthropic requires explicit cache_control breakpoints for prompt caching.
+        # Without them Claude caches nothing. Gemini/OpenAI cache implicitly from
+        # the system-block position and do not need this.
+        if self.client_type in ("anthropic", "anthropic_vertex"):
+            litellm_messages = _add_anthropic_cache_control(litellm_messages)
 
         # Merge default parameters with runtime kwargs (runtime takes precedence)
         merged_params = self.default_parameters.to_api_params()
@@ -1384,6 +1429,7 @@ class LLMs(BaseModel):
             api_key=config.api_key,
             base_url=config.base_url,
             vertex_location=vertex_location,
+            client_type=config.provider_segment,
             default_parameters=merged_params,
         )
 
