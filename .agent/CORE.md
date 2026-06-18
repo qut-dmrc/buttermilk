@@ -2,14 +2,14 @@
 
 ## Path Discovery (CRITICAL)
 
-To discover project locations, read `.agents/context-map.json` in the relevant repo. If the map is missing or stale, HALT.
+To discover project locations and key documentation, read `.agents/INDEX.md` in the relevant repo. If the index is missing, fall back to the repo's `README.md` and top-level layout — absence of the index is NOT a hard HALT (you are already inside the mounted worktree).
 
 ## Fail-Fast / Halt Rule (ENFORCED)
 
 If you cannot do what was asked, **STOP and report** — do NOT search broadly, do NOT invent workarounds.
 
 - **Missing Paths**: If a documented path does not exist, HALT.
-- **No Broad Grep**: Never grep `$HOME` or `/` to find source repos or documents. Use `context-map.json` for discovery.
+- **No Broad Grep**: Never grep `$HOME` or `/` to find source repos or documents. Use `.agents/INDEX.md` for discovery.
 - **Tool Failures**: If a tool doesn't work as documented, report the failure — do not invent alternatives.
 - **Ambiguity**: If instructions conflict or are ambiguous, ask for clarification.
 
