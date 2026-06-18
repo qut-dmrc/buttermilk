@@ -46,8 +46,18 @@ import pytest
 
 from buttermilk._core.messages import SystemMessage, UserMessage
 from buttermilk.utils.pricing import extract_cached_tokens
+from unittest.mock import AsyncMock, MagicMock, patch
+from buttermilk._core.exceptions import ProcessingError
+from buttermilk._core.llms import (
+    LiteLLMWrapper,
+    ModelInfo,
+    ModelParameters,
+    litellm_to_model_output,
+)
 
-pytestmark = [pytest.mark.integration, pytest.mark.slow]
+# NOTE: module-level pytestmark removed in the #432+#436 union so that the
+# reasoning-model UNIT tests (TestNullMessageDefensiveParse) are NOT marked
+# integration. The live matrix + integration classes carry their own marks.
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Filler block: must exceed per-provider implicit-cache token minimums.
@@ -617,6 +627,8 @@ _VARIANTS: dict[str, object] = {
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+@pytest.mark.integration
+@pytest.mark.slow
 @pytest.mark.anyio
 async def test_prompt_cache_matrix(real_llm, llm_wrapper_type, real_bm, session_runner) -> None:
     """Verify prompt-cache behaviour for one roster model × two variants.
@@ -703,3 +715,174 @@ def _report(model_name: str, rows: dict[str, dict]) -> None:
                 f" {hit_str:>5}"
             )
     print(sep)
+
+
+# ---------------------------------------------------------------------------
+# Unit tests — no real API required
+# ---------------------------------------------------------------------------
+
+
+class TestNullMessageDefensiveParse:
+    """litellm parse failure (null message + finish_reason=length) is handled cleanly."""
+
+    def test_litellm_to_model_output_null_message(self):
+        """litellm_to_model_output with message=None → empty content, finish_reason=length."""
+        mock_choice = MagicMock()
+        mock_choice.message = None
+        mock_choice.finish_reason = "length"
+
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        mock_response.cached = False
+
+        mock_usage = MagicMock()
+        mock_usage.prompt_tokens = 500
+        mock_usage.completion_tokens = 0
+
+        result = litellm_to_model_output(mock_response, mock_usage, "gemini-3.5-flash")
+
+        assert result.content == ""
+        assert result.finish_reason == "length"
+        assert result.usage.prompt_tokens == 500
+
+    @pytest.mark.slow
+    @pytest.mark.anyio
+    async def test_attribute_error_cause_not_retried(self):
+        """Exception with AttributeError root cause is not retried (deterministic, not transient).
+
+        When litellm wraps an AttributeError from parsing a null message as InternalServerError,
+        the string "500" would normally trigger the retry logic.  The AttributeError cause
+        check overrides is_retryable=False to prevent wasted retry cycles.
+        """
+        model_info = ModelInfo(vision=False, function_calling=False, json_output=False, family="gemini")
+        wrapper = LiteLLMWrapper(
+            model="gemini-3.5-flash",
+            model_info=model_info,
+            litellm_model_name="vertex_ai/gemini-3.5-flash",
+            max_retries=3,
+            min_wait_seconds=0.01,
+            jitter_seconds=0,
+        )
+        messages = [UserMessage(content="test", source="user")]
+
+        # Simulate: exception that would normally be retried ("500" in message)
+        # but whose root cause is an AttributeError (deterministic parse failure)
+        e = Exception("InternalServerError: 500 Internal Server Error")
+        e.__cause__ = AttributeError("'NoneType' object has no attribute 'get'")
+
+        with patch("litellm.acompletion", side_effect=e) as mock_acompletion:
+            with pytest.raises(ProcessingError):
+                await wrapper.create(messages=messages)
+
+            # Must not retry — 1 call only, not max_retries+1=4
+            assert mock_acompletion.call_count == 1, (
+                f"Expected 1 call (no retry for deterministic parse failure), got {mock_acompletion.call_count}"
+            )
+
+    @pytest.mark.slow
+    @pytest.mark.anyio
+    async def test_internal_server_error_with_attr_cause_returns_model_output(self):
+        """InternalServerError wrapping AttributeError → ModelOutput(finish_reason=length), not ProcessingError.
+
+        Reproduces the exact failure mode diagnosed 2026-06-19:
+          Vertex returns HTTP 200 with choices[0] = {finish_reason: "length", message: null}
+          litellm's convert_dict_to_response.py does choice["message"].get("tool_calls")
+          on None → AttributeError → re-wrapped as InternalServerError.
+        """
+        # Build a fake litellm module so we control InternalServerError's type
+        FakeInternalServerError = type("InternalServerError", (Exception,), {})
+        FakeContentPolicyViolationError = type("ContentPolicyViolationError", (Exception,), {})
+
+        fake_litellm = MagicMock()
+        fake_litellm.InternalServerError = FakeInternalServerError
+        fake_litellm.ContentPolicyViolationError = FakeContentPolicyViolationError
+
+        err = FakeInternalServerError("InternalServerError: 500 Internal Server Error")
+        err.__cause__ = AttributeError("'NoneType' object has no attribute 'get'")
+
+        model_info = ModelInfo(vision=False, function_calling=False, json_output=False, family="gemini")
+        wrapper = LiteLLMWrapper(
+            model="gemini-3.5-flash",
+            model_info=model_info,
+            litellm_model_name="vertex_ai/gemini-3.5-flash",
+            max_retries=0,
+            min_wait_seconds=0.01,
+            jitter_seconds=0,
+        )
+        messages = [UserMessage(content="test", source="user")]
+
+        async def _fake_acompletion(**kwargs):
+            raise err
+
+        with patch("buttermilk._core.llms._get_litellm", return_value=fake_litellm):
+            with patch("buttermilk._core.llms._get_acompletion", return_value=_fake_acompletion):
+                result = await wrapper.create(messages=messages)
+
+        assert result.finish_reason == "length"
+        assert result.content == ""
+        assert result.error_message is not None
+        assert "InternalServerError" in result.error_message
+
+
+# ---------------------------------------------------------------------------
+# Integration tests — require real Vertex AI infrastructure
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+@pytest.mark.slow
+@pytest.mark.anyio
+class TestReasoningModelCacheVariants:
+    """Verify reasoning models succeed with sufficient max_tokens.
+
+    These tests require real Vertex AI access (use real_bm / real_llm fixtures).
+    They guard against the defect where gemini-3.5-flash with max_tokens=64 on a
+    large prompt hits finish_reason=length on every call, masquerading as a 500.
+    """
+
+    async def test_gemini_reasoning_model_with_sufficient_budget(self, real_bm):
+        """gemini-3.5-flash succeeds with max_tokens=8192 on a non-trivial prompt."""
+        llms = real_bm.llms
+        model_name = "google/gemini-3.5-flash"
+
+        if model_name not in llms.connections:
+            pytest.skip(f"{model_name} not in configured LLM connections")
+
+        wrapper = llms.get_llm(model_name)
+        messages = [UserMessage(content="What is 2+2? Answer briefly.", source="user")]
+
+        result = await wrapper.create(messages=messages, max_tokens=8192)
+
+        assert result.finish_reason == "stop", (
+            f"Expected finish_reason=stop but got {result.finish_reason!r}. "
+            "If finish_reason=length, max_tokens may still be too small for this reasoning model."
+        )
+        assert result.content, "Expected non-empty content from reasoning model"
+
+    async def test_reasoning_model_finish_reason_length_not_raised_as_500(self, real_bm):
+        """When a reasoning model returns finish_reason=length, result is ModelOutput not 500."""
+        llms = real_bm.llms
+        model_name = "google/gemini-3.5-flash"
+
+        if model_name not in llms.connections:
+            pytest.skip(f"{model_name} not in configured LLM connections")
+
+        wrapper = llms.get_llm(model_name)
+        # Deliberately small max_tokens to trigger finish_reason=length on a reasoning model
+        messages = [
+            UserMessage(
+                content="Write a detailed 500-word essay about the history of computing.",
+                source="user",
+            )
+        ]
+
+        # Should return a ModelOutput, not raise ProcessingError / InternalServerError
+        result = await wrapper.create(messages=messages, max_tokens=64)
+
+        assert hasattr(result, "finish_reason"), "Should return ModelOutput, not raise"
+        if result.finish_reason == "length":
+            # Correct: budget was too small, returned gracefully
+            assert result.content == "" or isinstance(result.content, str)
+        else:
+            # Also fine: model managed to fit within 64 tokens (unlikely but valid)
+            assert result.content
