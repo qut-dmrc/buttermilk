@@ -27,8 +27,6 @@ and reported — not raised — so the full matrix is always collected.
 
 from __future__ import annotations
 
-import pytest
-
 from buttermilk._core.messages import SystemMessage, UserMessage
 from buttermilk.utils.pricing import extract_cached_tokens
 
@@ -341,14 +339,14 @@ async def test_prompt_cache_matrix(real_bm, session_runner) -> None:
                 # ── Call 1: warm the cache ────────────────────────────────
                 r1 = await client.create(messages=messages, max_tokens=64)
                 c1 = extract_cached_tokens(r1.usage)
-                p1: dict = (r1.metadata.get("pricing") or {})
+                p1: dict = r1.metadata.get("pricing") or {}
                 cost1: float = p1.get("total_cost") or 0.0
                 prompt1: int = getattr(r1.usage, "prompt_tokens", 0) or 0
 
                 # ── Call 2: expect cache hit on second request ────────────
                 r2 = await client.create(messages=messages, max_tokens=64)
                 c2 = extract_cached_tokens(r2.usage)
-                p2: dict = (r2.metadata.get("pricing") or {})
+                p2: dict = r2.metadata.get("pricing") or {}
                 cost2: float = p2.get("total_cost") or 0.0
                 prompt2: int = getattr(r2.usage, "prompt_tokens", 0) or 0
 
@@ -372,8 +370,7 @@ async def test_prompt_cache_matrix(real_bm, session_runner) -> None:
     # This confirms the test ran (even if every model errored or missed cache).
     for model_name in model_names:
         assert set(matrix[model_name].keys()) == set(_VARIANTS.keys()), (
-            f"Incomplete result for model '{model_name}': "
-            f"got {set(matrix[model_name].keys())}"
+            f"Incomplete result for model '{model_name}': got {set(matrix[model_name].keys())}"
         )
 
 
@@ -386,14 +383,9 @@ def _report(matrix: dict[str, dict[str, dict]], model_names: list[str]) -> None:
     sep = "=" * 122
     print(f"\n{sep}")
     print("PROMPT CACHE VERIFICATION MATRIX")
-    print(f"  Variant A = stuffed (single user message)   "
-          f"Variant B = separate (SystemMessage + UserMessage)")
+    print("  Variant A = stuffed (single user message)   Variant B = separate (SystemMessage + UserMessage)")
     print(sep)
-    print(
-        f"{'Model':<46} {'Variant':<12} "
-        f"{'Cached₁':>8} {'Cached₂':>8} "
-        f"{'Cost₁':>11} {'Cost₂':>11} {'Drop':>11} {'Hit':>5}"
-    )
+    print(f"{'Model':<46} {'Variant':<12} {'Cached₁':>8} {'Cached₂':>8} {'Cost₁':>11} {'Cost₂':>11} {'Drop':>11} {'Hit':>5}")
     print("-" * 122)
     for model_name in sorted(model_names):
         for variant in ("A_stuffed", "B_separate"):
