@@ -10,7 +10,9 @@ from buttermilk._core.llms import (
     LiteLLMWrapper,
     ModelInfo,
     ModelParameters,
-    _add_anthropic_cache_control,
+    _anthropic_cache_floor,
+    _anthropic_cache_injection_points,
+    _estimate_system_prefix_tokens,
     litellm_to_model_output,
     to_litellm_messages,
 )
@@ -375,99 +377,76 @@ class TestLiteLLMWrapperPricing:
         assert pricing["total_cost"] == 0.0
 
 
-class TestAddAnthropicCacheControl:
-    """Tests for _add_anthropic_cache_control helper."""
+# A system prefix large enough to clear the highest Anthropic floor (4096 tok).
+# ~30k chars / 4 ≈ 7500 tok.
+_BIG_SYSTEM = "criteria block. " * 2000
 
-    def test_adds_cache_control_to_string_system_content(self):
-        """System message with string content is converted to content block with cache_control."""
+
+class TestAnthropicCacheFloor:
+    """Tests for _anthropic_cache_floor model→floor mapping."""
+
+    def test_opus_and_haiku_are_high_floor(self):
+        assert _anthropic_cache_floor("claude-opus-4-7") == 4096
+        assert _anthropic_cache_floor("vertex_ai/claude-haiku-4-5") == 4096
+
+    def test_sonnet_46_and_fable_are_mid_floor(self):
+        assert _anthropic_cache_floor("claude-sonnet-4-6") == 2048
+        assert _anthropic_cache_floor("claude-fable-5") == 2048
+
+    def test_unknown_claude_defaults_high(self):
+        """Conservative: unrecognised model treated as the 4096 floor."""
+        assert _anthropic_cache_floor("claude-something-new") == 4096
+        assert _anthropic_cache_floor("") == 4096
+
+
+class TestEstimateSystemPrefixTokens:
+    """Tests for _estimate_system_prefix_tokens (char/4 over the leading system block)."""
+
+    def test_counts_only_leading_system_block(self):
         messages = [
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": "Hello!"},
+            {"role": "system", "content": "a" * 4000},
+            {"role": "user", "content": "b" * 8000},  # must NOT be counted
         ]
-        result = _add_anthropic_cache_control(messages)
+        assert _estimate_system_prefix_tokens(messages) == 1000  # 4000 / 4
 
-        sys_msg = result[0]
-        assert sys_msg["role"] == "system"
-        assert isinstance(sys_msg["content"], list)
-        assert len(sys_msg["content"]) == 1
-        block = sys_msg["content"][0]
-        assert block["type"] == "text"
-        assert block["text"] == "You are a helpful assistant."
-        assert block["cache_control"] == {"type": "ephemeral"}
-
-        # User message unchanged
-        assert result[1] == {"role": "user", "content": "Hello!"}
-
-    def test_no_system_message_returns_unchanged(self):
-        """Messages without a system role are returned unchanged."""
+    def test_list_content_summed(self):
         messages = [
-            {"role": "user", "content": "Hello!"},
-            {"role": "assistant", "content": "Hi!"},
+            {"role": "system", "content": [{"type": "text", "text": "a" * 2000}, {"type": "text", "text": "b" * 2000}]},
+            {"role": "user", "content": "x"},
         ]
-        result = _add_anthropic_cache_control(messages)
-        assert result == messages
+        assert _estimate_system_prefix_tokens(messages) == 1000  # 4000 / 4
 
-    def test_only_last_system_message_gets_cache_control(self):
-        """When multiple system messages exist, only the last one gets cache_control."""
-        messages = [
-            {"role": "system", "content": "First system block."},
-            {"role": "system", "content": "Second system block."},
-            {"role": "user", "content": "Question"},
-        ]
-        result = _add_anthropic_cache_control(messages)
+    def test_no_system_block_is_zero(self):
+        assert _estimate_system_prefix_tokens([{"role": "user", "content": "hi"}]) == 0
 
-        # First system message: unchanged (still a string)
-        assert result[0]["content"] == "First system block."
 
-        # Last system message: converted to content block with cache_control
-        last_sys = result[1]
-        assert isinstance(last_sys["content"], list)
-        assert last_sys["content"][0]["cache_control"] == {"type": "ephemeral"}
+class TestAnthropicCacheInjectionPoints:
+    """Tests for _anthropic_cache_injection_points (the floor-guarded decision)."""
 
-    def test_list_content_appends_cache_control_to_last_block(self):
-        """System message with list content gets cache_control on the last block."""
-        messages = [
-            {
-                "role": "system",
-                "content": [
-                    {"type": "text", "text": "Block one."},
-                    {"type": "text", "text": "Block two."},
-                ],
-            },
-            {"role": "user", "content": "Hi"},
-        ]
-        result = _add_anthropic_cache_control(messages)
+    def test_above_floor_returns_system_injection_point(self):
+        messages = [{"role": "system", "content": _BIG_SYSTEM}, {"role": "user", "content": "record"}]
+        result = _anthropic_cache_injection_points(messages, "claude-opus-4-7")
+        assert result == [{"location": "message", "role": "system"}]
 
-        content = result[0]["content"]
-        assert len(content) == 2
-        assert "cache_control" not in content[0]  # first block unchanged
-        assert content[1]["cache_control"] == {"type": "ephemeral"}
+    def test_below_floor_returns_none_and_warns(self):
+        """Small prefix → no breakpoint (silent no-op avoided) + a warning."""
+        messages = [{"role": "system", "content": "tiny system prompt"}, {"role": "user", "content": "record"}]
+        with patch("buttermilk._core.llms.logger.warning") as mock_warn:
+            result = _anthropic_cache_injection_points(messages, "claude-opus-4-7")
+        assert result is None
+        mock_warn.assert_called_once()
+        assert "below the 4096-tok floor" in mock_warn.call_args[0][0]
 
-    def test_existing_cache_control_not_overwritten(self):
-        """A block that already has cache_control is left alone."""
-        messages = [
-            {
-                "role": "system",
-                "content": [
-                    {"type": "text", "text": "Cached.", "cache_control": {"type": "ephemeral"}},
-                ],
-            },
-        ]
-        result = _add_anthropic_cache_control(messages)
-        # Only one block, already has cache_control — should not be duplicated/changed
-        assert result[0]["content"][0]["cache_control"] == {"type": "ephemeral"}
-        # Ensure no extra keys added
-        assert list(result[0]["content"][0].keys()) == ["type", "text", "cache_control"]
+    def test_mid_floor_model_caches_at_smaller_prefix(self):
+        """A ~3000-tok prefix clears Sonnet-4.6's 2048 floor but not Opus's 4096."""
+        mid = "criteria block. " * 800  # ~12.8k chars / 4 ≈ 3200 tok
+        messages = [{"role": "system", "content": mid}, {"role": "user", "content": "record"}]
+        assert _anthropic_cache_injection_points(messages, "claude-sonnet-4-6") == [{"location": "message", "role": "system"}]
+        assert _anthropic_cache_injection_points(messages, "claude-opus-4-7") is None
 
-    def test_system_block_ordering_preserved(self):
-        """System messages remain before user messages after transformation."""
-        messages = [
-            {"role": "system", "content": "Instructions."},
-            {"role": "user", "content": "Record content."},
-        ]
-        result = _add_anthropic_cache_control(messages)
-        assert result[0]["role"] == "system"
-        assert result[1]["role"] == "user"
+    def test_no_system_message_returns_none(self):
+        messages = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "yo"}]
+        assert _anthropic_cache_injection_points(messages, "claude-opus-4-7") is None
 
 
 @pytest.mark.slow
@@ -489,8 +468,8 @@ class TestAnthropicCacheControlInCreate:
         mock_response.cached = False
         return mock_response
 
-    async def test_anthropic_path_adds_cache_control(self):
-        """create() adds cache_control to the system message on the anthropic path."""
+    async def test_anthropic_path_requests_cache_injection_point(self):
+        """create() passes cache_control_injection_points on the anthropic path (prefix above floor)."""
         model_info = ModelInfo(vision=False, function_calling=True, json_output=False, family="claude")
         wrapper = LiteLLMWrapper(
             model="claude-sonnet-4-6",
@@ -500,7 +479,7 @@ class TestAnthropicCacheControlInCreate:
             client_type="anthropic",
         )
         messages = [
-            SystemMessage(content="You are a judge. Evaluate the following."),
+            SystemMessage(content=_BIG_SYSTEM),
             UserMessage(content="The article content here.", source="user"),
         ]
 
@@ -508,17 +487,14 @@ class TestAnthropicCacheControlInCreate:
             await wrapper.create(messages=messages)
             import litellm
 
-            call_messages = litellm.acompletion.call_args[1]["messages"]
+            call_kwargs = litellm.acompletion.call_args[1]
 
-        sys_msg = call_messages[0]
-        assert sys_msg["role"] == "system"
-        assert isinstance(sys_msg["content"], list), "System content must be a list of blocks for Anthropic caching"
-        assert sys_msg["content"][0]["cache_control"] == {"type": "ephemeral"}
-        # User message must not have cache_control
-        assert "cache_control" not in call_messages[1]
+        assert call_kwargs["cache_control_injection_points"] == [{"location": "message", "role": "system"}]
+        # We do NOT hand-stamp the messages — litellm's hook does that downstream.
+        assert call_kwargs["messages"][0]["role"] == "system"
 
-    async def test_anthropic_vertex_path_adds_cache_control(self):
-        """create() adds cache_control on the anthropic_vertex path."""
+    async def test_anthropic_vertex_path_requests_cache_injection_point(self):
+        """create() requests the injection point on the anthropic_vertex path."""
         model_info = ModelInfo(vision=False, function_calling=True, json_output=False, family="claude")
         wrapper = LiteLLMWrapper(
             model="claude-sonnet-4-6",
@@ -529,7 +505,7 @@ class TestAnthropicCacheControlInCreate:
             vertex_location="us-east5",
         )
         messages = [
-            SystemMessage(content="System instructions."),
+            SystemMessage(content=_BIG_SYSTEM),
             UserMessage(content="User content.", source="user"),
         ]
 
@@ -537,14 +513,35 @@ class TestAnthropicCacheControlInCreate:
             await wrapper.create(messages=messages)
             import litellm
 
-            call_messages = litellm.acompletion.call_args[1]["messages"]
+            call_kwargs = litellm.acompletion.call_args[1]
 
-        sys_msg = call_messages[0]
-        assert isinstance(sys_msg["content"], list)
-        assert sys_msg["content"][0]["cache_control"] == {"type": "ephemeral"}
+        assert call_kwargs["cache_control_injection_points"] == [{"location": "message", "role": "system"}]
 
-    async def test_gemini_path_no_cache_control(self):
-        """create() does NOT add cache_control on the gemini path (implicit caching)."""
+    async def test_anthropic_below_floor_no_injection_point(self):
+        """A small system prefix below the floor → no cache_control_injection_points param."""
+        model_info = ModelInfo(vision=False, function_calling=True, json_output=False, family="claude")
+        wrapper = LiteLLMWrapper(
+            model="claude-opus-4-7",
+            model_info=model_info,
+            litellm_model_name="claude-opus-4-7",
+            api_key="test-key",
+            client_type="anthropic",
+        )
+        messages = [
+            SystemMessage(content="You are a judge. Evaluate the following."),  # tiny, below 4096
+            UserMessage(content="The article content here.", source="user"),
+        ]
+
+        with patch("litellm.acompletion", return_value=self._make_mock_response()):
+            await wrapper.create(messages=messages)
+            import litellm
+
+            call_kwargs = litellm.acompletion.call_args[1]
+
+        assert "cache_control_injection_points" not in call_kwargs
+
+    async def test_gemini_path_no_injection_point(self):
+        """create() does NOT request cache_control on the gemini path (implicit caching)."""
         model_info = ModelInfo(vision=False, function_calling=True, json_output=False, family="gemini")
         wrapper = LiteLLMWrapper(
             model="gemini-2.5-flash",
@@ -553,7 +550,7 @@ class TestAnthropicCacheControlInCreate:
             client_type="gemini",
         )
         messages = [
-            SystemMessage(content="You are a judge."),
+            SystemMessage(content=_BIG_SYSTEM),
             UserMessage(content="Content.", source="user"),
         ]
 
@@ -561,15 +558,14 @@ class TestAnthropicCacheControlInCreate:
             await wrapper.create(messages=messages)
             import litellm
 
-            call_messages = litellm.acompletion.call_args[1]["messages"]
+            call_kwargs = litellm.acompletion.call_args[1]
 
-        sys_msg = call_messages[0]
-        # System content stays as a plain string — no cache_control injection
-        assert isinstance(sys_msg["content"], str)
-        assert "cache_control" not in sys_msg
+        assert "cache_control_injection_points" not in call_kwargs
+        # System content stays as a plain string — untouched.
+        assert isinstance(call_kwargs["messages"][0]["content"], str)
 
-    async def test_openai_path_no_cache_control(self):
-        """create() does NOT add cache_control on the openai path."""
+    async def test_openai_path_no_injection_point(self):
+        """create() does NOT request cache_control on the openai path."""
         model_info = ModelInfo(vision=False, function_calling=True, json_output=False, family="gpt-4", structured_output=True)
         wrapper = LiteLLMWrapper(
             model="gpt-4",
@@ -579,7 +575,7 @@ class TestAnthropicCacheControlInCreate:
             client_type="openai",
         )
         messages = [
-            SystemMessage(content="Instructions."),
+            SystemMessage(content=_BIG_SYSTEM),
             UserMessage(content="Content.", source="user"),
         ]
 
@@ -587,11 +583,9 @@ class TestAnthropicCacheControlInCreate:
             await wrapper.create(messages=messages)
             import litellm
 
-            call_messages = litellm.acompletion.call_args[1]["messages"]
+            call_kwargs = litellm.acompletion.call_args[1]
 
-        sys_msg = call_messages[0]
-        assert isinstance(sys_msg["content"], str)
-        assert "cache_control" not in sys_msg
+        assert "cache_control_injection_points" not in call_kwargs
 
     async def test_system_before_user_on_anthropic_path(self):
         """System message remains first (before user/record content) on Anthropic path."""
@@ -604,7 +598,7 @@ class TestAnthropicCacheControlInCreate:
             client_type="anthropic",
         )
         messages = [
-            SystemMessage(content="System prompt with criteria."),
+            SystemMessage(content=_BIG_SYSTEM),
             UserMessage(content="Variable record content.", source="user"),
         ]
 
