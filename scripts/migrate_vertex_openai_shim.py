@@ -44,6 +44,7 @@ Usage:
 
 Requires GCP creds with secretmanager.versions.access + .add on the project.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -101,9 +102,7 @@ def migrate(registry: dict) -> tuple[dict, list[str]]:
             continue
         entry["client_type"] = "vertex_xai"
         # repoint base_url location to us-east5 (where all grok ids resolve)
-        entry["base_url"] = (
-            f"https://aiplatform.googleapis.com/v1/projects/{PROJECT}/locations/{GROK_REGION}/endpoints/openapi"
-        )
+        entry["base_url"] = f"https://aiplatform.googleapis.com/v1/projects/{PROJECT}/locations/{GROK_REGION}/endpoints/openapi"
         cfg = entry.setdefault("configs", {})
         old_id = cfg.get("model")
         cfg["model"] = real_id
