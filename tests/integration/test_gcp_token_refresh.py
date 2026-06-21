@@ -24,7 +24,7 @@ async def test_litellm_vertex_uses_token_provider(real_bm):
 
     ARRANGE:
     - Get LiteLLMWrapper for a Vertex model via get_client()
-    - Verify model is actually a Vertex type (GEMINI_VERTEX or VERTEX_OPENAI)
+    - Verify model is actually a Vertex type (GEMINI_VERTEX or VERTEX_XAI)
 
     ACT:
     - Verify wrapper.token_provider is set and callable
@@ -55,7 +55,7 @@ async def test_litellm_vertex_uses_token_provider(real_bm):
 
     vertex_types = {
         ClientType.GEMINI_VERTEX,
-        ClientType.VERTEX_OPENAI,
+        ClientType.VERTEX_XAI,
         ClientType.ANTHROPIC_VERTEX,
     }
     assert config.client_type in vertex_types, (

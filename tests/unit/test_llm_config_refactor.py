@@ -15,7 +15,7 @@ def test_client_type_enum():
         "anthropic_vertex",
         "gemini",
         "gemini_vertex",
-        "vertex_openai",
+        "vertex_xai",
         "llama_vertex",
         "deepseek_vertex",
         "mistral_vertex",

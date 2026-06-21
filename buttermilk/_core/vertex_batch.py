@@ -422,8 +422,8 @@ def get_message_converter(model: str, client_type: str | None = None, **kwargs: 
 
     Routing logic:
     - anthropic, anthropic_vertex -> Claude converter
-    - azure, openai -> OpenAI converter
-    - Everything else (gemini_vertex, vertex_openai, deepseek_vertex, llama_vertex) -> Gemini converter
+    - azure, openai, vertex_xai (Grok on Vertex OpenAI-compat endpoint) -> OpenAI converter
+    - Everything else (gemini_vertex, deepseek_vertex, llama_vertex) -> Gemini converter
 
     Args:
         model: Model identifier (e.g., "gemini-2.5-flash", "claude-sonnet-4", "gpt-4o")
@@ -437,9 +437,10 @@ def get_message_converter(model: str, client_type: str | None = None, **kwargs: 
     if client_type:
         if client_type in ("anthropic", "anthropic_vertex"):
             return ClaudeMessageConverter(max_tokens=kwargs.get("max_tokens"))
-        if client_type in ("azure", "openai"):
+        if client_type in ("azure", "openai", "vertex_xai"):
+            # vertex_xai = Grok on Vertex via its OpenAI-compatible endpoint -> OpenAI format
             return OpenAIMessageConverter(max_tokens=kwargs.get("max_tokens"), model=model)
-        # All Vertex-hosted models (gemini_vertex, vertex_openai, deepseek_vertex, llama_vertex)
+        # Remaining Vertex-hosted models (gemini_vertex, deepseek_vertex, llama_vertex)
         # use Gemini batch format
         return GeminiMessageConverter()
 

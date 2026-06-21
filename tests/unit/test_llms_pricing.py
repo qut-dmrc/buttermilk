@@ -32,13 +32,13 @@ class TestModelOutputPricing:
 class TestLiteLLMModelNameResolution:
     """Test robust model name resolution for LiteLLM cost calculation."""
 
-    def test_gemini_vertex_openai_resolution(self):
-        """Test that Gemini models with vertex_openai client resolve correctly."""
+    def test_gemini_vertex_resolution(self):
+        """Test that Gemini models with gemini_vertex client resolve to native vertex_ai/."""
         # This is the key test case - should strip google/ prefix for litellm compatibility
-        result = LLMs.lookup_litellm_model_name("google/gemini-2.5-flash", "vertex_openai")
+        result = LLMs.lookup_litellm_model_name("google/gemini-2.5-flash", "gemini_vertex")
         assert result == "vertex_ai/gemini-2.5-flash"
 
-        result = LLMs.lookup_litellm_model_name("google/gemini-2.5-pro", "vertex_openai")
+        result = LLMs.lookup_litellm_model_name("google/gemini-2.5-pro", "gemini_vertex")
         assert result == "vertex_ai/gemini-2.5-pro"
 
     def test_gemini_direct_api_resolution(self):
@@ -75,9 +75,9 @@ class TestLiteLLMModelNameResolution:
         result = LLMs.lookup_litellm_model_name("gpt-4o", "openai")
         assert result == "openai/gpt-4o"
 
-    def test_llama_vertex_openai_resolution(self):
-        """Test Llama models on Vertex OpenAI endpoint resolve correctly."""
-        result = LLMs.lookup_litellm_model_name("meta/llama-4-maverick-17b-128e-instruct-maas", "vertex_openai")
+    def test_llama_vertex_resolution(self):
+        """Test Llama models on Vertex resolve correctly via native llama_vertex."""
+        result = LLMs.lookup_litellm_model_name("meta/llama-4-maverick-17b-128e-instruct-maas", "llama_vertex")
         assert result == "vertex_ai/meta/llama-4-maverick-17b-128e-instruct-maas"
 
     def test_deepseek_vertex_resolution(self):
@@ -88,7 +88,7 @@ class TestLiteLLMModelNameResolution:
     def test_existing_prefix_handling(self):
         """Test models that already have provider prefixes are handled correctly."""
         # If a model already has the expected prefix, it should be returned as-is
-        result = LLMs.lookup_litellm_model_name("vertex_ai/some-model", "vertex_openai")
+        result = LLMs.lookup_litellm_model_name("vertex_ai/some-model", "gemini_vertex")
         assert result == "vertex_ai/some-model"
 
         # If it has a different prefix, it should be preserved for cross-provider compatibility
@@ -101,10 +101,10 @@ class TestLiteLLMModelNameResolution:
 
     def test_empty_or_none_model_names(self):
         """Test edge cases with empty or None model names."""
-        result = LLMs.lookup_litellm_model_name("", "vertex_openai")
+        result = LLMs.lookup_litellm_model_name("", "gemini_vertex")
         assert result == ""
 
-        result = LLMs.lookup_litellm_model_name(None, "vertex_openai")
+        result = LLMs.lookup_litellm_model_name(None, "gemini_vertex")
         assert result is None
 
     def test_unknown_client_types_fallback(self):
@@ -117,16 +117,16 @@ class TestLiteLLMModelNameResolution:
         assert LLMs._provider_prefix_for_client_type("azure") == "azure"
         assert LLMs._provider_prefix_for_client_type("openai") == "openai"
         assert LLMs._provider_prefix_for_client_type("gemini") == "gemini"
-        assert LLMs._provider_prefix_for_client_type("gemini_vertex") == "gemini"
-        assert LLMs._provider_prefix_for_client_type("vertex_openai") == "vertex_ai"
+        assert LLMs._provider_prefix_for_client_type("gemini_vertex") == "vertex_ai"
+        assert LLMs._provider_prefix_for_client_type("vertex_xai") == "vertex_ai"
         assert LLMs._provider_prefix_for_client_type("anthropic_vertex") == "vertex_ai"
         assert LLMs._provider_prefix_for_client_type("deepseek_vertex") == "vertex_ai"
         assert LLMs._provider_prefix_for_client_type("anthropic") == "anthropic"
 
     def test_base_model_name_extraction(self):
         """Test that _extract_base_model_name handles various patterns."""
-        # For vertex_openai with google/ models, strip the google/ prefix for litellm compatibility
-        result = LLMs._extract_base_model_name("google/gemini-2.5-flash", "vertex_openai")
+        # For gemini_vertex with google/ models, strip the google/ prefix for litellm compatibility
+        result = LLMs._extract_base_model_name("google/gemini-2.5-flash", "gemini_vertex")
         assert result == "gemini-2.5-flash"
 
         # For other cases, strip mismatched prefixes
@@ -140,14 +140,14 @@ class TestLiteLLMModelNameResolution:
     def test_real_world_model_registry_examples(self):
         """Test with real model names from the model registry."""
         # Test current gemini models that were causing issues - should strip google/ prefix
-        result = LLMs.lookup_litellm_model_name("google/gemini-2.5-flash", "vertex_openai")
+        result = LLMs.lookup_litellm_model_name("google/gemini-2.5-flash", "gemini_vertex")
         assert result == "vertex_ai/gemini-2.5-flash"
 
-        result = LLMs.lookup_litellm_model_name("google/gemini-2.5-pro", "vertex_openai")
+        result = LLMs.lookup_litellm_model_name("google/gemini-2.5-pro", "gemini_vertex")
         assert result == "vertex_ai/gemini-2.5-pro"
 
-        # Test Llama model - should preserve meta/ prefix for vertex_openai
-        result = LLMs.lookup_litellm_model_name("meta/llama-4-maverick-17b-128e-instruct-maas", "vertex_openai")
+        # Test Llama model - should preserve meta/ prefix for llama_vertex
+        result = LLMs.lookup_litellm_model_name("meta/llama-4-maverick-17b-128e-instruct-maas", "llama_vertex")
         assert result == "vertex_ai/meta/llama-4-maverick-17b-128e-instruct-maas"
 
         # Test Azure models
@@ -166,12 +166,12 @@ class TestLiteLLMModelNameResolution:
 class TestLiteLLMIntegration:
     """Test that generated model names actually work with litellm cost_per_token."""
 
-    def test_gemini_vertex_openai_litellm_compatibility(self):
+    def test_gemini_vertex_litellm_compatibility(self):
         """Test that generated model names work with actual litellm cost_per_token."""
         from litellm.cost_calculator import cost_per_token
 
-        # Test the key case that was failing - google/gemini-2.5-flash with vertex_openai
-        resolved_name = LLMs.lookup_litellm_model_name("google/gemini-2.5-flash", "vertex_openai")
+        # Test the key case that was failing - google/gemini-2.5-flash with gemini_vertex
+        resolved_name = LLMs.lookup_litellm_model_name("google/gemini-2.5-flash", "gemini_vertex")
         assert resolved_name == "vertex_ai/gemini-2.5-flash"
 
         # Test that this model name actually works with litellm
@@ -194,8 +194,8 @@ class TestLiteLLMIntegration:
         from litellm.cost_calculator import cost_per_token
 
         test_cases = [
-            ("google/gemini-2.5-flash", "vertex_openai", "vertex_ai/gemini-2.5-flash"),
-            ("google/gemini-2.5-pro", "vertex_openai", "vertex_ai/gemini-2.5-pro"),
+            ("google/gemini-2.5-flash", "gemini_vertex", "vertex_ai/gemini-2.5-flash"),
+            ("google/gemini-2.5-pro", "gemini_vertex", "vertex_ai/gemini-2.5-pro"),
             ("gemini-2.5-flash", "gemini", "gemini-2.5-flash"),
         ]
 

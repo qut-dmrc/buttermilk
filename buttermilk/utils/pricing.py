@@ -56,7 +56,7 @@ def _simple_model_resolution(model_name: str | None) -> str:
         return _MODEL_MAPPINGS[model_name]
 
     # Handle double-prefixed model names (e.g., "openai/google/gemini-3.1-flash-lite")
-    # This occurs when vertex_openai models are incorrectly prefixed for pricing
+    # This occurs when Vertex models are incorrectly prefixed for pricing
     if model_name.count("/") >= 2:
         parts = model_name.split("/")
         # Check for pattern: provider/google/gemini-*

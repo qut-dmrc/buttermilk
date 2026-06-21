@@ -350,7 +350,7 @@ async def test_get_client_passes_token_provider_for_vertex(real_bm: BM):
 
     # Get a model that uses Vertex
     # Based on testing.yaml, we use llms:debug which has google/gemini-3-flash-preview
-    # Need to verify this model uses ClientType.GEMINI_VERTEX or VERTEX_OPENAI
+    # Need to verify this model uses ClientType.GEMINI_VERTEX or VERTEX_XAI
     model_name = "google/gemini-3-flash-preview"
 
     # Verify the model config uses a Vertex client_type
@@ -358,7 +358,7 @@ async def test_get_client_passes_token_provider_for_vertex(real_bm: BM):
     config = llms.connections.get(model_name)
     assert config is not None, f"Model {model_name} not found in connections"
 
-    vertex_types = {ClientType.GEMINI_VERTEX, ClientType.VERTEX_OPENAI, ClientType.ANTHROPIC_VERTEX}
+    vertex_types = {ClientType.GEMINI_VERTEX, ClientType.VERTEX_XAI, ClientType.ANTHROPIC_VERTEX}
     assert config.client_type in vertex_types, (
         f"Model {model_name} uses {config.client_type}, expected a Vertex type. This test requires a Vertex model to verify token_provider is passed."
     )
