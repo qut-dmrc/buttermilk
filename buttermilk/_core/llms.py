@@ -128,6 +128,8 @@ class ClientType(Enum):
         VERTEX_XAI: xAI Grok served on Vertex AI via its OpenAI-compatible endpoint
             (litellm has no working native vertex_ai/xai/ path in 1.83.0 and there is no
             direct xAI API key; this is the only working route for Grok-on-Vertex).
+            TODO(retire): This is a temporary workaround shim. Retire when litellm
+            fixes vertex_ai/xai/ or when Grok migrates to azure_ai/. See #439.
         LLAMA_VERTEX: Llama models on Vertex AI via native LiteLLM support.
         DEEPSEEK_VERTEX: DeepSeek models on Vertex AI via native LiteLLM support.
         ANTHROPIC: Anthropic platform (e.g., Claude models).
