@@ -30,9 +30,10 @@ def mock_bm():
 def azure_config():
     """Mock Azure OpenAI connection config."""
     config = MagicMock()
-    config.client_type.value = "azure"
+    config.litellm_model = "azure/gpt-4o-deployment"
     config.api_key = "test-key"
     config.base_url = "https://test.openai.azure.com/"
+    config.api_version = "2024-12-01-preview"
     config.configs = {
         "model": "gpt-4o-deployment",
         "api_version": "2024-12-01-preview",
@@ -45,9 +46,10 @@ def azure_config():
 def openai_config():
     """Mock direct OpenAI connection config."""
     config = MagicMock()
-    config.client_type.value = "openai"
+    config.litellm_model = "openai/gpt-4o"
     config.api_key = "test-key"
     config.base_url = None
+    config.api_version = None
     config.configs = {
         "model": "gpt-4o",
     }
@@ -58,7 +60,7 @@ def openai_config():
 def gemini_config():
     """Mock Gemini connection config (for rejection test)."""
     config = MagicMock()
-    config.client_type.value = "vertex"
+    config.litellm_model = "vertex_ai/gemini-1.5-flash"
     config.configs = {"model": "gemini-1.5-flash"}
     return config
 

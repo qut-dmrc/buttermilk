@@ -57,6 +57,26 @@ if TYPE_CHECKING:
     from buttermilk._core.vertex_batch import BatchJobManager
 
 
+def _provider_segment(litellm_model: str | None) -> str:
+    """Leading litellm provider segment of a full model name (e.g. 'azure', 'vertex_ai')."""
+    if not litellm_model or "/" not in litellm_model:
+        return ""
+    return litellm_model.split("/", 1)[0]
+
+
+def _uses_openai_batch_sdk(litellm_model: str | None) -> bool:
+    """Whether the OpenAI/Azure batch SDK path applies, derived from the litellm prefix.
+
+    azure / azure_ai / openai (or a bare un-prefixed name, treated as OpenAI) use the
+    OpenAI Batch API; everything else (vertex_ai/…, anthropic/…, gemini/…) uses Vertex.
+    """
+    segment = _provider_segment(litellm_model)
+    if segment in ("azure", "azure_ai", "openai"):
+        return True
+    # Bare name with no provider prefix -> direct OpenAI.
+    return bool(litellm_model) and segment == ""
+
+
 # =============================================================================
 # BatchLLMProcessor -- provider-agnostic base class
 # =============================================================================
@@ -219,18 +239,17 @@ class BatchLLMProcessor(BatchProcessorCore):
     def _ensure_manager(self) -> BatchJobManager | OpenAIBatchJobManager:
         """Lazily initialize the batch job manager via buttermilk infrastructure.
 
-        Routes to the appropriate manager based on client_type from model registry:
-        - azure, openai -> OpenAIBatchJobManager (OpenAI Batch API)
-        - Everything else -> BatchJobManager (Vertex AI Batch API)
+        Routes on the litellm provider segment of the registry entry:
+        - azure / azure_ai / openai (or bare OpenAI) -> OpenAIBatchJobManager (OpenAI Batch API)
+        - Everything else (vertex_ai/…, anthropic/…, …) -> BatchJobManager (Vertex AI Batch API)
         """
         if self._manager is None:
             from buttermilk import bm
 
-            # Check client_type from model registry for routing
             config = bm.llms.connections.get(self.model)
-            client_type = config.client_type.value if config else None
+            litellm_model = config.litellm_model if config else None
 
-            if client_type in ("azure", "openai"):
+            if _uses_openai_batch_sdk(litellm_model):
                 self._manager = self._create_openai_manager(config)
             else:
                 self._manager = self._create_vertex_manager(config)
@@ -285,24 +304,29 @@ class BatchLLMProcessor(BatchProcessorCore):
     def _create_openai_manager(self, config: Any) -> OpenAIBatchJobManager:
         """Create an OpenAI BatchJobManager for Azure/OpenAI models.
 
+        SDK choice is derived from the litellm provider segment: `azure`/`azure_ai`
+        use the AzureOpenAI SDK (needs api_version); everything else uses the plain
+        OpenAI SDK.
+
         Args:
             config: Model connection config from buttermilk registry
 
         Returns:
             Configured OpenAIBatchJobManager instance
         """
-        client_type = config.client_type.value
+        segment = _provider_segment(config.litellm_model)
+        base_url = config.base_url or config.configs.get("base_url")
 
         # AzureOpenAI is a subclass of OpenAI; annotate with the common base so both
         # branches type-check.
         client: OpenAI
-        if client_type == "azure":
+        if segment in ("azure", "azure_ai"):
             from openai import AzureOpenAI
 
             client = AzureOpenAI(
                 api_key=config.api_key,
-                azure_endpoint=config.configs["base_url"],
-                api_version=config.configs["api_version"],
+                azure_endpoint=base_url,
+                api_version=config.api_version or config.configs.get("api_version"),
             )
             endpoint = "/chat/completions"
         else:
@@ -310,12 +334,12 @@ class BatchLLMProcessor(BatchProcessorCore):
 
             client = OpenAI(
                 api_key=config.api_key,
-                base_url=config.configs.get("base_url"),
+                base_url=base_url,
             )
             endpoint = "/v1/chat/completions"
 
         logger.info(
-            f"Using OpenAI Batch API for model: {self.model} (client_type={client_type})",
+            f"Using OpenAI Batch API for model: {self.model} (litellm_model={config.litellm_model})",
         )
 
         return OpenAIBatchJobManager(
@@ -923,17 +947,17 @@ class VertexBatchProcessor(BatchLLMProcessor):
         manager = self._ensure_manager()
         resolved_max_tokens = self._get_resolved_max_tokens()
 
-        # Get client_type for correct message format routing
+        # Get the full litellm model name for correct message format routing
         from buttermilk import bm
 
         config = bm.llms.connections.get(self.model)
-        client_type = config.client_type.value if config else None
+        litellm_model = config.litellm_model if config else None
 
         jsonl_content = manager.build_jsonl(
             requests,
             self.model,
             max_tokens=resolved_max_tokens,
-            client_type=client_type,
+            litellm_model=litellm_model,
         )
 
         # Generate a dry-run job ID and upload to GCS
@@ -1058,16 +1082,17 @@ class OpenAIBatchProcessor(BatchLLMProcessor):
             raise ValueError(f"Model '{self.model}' not found in buttermilk LLM registry. Available models: {list(bm.llms.connections.keys())}")
 
         config = bm.llms.connections[self.model]
+        segment = _provider_segment(config.litellm_model)
 
-        if config.client_type.value not in ("azure", "openai"):
+        if not _uses_openai_batch_sdk(config.litellm_model):
             raise ValueError(
-                f"OpenAIBatchProcessor requires an OpenAI or Azure model, but '{self.model}' has client_type='{config.client_type.value}'"
+                f"OpenAIBatchProcessor requires an OpenAI or Azure model, but '{self.model}' has litellm_model='{config.litellm_model}'"
             )
 
-        if config.client_type.value == "azure":
+        if segment in ("azure", "azure_ai"):
             from openai import AzureOpenAI
 
-            api_version = config.configs["api_version"]
+            api_version = config.api_version or config.configs.get("api_version")
             self._openai_client = AzureOpenAI(
                 api_key=config.api_key,
                 azure_endpoint=config.base_url,
@@ -1097,7 +1122,7 @@ class OpenAIBatchProcessor(BatchLLMProcessor):
         config = bm.llms.connections[self.model]
 
         # Azure uses /chat/completions, direct OpenAI uses /v1/chat/completions
-        endpoint = "/chat/completions" if config.client_type.value == "azure" else "/v1/chat/completions"
+        endpoint = "/chat/completions" if _provider_segment(config.litellm_model) in ("azure", "azure_ai") else "/v1/chat/completions"
 
         self._manager = OpenAIBatchJobManager(
             client=client,

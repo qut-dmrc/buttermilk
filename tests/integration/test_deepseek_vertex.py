@@ -8,7 +8,7 @@ No mocks - this is a TRUE integration test making REAL API calls.
 
 import pytest
 
-from buttermilk._core.llms import ClientType, LiteLLMWrapper
+from buttermilk._core.llms import LiteLLMWrapper
 from buttermilk._core.messages import UserMessage
 
 pytestmark = [pytest.mark.integration, pytest.mark.slow]
@@ -27,11 +27,10 @@ async def test_deepseek_r1_responds(real_bm):
     llms = real_bm.llms
     config = llms.connections.get("deepseek-ai/deepseek-r1-0528-maas")
     assert config is not None, "deepseek-ai/deepseek-r1-0528-maas not found in connections"
-    assert config.client_type == ClientType.DEEPSEEK_VERTEX
+    assert config.litellm_model.startswith("vertex_ai/")
 
     wrapper = llms.get_client("deepseek-ai/deepseek-r1-0528-maas")
     assert isinstance(wrapper, LiteLLMWrapper)
-    assert wrapper.token_provider is not None, "token_provider not set for Vertex model"
 
     messages = [UserMessage(content="What is 2+2? Answer with just the number.", source="test")]
     result = await wrapper.create(messages=messages)
@@ -61,11 +60,10 @@ async def test_deepseek_v3_responds(real_bm):
     llms = real_bm.llms
     config = llms.connections.get("deepseek-ai/deepseek-v3.2-maas")
     assert config is not None, "deepseek-ai/deepseek-v3.2-maas not found in connections"
-    assert config.client_type == ClientType.DEEPSEEK_VERTEX
+    assert config.litellm_model.startswith("vertex_ai/")
 
     wrapper = llms.get_client("deepseek-ai/deepseek-v3.2-maas")
     assert isinstance(wrapper, LiteLLMWrapper)
-    assert wrapper.token_provider is not None, "token_provider not set for Vertex model"
 
     messages = [UserMessage(content="What is 2+2? Answer with just the number.", source="test")]
     result = await wrapper.create(messages=messages)
@@ -89,12 +87,14 @@ async def test_deepseek_models_use_correct_regions(real_bm):
 
     r1_config = llms.connections.get("deepseek-ai/deepseek-r1-0528-maas")
     assert r1_config is not None
-    assert r1_config.configs.get("region") == "us-central1", (
-        f"deepseek-ai/deepseek-r1-0528-maas region should be us-central1, got {r1_config.configs.get('region')}"
+    r1_region = r1_config.region or r1_config.configs.get("region")
+    assert r1_region == "us-central1", (
+        f"deepseek-ai/deepseek-r1-0528-maas region should be us-central1, got {r1_region}"
     )
 
     v3_config = llms.connections.get("deepseek-ai/deepseek-v3.2-maas")
     assert v3_config is not None
-    assert v3_config.configs.get("region") == "global", (
-        f"deepseek-ai/deepseek-v3.2-maas region should be global, got {v3_config.configs.get('region')}"
+    v3_region = v3_config.region or v3_config.configs.get("region")
+    assert v3_region == "global", (
+        f"deepseek-ai/deepseek-v3.2-maas region should be global, got {v3_region}"
     )
