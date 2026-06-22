@@ -747,9 +747,7 @@ class LiteLLMWrapper(BaseModel):
         )
         # Keep only real exception classes — guards against a partially-mocked litellm
         # module (test doubles) whose exception attributes are not types.
-        retryable_types: tuple[type[BaseException], ...] = tuple(
-            t for t in candidate_types if isinstance(t, type) and issubclass(t, BaseException)
-        )
+        retryable_types: tuple[type[BaseException], ...] = tuple(t for t in candidate_types if isinstance(t, type) and issubclass(t, BaseException))
 
         last_exception: Exception | None = None
         wait_time = self.min_wait_seconds
