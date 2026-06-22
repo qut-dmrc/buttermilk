@@ -14,9 +14,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from buttermilk._core.llms import ClientType, LLMConfig, LiteLLMWrapper, LLMs
+from buttermilk._core.llms import ClientType, LiteLLMWrapper, LLMConfig, LLMs
 from buttermilk._core.messages import ModelInfo, UserMessage
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -119,9 +118,7 @@ class TestVertexXaiGetClient:
 
         assert captured, "acompletion was not called"
         model_arg = captured[0]["model"]
-        assert model_arg == f"openai/{_GROK_MODEL}", (
-            f"Expected openai/<model> for VERTEX_XAI transport, got: {model_arg}"
-        )
+        assert model_arg == f"openai/{_GROK_MODEL}", f"Expected openai/<model> for VERTEX_XAI transport, got: {model_arg}"
 
     def test_raises_without_gcp_credentials(self):
         """VERTEX_XAI raises ValueError when GCP credentials are absent."""
@@ -174,8 +171,7 @@ class TestGeminiVertexGetClient:
             wrapper = llms.get_client("gemini")
 
         assert wrapper.vertex_location == "global", (
-            "gemini-3.x models only resolve under the 'global' location; "
-            "get_client() must default to 'global' when region is absent"
+            "gemini-3.x models only resolve under the 'global' location; get_client() must default to 'global' when region is absent"
         )
 
     def test_token_provider_wired(self):
