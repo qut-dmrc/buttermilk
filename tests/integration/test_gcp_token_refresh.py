@@ -31,9 +31,7 @@ async def test_litellm_vertex_ambient_adc(real_bm):
     llms = real_bm.llms
     config = llms.connections.get(model_name)
     assert config is not None, f"Model {model_name} not found in connections"
-    assert config.litellm_model.startswith("vertex_ai/"), (
-        f"Model {model_name} litellm_model={config.litellm_model!r}, expected a vertex_ai/ name."
-    )
+    assert config.litellm_model.startswith("vertex_ai/"), f"Model {model_name} litellm_model={config.litellm_model!r}, expected a vertex_ai/ name."
 
     wrapper = llms.get_client(model_name)
     assert isinstance(wrapper, LiteLLMWrapper), f"Expected LiteLLMWrapper, got {type(wrapper).__name__}"

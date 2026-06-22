@@ -1085,9 +1085,7 @@ class OpenAIBatchProcessor(BatchLLMProcessor):
         segment = _provider_segment(config.litellm_model)
 
         if not _uses_openai_batch_sdk(config.litellm_model):
-            raise ValueError(
-                f"OpenAIBatchProcessor requires an OpenAI or Azure model, but '{self.model}' has litellm_model='{config.litellm_model}'"
-            )
+            raise ValueError(f"OpenAIBatchProcessor requires an OpenAI or Azure model, but '{self.model}' has litellm_model='{config.litellm_model}'")
 
         if segment in ("azure", "azure_ai"):
             from openai import AzureOpenAI

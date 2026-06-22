@@ -40,6 +40,7 @@ Usage:
 
 Requires GCP creds with secretmanager.versions.access + .add on the project.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -60,7 +61,7 @@ GROK_REASONING_IDS = {
 
 
 def _strip(prefix: str, name: str) -> str:
-    return name[len(prefix):] if name.startswith(prefix) else name
+    return name[len(prefix) :] if name.startswith(prefix) else name
 
 
 def derive_litellm_model(name: str, entry: dict) -> tuple[str, str | None, str | None]:

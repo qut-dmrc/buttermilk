@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import threading
 from typing import TYPE_CHECKING
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 
