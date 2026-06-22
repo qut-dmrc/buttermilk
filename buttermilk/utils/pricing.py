@@ -83,11 +83,22 @@ def _simple_model_resolution(model_name: str | None) -> str:
 def extract_cached_tokens(usage: Any) -> int:
     """Extract the cache-read (cached prompt) token count from a usage object or dict.
 
-    Providers report the subset of input tokens served from a context cache under
-    several schemas. We check, in order:
-    - OpenAI / Vertex-OpenAI / Gemini: ``prompt_tokens_details.cached_tokens``
-      (object attribute or nested dict). This is what the Vertex OpenAI-compat
-      layer and litellm normalise Gemini implicit-cache hits into.
+    For a live litellm ``Usage`` object this reduces to reading litellm's normalised
+    ``prompt_tokens_details.cached_tokens`` (litellm folds Anthropic
+    ``cache_read_input_tokens``, DeepSeek ``prompt_cache_hit_tokens`` etc. into that
+    field — verified 2026-06-22: azure_ai returned cached_tokens via this path).
+
+    The remaining flat/camelCase branches are KEPT-BECAUSE-LITELLM-GAP: this helper is
+    ALSO called on raw, NON-litellm usage dicts produced by the batch path
+    (``_core/vertex_batch.py`` reads ``response.body.usage`` straight from the
+    provider's batch-result JSONL and passes it as ``usage_dict``). Those raw Vertex/
+    Gemini batch shapes are not normalised by litellm, so the
+    ``cachedContentTokenCount`` / ``cached_content_token_count`` / flat
+    ``cache_read_input_tokens`` / ``cached_tokens`` fallbacks are retained
+    (fail-safe; the exact Vertex batch usage schema was not live-submitted here).
+
+    Checked in order:
+    - ``prompt_tokens_details.cached_tokens`` (object attr or nested dict) — litellm-normalised.
     - Anthropic-style flat field: ``cache_read_input_tokens``.
     - Gemini native batch schema: ``cachedContentTokenCount`` / ``cached_content_token_count``.
     - Flat ``cached_tokens``.

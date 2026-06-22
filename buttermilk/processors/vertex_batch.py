@@ -57,11 +57,7 @@ if TYPE_CHECKING:
     from buttermilk._core.vertex_batch import BatchJobManager
 
 
-def _provider_segment(litellm_model: str | None) -> str:
-    """Leading litellm provider segment of a full model name (e.g. 'azure', 'vertex_ai')."""
-    if not litellm_model or "/" not in litellm_model:
-        return ""
-    return litellm_model.split("/", 1)[0]
+from buttermilk._core.llms import litellm_provider_segment as _provider_segment  # dedup: single source in llms.py
 
 
 def _uses_openai_batch_sdk(litellm_model: str | None) -> bool:

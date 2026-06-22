@@ -1,9 +1,9 @@
 """Manages Language Model (LLM) configurations, clients, and interactions.
 
 This module provides structures for defining LLM configurations (`LLMConfig`),
-managing different LLM providers and their clients (`LLMs`, `LLMClient`), and
-wrapping chat completion clients with additional functionality such as rate
-limiting and retry logic (`LiteLLMWrapper`).
+managing different LLM providers and their clients (`LLMs`), and wrapping chat
+completion clients with additional functionality such as retry logic
+(`LiteLLMWrapper`).
 
 It uses LiteLLM as the unified interface for interacting with various LLM APIs
 and provides a consistent interface for agents within the Buttermilk framework.
@@ -16,15 +16,9 @@ import importlib
 import json
 import logging
 import random
-import socket
 from collections.abc import Callable, Sequence
 from enum import Enum
 from typing import Any
-
-import urllib3.exceptions
-
-# Core LLM library imports
-from google.auth.exceptions import TransportError as GoogleAuthTransportError
 
 # LiteLLM is lazy-loaded to speed up import time (~3s savings)
 # Use _get_litellm() and _get_acompletion() instead of direct imports
@@ -101,7 +95,6 @@ from pydantic import (
 from buttermilk import logger
 from buttermilk._core.constants import CONFIG_CACHE_FILENAME, cache, get_base_cache_dir  # Models cache constants
 from buttermilk._core.exceptions import ContentBlockedError, ProcessingError  # Custom Buttermilk exceptions
-from buttermilk._core.json_schema import make_all_properties_required, resolve_json_schema_refs  # Schema $ref resolution for Azure compatibility
 from buttermilk._core.messages import (
     AssistantMessage,
     CreateResult,
@@ -340,27 +333,6 @@ CHEAP_CHAT_MODELS = [
     "gpt-5-nano",
     "claude-haiku-4-5@20251001",
 ]
-
-
-class LLMClient(BaseModel):
-    """Represents an instantiated LLM client along with its connection and parameters.
-
-    This model is used to store and pass around active LLM client instances.
-
-    Attributes:
-        client (Any): The actual instantiated LLM client object (e.g., an instance
-            of `OpenAIChatCompletionClient`, `AsyncAnthropicVertex`, etc.).
-        connection (str): The connection identifier (from `LLMConfig.connection`)
-            associated with this client.
-        parameters (dict): A dictionary of parameters that were used to configure
-            this client instance, or default parameters for its use.
-            Defaults to an empty dict.
-
-    """
-
-    client: Any  # The actual LLM client object (e.g., OpenAIChatCompletionClient)
-    connection: str  # Identifier for the connection type (e.g., "azure_gpt4")
-    parameters: dict = Field(default_factory=dict)  # Parameters for this client
 
 
 class ModelOutput(CreateResult):
@@ -640,12 +612,16 @@ def litellm_to_model_output(response: Any, usage: Any, model: str, schema: type[
             else:
                 # Regular text content
                 content = message.content if hasattr(message, "content") else str(message)
-                # Route the response through ChatParser to (a) strip inline
-                # <think>...</think> blocks emitted by DeepSeek-R1 via Vertex MAAS
-                # and (b) capture any reasoning into the proper `thought` field.
-                # Providers that emit structured `reasoning_content` (DeepSeek
-                # reasoner, OpenAI o-series, Anthropic extended thinking, Gemini
-                # thinking) take precedence over inline-extracted text.
+                # litellm 1.83.0 already surfaces provider reasoning via
+                # `message.reasoning_content` and strips <think>/<thinking>/
+                # <budget:thinking> from `content` on its own parse path
+                # (litellm_core_utils/prompt_templates/common_utils.py:1294-1316).
+                # We only need to ROUTE that into buttermilk's `thought` field.
+                # The inline-<think> stripping fallback is KEPT for the
+                # DeepSeek-R1-via-Vertex-MAAS edge, which emits chain-of-thought
+                # inline in `content` rather than as structured reasoning_content
+                # (UNVERIFIED whether litellm 1.83.0 covers that specific MAAS path,
+                # so retained fail-safe). structured reasoning takes precedence.
                 if isinstance(content, str):
                     parser = importlib.import_module("buttermilk.utils.json_parser").ChatParser()
                     content = parser.extract_reasoning(
@@ -745,66 +721,66 @@ class LiteLLMWrapper(BaseModel):
             raise ImportError("LiteLLM is not installed. Please install it with: pip install litellm")
 
     async def _execute_with_retry(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
-        """Execute a function with exponential backoff retry logic.
+        """Execute a litellm call with exponential-backoff retries.
 
-        Mirrors RetryWrapper behavior for consistency.
+        litellm classifies which exceptions are transient via its typed exception
+        hierarchy (RateLimitError, Timeout, APIConnectionError, InternalServerError,
+        ServiceUnavailableError, …); we retry exactly those types instead of the old
+        brittle string/urllib3 keyword matching.
+
+        The ONE genuinely buttermilk-specific coupling kept here — the reason we do
+        not just pass `num_retries` to litellm and be done — is: do NOT retry when the
+        root cause is an ``AttributeError``. litellm wraps a deterministic null-message
+        parse (reasoning model, finish_reason=length, exhausted budget) as a transient-
+        looking InternalServerError; retrying it just burns the budget again. litellm's
+        own `num_retries`/`RetryPolicy` cannot express "retry InternalServerError EXCEPT
+        when __cause__ is AttributeError", so we own the retry loop for this case.
         """
+        litellm_mod = _get_litellm()
+        candidate_types = (
+            [
+                getattr(litellm_mod, name, None)
+                for name in ("RateLimitError", "Timeout", "APIConnectionError", "InternalServerError", "ServiceUnavailableError")
+            ]
+            if litellm_mod is not None
+            else [TimeoutError, ConnectionError]
+        )
+        # Keep only real exception classes — guards against a partially-mocked litellm
+        # module (test doubles) whose exception attributes are not types.
+        retryable_types: tuple[type[BaseException], ...] = tuple(
+            t for t in candidate_types if isinstance(t, type) and issubclass(t, BaseException)
+        )
+
         last_exception: Exception | None = None
         wait_time = self.min_wait_seconds
 
         for attempt in range(self.max_retries + 1):
             try:
-                # Add cooldown before each attempt (except first)
                 if attempt > 0:
                     await asyncio.sleep(self.cooldown_seconds)
-
-                # Execute the function
-                result = await func(*args, **kwargs)
-                return result
+                return await func(*args, **kwargs)
 
             except Exception as e:
                 last_exception = e
-                error_msg = str(e).lower()
 
-                # Check if this is a retryable error (by type or message)
-                retryable_types = (
-                    TimeoutError,
-                    ConnectionError,
-                    ConnectionResetError,
-                    ConnectionAbortedError,
-                    socket.gaierror,
-                    urllib3.exceptions.ProtocolError,
-                    urllib3.exceptions.TimeoutError,
-                    urllib3.exceptions.NameResolutionError,
-                    urllib3.exceptions.NewConnectionError,
-                    GoogleAuthTransportError,
-                )
-
-                is_retryable = isinstance(e, retryable_types) or any(
-                    keyword in error_msg for keyword in ["rate limit", "timeout", "503", "429", "502", "500", "name resolution"]
-                )
+                is_retryable = isinstance(e, retryable_types)
 
                 # AttributeError as the root cause means a deterministic parse failure
-                # (litellm wraps null-message parse as InternalServerError) — never retry
+                # (litellm wraps null-message parse as InternalServerError) — never retry.
                 if is_retryable:
                     cause = e.__cause__ or e.__context__
                     if isinstance(cause, AttributeError):
                         is_retryable = False
 
                 if attempt < self.max_retries and is_retryable:
-                    # Calculate wait time with jitter
                     jitter = random.uniform(-self.jitter_seconds, self.jitter_seconds)
                     actual_wait = min(wait_time + jitter, self.max_wait_seconds)
-
                     logger.warning(f"LiteLLM call failed (attempt {attempt + 1}/{self.max_retries + 1}): {e}. Retrying in {actual_wait:.1f}s...")
-
                     await asyncio.sleep(actual_wait)
                     wait_time *= 2  # Exponential backoff
                 else:
-                    # Not retryable or out of retries
                     raise
 
-        # Should not reach here, but just in case
         raise last_exception or ProcessingError("LiteLLM call failed after all retries")
 
     async def create(
@@ -873,36 +849,17 @@ class LiteLLMWrapper(BaseModel):
         )
 
         if schema and structured_output_enabled:
-            # Native structured output supported - use response_format
+            # Native structured output: pass the RAW pydantic JSON schema straight to
+            # litellm's response_format. litellm 1.83.0 runs the provider-specific
+            # transforms itself (_build_vertex_schema does $ref expansion + enum/type
+            # coercion for Vertex/Gemini; type_to_response_format_param for OpenAI/Azure;
+            # Anthropic-on-Vertex via the tool transform). Live-verified 2026-06-22 that
+            # litellm accepts our raw nested schemas (JudgeReasons, QualScore with $defs +
+            # Literal enums) and returns valid parsed JSON for vertex_ai/gemini@global,
+            # vertex_ai/claude, and azure_ai — so buttermilk's own $ref/required/enum
+            # massaging here is redundant and was removed.
             _validate_schema_constraints(schema, self.model_info)
             schema_dict = schema.model_json_schema() if hasattr(schema, "model_json_schema") else schema.schema()
-
-            # Azure and Vertex AI models require $ref to be resolved inline
-            # Vertex AI (including Llama) may not fully support $defs in JSON schemas
-            is_azure = self.litellm_model_name and self.litellm_model_name.startswith("azure/")
-            is_vertex = self.litellm_model_name and "vertex" in self.litellm_model_name.lower()
-            if is_azure or is_vertex:
-                logger.debug(f"LiteLLMWrapper: Resolving $ref in schema for {self.litellm_model_name}")
-                schema_dict = resolve_json_schema_refs(schema_dict)
-                schema_dict = make_all_properties_required(schema_dict)
-
-            # Vertex AI requires enum values to be strings, not integers
-            # Convert integer enums to string enums in the schema
-            def convert_enum_values_to_strings(obj: Any) -> Any:
-                """Recursively convert integer enum values to strings for Vertex AI compatibility."""
-                if isinstance(obj, dict):
-                    # Check if this is an enum property
-                    if "enum" in obj and isinstance(obj["enum"], list):
-                        obj["enum"] = [str(v) for v in obj["enum"]]
-                    # Recursively process nested objects
-                    return {k: convert_enum_values_to_strings(v) for k, v in obj.items()}
-                if isinstance(obj, list):
-                    return [convert_enum_values_to_strings(item) for item in obj]
-                return obj
-
-            # Apply conversion for Vertex AI models (gemini, etc.)
-            if self.litellm_model_name and ("gemini" in self.litellm_model_name.lower() or "vertex" in self.litellm_model_name.lower()):
-                schema_dict = convert_enum_values_to_strings(schema_dict)
 
             litellm_params["response_format"] = {
                 "type": "json_schema",
@@ -1024,9 +981,10 @@ class LiteLLMWrapper(BaseModel):
             error_msg = f"LiteLLM call failed: {e}"
             raise ProcessingError(error_msg) from e
 
-        # Calculate pricing from usage
+        # Calculate pricing from the full response (lets litellm.completion_cost do
+        # the per-token arithmetic / cache-read discount itself).
         usage = response.usage if hasattr(response, "usage") else None
-        pricing_metadata = self._calculate_pricing(usage)
+        pricing_metadata = self._calculate_pricing(usage, response=response)
 
         # Handle fake tool response - extract arguments as the structured content
         if used_fake_schema_tool and fake_tool_name:
@@ -1206,8 +1164,17 @@ class LiteLLMWrapper(BaseModel):
             content=tool.return_value_as_string(result),
         )
 
-    def _calculate_pricing(self, usage: Any) -> dict[str, Any]:
-        """Calculate pricing information from usage data."""
+    def _calculate_pricing(self, usage: Any, response: Any = None) -> dict[str, Any]:
+        """Calculate pricing information from a litellm response.
+
+        The total cost is computed by litellm.completion_cost() directly on the
+        response — litellm already applies the model's per-token rates and the
+        cache-read discount (live-verified 2026-06-22 across vertex_ai/gemini,
+        vertex_ai/claude and azure_ai). We only fall back to buttermilk's
+        calculate_token_cost (which carries the _simple_model_resolution name
+        remapping) when completion_cost() is unavailable or raises — e.g. a
+        litellm model name it cannot price.
+        """
         if usage is None:
             logger.warning("LLM response had no usage data - using 0 tokens for pricing")
             return {
@@ -1220,14 +1187,23 @@ class LiteLLMWrapper(BaseModel):
         completion_tokens = getattr(usage, "completion_tokens", 0) or 0
         cached_tokens = extract_cached_tokens(usage)
 
-        # Use existing pricing calculation utility; pass cached tokens so the
-        # cache-read discount is applied to total_cost.
-        prompt_tokens, completion_tokens, total_cost = calculate_token_cost(
-            model=self.litellm_model_name,
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            cached_tokens=cached_tokens,
-        )
+        total_cost: float | None = None
+        litellm_mod = _get_litellm()
+        if response is not None and litellm_mod is not None:
+            try:
+                total_cost = float(litellm_mod.completion_cost(completion_response=response))
+            except Exception as e:
+                logger.debug(f"litellm.completion_cost failed for {self.litellm_model_name}: {e}; falling back to calculate_token_cost")
+                total_cost = None
+
+        if total_cost is None:
+            # Fallback path: buttermilk name-remapping + cost_per_token with cache discount.
+            _, _, total_cost = calculate_token_cost(
+                model=self.litellm_model_name,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                cached_tokens=cached_tokens,
+            )
 
         return {
             "prompt_tokens": prompt_tokens,

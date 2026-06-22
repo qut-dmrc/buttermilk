@@ -235,8 +235,12 @@ class TestLiteLLMWrapperCreate:
             mock_response.usage = MagicMock(prompt_tokens=10, completion_tokens=5)
             mock_response.cached = False
 
+            import litellm
+
+            # litellm classifies retryable failures via its typed exception hierarchy;
+            # the wrapper retries those (not arbitrary string-matched Exceptions).
             mock_acompletion.side_effect = [
-                Exception("Rate limit exceeded"),
+                litellm.RateLimitError("Rate limit exceeded", llm_provider="openai", model="gpt-4"),
                 mock_response,
             ]
 
@@ -262,7 +266,10 @@ class TestLiteLLMWrapperCreate:
         messages = [UserMessage(content="Hello!", source="user")]
 
         with patch("litellm.acompletion") as mock_acompletion:
-            mock_acompletion.side_effect = Exception("Rate limit exceeded")
+            import litellm
+
+            # Typed litellm RateLimitError is retryable; exhausting retries -> ProcessingError.
+            mock_acompletion.side_effect = litellm.RateLimitError("Rate limit exceeded", llm_provider="openai", model="gpt-4")
 
             with pytest.raises(ProcessingError, match="LiteLLM call failed"):
                 await wrapper.create(messages=messages)
