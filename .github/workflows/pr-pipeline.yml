@@ -1,0 +1,490 @@
+# Adapted for buttermilk: guard-no-dist, typecheck, and pytest jobs removed.
+# Buttermilk runs its own tests via tests.yml (kept untouched).
+
+# PR Review Pipeline — Stage-1 triage orchestrator (and Stage-2 fix-loop driver).
+#
+# Stage 1 (every push): committing agents run in cost order under the §3.4 ordered
+# short-circuit — `lint → enforcer → qa`. Read-only checks (tests.yml runs separately)
+# post statuses but never end a pass. Admission to Stage 2 is the maintainer's PR
+# **review approval**, handled by the separate `admit-on-review.yml`
+# (`on: pull_request_review`, §3.2) — NOT an in-pipeline parked job (the
+# `pr-fix-loop` Environment gate is retired; see §3.2 for why).
+#
+# Stage 2 (post-admission, when `admit-status` is `success`): the same orchestrator
+# appends the **mechanic** to the cost order — real development to clear the red
+# the autofixers couldn't, plus conflict resolution. Enforcer + qa re-verify each
+# mechanic SHA (§3.5); the §3.6 bounded loop is enforced inside `agent-mechanic.yml`.
+# The mechanic's FIRST pass is dispatched by `admit-on-review.yml`; passes 2…N by
+# this file's `check-admit → mechanic` on the mechanic's own `synchronize`s.
+#
+# `merge-prep-status` is retired (Phase 5) — replaced by `admit-status` at P4 and
+# no longer carried forward here. `mechanic-status` is informational only and is
+# never required by the ruleset; it lives entirely on the mechanic workflow side.
+#
+# See specs/workflows/pr-pipeline.md for the full process documentation.
+
+name: PR Review Pipeline
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+  workflow_call:
+    secrets:
+      AOPS_BOT_GH_TOKEN:
+        description: 'PAT for GitHub API operations'
+        required: false
+      CLAUDE_CODE_OAUTH_TOKEN:
+        description: 'OAuth token for Claude agent'
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  statuses: write
+  id-token: write
+  issues: write
+  actions: read
+
+concurrency:
+  group: pr-pipeline-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  # ─── Step 0: Gate (Approval for release-please PRs) ──────────────
+  gate:
+    name: Release Gate Approval
+    runs-on: ubuntu-latest
+    environment: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref && startsWith(github.event.pull_request.head.ref, 'release-please')) && 'production' || '' }}
+    steps:
+      - name: Acknowledge approval
+        run: echo "Environment gate approved or bypassed"
+
+  # ─── Step 0.5: Initialize ──────────────────────────────────────────
+  # admit-status carry-forward (pr-pipeline §5). admit-status is the only required
+  # human gate; the vestigial merge-prep-status carry-forward was retired at Phase 5
+  # (the merge-prep agent was repurposed into the post-admission mechanic; its
+  # informational mechanic-status is owned by agent-mechanic.yml, not initialize).
+  initialize:
+    needs: [gate]
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    timeout-minutes: 45
+    name: Initialize
+    runs-on: ubuntu-latest
+    steps:
+      # admit-status carry-forward (pr-pipeline §5). admit-status is the required
+      # human gate; it is set to success only by `admit-on-review.yml` (§3.2)
+      # when the maintainer APPROVES the PR (a review approval is the admission
+      # signal; the `pr-fix-loop` Environment gate is retired). This step manages
+      # the NON-admit transitions so the gate stays honest across the Stage-2 fix
+      # loop:
+      #   - opened/reopened/ready_for_review → pending (a fresh PR is not admitted).
+      #   - synchronize: an AGENT-authored fix commit carries a prior admission
+      #     forward (the decision stands); a new HUMAN push resets to pending (a
+      #     substantive human change must be re-judged — re-approve the PR).
+      # The reset trigger is "a new human push" (§5); an additional reset trigger lives
+      # in the Stage-2 mechanic's exhaustion handler (§3.6) — `agent-mechanic.yml` resets
+      # admit-status to pending on loop-ceiling breach to surface the PR back to the gate.
+      # No idempotence output is needed any more: admission is event-driven (a
+      # review approval), not a parked job that could re-fire on every convergence,
+      # so the carry-forward simply keeps admit-status honest on HEAD.
+      - name: Set admit status (carry-forward)
+        id: admit-carry
+        run: |
+          NEW_SHA="${{ github.event.pull_request.head.sha }}"
+          REPO="${{ github.repository }}"
+          ACTION="${{ github.event.action }}"
+
+          set_admit_pending() {
+            gh api "repos/${REPO}/statuses/${NEW_SHA}" \
+              -f state="pending" \
+              -f context="admit-status" \
+              -f description="Awaiting admission — approve the PR to admit (review approval)"
+          }
+
+          # Fresh PR (or re-opened) is never pre-admitted.
+          if [ "$ACTION" != "synchronize" ]; then
+            echo "Action is '${ACTION}' — admit-status pending"
+            set_admit_pending
+            exit 0
+          fi
+
+          # synchronize: only carry an admission forward across agent-authored commits.
+          OLD_SHA="${{ github.event.before }}"
+          PREV_ADMIT=$(gh api "repos/${REPO}/commits/${OLD_SHA}/statuses" \
+            --jq '[.[] | select(.context == "admit-status")] | sort_by(.updated_at) | last | .state // empty')
+
+          if [ "$PREV_ADMIT" != "success" ]; then
+            echo "Previous admit-status was '${PREV_ADMIT:-none}' — admit-status pending"
+            set_admit_pending
+            exit 0
+          fi
+
+          # Previous HEAD was admitted. Carry forward ONLY if the new HEAD commit was
+          # authored by a pipeline agent (bot). A human push resets to pending.
+          # Agent commits are authored by the bot identities the agents commit as
+          # (lint/release: github-actions[bot]; Claude agents: claude[bot]) — both have
+          # GitHub account type "Bot". We treat a commit as agent-authored if either the
+          # author or committer account type is "Bot" or its login carries a "[bot]" suffix.
+          COMMIT_JSON=$(gh api "repos/${REPO}/commits/${NEW_SHA}")
+          AUTHOR_LOGIN=$(echo "$COMMIT_JSON" | jq -r '.author.login // ""')
+          AUTHOR_TYPE=$(echo "$COMMIT_JSON" | jq -r '.author.type // ""')
+          COMMITTER_TYPE=$(echo "$COMMIT_JSON" | jq -r '.committer.type // ""')
+          echo "New HEAD author='${AUTHOR_LOGIN}' author_type='${AUTHOR_TYPE}' committer_type='${COMMITTER_TYPE}'"
+
+          IS_AGENT=false
+          if [ "$AUTHOR_TYPE" = "Bot" ] || [ "$COMMITTER_TYPE" = "Bot" ]; then
+            IS_AGENT=true
+          fi
+          case "$AUTHOR_LOGIN" in *"[bot]"*) IS_AGENT=true ;; esac
+
+          if [ "$IS_AGENT" = "true" ]; then
+            echo "Agent-authored fix commit — carrying admission forward to ${NEW_SHA}"
+            gh api "repos/${REPO}/statuses/${NEW_SHA}" \
+              -f state="success" \
+              -f context="admit-status" \
+              -f description="Admission carried forward across agent fix commit"
+          else
+            echo "Human push detected — resetting admission to pending (must be re-judged)"
+            set_admit_pending
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  # ─── Stage 1 Triage Orchestrator (§3.4) ──────────────────────────
+
+  # ─── Alignment queue (§6) — ADVISORY, never a merge gate ──────────
+  # Posts `alignment-status: pending` on HEAD as a lightweight advisory marker
+  # that documents intent (this PR is queued for pauli's alignment read).
+  #
+  # ⚠️  ISSUE-QUEUE SURFACE DELIBERATELY DISABLED (aops-956c1842). This job used
+  # to ALSO file/refresh one `alignment:queued` GitHub issue per PR per run, to
+  # be drained by a host-side pauli/alignment cron. That cron is SPEC-ONLY and
+  # was never built (specs/workflows/pr-pipeline.md §0 table + §6.2), so the
+  # issue surface was a write-only spam loop: 48 open `alignment:queued` issues,
+  # 0 ever closed, growing one-per-PR-run, with no consumer.
+  #
+  # DO NOT re-add the `alignment:queued` label/issue steps until the host-side
+  # drainer (§6.2) actually ships. Producing a queue with no consumer is pure
+  # noise. The follow-up that wires the drainer is task aops-8f42f33d; only when
+  # that lands may the issue surface be restored. A future SSoT/spec-sync pass
+  # MUST NOT restore it from the spec on its own.
+  #
+  # DESIGN INVARIANT (specs/workflows/pr-pipeline.md §6): `alignment-status` is
+  # ADVISORY. It is INTENTIONALLY NOT in the branch-protection ruleset — the
+  # maintainer reads pauli's verdict at the human Environment gate; alignment
+  # never blocks merge. Do not promote it to a required check without a
+  # deliberate spec change.
+  #
+  # Same-repo PRs only (fork-origin runs cannot mint a write token for the bot,
+  # same gating as `initialize`). Independent of lint/enforcer/qa — runs in
+  # parallel so a slow alignment surface never delays the merge-gate agents.
+  alignment-queue:
+    needs: [gate]
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    name: Alignment Queue
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.AOPS_BOT_GH_TOKEN || github.token }}
+      REPO: ${{ github.repository }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Post alignment-status pending (skip if already terminal on this HEAD)
+        run: |
+          set -euo pipefail
+          CURRENT=$(gh api "repos/${REPO}/commits/${HEAD_SHA}/statuses" \
+            --jq '[.[] | select(.context == "alignment-status")] | sort_by(.updated_at) | last | .state // empty')
+          case "$CURRENT" in
+            success|failure|error)
+              echo "alignment-status already terminal (${CURRENT}) on ${HEAD_SHA} — pauli has reviewed this SHA. Leaving the verdict in place."
+              exit 0
+              ;;
+          esac
+          gh api "repos/${REPO}/statuses/${HEAD_SHA}" \
+            -f state="pending" \
+            -f context="alignment-status" \
+            -f description="Queued for pauli alignment review (advisory; see pr-pipeline.md §6)"
+
+      # NOTE: the `alignment:queued` label + issue-filing steps were removed in
+      # aops-956c1842. They produced one issue per PR per run for a host-side
+      # drainer that is SPEC-ONLY and unbuilt (§6.2) → write-only spam. Do not
+      # re-add them until the drainer ships (follow-up: aops-8f42f33d). See the
+      # job-level comment above.
+
+  # ─── Step 1: Lint ─────────────────────────────────────────────────
+  # If lint autofixes and pushes (using AOPS_BOT_GH_TOKEN), the push
+  # triggers a new synchronize event. This run is cancelled and the
+  # pipeline restarts on the clean commit.
+  lint:
+    needs: [gate]
+    name: Lint
+    uses: ./.github/workflows/lint.yml
+    secrets: inherit
+
+  # ─── Step 2: Enforcer ────────────────────────────────────────────
+  enforcer:
+    needs: [lint]
+    if: needs.lint.outputs.committed != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    name: Enforcer Review
+    uses: ./.github/workflows/agent-enforcer.yml
+    with:
+      pr_number: ${{ github.event.pull_request.number }}
+      ref: ${{ github.event.pull_request.head.ref }}
+      sha: ${{ github.event.pull_request.head.sha }}
+    secrets:
+      AOPS_BOT_GH_TOKEN: ${{ secrets.AOPS_BOT_GH_TOKEN }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+  # ─── Step 3: QA (Marsha) ─────────────────────────────────────────
+  # Inverted review gradient (#1450, §3.4): a red ENFORCER VERDICT must not gate
+  # qa off — a failing PR should get MORE review, not less. So qa runs whenever
+  # the enforcer actually RAN and produced a verdict (success OR failure) and did
+  # NOT commit. The `committed != 'true'` guard is what preserves convergence (an
+  # enforcer fix changes the SHA → that pass short-circuits and the new SHA's run
+  # re-reviews); the enforcer's red/green VERDICT no longer suppresses qa.
+  # qa is still skipped when enforcer was `skipped` (lint committed → stale SHA)
+  # or `cancelled`, neither of which is a verdict on this SHA.
+  qa:
+    needs: [enforcer, lint]
+    if: always() && needs.lint.result == 'success' && (needs.enforcer.result == 'success' || needs.enforcer.result == 'failure') && needs.lint.outputs.committed != 'true' && needs.enforcer.outputs.committed != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    name: QA Verification
+    uses: ./.github/workflows/agent-qa.yml
+    with:
+      pr_number: ${{ github.event.pull_request.number }}
+      ref: ${{ github.event.pull_request.head.ref }}
+      sha: ${{ github.event.pull_request.head.sha }}
+    secrets:
+      AOPS_BOT_GH_TOKEN: ${{ secrets.AOPS_BOT_GH_TOKEN }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+  # ─── Step 3.5: Pre-Admission Mechanical Responder (§3.8) ─────────────────
+  # Clears mechanically-fixable red PRE-admission — failing CI, scope-faithful
+  # review feedback the autofixers couldn't, and merge conflicts.
+  #
+  # DISPATCH GUARD: check-mechred reads commit statuses to enforce two guards:
+  #   (a) No-op-on-green: if both enforcer-status AND qa-status are success on
+  #       HEAD, check-mechred outputs has_mechanical_red=false and the responder
+  #       is skipped. This is the P5 pathology guard (PR #1614) applied
+  #       pre-admission — never burn a runner on a green PR.
+  #   (b) Stage-2 guard: if admit-status is already success (admitted), the
+  #       post-admission mechanic (Stage 2) handles any remaining red. The
+  #       pre-admission responder must not run alongside the Stage-2 loop.
+  #   (c) Ceiling guard: if Responder-By: commit count >= MAX_RESPONDER_RUNS (3),
+  #       pre-admission budget is exhausted — surface to human.
+  # Source: check-mechanical-red.sh + pr-pipeline.md §3.8.
+  #
+  # MECHANICAL/JUDGMENT BOUNDARY (load-bearing): the responder fixes ONLY what
+  # the enforcer classifies as mechanical (typos, CI failures, missing files,
+  # merge conflicts). Judgment calls and recusal flags are NEVER auto-applied
+  # — they must surface to the human gate unmodified. Source: enforcer.agent.md §3.
+  #
+  # `responder-status` is informational, never required by the ruleset (§4.2).
+  # Stage-2 mechanic (check-admit → mechanic) is UNAFFECTED — the responder runs
+  # only pre-admission; post-admission Stage-2 remains controlled by check-admit.
+  # Both check-mechred and check-admit depend on [lint, enforcer, qa]; check-admit
+  # additionally depends on [pre-admission-responder] so it waits for the responder
+  # to finish before deciding whether to dispatch the mechanic.
+
+  check-mechred:
+    name: Check for pre-admission mechanical red
+    needs: [lint, enforcer, qa]
+    # Same convergence precondition as check-admit: Stage 1 fully ran with no commits.
+    # Enforcer/qa must have posted terminal verdicts on this SHA.
+    if: >-
+      always() &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      needs.lint.result == 'success' &&
+      (needs.enforcer.result == 'success' || needs.enforcer.result == 'failure') &&
+      (needs.qa.result == 'success' || needs.qa.result == 'failure') &&
+      needs.lint.outputs.committed != 'true' && needs.enforcer.outputs.committed != 'true' && needs.qa.outputs.committed != 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      has_mechanical_red: ${{ steps.check.outputs.has_mechanical_red }}
+    env:
+      GH_TOKEN: ${{ secrets.AOPS_BOT_GH_TOKEN || github.token }}
+      REPO: ${{ github.repository }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ secrets.AOPS_BOT_GH_TOKEN || github.token }}
+      - name: Evaluate pre-admission mechanical red gate
+        id: check
+        run: bash scripts/ci/check-mechanical-red.sh
+        env:
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+
+  pre-admission-responder:
+    name: Pre-Admission Responder
+    needs: [check-mechred]
+    if: needs.check-mechred.outputs.has_mechanical_red == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    uses: ./.github/workflows/agent-pre-admission-responder.yml
+    with:
+      pr_number: ${{ github.event.pull_request.number }}
+      ref: ${{ github.event.pull_request.head.ref }}
+      sha: ${{ github.event.pull_request.head.sha }}
+    secrets:
+      AOPS_BOT_GH_TOKEN: ${{ secrets.AOPS_BOT_GH_TOKEN }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+  # ─── Step 4: Mechanic (Stage-2 only — admitted runs) ─────────────
+  # The post-admission DEV agent. Runs ONLY when:
+  #   - Stage 1 converged this pass (lint/enforcer/qa/responder all ran with no
+  #     commit), AND
+  #   - admit-status is `success` on HEAD (the maintainer approved the PR, §3.2).
+  # Otherwise it is a no-op (`check-admit` outputs admitted=false).
+  #
+  # The FIRST dispatch after admission is owned by `admit-on-review.yml` (the
+  # review-approval triggers it on the admitted SHA — the hop the retired
+  # Environment gate could not make, which stranded admission; see §3.2). This
+  # check-admit → mechanic path handles passes 2…N: the mechanic's own commits
+  # fire `synchronize`, admit-status carries forward across those agent commits
+  # (§5), so check-admit reads `success` and re-dispatches. There is no race
+  # here — admission already happened on a prior event; the carry-forward (in
+  # `initialize`) completes long before check-admit reads the status.
+  #
+  # The pre-admission-responder is also in this needs list: check-admit must
+  # wait for the responder to complete (or be skipped) before reading admit-status.
+  # This prevents a race where check-admit dispatches the mechanic on a SHA the
+  # responder is still fixing. In practice the responder is skipped immediately on
+  # Stage-2 passes (check-mechred returns has_mechanical_red=false for admitted PRs),
+  # so the extra wait is ~0s on the Stage-2 critical path.
+  #
+  # mechanic-status is informational, never required by the ruleset (§4.2);
+  # enforcer/qa re-verify the mechanic's pushed SHA on the next pass (§3.5);
+  # the §3.6 bounded loop is enforced inside agent-mechanic.yml.
+
+  check-admit:
+    name: Check admit-status
+    needs: [lint, enforcer, qa, pre-admission-responder]
+    # Gate on CONVERGENCE, never on the reviewers' green VERDICT (§3.4 pt 5, §3.7).
+    # Convergence = lint succeeded, enforcer AND qa each RAN and produced a verdict on
+    # this SHA (`success` OR `failure`), and NO agent committed (including the
+    # pre-admission responder). A red enforcer/qa verdict must NOT gate the mechanic
+    # off — the mechanic is exactly who clears that red (§3.5), and the enforcer
+    # reusable HARD-FAILS its job on a red verdict (so its `result` is `failure`,
+    # not `success`). Keying on `== 'success'` made every converged-red admitted
+    # PR skip the mechanic — the §1450 success-gate inversion, here on the dispatch gate.
+    #
+    # pre-admission-responder may be 'skipped' (check-mechred returned false) or
+    # 'success'/'failure' (it ran). In all cases `committed` defaults to '' (not 'true')
+    # when skipped — so the `!= 'true'` guard correctly allows check-admit to proceed.
+    if: >-
+      always() &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      needs.lint.result == 'success' &&
+      (needs.enforcer.result == 'success' || needs.enforcer.result == 'failure') &&
+      (needs.qa.result == 'success' || needs.qa.result == 'failure') &&
+      (needs.pre-admission-responder.result == 'success' || needs.pre-admission-responder.result == 'skipped' || needs.pre-admission-responder.result == 'failure') &&
+      needs.lint.outputs.committed != 'true' && needs.enforcer.outputs.committed != 'true' && needs.qa.outputs.committed != 'true' &&
+      needs.pre-admission-responder.outputs.committed != 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      admitted: ${{ steps.check.outputs.admitted }}
+    env:
+      GH_TOKEN: ${{ secrets.AOPS_BOT_GH_TOKEN || github.token }}
+      REPO: ${{ github.repository }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Read admit-status on HEAD
+        id: check
+        run: |
+          ADMIT=$(gh api "repos/$REPO/commits/$HEAD_SHA/statuses" \
+            --jq '[.[] | select(.context == "admit-status")] | sort_by(.updated_at) | last | .state // empty' \
+            2>/dev/null || echo "")
+          if [ "$ADMIT" = "success" ]; then
+            echo "admitted=true" >> "$GITHUB_OUTPUT"
+            echo "PR is admitted (admit-status=success) — Stage-2 mechanic will run."
+          else
+            echo "admitted=false" >> "$GITHUB_OUTPUT"
+            echo "PR is not admitted (admit-status='${ADMIT:-absent}') — mechanic skipped (Stage-1 only)."
+          fi
+
+  mechanic:
+    name: Mechanic (Stage 2)
+    needs: [check-admit]
+    if: needs.check-admit.outputs.admitted == 'true'
+    uses: ./.github/workflows/agent-mechanic.yml
+    with:
+      pr_number: ${{ github.event.pull_request.number }}
+      ref: ${{ github.event.pull_request.head.ref }}
+      sha: ${{ github.event.pull_request.head.sha }}
+    secrets:
+      AOPS_BOT_GH_TOKEN: ${{ secrets.AOPS_BOT_GH_TOKEN }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+  # ─── Liveness + named-reviewer attestation (§3.7) — REQUIRED, FAIL-CLOSED ──
+  # Proves a NAMED reviewer actually ran on THIS exact PR SHA, and makes a
+  # dead/skipped pipeline read RED rather than as a silent pass (#1450).
+  #
+  # The named reviewer statuses (enforcer-status, qa-status) post to the head SHA,
+  # but a startup_failure / skipped run posts NOTHING — and absence was silently
+  # treated as a pass. This job independently re-reads each named reviewer's
+  # status on the head SHA and posts ONE required `review-attestation` status that
+  # is `success` only when EVERY named reviewer posted a genuine terminal success
+  # whose §10 `target_sha` equals this HEAD (a provable live pass on this diff);
+  # it fails closed on absent / pending / red / stale.
+  #
+  # It runs `if: always()` after enforcer+qa, so whenever the workflow runs at all
+  # the signal is posted explicitly. And because `review-attestation` is a REQUIRED
+  # check (ruleset 13762049), a workflow that startup-fails (posts nothing) leaves
+  # the required check unsatisfied → the PR is unmergeable. Absence can no longer
+  # read as pass. The decision logic lives in scripts/ci/review-attestation.sh
+  # (unit-tested in tests/test_review_attestation.py).
+  review-attestation:
+    name: Review Attestation
+    needs: [enforcer, qa]
+    if: always() && github.event.pull_request.head.repo.full_name == github.repository && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: write
+    env:
+      GH_TOKEN: ${{ secrets.AOPS_BOT_GH_TOKEN || github.token }}
+      REPO: ${{ github.repository }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      GITHUB_RUN_ID: ${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compute attestation decision
+        id: attest
+        run: ./scripts/ci/review-attestation.sh
+      - name: Post review-attestation status
+        env:
+          STATE: ${{ steps.attest.outputs.state }}
+          DESC: ${{ steps.attest.outputs.description }}
+        run: |
+          gh api "repos/$REPO/statuses/$HEAD_SHA" \
+            -f state="$STATE" \
+            -f context="review-attestation" \
+            -f description="$DESC" \
+            -f target_url="https://github.com/$REPO/actions/runs/$GITHUB_RUN_ID?target_sha=$HEAD_SHA"
+      - name: Fail closed when not attested
+        env:
+          STATE: ${{ steps.attest.outputs.state }}
+          DESC: ${{ steps.attest.outputs.description }}
+        run: |
+          if [ "$STATE" != "success" ]; then
+            echo "::error::$DESC"
+            exit 1
+          fi
+          echo "::notice::$DESC"
+
+  # ─── Admission is event-driven (§3.2) — see `admit-on-review.yml` ──────────
+  # The human admission gate is NO LONGER an in-pipeline job. Admission is a PR
+  # **review approval**, handled by the separate `admit-on-review.yml` workflow
+  # (`on: pull_request_review`). That workflow sets `admit-status=success` on the
+  # admitted SHA, arms auto-merge, and dispatches the mechanic's first pass.
+  #
+  # Why this is no longer here (the retired `pr-fix-loop` Environment gate):
+  #   - Discoverability — the Environment approval surfaced only as "Review
+  #     deployments → Approve" buried in an Actions run, not on the PR.
+  #   - Dispatch race — approving an Environment emits NO event, so this run's
+  #     `check-admit` read admit-status=pending and skipped the mechanic ~2 min
+  #     before the parked `admit` job set it to success; nothing re-triggered the
+  #     pipeline on the admitted SHA, so admission stranded (worked example:
+  #     PR #1858, run 27625186358). A `pull_request_review` IS a trigger, so
+  #     admission now re-enters on the admitted SHA and dispatches the mechanic.
+  # `admit-status` is still the required merge gate; its carry-forward / reset
+  # still lives in `initialize` (§5). Passes 2…N still flow through the
+  # `check-admit → mechanic` jobs above on the mechanic's own `synchronize`s.
