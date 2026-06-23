@@ -9,12 +9,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from buttermilk._core.vertex_caching import CriteriaCacheManager
 from buttermilk.batch.managers import (
     BatchJobManager,
     BatchRequest,
     BatchResult,
 )
-from buttermilk._core.vertex_caching import CriteriaCacheManager
 
 
 class TestBatchRequest:

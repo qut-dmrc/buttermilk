@@ -57,8 +57,8 @@ class TestBatchAccumulatorWithVertexBatch:
         Uses the first available cheap model from bm.llms.
         """
         from buttermilk._core.processing_context import ProcessingContext
-        from buttermilk.processors.batch_accumulator import BatchAccumulator
         from buttermilk.batch.processors import VertexBatchProcessor
+        from buttermilk.processors.batch_accumulator import BatchAccumulator
 
         # Use first available model from config
         model_name = CHEAP_CHAT_MODELS[0]
