@@ -1372,7 +1372,7 @@ requires-dist = [
     { name = "langchain", specifier = ">=0.3.21,<1.0.0" },
     { name = "langchain-text-splitters", specifier = ">=0.3.7" },
     { name = "langdetect", specifier = ">=1.0.9" },
-    { name = "litellm", specifier = ">=1.0.0" },
+    { name = "litellm", specifier = ">=1.83.0" },
     { name = "loky", marker = "extra == 'ml'", specifier = ">=3.4.1,<4.0.0" },
     { name = "lxml", extras = ["html-clean"], specifier = ">=5.3.0" },
     { name = "marshmallow", specifier = ">=3.23.2,<4.0.0" },

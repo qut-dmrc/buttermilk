@@ -71,8 +71,9 @@ async def test_llmcore_fills_template_with_expected_from_record(judge_trace):
         context=[],
     )
 
-    # Get the rendered message content
-    rendered = messages[0].content
+    # Get the rendered message content across all messages (score.jinja2 splits into
+    # system block + user block after the caching redesign; expected lives in the user block)
+    rendered = "\n\n".join(m.content for m in messages if isinstance(m.content, str))
 
     # Verify 'expected' appears in rendered output
     assert "<BEGIN EXPECTED ANSWER KEY POINTS>" in rendered
@@ -210,9 +211,10 @@ async def test_full_rescore_pipeline_preserves_expected():
     # Extract the result from _fill_template
     result = type("obj", (object,), {"messages": messages})()
 
-    # Check the rendered messages
+    # Check the rendered messages — join all messages since score.jinja2 splits into
+    # system block + user block after the caching redesign; expected lives in the user block
     assert len(result.messages) > 0, "Should have rendered messages"
-    rendered = result.messages[0].content
+    rendered = "\n\n".join(m.content for m in result.messages if isinstance(m.content, str))
 
     # THE BUG: Verify 'expected' appears in rendered output
     assert "<BEGIN EXPECTED ANSWER KEY POINTS>" in rendered

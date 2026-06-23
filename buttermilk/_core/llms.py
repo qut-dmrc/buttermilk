@@ -508,6 +508,84 @@ async def _parse_structured_output(  # noqa: PLR0912
 # =============================================================================
 
 
+# Anthropic per-model minimum cacheable-prefix floors (tokens). A cache_control
+# breakpoint on a prefix below the model's floor is silently ineffective, so we
+# warn rather than stamp it. Opus 4.x / Haiku 4.5 = 4096; Sonnet 4.6 / Fable 5 =
+# 2048; older Sonnet (4.5/4/3.7) = 1024. See docs/design/pr435-caching-redesign.md.
+_ANTHROPIC_CACHE_FLOOR_HIGH = 4096
+_ANTHROPIC_CACHE_FLOOR_MID = 2048
+
+
+def _anthropic_cache_floor(model_name: str) -> int:
+    """Return the minimum cacheable-prefix token floor for a Claude model.
+
+    Conservative: an unrecognised Claude model is treated as a 4096 floor so we
+    only claim a cache when we are confident the prefix clears it.
+    """
+    name = (model_name or "").lower()
+    if "opus" in name or "haiku" in name:
+        return _ANTHROPIC_CACHE_FLOOR_HIGH
+    if "sonnet-4-6" in name or "sonnet4.6" in name or "fable" in name:
+        return _ANTHROPIC_CACHE_FLOOR_MID
+    # Older Sonnet variants float to 1024, but default high when unsure.
+    if "sonnet" in name and any(v in name for v in ("4-5", "4.5", "-4-", "3-7", "3.7")):
+        return _ANTHROPIC_CACHE_FLOOR_MID
+    return _ANTHROPIC_CACHE_FLOOR_HIGH
+
+
+def _estimate_system_prefix_tokens(messages: list[dict[str, Any]]) -> int:
+    """Estimate the token size of the leading system block (char/4 heuristic).
+
+    Used only for the floor guard — a directional check, not billing-accurate.
+    """
+    total_chars = 0
+    for msg in messages:
+        if msg.get("role") != "system":
+            break  # only the leading contiguous system block forms the cached prefix
+        content = msg.get("content")
+        if isinstance(content, str):
+            total_chars += len(content)
+        elif isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict):
+                    total_chars += len(str(block.get("text", "")))
+                else:
+                    total_chars += len(str(block))
+    return total_chars // 4
+
+
+def _anthropic_cache_injection_points(
+    messages: list[dict[str, Any]],
+    model_name: str,
+) -> list[dict[str, Any]] | None:
+    """Decide whether to request a cache_control breakpoint on the system block.
+
+    Returns litellm ``cache_control_injection_points`` (one breakpoint on the
+    leading system block) when there is a system message whose estimated size
+    clears the model's floor; otherwise ``None`` (and logs a warning when a
+    system block exists but is too small to cache).
+
+    We hand litellm a declarative injection point rather than hand-stamping the
+    message: litellm's ``AnthropicCacheControlHook`` reads
+    ``cache_control_injection_points`` and places the breakpoint, translating it
+    to the Anthropic API format for both ``anthropic`` and ``anthropic_vertex``.
+    Gemini/OpenAI cache the same leading prefix implicitly and ignore the field.
+    """
+    if not any(msg.get("role") == "system" for msg in messages):
+        return None
+
+    prefix_tokens = _estimate_system_prefix_tokens(messages)
+    floor = _anthropic_cache_floor(model_name)
+    if prefix_tokens < floor:
+        logger.warning(
+            f"Anthropic prompt cache skipped for '{model_name}': system prefix ~{prefix_tokens} tok "
+            f"is below the {floor}-tok floor; a cache_control breakpoint would be silently ineffective."
+        )
+        return None
+
+    return [{"location": "message", "role": "system"}]
+
+
 def to_litellm_messages(messages: Sequence[LLMMessage]) -> list[dict[str, Any]]:
     """Convert LLMMessage objects to LiteLLM message format.
 
@@ -699,6 +777,7 @@ class LiteLLMWrapper(BaseModel):
     api_key: str | None = Field(default=None, description="API key for the provider")
     base_url: str | None = Field(default=None, description="Custom base URL")
     vertex_location: str | None = Field(default=None, description="GCP region for Vertex AI providers (litellm vertex_location)")
+    client_type: str | None = Field(default=None, description="Client type identifier (e.g., 'anthropic', 'vertex_ai')")
     default_parameters: ModelParameters = Field(
         default_factory=ModelParameters,
         description="Default inference parameters (temperature, max_tokens, etc.)",
@@ -804,6 +883,17 @@ class LiteLLMWrapper(BaseModel):
         # Convert messages to LiteLLM format
         litellm_messages = to_litellm_messages(messages)
 
+        # Anthropic prompt caching: Claude caches NOTHING without an explicit
+        # cache_control breakpoint. We request ONE breakpoint on the leading
+        # system block (the stable reused prefix: instructions + criteria) via
+        # litellm's declarative cache_control_injection_points, but only when the
+        # prefix clears the model's min-token floor (otherwise it is a silent
+        # no-op and we warn instead). Gemini/OpenAI cache the same prefix
+        # implicitly and ignore the field. See docs/design/pr435-caching-redesign.md.
+        cache_injection_points: list[dict[str, Any]] | None = None
+        if self.client_type in ("anthropic", "anthropic_vertex"):
+            cache_injection_points = _anthropic_cache_injection_points(litellm_messages, self.litellm_model_name or self.model)
+
         # Merge default parameters with runtime kwargs (runtime takes precedence)
         merged_params = self.default_parameters.to_api_params()
         merged_params.update(kwargs)
@@ -816,6 +906,11 @@ class LiteLLMWrapper(BaseModel):
             "messages": litellm_messages,
             **merged_params,
         }
+
+        # Request the Anthropic cache_control breakpoint (set above) — litellm's
+        # AnthropicCacheControlHook reads this and stamps the system block.
+        if cache_injection_points:
+            litellm_params["cache_control_injection_points"] = cache_injection_points
 
         # Add API key if provided
         if self.api_key:
@@ -1384,6 +1479,7 @@ class LLMs(BaseModel):
             api_key=config.api_key,
             base_url=config.base_url,
             vertex_location=vertex_location,
+            client_type=config.provider_segment,
             default_parameters=merged_params,
         )
 

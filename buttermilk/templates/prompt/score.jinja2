@@ -37,6 +37,14 @@ You may be provided with an abbreviated list of the main points we expect to see
 {{ instructions }}
 <END INSTRUCTIONS PROVIDED TO THE ANALYST>
 
+{# Everything above this point (role + instructions/criteria) is constant across #}
+{# records for a given criteria-set, so it forms the cacheable leading prefix.   #}
+{# The per-record source/expected/answers below are deliberately placed in the   #}
+{# User turn AFTER the system block so they never invalidate the cached prefix.  #}
+{# See docs/design/pr435-caching-redesign.md.                                    #}
+
+# User:
+
 <BEGIN SOURCE TO BE ASSESSED>
 {{ source }}
 <END SOURCE TO BE ASSESSED>
@@ -53,8 +61,6 @@ You may be provided with an abbreviated list of the main points we expect to see
 {%- endif -%}
 <END EXPECTED ANSWER KEY POINTS>
 
-
-# User:
 {% for answer in answers %}
 {{ answer }}
 {%- endfor -%}

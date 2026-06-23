@@ -10,6 +10,9 @@ from buttermilk._core.llms import (
     LiteLLMWrapper,
     ModelInfo,
     ModelParameters,
+    _anthropic_cache_floor,
+    _anthropic_cache_injection_points,
+    _estimate_system_prefix_tokens,
     litellm_to_model_output,
     to_litellm_messages,
 )
@@ -372,3 +375,238 @@ class TestLiteLLMWrapperPricing:
         assert pricing["prompt_tokens"] == 0
         assert pricing["completion_tokens"] == 0
         assert pricing["total_cost"] == 0.0
+
+
+# A system prefix large enough to clear the highest Anthropic floor (4096 tok).
+# ~30k chars / 4 ≈ 7500 tok.
+_BIG_SYSTEM = "criteria block. " * 2000
+
+
+class TestAnthropicCacheFloor:
+    """Tests for _anthropic_cache_floor model→floor mapping."""
+
+    def test_opus_and_haiku_are_high_floor(self):
+        assert _anthropic_cache_floor("claude-opus-4-7") == 4096
+        assert _anthropic_cache_floor("vertex_ai/claude-haiku-4-5") == 4096
+
+    def test_sonnet_46_and_fable_are_mid_floor(self):
+        assert _anthropic_cache_floor("claude-sonnet-4-6") == 2048
+        assert _anthropic_cache_floor("claude-fable-5") == 2048
+
+    def test_unknown_claude_defaults_high(self):
+        """Conservative: unrecognised model treated as the 4096 floor."""
+        assert _anthropic_cache_floor("claude-something-new") == 4096
+        assert _anthropic_cache_floor("") == 4096
+
+
+class TestEstimateSystemPrefixTokens:
+    """Tests for _estimate_system_prefix_tokens (char/4 over the leading system block)."""
+
+    def test_counts_only_leading_system_block(self):
+        messages = [
+            {"role": "system", "content": "a" * 4000},
+            {"role": "user", "content": "b" * 8000},  # must NOT be counted
+        ]
+        assert _estimate_system_prefix_tokens(messages) == 1000  # 4000 / 4
+
+    def test_list_content_summed(self):
+        messages = [
+            {"role": "system", "content": [{"type": "text", "text": "a" * 2000}, {"type": "text", "text": "b" * 2000}]},
+            {"role": "user", "content": "x"},
+        ]
+        assert _estimate_system_prefix_tokens(messages) == 1000  # 4000 / 4
+
+    def test_no_system_block_is_zero(self):
+        assert _estimate_system_prefix_tokens([{"role": "user", "content": "hi"}]) == 0
+
+
+class TestAnthropicCacheInjectionPoints:
+    """Tests for _anthropic_cache_injection_points (the floor-guarded decision)."""
+
+    def test_above_floor_returns_system_injection_point(self):
+        messages = [{"role": "system", "content": _BIG_SYSTEM}, {"role": "user", "content": "record"}]
+        result = _anthropic_cache_injection_points(messages, "claude-opus-4-7")
+        assert result == [{"location": "message", "role": "system"}]
+
+    def test_below_floor_returns_none_and_warns(self):
+        """Small prefix → no breakpoint (silent no-op avoided) + a warning."""
+        messages = [{"role": "system", "content": "tiny system prompt"}, {"role": "user", "content": "record"}]
+        with patch("buttermilk._core.llms.logger.warning") as mock_warn:
+            result = _anthropic_cache_injection_points(messages, "claude-opus-4-7")
+        assert result is None
+        mock_warn.assert_called_once()
+        assert "below the 4096-tok floor" in mock_warn.call_args[0][0]
+
+    def test_mid_floor_model_caches_at_smaller_prefix(self):
+        """A ~3000-tok prefix clears Sonnet-4.6's 2048 floor but not Opus's 4096."""
+        mid = "criteria block. " * 800  # ~12.8k chars / 4 ≈ 3200 tok
+        messages = [{"role": "system", "content": mid}, {"role": "user", "content": "record"}]
+        assert _anthropic_cache_injection_points(messages, "claude-sonnet-4-6") == [{"location": "message", "role": "system"}]
+        assert _anthropic_cache_injection_points(messages, "claude-opus-4-7") is None
+
+    def test_no_system_message_returns_none(self):
+        messages = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "yo"}]
+        assert _anthropic_cache_injection_points(messages, "claude-opus-4-7") is None
+
+
+@pytest.mark.slow
+@pytest.mark.anyio
+class TestAnthropicCacheControlInCreate:
+    """Tests that LiteLLMWrapper.create() injects cache_control on Anthropic paths."""
+
+    def _make_mock_response(self, text: str = "OK") -> MagicMock:
+        mock_msg = MagicMock()
+        mock_msg.content = text
+        mock_msg.tool_calls = None
+        mock_msg.reasoning_content = None
+        mock_choice = MagicMock()
+        mock_choice.message = mock_msg
+        mock_choice.finish_reason = "stop"
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        mock_response.usage = MagicMock(prompt_tokens=10, completion_tokens=5)
+        mock_response.cached = False
+        return mock_response
+
+    async def test_anthropic_path_requests_cache_injection_point(self):
+        """create() passes cache_control_injection_points on the anthropic path (prefix above floor)."""
+        model_info = ModelInfo(vision=False, function_calling=True, json_output=False, family="claude")
+        wrapper = LiteLLMWrapper(
+            model="claude-sonnet-4-6",
+            model_info=model_info,
+            litellm_model_name="claude-sonnet-4-6",
+            api_key="test-key",
+            client_type="anthropic",
+        )
+        messages = [
+            SystemMessage(content=_BIG_SYSTEM),
+            UserMessage(content="The article content here.", source="user"),
+        ]
+
+        with patch("litellm.acompletion", return_value=self._make_mock_response()):
+            await wrapper.create(messages=messages)
+            import litellm
+
+            call_kwargs = litellm.acompletion.call_args[1]
+
+        assert call_kwargs["cache_control_injection_points"] == [{"location": "message", "role": "system"}]
+        # We do NOT hand-stamp the messages — litellm's hook does that downstream.
+        assert call_kwargs["messages"][0]["role"] == "system"
+
+    async def test_anthropic_vertex_path_requests_cache_injection_point(self):
+        """create() requests the injection point on the anthropic_vertex path."""
+        model_info = ModelInfo(vision=False, function_calling=True, json_output=False, family="claude")
+        wrapper = LiteLLMWrapper(
+            model="claude-sonnet-4-6",
+            model_info=model_info,
+            litellm_model_name="vertex_ai/claude-sonnet-4-6",
+            client_type="anthropic_vertex",
+            vertex_project="my-project",
+            vertex_location="us-east5",
+        )
+        messages = [
+            SystemMessage(content=_BIG_SYSTEM),
+            UserMessage(content="User content.", source="user"),
+        ]
+
+        with patch("litellm.acompletion", return_value=self._make_mock_response()):
+            await wrapper.create(messages=messages)
+            import litellm
+
+            call_kwargs = litellm.acompletion.call_args[1]
+
+        assert call_kwargs["cache_control_injection_points"] == [{"location": "message", "role": "system"}]
+
+    async def test_anthropic_below_floor_no_injection_point(self):
+        """A small system prefix below the floor → no cache_control_injection_points param."""
+        model_info = ModelInfo(vision=False, function_calling=True, json_output=False, family="claude")
+        wrapper = LiteLLMWrapper(
+            model="claude-opus-4-7",
+            model_info=model_info,
+            litellm_model_name="claude-opus-4-7",
+            api_key="test-key",
+            client_type="anthropic",
+        )
+        messages = [
+            SystemMessage(content="You are a judge. Evaluate the following."),  # tiny, below 4096
+            UserMessage(content="The article content here.", source="user"),
+        ]
+
+        with patch("litellm.acompletion", return_value=self._make_mock_response()):
+            await wrapper.create(messages=messages)
+            import litellm
+
+            call_kwargs = litellm.acompletion.call_args[1]
+
+        assert "cache_control_injection_points" not in call_kwargs
+
+    async def test_gemini_path_no_injection_point(self):
+        """create() does NOT request cache_control on the gemini path (implicit caching)."""
+        model_info = ModelInfo(vision=False, function_calling=True, json_output=False, family="gemini")
+        wrapper = LiteLLMWrapper(
+            model="gemini-2.5-flash",
+            model_info=model_info,
+            litellm_model_name="gemini/gemini-2.5-flash",
+            client_type="gemini",
+        )
+        messages = [
+            SystemMessage(content=_BIG_SYSTEM),
+            UserMessage(content="Content.", source="user"),
+        ]
+
+        with patch("litellm.acompletion", return_value=self._make_mock_response()):
+            await wrapper.create(messages=messages)
+            import litellm
+
+            call_kwargs = litellm.acompletion.call_args[1]
+
+        assert "cache_control_injection_points" not in call_kwargs
+        # System content stays as a plain string — untouched.
+        assert isinstance(call_kwargs["messages"][0]["content"], str)
+
+    async def test_openai_path_no_injection_point(self):
+        """create() does NOT request cache_control on the openai path."""
+        model_info = ModelInfo(vision=False, function_calling=True, json_output=False, family="gpt-4", structured_output=True)
+        wrapper = LiteLLMWrapper(
+            model="gpt-4",
+            model_info=model_info,
+            litellm_model_name="gpt-4",
+            api_key="sk-test",
+            client_type="openai",
+        )
+        messages = [
+            SystemMessage(content=_BIG_SYSTEM),
+            UserMessage(content="Content.", source="user"),
+        ]
+
+        with patch("litellm.acompletion", return_value=self._make_mock_response()):
+            await wrapper.create(messages=messages)
+            import litellm
+
+            call_kwargs = litellm.acompletion.call_args[1]
+
+        assert "cache_control_injection_points" not in call_kwargs
+
+    async def test_system_before_user_on_anthropic_path(self):
+        """System message remains first (before user/record content) on Anthropic path."""
+        model_info = ModelInfo(vision=False, function_calling=True, json_output=False, family="claude")
+        wrapper = LiteLLMWrapper(
+            model="claude-sonnet-4-6",
+            model_info=model_info,
+            litellm_model_name="claude-sonnet-4-6",
+            api_key="test-key",
+            client_type="anthropic",
+        )
+        messages = [
+            SystemMessage(content=_BIG_SYSTEM),
+            UserMessage(content="Variable record content.", source="user"),
+        ]
+
+        with patch("litellm.acompletion", return_value=self._make_mock_response()):
+            await wrapper.create(messages=messages)
+            import litellm
+
+            call_messages = litellm.acompletion.call_args[1]["messages"]
+
+        assert call_messages[0]["role"] == "system"
+        assert call_messages[1]["role"] == "user"
