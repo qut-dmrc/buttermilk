@@ -18,7 +18,7 @@ from cloudpathlib import AnyPath
 
 from buttermilk import bm, logger
 from buttermilk._core.config_bootstrap import init_async
-from buttermilk._core.vertex_batch import BatchJobManager, BatchJobManifest
+from buttermilk.batch.managers import BatchJobManager, BatchJobManifest
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

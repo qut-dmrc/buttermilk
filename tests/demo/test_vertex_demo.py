@@ -140,7 +140,7 @@ class TestVertexBatchProcessorDemo:
         because it deadnames Elliot Page, uses wrong pronouns, and uses
         "identifies as" language.
         """
-        from buttermilk.processors.vertex_batch import VertexBatchProcessor
+        from buttermilk.batch.processors import VertexBatchProcessor
 
         # ==== SETUP ====
         print(f"\n{SEPARATOR}")

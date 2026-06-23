@@ -90,7 +90,7 @@ def extract_cached_tokens(usage: Any) -> int:
 
     The remaining flat/camelCase branches are KEPT-BECAUSE-LITELLM-GAP: this helper is
     ALSO called on raw, NON-litellm usage dicts produced by the batch path
-    (``_core/vertex_batch.py`` reads ``response.body.usage`` straight from the
+    (``batch/managers.py`` reads ``response.body.usage`` straight from the
     provider's batch-result JSONL and passes it as ``usage_dict``). Those raw Vertex/
     Gemini batch shapes are not normalised by litellm, so the
     ``cachedContentTokenCount`` / ``cached_content_token_count`` / flat

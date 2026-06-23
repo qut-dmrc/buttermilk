@@ -36,8 +36,7 @@ from buttermilk import logger
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.processor_core import BatchProcessorCore
 from buttermilk._core.types import BaseRecord
-
-from .vertex_batch import VertexBatchProcessor
+from buttermilk.batch.processors import VertexBatchProcessor
 
 
 class VariantBatchProcessor(BatchProcessorCore):

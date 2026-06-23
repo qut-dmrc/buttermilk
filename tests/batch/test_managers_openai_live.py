@@ -28,7 +28,7 @@ from pathlib import Path
 
 import pytest
 
-from buttermilk._core.vertex_batch import (
+from buttermilk.batch.managers import (
     BatchRequest,
     BatchResult,
     OpenAIBatchJobManager,

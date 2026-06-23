@@ -5,6 +5,8 @@ for use in data processing pipelines. Each processor takes dict inputs
 containing 'record' and other fields, yielding transformed dict outputs.
 """
 
+from buttermilk.batch.processors import BatchLLMProcessor, OpenAIBatchProcessor, VertexBatchProcessor
+
 from .batch_accumulator import BatchAccumulator
 from .chromadb_uploader import ChromaDBUploader
 from .embeddings import EmbeddingGenerator
@@ -13,7 +15,6 @@ from .parallel import ParallelProcessor
 from .unified_processors import GroupchatProcessor, LLMProcessor, ParameterExpansionProcessor
 from .variant_batch import VariantBatchProcessor
 from .variants import VariantProcessor
-from .vertex_batch import BatchLLMProcessor, OpenAIBatchProcessor, VertexBatchProcessor
 
 __all__ = [
     "BatchAccumulator",
