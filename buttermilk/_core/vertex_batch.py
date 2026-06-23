@@ -413,37 +413,58 @@ def _is_openai_model(model: str) -> bool:
     return any(pattern in model_lower for pattern in _OPENAI_MODEL_PATTERNS)
 
 
-def get_message_converter(model: str, client_type: str | None = None, **kwargs: Any) -> BatchMessageConverter:
+def batch_message_format(litellm_model: str | None) -> str | None:
+    """Derive the batch message format from a full litellm model name.
+
+    The full provider-prefixed litellm name (e.g. "vertex_ai/claude-sonnet-4-6",
+    "azure/gpt-5-mini", "azure_ai/grok-4-1-fast-non-reasoning") is the single source
+    of truth; there is no ClientType enum. Returns one of:
+      "claude"  -> ClaudeMessageConverter   (Anthropic on Vertex or direct)
+      "openai"  -> OpenAIMessageConverter    (Azure / Azure AI / direct OpenAI)
+      "gemini"  -> GeminiMessageConverter    (Gemini / DeepSeek / Llama / Mistral on Vertex)
+      None      -> caller should fall back to model-name pattern matching
+    """
+    if not litellm_model:
+        return None
+    name = litellm_model.lower()
+    segment = name.split("/", 1)[0] if "/" in name else ""
+
+    # Anthropic — direct or on Vertex (vertex_ai/claude-...)
+    if segment == "anthropic" or "claude" in name:
+        return "claude"
+    # Azure / Azure AI / direct OpenAI all speak the OpenAI chat-completions format.
+    if segment in ("azure", "azure_ai", "openai"):
+        return "openai"
+    # Vertex-hosted Gemini / DeepSeek / Llama / Mistral and the Gemini AI-Studio API.
+    if segment in ("vertex_ai", "gemini"):
+        return "gemini"
+    return None
+
+
+def get_message_converter(model: str, litellm_model: str | None = None, **kwargs: Any) -> BatchMessageConverter:
     """Factory function to get the appropriate converter for a model.
 
-    When client_type is provided (from model registry), it takes priority over
-    model name pattern matching. This handles models like DeepSeek and Grok
-    that don't match standard name patterns.
-
-    Routing logic:
-    - anthropic, anthropic_vertex -> Claude converter
-    - azure, openai -> OpenAI converter
-    - Everything else (gemini_vertex, vertex_openai, deepseek_vertex, llama_vertex) -> Gemini converter
+    Routing is derived from the full provider-prefixed litellm name (see
+    `batch_message_format`); it takes priority over model-name pattern matching,
+    which handles models like DeepSeek/Llama that don't match standard patterns.
 
     Args:
-        model: Model identifier (e.g., "gemini-2.5-flash", "claude-sonnet-4", "gpt-4o")
-        client_type: Optional client type string from model registry (e.g., "azure", "anthropic_vertex")
+        model: Display/registry model id (e.g., "gemini-2.5-flash", "gpt-4o").
+        litellm_model: Full provider-prefixed litellm name from the registry.
         **kwargs: Provider-specific options (e.g., max_tokens for Claude/OpenAI)
 
     Returns:
         Appropriate BatchMessageConverter instance
     """
-    # If client_type is provided, use it as primary routing signal
-    if client_type:
-        if client_type in ("anthropic", "anthropic_vertex"):
-            return ClaudeMessageConverter(max_tokens=kwargs.get("max_tokens"))
-        if client_type in ("azure", "openai"):
-            return OpenAIMessageConverter(max_tokens=kwargs.get("max_tokens"), model=model)
-        # All Vertex-hosted models (gemini_vertex, vertex_openai, deepseek_vertex, llama_vertex)
-        # use Gemini batch format
+    fmt = batch_message_format(litellm_model)
+    if fmt == "claude":
+        return ClaudeMessageConverter(max_tokens=kwargs.get("max_tokens"))
+    if fmt == "openai":
+        return OpenAIMessageConverter(max_tokens=kwargs.get("max_tokens"), model=model)
+    if fmt == "gemini":
         return GeminiMessageConverter()
 
-    # Fallback to model name pattern matching
+    # Fallback to model name pattern matching when no litellm name is available
     if _is_claude_model(model):
         return ClaudeMessageConverter(max_tokens=kwargs.get("max_tokens"))
     if _is_openai_model(model) or _is_llama_model(model):
@@ -658,7 +679,7 @@ class BatchJobManager(BaseModel):
         requests: list[BatchRequest],
         model: str,
         max_tokens: int | None = None,
-        client_type: str | None = None,
+        litellm_model: str | None = None,
     ) -> str:
         """Build JSONL content for batch job.
 
@@ -666,12 +687,12 @@ class BatchJobManager(BaseModel):
             requests: List of batch requests (each with messages in LiteLLM format)
             model: Model identifier (determines format)
             max_tokens: Maximum tokens for response (passed to Claude converter)
-            client_type: Optional client type from model registry for routing
+            litellm_model: Full provider-prefixed litellm name from the registry (routing)
 
         Returns:
             JSONL string ready for upload
         """
-        converter = get_message_converter(model, client_type=client_type, max_tokens=max_tokens)
+        converter = get_message_converter(model, litellm_model=litellm_model, max_tokens=max_tokens)
         lines = [json.dumps(converter.build_request(request)) for request in requests]
         return "\n".join(lines)
 
@@ -816,14 +837,14 @@ class BatchJobManager(BaseModel):
         self,
         model: str,
         requests: list[BatchRequest],
-        client_type: str | None = None,
+        litellm_model: str | None = None,
     ) -> BatchJob:
         """Submit a batch prediction job.
 
         Args:
             model: Model to use (e.g., "gemini-2.5-flash")
             requests: List of batch requests (each with messages in LiteLLM format)
-            client_type: Optional client type for message format routing
+            litellm_model: Full provider-prefixed litellm name for message format routing
 
         Returns:
             BatchJob object for tracking
@@ -836,7 +857,7 @@ class BatchJobManager(BaseModel):
         job_id = self._generate_job_id()
 
         # Build JSONL
-        jsonl_content = self.build_jsonl(requests, model, client_type=client_type)
+        jsonl_content = self.build_jsonl(requests, model, litellm_model=litellm_model)
 
         # Upload to stable batch directory
         input_uri = self._upload_to_gcs(jsonl_content, job_id)
@@ -1642,6 +1663,7 @@ class OpenAIBatchJobManager(BaseModel):
         requests: list[BatchRequest],
         model: str,
         max_tokens: int | None = None,
+        litellm_model: str | None = None,
     ) -> str:
         """Build JSONL content for OpenAI batch job.
 
@@ -1649,6 +1671,8 @@ class OpenAIBatchJobManager(BaseModel):
             requests: List of batch requests (each with messages in LiteLLM format)
             model: Model identifier (e.g., "gpt-4o")
             max_tokens: Maximum tokens for response
+            litellm_model: Accepted for signature parity with the Vertex manager;
+                the OpenAI batch path always uses the OpenAI message format.
 
         Returns:
             JSONL string ready for upload

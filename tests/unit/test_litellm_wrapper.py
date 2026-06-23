@@ -106,6 +106,56 @@ class TestMessageFormatConversion:
         assert result.cached is False
 
 
+class TestNullContentDefensiveParse:
+    """Reasoning models (Gemini-3.x on native vertex_ai/) can exhaust the output
+    budget on hidden thinking tokens, returning either a null `message` (the legacy
+    compat-shim shape) OR a non-null `message` whose `.content` is None (the native
+    vertex_ai/ shape). Both must coerce to "" so ModelOutput doesn't raise a pydantic
+    ValidationError out of create().
+    """
+
+    def _usage(self):
+        usage = MagicMock()
+        usage.prompt_tokens = 100
+        usage.completion_tokens = 32
+        return usage
+
+    def test_null_message_coerced_to_empty_string(self):
+        """choice.message is None (legacy shape) -> content == ''."""
+        mock_choice = MagicMock()
+        mock_choice.message = None
+        mock_choice.finish_reason = "length"
+
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        mock_response.cached = False
+
+        result = litellm_to_model_output(mock_response, self._usage(), "gemini-3.5-flash")
+        assert result.content == ""
+        assert result.finish_reason == "length"
+
+    def test_non_null_message_with_null_content_coerced_to_empty_string(self):
+        """choice.message is present but message.content is None (native vertex_ai/
+        reasoning shape) -> content == '' (previously raised a pydantic ValidationError).
+        """
+        mock_message = MagicMock()
+        mock_message.content = None
+        mock_message.tool_calls = None
+        mock_message.reasoning_content = None
+
+        mock_choice = MagicMock()
+        mock_choice.message = mock_message
+        mock_choice.finish_reason = "length"
+
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        mock_response.cached = False
+
+        result = litellm_to_model_output(mock_response, self._usage(), "gemini-3.5-flash")
+        assert result.content == ""
+        assert result.finish_reason == "length"
+
+
 @pytest.mark.slow
 @pytest.mark.anyio
 class TestLiteLLMWrapperCreate:
@@ -185,8 +235,12 @@ class TestLiteLLMWrapperCreate:
             mock_response.usage = MagicMock(prompt_tokens=10, completion_tokens=5)
             mock_response.cached = False
 
+            import litellm
+
+            # litellm classifies retryable failures via its typed exception hierarchy;
+            # the wrapper retries those (not arbitrary string-matched Exceptions).
             mock_acompletion.side_effect = [
-                Exception("Rate limit exceeded"),
+                litellm.RateLimitError("Rate limit exceeded", llm_provider="openai", model="gpt-4"),
                 mock_response,
             ]
 
@@ -212,7 +266,10 @@ class TestLiteLLMWrapperCreate:
         messages = [UserMessage(content="Hello!", source="user")]
 
         with patch("litellm.acompletion") as mock_acompletion:
-            mock_acompletion.side_effect = Exception("Rate limit exceeded")
+            import litellm
+
+            # Typed litellm RateLimitError is retryable; exhausting retries -> ProcessingError.
+            mock_acompletion.side_effect = litellm.RateLimitError("Rate limit exceeded", llm_provider="openai", model="gpt-4")
 
             with pytest.raises(ProcessingError, match="LiteLLM call failed"):
                 await wrapper.create(messages=messages)

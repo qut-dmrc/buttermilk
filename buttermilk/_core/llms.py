@@ -1,9 +1,9 @@
 """Manages Language Model (LLM) configurations, clients, and interactions.
 
 This module provides structures for defining LLM configurations (`LLMConfig`),
-managing different LLM providers and their clients (`LLMs`, `LLMClient`), and
-wrapping chat completion clients with additional functionality such as rate
-limiting and retry logic (`LiteLLMWrapper`).
+managing different LLM providers and their clients (`LLMs`), and wrapping chat
+completion clients with additional functionality such as retry logic
+(`LiteLLMWrapper`).
 
 It uses LiteLLM as the unified interface for interacting with various LLM APIs
 and provides a consistent interface for agents within the Buttermilk framework.
@@ -16,15 +16,9 @@ import importlib
 import json
 import logging
 import random
-import socket
 from collections.abc import Callable, Sequence
 from enum import Enum
 from typing import Any
-
-import urllib3.exceptions
-
-# Core LLM library imports
-from google.auth.exceptions import TransportError as GoogleAuthTransportError
 
 # LiteLLM is lazy-loaded to speed up import time (~3s savings)
 # Use _get_litellm() and _get_acompletion() instead of direct imports
@@ -98,10 +92,9 @@ from pydantic import (
     field_validator,
 )
 
-from buttermilk import bm, logger
+from buttermilk import logger
 from buttermilk._core.constants import CONFIG_CACHE_FILENAME, cache, get_base_cache_dir  # Models cache constants
 from buttermilk._core.exceptions import ContentBlockedError, ProcessingError  # Custom Buttermilk exceptions
-from buttermilk._core.json_schema import make_all_properties_required, resolve_json_schema_refs  # Schema $ref resolution for Azure compatibility
 from buttermilk._core.messages import (
     AssistantMessage,
     CreateResult,
@@ -116,37 +109,23 @@ from buttermilk._core.tool_types import CancellationToken, Tool, ToolSchema
 from buttermilk.utils.pricing import calculate_token_cost, extract_cached_tokens  # Token cost calculation
 
 
-class ClientType(Enum):
-    """Enumeration of supported LLM client types.
+def litellm_provider_segment(litellm_model: str) -> str:
+    """Return the leading litellm provider segment of a full model name.
 
-    Used to categorize LLM providers or services.
+    Examples:
+        "vertex_ai/gemini-3-flash-preview" -> "vertex_ai"
+        "vertex_ai/claude-sonnet-4-6"      -> "vertex_ai"
+        "azure/gpt-5-mini"                 -> "azure"
+        "azure_ai/grok-4-1-fast-non-reasoning" -> "azure_ai"
+        "anthropic/claude-3-5-sonnet"      -> "anthropic"
+        "gpt-4o" (no prefix)               -> "" (treated as bare OpenAI)
 
-    Attributes:
-        OPENAI: OpenAI platform.
-        GEMINI: Google Generative AI platform (e.g., Gemini API).
-        GEMINI_VERTEX: Gemini client on vertex platform.
-        VERTEX_OPENAI: Google Vertex AI platform with OpenAI-compatible endpoint (legacy).
-        LLAMA_VERTEX: Llama models on Vertex AI via native LiteLLM support.
-        DEEPSEEK_VERTEX: DeepSeek models on Vertex AI via native LiteLLM support.
-        ANTHROPIC: Anthropic platform (e.g., Claude models).
-        ANTHROPIC_VERTEX: Anthropic models hosted on Google Vertex AI.
-        llama: Llama models (often self-hosted or via specific providers).
-        AZURE: Microsoft Azure AI platform (e.g., Azure OpenAI).
-
+    The full provider-prefixed litellm name is the single source of truth for
+    routing/auth/format; there is no ClientType enum any more.
     """
-
-    OPENAI = "openai"
-    AZURE = "azure"
-    ANTHROPIC = "anthropic"
-    ANTHROPIC_VERTEX = "anthropic_vertex"
-    GEMINI = "gemini"
-    GEMINI_VERTEX = "gemini_vertex"
-    VERTEX_OPENAI = "vertex_openai"  # OpenAI-compatible endpoint on Vertex (legacy)
-    LLAMA_VERTEX = "llama_vertex"  # Llama models on Vertex AI via native LiteLLM
-    DEEPSEEK_VERTEX = "deepseek_vertex"  # DeepSeek models on Vertex AI via native LiteLLM
-    MISTRAL_VERTEX = "mistral_vertex"  # Mistral models on Vertex AI via native LiteLLM
-    HUGGINGFACE = "huggingface"  # HuggingFace Inference API (serverless or dedicated)
-    ZENTROPI = "zentropi"  # Zentropi toxicity/content moderation API
+    if not litellm_model or "/" not in litellm_model:
+        return ""
+    return litellm_model.split("/", 1)[0]
 
 
 class ModelParameters(BaseModel):
@@ -255,83 +234,54 @@ class ModelParameters(BaseModel):
 class LLMConfig(BaseModel):
     """Configuration for a specific Language Model (LLM).
 
-    Defines the client type, API key, custom base URL, model-specific information,
-    and any additional configurations required by the LLM client.
+    Routing is driven entirely by the full provider-prefixed litellm model name
+    (`litellm_model`, e.g. "vertex_ai/gemini-3-flash-preview", "azure/gpt-5-mini",
+    "azure_ai/grok-4-1-fast-non-reasoning", "vertex_ai/claude-sonnet-4-6"). There is
+    no longer a `ClientType` enum: litellm + ambient GCP ADC handle auth/transport,
+    and the few genuine non-string-derivable branches (batch SDK + message-format
+    selection) are derived from the litellm provider segment.
 
     Attributes:
-        client_type (ClientType): The type of client to instantiate (e.g., "openai",
-            "anthropic", "gemini_vertex"). This determines which LiteLLM provider to use.
-        api_key (str | None): The API key required for authenticating with the
-            LLM provider. Can be None if authentication is handled differently
-            (e.g., via environment variables or instance metadata).
-        base_url (str | None): A custom base URL for the API endpoint, if
-            different from the provider's default (e.g., for Azure OpenAI or
-            self-hosted models).
-        model_info (ModelInfo): A ModelInfo object containing detailed metadata
-            about the model, such as its family, context window size,
-            support for structured output, etc.
-        configs (dict): A dictionary for additional options or configurations
-            to pass to the LiteLLM client.
-        litellm_model (str | None): An optional explicit litellm model identifier.
-            If provided, this will be used instead of automatic resolution from
-            client_type and model info. Useful for models that need specific naming
-            for litellm pricing calculations.
-        parameters (ModelParameters): Default inference parameters (temperature,
-            max_tokens, etc.) for this model. Defaults to empty ModelParameters
-            instance. Can be specified as a dict which will be converted to
-            ModelParameters during validation.
-
+        litellm_model (str): The full provider-prefixed litellm model identifier.
+            Required. This is the single source of truth for provider routing.
+        api_key (str | None): The API key for the provider, if needed. None when
+            auth is ambient (e.g. Vertex via Application Default Credentials).
+        base_url (str | None): Custom API endpoint (e.g. Azure / Azure AI / self-hosted).
+        region (str | None): Vertex AI location, passed straight through as
+            litellm's `vertex_location`. Required per-entry for region-pinned models
+            (gemini-3.x need "global"); litellm defaults to us-central1 otherwise.
+        api_version (str | None): Azure OpenAI api-version (used by the batch SDK path).
+        model_info (ModelInfo): Model metadata (family, context size, etc.).
+        configs (dict): Extra options. `configs["model"]` is the display/registry id.
+        parameters (ModelParameters): Default inference parameters.
     """
 
-    client_type: ClientType = Field(
-        description="Type of client to instantiate (determines which LiteLLM provider to use)",
+    litellm_model: str = Field(
+        ...,
+        description="Full provider-prefixed litellm model identifier (e.g. 'vertex_ai/gemini-3-flash-preview'). Single source of truth for routing.",
     )
     api_key: str | None = Field(
         default=None,
-        description="API key to use for this model",
+        description="API key to use for this model (None when auth is ambient, e.g. Vertex ADC)",
     )
     base_url: str | None = Field(default=None, description="Custom URL to call")
+    region: str | None = Field(
+        default=None,
+        description="Vertex AI location, passed through as litellm vertex_location (e.g. 'global', 'us-east5')",
+    )
+    api_version: str | None = Field(default=None, description="Azure OpenAI api-version (batch SDK path)")
 
     model_info: ModelInfo = Field(..., description="Model metadata (family, context size, etc.)")
     configs: dict = Field(default_factory=dict, description="Options to pass to the LiteLLM client")
-    litellm_model: str | None = Field(default=None, description="Explicit litellm model identifier override")
     parameters: ModelParameters = Field(
         default_factory=ModelParameters,
         description="Default inference parameters (temperature, max_tokens, etc.)",
     )
 
-    @field_validator("client_type", mode="before")
-    @classmethod
-    def validate_client_type(cls, v: Any) -> ClientType:
-        """Validate client_type and convert string values to ClientType enum.
-
-        Args:
-            v: The input value to validate (typically from models.json)
-
-        Returns:
-            ClientType: The validated enum value
-
-        Raises:
-            ValueError: If the client_type string is not supported
-
-        """
-        if isinstance(v, ClientType):
-            return v
-        if isinstance(v, str):
-            # Try to match the string value to an enum member
-            try:
-                return ClientType(v)
-            except ValueError:
-                # If direct value match fails, try case-insensitive matching
-                for client_type in ClientType:
-                    if client_type.value.lower() == v.lower():
-                        return client_type
-                # If no match found, raise a descriptive error
-                supported_values = [ct.value for ct in ClientType]
-                raise ValueError(
-                    f"Unsupported client_type '{v}'. Supported values are: {supported_values}",
-                )
-        raise ValueError(f"client_type must be a string or ClientType enum, got {type(v)}")
+    @property
+    def provider_segment(self) -> str:
+        """Leading litellm provider segment of `litellm_model` (e.g. 'vertex_ai', 'azure', 'azure_ai')."""
+        return litellm_provider_segment(self.litellm_model)
 
     @field_validator("parameters", mode="before")
     @classmethod
@@ -383,27 +333,6 @@ CHEAP_CHAT_MODELS = [
     "gpt-5-nano",
     "claude-haiku-4-5@20251001",
 ]
-
-
-class LLMClient(BaseModel):
-    """Represents an instantiated LLM client along with its connection and parameters.
-
-    This model is used to store and pass around active LLM client instances.
-
-    Attributes:
-        client (Any): The actual instantiated LLM client object (e.g., an instance
-            of `OpenAIChatCompletionClient`, `AsyncAnthropicVertex`, etc.).
-        connection (str): The connection identifier (from `LLMConfig.connection`)
-            associated with this client.
-        parameters (dict): A dictionary of parameters that were used to configure
-            this client instance, or default parameters for its use.
-            Defaults to an empty dict.
-
-    """
-
-    client: Any  # The actual LLM client object (e.g., OpenAIChatCompletionClient)
-    connection: str  # Identifier for the connection type (e.g., "azure_gpt4")
-    parameters: dict = Field(default_factory=dict)  # Parameters for this client
 
 
 class ModelOutput(CreateResult):
@@ -661,9 +590,15 @@ def litellm_to_model_output(response: Any, usage: Any, model: str, schema: type[
         }
         finish_reason = finish_reason_map.get(raw_finish_reason, raw_finish_reason)
 
-        if message is None:
-            # Vertex returns message=null when a reasoning model hits finish_reason=length
-            # (hidden reasoning tokens consumed the entire budget before output tokens)
+        # Vertex/Gemini reasoning models can return either a null message OR a
+        # non-null message whose `content` is None when hidden reasoning tokens
+        # consume the entire output budget (finish_reason=length, small max_tokens).
+        # Guarding only `message is None` (the legacy compat-shim shape) misses the
+        # native `vertex_ai/` shape where `message` is present but `message.content`
+        # is None, which previously flowed into ModelOutput(content=None) and raised
+        # a pydantic ValidationError out of create(). Coerce both shapes to "".
+        message_content = getattr(message, "content", None) if message is not None else None
+        if message is None or (message_content is None and not getattr(message, "tool_calls", None)):
             content = ""
         else:
             # Check for tool calls (check both existence and non-empty list)
@@ -677,12 +612,16 @@ def litellm_to_model_output(response: Any, usage: Any, model: str, schema: type[
             else:
                 # Regular text content
                 content = message.content if hasattr(message, "content") else str(message)
-                # Route the response through ChatParser to (a) strip inline
-                # <think>...</think> blocks emitted by DeepSeek-R1 via Vertex MAAS
-                # and (b) capture any reasoning into the proper `thought` field.
-                # Providers that emit structured `reasoning_content` (DeepSeek
-                # reasoner, OpenAI o-series, Anthropic extended thinking, Gemini
-                # thinking) take precedence over inline-extracted text.
+                # litellm 1.83.0 already surfaces provider reasoning via
+                # `message.reasoning_content` and strips <think>/<thinking>/
+                # <budget:thinking> from `content` on its own parse path
+                # (litellm_core_utils/prompt_templates/common_utils.py:1294-1316).
+                # We only need to ROUTE that into buttermilk's `thought` field.
+                # The inline-<think> stripping fallback is KEPT for the
+                # DeepSeek-R1-via-Vertex-MAAS edge, which emits chain-of-thought
+                # inline in `content` rather than as structured reasoning_content
+                # (UNVERIFIED whether litellm 1.83.0 covers that specific MAAS path,
+                # so retained fail-safe). structured reasoning takes precedence.
                 if isinstance(content, str):
                     parser = importlib.import_module("buttermilk.utils.json_parser").ChatParser()
                     content = parser.extract_reasoning(
@@ -759,10 +698,7 @@ class LiteLLMWrapper(BaseModel):
     litellm_model_name: str = Field(..., description="Resolved model name for LiteLLM")
     api_key: str | None = Field(default=None, description="API key for the provider")
     base_url: str | None = Field(default=None, description="Custom base URL")
-    extra_headers: dict[str, str] | None = Field(default=None, description="Extra headers for the API request (e.g., Authorization)")
-    token_provider: Callable[[], str] | None = Field(default=None, description="Optional callable that returns an authentication token")
-    vertex_project: str | None = Field(default=None, description="GCP project ID for Vertex AI providers")
-    vertex_location: str | None = Field(default=None, description="GCP region for Vertex AI providers")
+    vertex_location: str | None = Field(default=None, description="GCP region for Vertex AI providers (litellm vertex_location)")
     default_parameters: ModelParameters = Field(
         default_factory=ModelParameters,
         description="Default inference parameters (temperature, max_tokens, etc.)",
@@ -785,66 +721,64 @@ class LiteLLMWrapper(BaseModel):
             raise ImportError("LiteLLM is not installed. Please install it with: pip install litellm")
 
     async def _execute_with_retry(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
-        """Execute a function with exponential backoff retry logic.
+        """Execute a litellm call with exponential-backoff retries.
 
-        Mirrors RetryWrapper behavior for consistency.
+        litellm classifies which exceptions are transient via its typed exception
+        hierarchy (RateLimitError, Timeout, APIConnectionError, InternalServerError,
+        ServiceUnavailableError, …); we retry exactly those types instead of the old
+        brittle string/urllib3 keyword matching.
+
+        The ONE genuinely buttermilk-specific coupling kept here — the reason we do
+        not just pass `num_retries` to litellm and be done — is: do NOT retry when the
+        root cause is an ``AttributeError``. litellm wraps a deterministic null-message
+        parse (reasoning model, finish_reason=length, exhausted budget) as a transient-
+        looking InternalServerError; retrying it just burns the budget again. litellm's
+        own `num_retries`/`RetryPolicy` cannot express "retry InternalServerError EXCEPT
+        when __cause__ is AttributeError", so we own the retry loop for this case.
         """
+        litellm_mod = _get_litellm()
+        candidate_types = (
+            [
+                getattr(litellm_mod, name, None)
+                for name in ("RateLimitError", "Timeout", "APIConnectionError", "InternalServerError", "ServiceUnavailableError")
+            ]
+            if litellm_mod is not None
+            else [TimeoutError, ConnectionError]
+        )
+        # Keep only real exception classes — guards against a partially-mocked litellm
+        # module (test doubles) whose exception attributes are not types.
+        retryable_types: tuple[type[BaseException], ...] = tuple(t for t in candidate_types if isinstance(t, type) and issubclass(t, BaseException))
+
         last_exception: Exception | None = None
         wait_time = self.min_wait_seconds
 
         for attempt in range(self.max_retries + 1):
             try:
-                # Add cooldown before each attempt (except first)
                 if attempt > 0:
                     await asyncio.sleep(self.cooldown_seconds)
-
-                # Execute the function
-                result = await func(*args, **kwargs)
-                return result
+                return await func(*args, **kwargs)
 
             except Exception as e:
                 last_exception = e
-                error_msg = str(e).lower()
 
-                # Check if this is a retryable error (by type or message)
-                retryable_types = (
-                    TimeoutError,
-                    ConnectionError,
-                    ConnectionResetError,
-                    ConnectionAbortedError,
-                    socket.gaierror,
-                    urllib3.exceptions.ProtocolError,
-                    urllib3.exceptions.TimeoutError,
-                    urllib3.exceptions.NameResolutionError,
-                    urllib3.exceptions.NewConnectionError,
-                    GoogleAuthTransportError,
-                )
-
-                is_retryable = isinstance(e, retryable_types) or any(
-                    keyword in error_msg for keyword in ["rate limit", "timeout", "503", "429", "502", "500", "name resolution"]
-                )
+                is_retryable = isinstance(e, retryable_types)
 
                 # AttributeError as the root cause means a deterministic parse failure
-                # (litellm wraps null-message parse as InternalServerError) — never retry
+                # (litellm wraps null-message parse as InternalServerError) — never retry.
                 if is_retryable:
                     cause = e.__cause__ or e.__context__
                     if isinstance(cause, AttributeError):
                         is_retryable = False
 
                 if attempt < self.max_retries and is_retryable:
-                    # Calculate wait time with jitter
                     jitter = random.uniform(-self.jitter_seconds, self.jitter_seconds)
                     actual_wait = min(wait_time + jitter, self.max_wait_seconds)
-
                     logger.warning(f"LiteLLM call failed (attempt {attempt + 1}/{self.max_retries + 1}): {e}. Retrying in {actual_wait:.1f}s...")
-
                     await asyncio.sleep(actual_wait)
                     wait_time *= 2  # Exponential backoff
                 else:
-                    # Not retryable or out of retries
                     raise
 
-        # Should not reach here, but just in case
         raise last_exception or ProcessingError("LiteLLM call failed after all retries")
 
     async def create(
@@ -874,20 +808,11 @@ class LiteLLMWrapper(BaseModel):
         merged_params = self.default_parameters.to_api_params()
         merged_params.update(kwargs)
 
-        # Build LiteLLM parameters
-        # Determine the model name for the API call:
-        # - For vertex_openai (custom GCP endpoint with extra_headers), use openai/<model> format
-        # - For other providers (Azure, Anthropic, etc.), use litellm_model_name with proper prefix
-        # Note: self.litellm_model_name is used for pricing lookups (may have different prefix)
-        if self.base_url and self.extra_headers:
-            # Vertex OpenAI-compatible endpoint - use openai/ prefix for OpenAI API format
-            api_model = f"openai/{self.model}"
-        else:
-            # Standard provider (Azure, Anthropic, etc.) - use the resolved litellm model name
-            api_model = self.litellm_model_name
-
+        # The full provider-prefixed litellm model name is the single source of truth
+        # for routing; litellm picks the provider/transport from its prefix (vertex_ai/,
+        # azure/, azure_ai/, anthropic/, gemini/, …). Vertex auth is ambient via GCP ADC.
         litellm_params = {
-            "model": api_model,
+            "model": self.litellm_model_name,
             "messages": litellm_messages,
             **merged_params,
         }
@@ -900,23 +825,9 @@ class LiteLLMWrapper(BaseModel):
         if self.base_url:
             litellm_params["base_url"] = self.base_url
 
-        # Get fresh token from token_provider if configured
-        headers_to_add = {}
-        if self.token_provider:
-            fresh_token = self.token_provider()
-            headers_to_add["Authorization"] = f"Bearer {fresh_token}"
-
-        # Add extra headers if provided (e.g., Authorization for GCP)
-        if self.extra_headers:
-            # Merge token_provider headers with extra_headers
-            merged_headers = {**self.extra_headers, **headers_to_add}
-            litellm_params["extra_headers"] = merged_headers
-        elif headers_to_add:
-            litellm_params["extra_headers"] = headers_to_add
-
-        # Add Vertex AI configuration if provided (for anthropic_vertex, gemini_vertex)
-        if self.vertex_project:
-            litellm_params["vertex_project"] = self.vertex_project
+        # Add Vertex AI location if provided. Vertex auth/project come from ambient ADC;
+        # only the location is per-model (gemini-3.x need "global"). litellm region
+        # precedence: vertex_location kwarg -> litellm.vertex_location -> VERTEXAI_LOCATION.
         if self.vertex_location:
             litellm_params["vertex_location"] = self.vertex_location
 
@@ -936,36 +847,17 @@ class LiteLLMWrapper(BaseModel):
         )
 
         if schema and structured_output_enabled:
-            # Native structured output supported - use response_format
+            # Native structured output: pass the RAW pydantic JSON schema straight to
+            # litellm's response_format. litellm 1.83.0 runs the provider-specific
+            # transforms itself (_build_vertex_schema does $ref expansion + enum/type
+            # coercion for Vertex/Gemini; type_to_response_format_param for OpenAI/Azure;
+            # Anthropic-on-Vertex via the tool transform). Live-verified 2026-06-22 that
+            # litellm accepts our raw nested schemas (JudgeReasons, QualScore with $defs +
+            # Literal enums) and returns valid parsed JSON for vertex_ai/gemini@global,
+            # vertex_ai/claude, and azure_ai — so buttermilk's own $ref/required/enum
+            # massaging here is redundant and was removed.
             _validate_schema_constraints(schema, self.model_info)
             schema_dict = schema.model_json_schema() if hasattr(schema, "model_json_schema") else schema.schema()
-
-            # Azure and Vertex AI models require $ref to be resolved inline
-            # Vertex AI (including Llama) may not fully support $defs in JSON schemas
-            is_azure = self.litellm_model_name and self.litellm_model_name.startswith("azure/")
-            is_vertex = self.litellm_model_name and "vertex" in self.litellm_model_name.lower()
-            if is_azure or is_vertex:
-                logger.debug(f"LiteLLMWrapper: Resolving $ref in schema for {self.litellm_model_name}")
-                schema_dict = resolve_json_schema_refs(schema_dict)
-                schema_dict = make_all_properties_required(schema_dict)
-
-            # Vertex AI requires enum values to be strings, not integers
-            # Convert integer enums to string enums in the schema
-            def convert_enum_values_to_strings(obj: Any) -> Any:
-                """Recursively convert integer enum values to strings for Vertex AI compatibility."""
-                if isinstance(obj, dict):
-                    # Check if this is an enum property
-                    if "enum" in obj and isinstance(obj["enum"], list):
-                        obj["enum"] = [str(v) for v in obj["enum"]]
-                    # Recursively process nested objects
-                    return {k: convert_enum_values_to_strings(v) for k, v in obj.items()}
-                if isinstance(obj, list):
-                    return [convert_enum_values_to_strings(item) for item in obj]
-                return obj
-
-            # Apply conversion for Vertex AI models (gemini, etc.)
-            if self.litellm_model_name and ("gemini" in self.litellm_model_name.lower() or "vertex" in self.litellm_model_name.lower()):
-                schema_dict = convert_enum_values_to_strings(schema_dict)
 
             litellm_params["response_format"] = {
                 "type": "json_schema",
@@ -1043,7 +935,7 @@ class LiteLLMWrapper(BaseModel):
         # Note: HuggingFace models don't support max_retries and will log a warning
         # if it's passed. Since we handle retries ourselves, we skip num_retries
         # for HuggingFace to avoid the spurious warning.
-        is_huggingface = api_model.startswith("huggingface/") if api_model else False
+        is_huggingface = self.litellm_model_name.startswith("huggingface/") if self.litellm_model_name else False
         if not is_huggingface:
             litellm_params["num_retries"] = 0
 
@@ -1087,9 +979,10 @@ class LiteLLMWrapper(BaseModel):
             error_msg = f"LiteLLM call failed: {e}"
             raise ProcessingError(error_msg) from e
 
-        # Calculate pricing from usage
+        # Calculate pricing from the full response (lets litellm.completion_cost do
+        # the per-token arithmetic / cache-read discount itself).
         usage = response.usage if hasattr(response, "usage") else None
-        pricing_metadata = self._calculate_pricing(usage)
+        pricing_metadata = self._calculate_pricing(usage, response=response)
 
         # Handle fake tool response - extract arguments as the structured content
         if used_fake_schema_tool and fake_tool_name:
@@ -1269,8 +1162,17 @@ class LiteLLMWrapper(BaseModel):
             content=tool.return_value_as_string(result),
         )
 
-    def _calculate_pricing(self, usage: Any) -> dict[str, Any]:
-        """Calculate pricing information from usage data."""
+    def _calculate_pricing(self, usage: Any, response: Any = None) -> dict[str, Any]:
+        """Calculate pricing information from a litellm response.
+
+        The total cost is computed by litellm.completion_cost() directly on the
+        response — litellm already applies the model's per-token rates and the
+        cache-read discount (live-verified 2026-06-22 across vertex_ai/gemini,
+        vertex_ai/claude and azure_ai). We only fall back to buttermilk's
+        calculate_token_cost (which carries the _simple_model_resolution name
+        remapping) when completion_cost() is unavailable or raises — e.g. a
+        litellm model name it cannot price.
+        """
         if usage is None:
             logger.warning("LLM response had no usage data - using 0 tokens for pricing")
             return {
@@ -1283,14 +1185,23 @@ class LiteLLMWrapper(BaseModel):
         completion_tokens = getattr(usage, "completion_tokens", 0) or 0
         cached_tokens = extract_cached_tokens(usage)
 
-        # Use existing pricing calculation utility; pass cached tokens so the
-        # cache-read discount is applied to total_cost.
-        prompt_tokens, completion_tokens, total_cost = calculate_token_cost(
-            model=self.litellm_model_name,
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            cached_tokens=cached_tokens,
-        )
+        total_cost: float | None = None
+        litellm_mod = _get_litellm()
+        if response is not None and litellm_mod is not None:
+            try:
+                total_cost = float(litellm_mod.completion_cost(completion_response=response))
+            except Exception as e:
+                logger.debug(f"litellm.completion_cost failed for {self.litellm_model_name}: {e}; falling back to calculate_token_cost")
+                total_cost = None
+
+        if total_cost is None:
+            # Fallback path: buttermilk name-remapping + cost_per_token with cache discount.
+            _, _, total_cost = calculate_token_cost(
+                model=self.litellm_model_name,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                cached_tokens=cached_tokens,
+            )
 
         return {
             "prompt_tokens": prompt_tokens,
@@ -1418,150 +1329,12 @@ class LLMs(BaseModel):
 
         return base_params
 
-    @staticmethod
-    def _provider_prefix_for_client_type(client_type: str) -> str:
-        """Normalize internal client_type to a litellm provider prefix."""
-        # Mapping of internal client types to litellm provider prefixes
-        prefix_map = {
-            "azure": "azure",
-            "openai": "openai",
-            "gemini": "gemini",  # litellm uses 'gemini' for Gemini API
-            "gemini_vertex": "gemini",  # vertex-hosted Gemini still routes differently upstream
-            "huggingface": "huggingface",
-            "vertex_openai": "vertex_ai",  # For litellm pricing, Vertex models need vertex_ai prefix
-            "llama_vertex": "vertex_ai",  # Llama on Vertex via native LiteLLM support
-            "deepseek_vertex": "vertex_ai",  # DeepSeek on Vertex via native LiteLLM support
-            "mistral_vertex": "vertex_ai",  # Mistral on Vertex via native LiteLLM support
-            "anthropic_vertex": "vertex_ai",  # Anthropic-on-Vertex
-            "anthropic": "anthropic",
-            "zentropi": "zentropi",  # Zentropi custom API
-        }
-        return prefix_map.get(client_type, client_type)  # fallback / extension
-
-    @staticmethod
-    def _is_already_litellm_identifier(model_name: str, registry: dict[str, Any] | None = None) -> bool:
-        """Heuristic: treat as already-qualified if first segment is a known provider and not an internal key."""
-        # Known litellm provider prefixes
-        known_litellm_providers = {
-            "azure",
-            "openai",
-            "gemini",
-            "huggingface",
-            "vertex_ai",
-            "anthropic",
-        }
-
-        if "/" not in model_name:
-            return False
-        first = model_name.split("/", 1)[0]
-        keys = set(registry.keys()) if registry else set()
-        return first in known_litellm_providers and model_name not in keys
-
-    @staticmethod
-    def lookup_litellm_model_name(model_name: str, client_type: str = "") -> str | None:
-        """Resolve an internal model key to a litellm-compatible identifier.
-
-        This function provides robust model name resolution by:
-        1. Determining the correct provider prefix for the client_type
-        2. Extracting the base model name (stripping any existing prefixes if needed)
-        3. Applying intelligent mapping for known model variations
-        4. Constructing the final litellm-compatible identifier
-
-        Args:
-            model_name: The model name from config (e.g., "google/gemini-2.5-flash")
-            client_type: The client type (e.g., "vertex_openai", "gemini_vertex")
-
-        Returns:
-            Properly formatted litellm model identifier
-        """
-        if not model_name:
-            return model_name
-
-        # Get the correct provider prefix for this client type
-        expected_prefix = LLMs._provider_prefix_for_client_type(client_type)
-
-        # Handle special cases and extract base model name
-        base_model = LLMs._extract_base_model_name(model_name, client_type)
-
-        # For native API client types (gemini, anthropic), bare model names work
-        # For openai client_type, always add the openai/ prefix — LiteLLM needs it
-        # for provider routing, especially with custom base_url (e.g., grok on Azure AI)
-        if client_type in {
-            "gemini",
-            "anthropic",
-        } and not model_name.startswith(expected_prefix + "/"):
-            return model_name
-
-        # If the model name already has the correct prefix, return as-is
-        if model_name.startswith(expected_prefix + "/"):
-            return model_name
-
-        # Construct the final litellm identifier
-        return f"{expected_prefix}/{base_model}"
-
-    @staticmethod
-    def _extract_base_model_name(model_name: str, client_type: str) -> str:
-        """Extract the base model name, handling various prefix patterns.
-
-        Examples:
-        - "google/gemini-2.5-flash" -> "gemini-2.5-flash" (strip google/ for litellm compatibility)
-        - "gemini-2.5-flash" -> "gemini-2.5-flash"
-        - "claude-sonnet-4@20250514" -> "claude-sonnet-4@20250514"
-        """
-        # Handle known model name patterns and client type combinations
-
-        # For vertex_openai (legacy), strip google/ prefix from Gemini models for litellm pricing
-        # e.g., "google/gemini-2.5-flash" -> "gemini-2.5-flash" (litellm expects vertex_ai/gemini-2.5-flash)
-        # But preserve meta/ prefix for Llama models (litellm expects vertex_ai/meta/llama-*)
-        if client_type == "vertex_openai":
-            if model_name.startswith("google/"):
-                return model_name[len("google/") :]  # Strip google/ prefix
-            return model_name  # Keep other prefixes (e.g., meta/llama-*)
-
-        # For llama_vertex, preserve the meta/ prefix for native LiteLLM support
-        # LiteLLM expects model names like "meta/llama-4-maverick-17b-128e-instruct-maas"
-        # and will construct the full model name as "vertex_ai/meta/llama-..."
-        if client_type == "llama_vertex":
-            # Keep meta/ prefix - litellm needs it for proper routing
-            return model_name
-
-        # For deepseek_vertex, preserve the deepseek-ai/ prefix for native LiteLLM support
-        # LiteLLM expects model names like "deepseek-ai/deepseek-r1-0528-maas"
-        # and will construct the full model name as "vertex_ai/deepseek-ai/deepseek-r1-..."
-        if client_type == "deepseek_vertex":
-            # Keep deepseek-ai/ prefix - litellm needs it for proper routing
-            return model_name
-
-        # For mistral_vertex, strip the mistralai/ prefix - LiteLLM adds it as the publisher
-        if client_type == "mistral_vertex":
-            if model_name.startswith("mistralai/"):
-                return model_name[len("mistralai/") :]
-            return model_name
-
-        # For anthropic_vertex clients with provider-specific models, preserve format
-        if client_type == "anthropic_vertex" and "/" in model_name:
-            return model_name
-
-        # For other cases, strip common provider prefixes if they don't match client type
-        if "/" in model_name:
-            prefix, base = model_name.split("/", 1)
-
-            # If the existing prefix matches what we expect, keep the base
-            expected_prefix = LLMs._provider_prefix_for_client_type(client_type)
-            if prefix == expected_prefix:
-                return base
-            # Keep the full name as-is for cross-provider compatibility
-            return model_name
-
-        # No prefix found, return as-is
-        return model_name
-
     def get_client(self, name: str) -> LiteLLMWrapper:
         """Gets or creates an LLM wrapper for the configuration specified by `name`.
 
-        If a client for the given name already exists in the cache,
-        it is returned. Otherwise, a new LiteLLMWrapper is instantiated based on the
-        `LLMConfig` found in `connections`, cached, and returned.
+        Routing is entirely driven by the full provider-prefixed `litellm_model`
+        name on the config. litellm + ambient GCP ADC handle auth/transport; the
+        only per-model knob we pass through is `region` -> litellm `vertex_location`.
 
         Args:
             name: The connection name of the LLM configuration (must be a key
@@ -1573,9 +1346,7 @@ class LLMs(BaseModel):
         Raises:
             AttributeError: If `name` is not found in `self.connections`.
             ImportError: If LiteLLM is not available.
-            ValueError: If essential configuration like GCP credentials for Vertex
-                are missing.
-
+            ProcessingError: If the model is a classification-only provider (zentropi).
         """
         # Check cache first
         if name in self.cached_clients:
@@ -1585,13 +1356,11 @@ class LLMs(BaseModel):
             raise AttributeError(f"LLM configuration named '{name}' not found in connections.")
 
         config = self.connections[name]
-        model_name = config.configs.get("model")
+        model_name = config.configs.get("model") or name
 
-        # Resolve litellm model name: explicit override > lookup > raw model_name
-        resolved_litellm = config.litellm_model or self.lookup_litellm_model_name(model_name or name, config.client_type.value) or model_name
-
-        # Zentropi is a classification API, not an LLM - use ZentropiClassifier agent instead
-        if config.client_type == ClientType.ZENTROPI:
+        # Zentropi is a classification API, not an LLM - use ZentropiClassifier agent instead.
+        # Guard off the litellm provider segment instead of a client_type enum.
+        if config.provider_segment == "zentropi":
             raise ProcessingError(
                 "Zentropi models cannot be used as LLM clients. Use buttermilk.agents.ZentropiClassifier for classification tasks instead."
             )
@@ -1599,76 +1368,23 @@ class LLMs(BaseModel):
         # Get merged parameters for this model
         merged_params = self.get_merged_parameters(name)
 
-        logger.debug(f"Creating LiteLLMWrapper for model '{name}' with provider '{config.client_type.value}'")
+        logger.debug(f"Creating LiteLLMWrapper for model '{name}' with litellm_model '{config.litellm_model}'")
 
-        # Prepare provider-specific configuration
-        extra_headers: dict[str, str] | None = None
-        api_key = config.api_key
-        vertex_project: str | None = None
-        vertex_location: str | None = None
-        # Default to config base_url, but some providers override this
-        effective_base_url: str | None = config.base_url
-
-        if config.client_type == ClientType.VERTEX_OPENAI:
-            # Vertex OpenAI-compatible endpoints require GCP auth
-            if not bm.gcp_credentials:
-                raise ValueError("GCP credentials not available for Vertex AI.")
-            gcp_token = bm.get_gcp_access_token()
-            extra_headers = {"Authorization": f"Bearer {gcp_token}"}
-            # LiteLLM requires an api_key, use placeholder for Vertex
-            api_key = api_key or "vertex-gcp-auth"
-
-        elif config.client_type == ClientType.ANTHROPIC_VERTEX:
-            # Anthropic on Vertex requires project/location
-            vertex_project = config.configs.get("project_id")
-            vertex_location = config.configs.get("region")
-            if not vertex_project or not vertex_location:
-                raise ValueError("project_id and region are required for Anthropic Vertex AI.")
-
-        elif config.client_type == ClientType.GEMINI_VERTEX:
-            # Gemini on Vertex - uses standard Vertex AI auth
-            vertex_project = config.configs.get("project_id")
-            vertex_location = config.configs.get("region")
-
-        elif config.client_type in (ClientType.LLAMA_VERTEX, ClientType.DEEPSEEK_VERTEX, ClientType.MISTRAL_VERTEX):
-            # Vertex AI MaaS models via native LiteLLM support (Llama, DeepSeek, etc.)
-            # LiteLLM handles auth and endpoint construction - no base_url needed
-            if not bm.gcp_credentials:
-                raise ValueError("GCP credentials not available for Vertex AI.")
-            vertex_project = config.configs.get("project_id")
-            vertex_location = config.configs.get("region")
-            if not vertex_project or not vertex_location:
-                provider = config.client_type.value
-                raise ValueError(f"project_id and region are required for {provider}.")
-            # Don't pass base_url - let LiteLLM construct the correct endpoint
-            effective_base_url = None
-
-        # Determine if token_provider is needed for this provider
-        token_provider = None
-        if config.client_type in (
-            ClientType.VERTEX_OPENAI,
-            ClientType.GEMINI_VERTEX,
-            ClientType.LLAMA_VERTEX,
-            ClientType.DEEPSEEK_VERTEX,
-            ClientType.MISTRAL_VERTEX,
-        ):
-            # Vertex models need GCP token refresh
-            def get_vertex_token() -> str:
-                return bm.get_gcp_access_token()
-
-            token_provider = get_vertex_token
+        # vertex_location: per-model region for Vertex providers. gemini-3.x require
+        # "global"; litellm otherwise defaults to us-central1. Project + auth are
+        # ambient via GCP ADC (set up in the BM startup loop), so we pass nothing else.
+        vertex_location: str | None = config.region
+        if config.provider_segment == "vertex_ai" and not vertex_location:
+            vertex_location = "global"
 
         wrapped_client = LiteLLMWrapper(
             model=model_name,
             model_info=config.model_info,
-            litellm_model_name=resolved_litellm,
-            api_key=api_key,
-            base_url=effective_base_url,
-            extra_headers=extra_headers,
-            vertex_project=vertex_project,
+            litellm_model_name=config.litellm_model,
+            api_key=config.api_key,
+            base_url=config.base_url,
             vertex_location=vertex_location,
             default_parameters=merged_params,
-            token_provider=token_provider,
         )
 
         self.cached_clients[name] = wrapped_client
