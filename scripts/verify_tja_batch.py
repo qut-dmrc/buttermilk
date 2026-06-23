@@ -5,8 +5,8 @@ from buttermilk._core.config_bootstrap import init_async
 from buttermilk._core.storage_config import BigQueryStorageConfig
 from buttermilk._core.types import BaseRecord
 from buttermilk.batch.executors.vertex import VertexBatchExecutor
+from buttermilk.batch.processors import VertexBatchProcessor
 from buttermilk.batch.runner import BatchPipelineRunner
-from buttermilk.processors.vertex_batch import VertexBatchProcessor
 from buttermilk.storage.bigquery import BigQueryStorage
 
 # Configure basic logging

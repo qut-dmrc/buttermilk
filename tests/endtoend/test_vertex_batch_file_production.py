@@ -7,8 +7,8 @@ pytestmark = pytest.mark.slow
 
 from buttermilk._core.processing_context import ProcessingContext
 from buttermilk._core.types import Record
-from buttermilk._core.vertex_batch import BatchJobManager
-from buttermilk.processors.vertex_batch import VertexBatchProcessor
+from buttermilk.batch.managers import BatchJobManager
+from buttermilk.batch.processors import VertexBatchProcessor
 
 
 def _wrap_records(records: list[Record]) -> list[ProcessingContext]:
@@ -167,7 +167,7 @@ class TestVertexBatchDryRun:
             return_value="gs://test-bucket/dry_run_abc123/input.jsonl",
         )
         mocker.patch(
-            "buttermilk._core.vertex_batch.upload_text",
+            "buttermilk.batch.managers.upload_text",
             return_value="gs://test-bucket/dry_run_abc123/input.jsonl",
         )
 

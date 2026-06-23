@@ -61,7 +61,7 @@ def submit(config: Path, json_output: bool) -> None:
     async def run_submit() -> dict:
         bm = await init_async(job="batch-submit")
 
-        from buttermilk._core.vertex_batch import BatchJobManager, BatchRequest
+        from buttermilk.batch.managers import BatchJobManager, BatchRequest
 
         manager = BatchJobManager(client=bm.genai)
 
@@ -150,7 +150,7 @@ def status(job_id: str, json_output: bool, save_dir: str | None, search: bool) -
     async def run_status() -> dict:
         bm = await init_async(job="batch-status")
 
-        from buttermilk._core.vertex_batch import BatchJobManager
+        from buttermilk.batch.managers import BatchJobManager
 
         manager = BatchJobManager(client=bm.genai)
 
@@ -224,7 +224,7 @@ def fetch(job_id: str, json_output: bool, output: str | None, save_dir: str | No
     async def run_fetch() -> dict[str, Any]:
         bm = await init_async(job="batch-fetch")
 
-        from buttermilk._core.vertex_batch import BatchJobManager
+        from buttermilk.batch.managers import BatchJobManager
 
         manager = BatchJobManager(client=bm.genai)
 
@@ -329,7 +329,7 @@ def list_jobs(json_output: bool, limit: int, save_dir: str | None) -> None:
     from cloudpathlib import AnyPath, CloudPath
 
     from buttermilk import init_async
-    from buttermilk._core.vertex_batch import BatchJobManifest
+    from buttermilk.batch.managers import BatchJobManifest
 
     async def run_list() -> list[dict]:
         bm = await init_async(job="batch-list")
