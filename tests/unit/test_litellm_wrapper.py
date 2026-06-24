@@ -494,13 +494,17 @@ class TestAnthropicCacheControlInCreate:
         assert call_kwargs["messages"][0]["role"] == "system"
 
     async def test_anthropic_vertex_path_requests_cache_injection_point(self):
-        """create() requests the injection point on the anthropic_vertex path."""
+        """create() requests the injection point for vertex_ai/claude-* (Anthropic-on-Vertex).
+
+        client_type is set to provider_segment ("vertex_ai") by get_client(); the
+        model name discriminates Claude from Gemini on the same provider.
+        """
         model_info = ModelInfo(vision=False, function_calling=True, json_output=False, family="claude")
         wrapper = LiteLLMWrapper(
             model="claude-sonnet-4-6",
             model_info=model_info,
             litellm_model_name="vertex_ai/claude-sonnet-4-6",
-            client_type="anthropic_vertex",
+            client_type="vertex_ai",
             vertex_project="my-project",
             vertex_location="us-east5",
         )
@@ -516,6 +520,34 @@ class TestAnthropicCacheControlInCreate:
             call_kwargs = litellm.acompletion.call_args[1]
 
         assert call_kwargs["cache_control_injection_points"] == [{"location": "message", "role": "system"}]
+
+    async def test_vertex_ai_gemini_no_cache_injection_point(self):
+        """create() does NOT inject cache_control for vertex_ai/gemini-* (implicit caching).
+
+        Both Claude and Gemini share provider_segment=="vertex_ai"; only Claude
+        requires explicit cache_control breakpoints.
+        """
+        model_info = ModelInfo(vision=False, function_calling=True, json_output=False, family="gemini")
+        wrapper = LiteLLMWrapper(
+            model="gemini-2.5-flash",
+            model_info=model_info,
+            litellm_model_name="vertex_ai/gemini-2.5-flash",
+            client_type="vertex_ai",
+            vertex_project="my-project",
+            vertex_location="us-central1",
+        )
+        messages = [
+            SystemMessage(content=_BIG_SYSTEM),
+            UserMessage(content="User content.", source="user"),
+        ]
+
+        with patch("litellm.acompletion", return_value=self._make_mock_response()):
+            await wrapper.create(messages=messages)
+            import litellm
+
+            call_kwargs = litellm.acompletion.call_args[1]
+
+        assert "cache_control_injection_points" not in call_kwargs
 
     async def test_anthropic_below_floor_no_injection_point(self):
         """A small system prefix below the floor → no cache_control_injection_points param."""

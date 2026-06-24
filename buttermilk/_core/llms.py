@@ -891,8 +891,12 @@ class LiteLLMWrapper(BaseModel):
         # no-op and we warn instead). Gemini/OpenAI cache the same prefix
         # implicitly and ignore the field. See docs/design/pr435-caching-redesign.md.
         cache_injection_points: list[dict[str, Any]] | None = None
-        if self.client_type in ("anthropic", "anthropic_vertex"):
-            cache_injection_points = _anthropic_cache_injection_points(litellm_messages, self.litellm_model_name or self.model)
+        _model_name = self.litellm_model_name or self.model or ""
+        _needs_explicit_cache = self.client_type == "anthropic" or (
+            self.client_type == "vertex_ai" and "claude" in _model_name
+        )
+        if _needs_explicit_cache:
+            cache_injection_points = _anthropic_cache_injection_points(litellm_messages, _model_name)
 
         # Merge default parameters with runtime kwargs (runtime takes precedence)
         merged_params = self.default_parameters.to_api_params()
