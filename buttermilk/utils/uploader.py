@@ -159,6 +159,14 @@ class AsyncDataUploader:
                     task=(current.get_name() if current else None),
                 )
                 await asyncio.sleep(1)
+        
+        # Ensure any remaining items in buffer are flushed before worker exits
+        if self.buffer:
+            try:
+                await self._flush()
+            except Exception as e:
+                logger.error(f"Worker final flush error: {e}")
+                
         logger.info("Data uploader loop finished.")
 
     async def _save_with_retry(self, data: list[Any], target_storage=None) -> None:
@@ -319,8 +327,18 @@ class AsyncDataUploader:
             bool: True if finalization succeeded, False otherwise
         """
         try:
-            # Trigger shutdown to flush remaining data
-            self.shutdown()
+            # Trigger shutdown to tell worker to stop after queue is empty
+            self._shutdown.set()
+            
+            # Wait for the worker to finish processing the queue
+            if self.worker_task is not None and not self.worker_task.done():
+                logger.info("Waiting for AsyncDataUploader worker to finish draining queue...")
+                await self.worker_task
+            
+            # Flush any remaining items in the buffer (should be handled by worker, but as a fallback)
+            if self.buffer:
+                await self._flush()
+                
             return True
         except Exception as e:
             logger.error(f"Error during AsyncDataUploader finalization: {e}")
