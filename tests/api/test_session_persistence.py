@@ -1,8 +1,4 @@
-"""Tests for session persistence functionality.
-
-Note: These tests mock global module state (SESSIONS_DIR) and must run serially.
-All tests in this module are marked to run in the same xdist worker.
-"""
+"""Tests for session persistence functionality."""
 
 import json
 import tempfile
@@ -14,9 +10,6 @@ import pytest
 from buttermilk.api.services.message_service import ChatMessage
 from buttermilk.api.services.session_storage import SessionStorageService
 
-# Force all tests in this module to run in same worker due to global mocking
-pytestmark = pytest.mark.xdist_group("session_storage_serial")
-
 
 class TestSessionStorageService:
     """Test suite for SessionStorageService."""
@@ -26,12 +19,8 @@ class TestSessionStorageService:
         """Set up temporary directory for each test."""
         with tempfile.TemporaryDirectory() as tmpdir:
             self.temp_storage_dir = Path(tmpdir)
-            with patch(
-                "buttermilk.api.services.session_storage.SESSIONS_DIR",
-                self.temp_storage_dir,
-            ):
-                self.storage_service = SessionStorageService()
-                yield
+            self.storage_service = SessionStorageService(sessions_dir=self.temp_storage_dir)
+            yield
 
     def test_save_message(self):
         """Test saving a message to session storage."""
@@ -289,12 +278,8 @@ class TestSessionStorageHelperMethods:
         """Set up temporary directory for each test."""
         with tempfile.TemporaryDirectory() as tmpdir:
             self.temp_storage_dir = Path(tmpdir)
-            with patch(
-                "buttermilk.api.services.session_storage.SESSIONS_DIR",
-                self.temp_storage_dir,
-            ):
-                self.storage_service = SessionStorageService()
-                yield
+            self.storage_service = SessionStorageService(sessions_dir=self.temp_storage_dir)
+            yield
 
     def test_get_or_create_session_data_new_session(self):
         """Test _get_or_create_session_data creates new session data."""
@@ -384,12 +369,8 @@ class TestSessionGCSArchival:
         """Set up temporary directory for each test."""
         with tempfile.TemporaryDirectory() as tmpdir:
             self.temp_storage_dir = Path(tmpdir)
-            with patch(
-                "buttermilk.api.services.session_storage.SESSIONS_DIR",
-                self.temp_storage_dir,
-            ):
-                self.storage_service = SessionStorageService()
-                yield
+            self.storage_service = SessionStorageService(sessions_dir=self.temp_storage_dir)
+            yield
 
     def test_archive_to_gcs_local_save_dir(self, real_bm):
         """Test archive_to_gcs with local save_dir (should skip archival)."""

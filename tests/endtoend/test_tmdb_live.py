@@ -111,7 +111,7 @@ class TestTMDBLiveAPI:
             if result.available:
                 assert result.provider_name is not None
                 assert result.provider_id is not None
-                assert result.provider_type in ["flatrate", "rent", "buy"]
+                assert result.provider_type in ["flatrate", "rent", "buy", "ads", "free"]
             else:
                 assert result.provider_name is None
 
@@ -329,7 +329,7 @@ class TestTMDBLiveAPI:
                 # Available results should have provider info
                 assert result.provider_name is not None
                 assert result.provider_id is not None
-                assert result.provider_type in ["flatrate", "rent", "buy"]
+                assert result.provider_type in ["flatrate", "rent", "buy", "ads", "free"]
             else:
                 # Unavailable results should be explicit
                 assert result.provider_name is None

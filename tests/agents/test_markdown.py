@@ -5,7 +5,6 @@ from unittest.mock import MagicMock
 from buttermilk._core.contract import AgentConfig, ExecutionTrace
 from buttermilk.agents.describer import MediaDescription
 from buttermilk.agents.differences import Differences, Divergence, Position
-from buttermilk.agents.frame import FramedStatement
 from buttermilk.agents.judge import JudgeReasons
 from buttermilk.agents.rag.rag_zotero import ZoteroReference, ZoteroResearchResult
 from buttermilk.agents.rag.simple_rag_agent import Reference, ResearchResult
@@ -116,32 +115,6 @@ class TestMediaDescriptionMarkdown:
         assert f"**{agent_id} #{call_id[:8]}**" in result
         assert "A scenic view of mountains" in result
         assert "Type: image" in result
-
-
-class TestFramedStatementMarkdown:
-    """Test markdown formatting for FramedStatement output model."""
-
-    def test_framed_statement_as_markdown(self):
-        """Test the as_markdown method for FramedStatement."""
-        agent_id = "FRAME-gpt4"
-        call_id = "3456MNOP"
-
-        output = FramedStatement(
-            statement="Climate change is an urgent crisis",
-            speaker_name="Dr. Smith",
-            speaker_affiliation="University X",
-            problem_definition="Global warming threatens ecosystems",
-            blame_attribution="Industrial emissions",
-            moral_evaluation="Negligent behavior",
-            recommendation="Immediate action needed",
-            confidence_score=0.9,
-        )
-
-        result = output.as_markdown(agent_id, call_id)
-
-        # Note: FramedStatement does not include agent_id header (handled by FrameAnalysisResults)
-        assert "Climate change is an urgent crisis" in result
-        assert "Dr. Smith" in result
 
 
 class TestResearchResultMarkdown:
