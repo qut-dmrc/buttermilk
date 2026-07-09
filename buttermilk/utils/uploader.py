@@ -21,6 +21,15 @@ from buttermilk.utils.utils import scrub_serializable
 
 
 class AsyncDataUploader:
+    """Asynchronous background uploader for batching records to storage.
+    
+    Warning:
+        When used with highly concurrent scrapers (e.g. TMDB) that generate data 
+        very rapidly, do NOT set `buffer_size` too small. A very small buffer_size 
+        with high-throughput extraction can cause the upload queue to fall too far behind,
+        risking data loss if the shutdown phase exceeds the 10-second graceful timeout.
+        For high-throughput scrapers, use a larger buffer_size (e.g., 1000-5000).
+    """
     def __init__(
         self,
         storage: Storage,
