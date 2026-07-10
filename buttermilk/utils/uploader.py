@@ -19,8 +19,26 @@ from buttermilk._core.types import BaseRecord
 from buttermilk.storage import Storage
 from buttermilk.utils.utils import scrub_serializable
 
+# Budget (seconds) for draining the upload queue during finalization before we warn
+# the researcher loudly. Aligned with the default timeout of BM.graceful_shutdown()
+# (see buttermilk/_core/bm_init.py): once graceful shutdown's own budget elapses it
+# force-cancels background tasks, so a drain that exceeds this risks the very data loss
+# this uploader is designed to prevent. We keep draining past the warning rather than
+# drop records; the warning tells the researcher how to avoid the delay next time.
+SHUTDOWN_FLUSH_WARN_SECONDS = 10.0
+
 
 class AsyncDataUploader:
+    """Asynchronous background uploader for batching records to storage.
+
+    Warning:
+        When used with highly concurrent scrapers (e.g. TMDB) that generate data
+        very rapidly, do NOT set `buffer_size` too small. A very small buffer_size
+        with high-throughput extraction can cause the upload queue to fall too far behind,
+        risking data loss if the shutdown phase exceeds the 10-second graceful timeout.
+        For high-throughput scrapers, use a larger buffer_size (e.g., 1000-5000).
+    """
+
     def __init__(
         self,
         storage: Storage,
@@ -32,6 +50,7 @@ class AsyncDataUploader:
         retry_max_wait: float = 30.0,
         use_timestamp_suffix: bool | None = None,
         output_col: str = "uri",
+        shutdown_warn_seconds: float = SHUTDOWN_FLUSH_WARN_SECONDS,
     ):
         self.storage: Storage = bm.get_storage(storage) if not isinstance(storage, Storage) else storage
 
@@ -40,6 +59,9 @@ class AsyncDataUploader:
         self.max_flush_retries = max_flush_retries
         self.retry_min_wait = retry_min_wait
         self.retry_max_wait = retry_max_wait
+        # Seconds to wait for the queue to drain on finalization before warning the
+        # researcher. Exposed as a parameter so tests can drive it to a small value.
+        self.shutdown_warn_seconds = shutdown_warn_seconds
 
         # Default behavior: use timestamp suffix if file exists, unless explicitly overridden
         if use_timestamp_suffix is not None:
@@ -159,6 +181,14 @@ class AsyncDataUploader:
                     task=(current.get_name() if current else None),
                 )
                 await asyncio.sleep(1)
+
+        # Ensure any remaining items in buffer are flushed before worker exits
+        if self.buffer:
+            try:
+                await self._flush()
+            except Exception as e:
+                logger.error(f"Worker final flush error: {e}")
+
         logger.info("Data uploader loop finished.")
 
     async def _save_with_retry(self, data: list[Any], target_storage=None) -> None:
@@ -319,8 +349,33 @@ class AsyncDataUploader:
             bool: True if finalization succeeded, False otherwise
         """
         try:
-            # Trigger shutdown to flush remaining data
-            self.shutdown()
+            # Trigger shutdown to tell worker to stop after queue is empty
+            self._shutdown.set()
+
+            # Wait for the worker to finish processing the queue.
+            if self.worker_task is not None and not self.worker_task.done():
+                logger.info("Waiting for AsyncDataUploader worker to finish draining queue...")
+
+                # Wait up to the drain budget, then warn loudly but KEEP waiting so no
+                # records are dropped. We use asyncio.wait (not asyncio.wait_for): wait_for
+                # cancels its target on timeout, and worker_task is an asyncio.shield wrapper
+                # (see add()) — cancelling that wrapper would leave us awaiting a cancelled
+                # future. asyncio.wait just reports done/pending and never cancels.
+                _done, pending = await asyncio.wait({self.worker_task}, timeout=self.shutdown_warn_seconds)
+                if pending:
+                    logger.warning(
+                        f"AsyncDataUploader has been flushing for over {self.shutdown_warn_seconds:.0f}s "
+                        f"({self.queue.qsize()} queued + {len(self.buffer)} buffered records still pending). "
+                        f"Shutdown is blocked until the upload finishes so no records are lost. "
+                        f"To avoid this delay, increase `buffer_size` (currently {self.buffer_size}) so records "
+                        f"upload in fewer, larger batches.",
+                    )
+                    await self.worker_task  # keep waiting; do NOT drop records
+
+            # Flush any remaining items in the buffer (should be handled by worker, but as a fallback)
+            if self.buffer:
+                await self._flush()
+
             return True
         except Exception as e:
             logger.error(f"Error during AsyncDataUploader finalization: {e}")

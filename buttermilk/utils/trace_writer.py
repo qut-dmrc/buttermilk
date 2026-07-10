@@ -115,13 +115,36 @@ class TraceWriter:
         logger.debug(f"Trace {trace.call_id} queued for upload")
 
     async def flush(self) -> None:
-        """Force flush any pending traces.
+        """Force flush any buffered traces WITHOUT stopping the uploader.
+
+        Flushes only the uploader's current buffer; the background worker keeps
+        running, so more traces can be added afterwards. Use this mid-run (e.g. in
+        tests) when you want buffered traces written but the writer to stay live.
+        For shutdown, use :meth:`finalize` instead so queued (not-yet-buffered)
+        traces are drained rather than dropped.
 
         Raises:
             StorageConfigError: If traces storage is not configured (on first call).
         """
         self._ensure_initialized()
         await self.uploader._flush()
+
+    async def finalize(self) -> bool:
+        """Drain all pending traces (queue + buffer) and stop the uploader.
+
+        Unlike :meth:`flush`, this signals the background worker to stop and blocks
+        until the entire queue has been drained, so traces still sitting in the
+        queue at shutdown are not silently dropped (issue #422). Intended for the
+        graceful-shutdown path.
+
+        Returns:
+            bool: True if finalization succeeded.
+
+        Raises:
+            StorageConfigError: If traces storage is not configured (on first call).
+        """
+        self._ensure_initialized()
+        return await self.uploader.finalize_processing()
 
 
 # Global singleton instance (lazy initialization)
