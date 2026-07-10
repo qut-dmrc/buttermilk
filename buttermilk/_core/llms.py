@@ -510,8 +510,8 @@ async def _parse_structured_output(  # noqa: PLR0912
 
 # Anthropic per-model minimum cacheable-prefix floors (tokens). A cache_control
 # breakpoint on a prefix below the model's floor is silently ineffective, so we
-# warn rather than stamp it. Opus 4.x / Haiku 4.5 = 4096; Sonnet 4.6 / Fable 5 =
-# 2048; older Sonnet (4.5/4/3.7) = 1024. See docs/design/pr435-caching-redesign.md.
+# warn rather than stamp it. Opus 4.x / Haiku 4.5 = 4096; Sonnet 4.6 / Fable 5 and
+# older Sonnet (4.5/4/3.7) = 2048 (conservative). See docs/design/pr435-caching-redesign.md.
 _ANTHROPIC_CACHE_FLOOR_HIGH = 4096
 _ANTHROPIC_CACHE_FLOOR_MID = 2048
 
@@ -527,7 +527,7 @@ def _anthropic_cache_floor(model_name: str) -> int:
         return _ANTHROPIC_CACHE_FLOOR_HIGH
     if "sonnet-4-6" in name or "sonnet4.6" in name or "fable" in name:
         return _ANTHROPIC_CACHE_FLOOR_MID
-    # Older Sonnet variants float to 1024, but default high when unsure.
+    # Older Sonnet variants: real floor is ~1024, but we stamp the conservative 2048 (MID).
     if "sonnet" in name and any(v in name for v in ("4-5", "4.5", "-4-", "3-7", "3.7")):
         return _ANTHROPIC_CACHE_FLOOR_MID
     return _ANTHROPIC_CACHE_FLOOR_HIGH
