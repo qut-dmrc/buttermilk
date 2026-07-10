@@ -26,10 +26,7 @@ from buttermilk.utils.uploader import AsyncDataUploader
 
 
 def _make_records(n: int) -> list[Record]:
-    return [
-        Record(record_id=f"rec_{i:04d}", content=f"content {i}", dataset_name="test", split_type="test")
-        for i in range(n)
-    ]
+    return [Record(record_id=f"rec_{i:04d}", content=f"content {i}", dataset_name="test", split_type="test") for i in range(n)]
 
 
 class _SlowFileStorage(FileStorage):
