@@ -11,7 +11,8 @@ repos:
           (?x)^(
             \.vscode/.*\.json|
             \.claude/.*\.json|
-            .*\.ipynb
+            .*\.ipynb|
+            dprint\.json
           )$
       - id: check-toml
       - id: mixed-line-ending
@@ -43,10 +44,15 @@ repos:
         args: [--fix, --unsafe-fixes, --exit-non-zero-on-fix]
       - id: ruff-format
 
-  # academicOps framework hooks
-  - repo: git@github.com:nicsuzor/academicOps
-    rev: v1.0.0
+  # dprint: owns only markdown/json/toml/yaml/dockerfile (see dprint.json's
+  # scope comment). Requires `dprint` on PATH (https://dprint.dev/install/)
+  # -- unlike a normal pre-commit hook repo, `language: system` means this
+  # hook does not manage its own toolchain.
+  - repo: local
     hooks:
       - id: dprint
-      - id: no-config-defaults
-      - id: check-instruction-bloat
+        name: dprint (md/json/yaml/toml/dockerfile)
+        entry: dprint fmt
+        language: system
+        pass_filenames: true
+        files: \.(md|json|ya?ml|toml)$|(^|/)Dockerfile$

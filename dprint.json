@@ -1,6 +1,18 @@
 {
   "$schema": "https://dprint.dev/schemas/v0.json",
   "incremental": true,
+  // Scope: dprint here owns ONLY filetypes nothing else already formats --
+  // markdown, json, toml, yaml, dockerfile. Keep it that way:
+  // - Python (.py) and Jupyter (.ipynb) are owned by ruff-pre-commit, which
+  //   formats/lints notebooks natively by default. Do not add dprint's ruff
+  //   or jupyter plugins here -- jupyter is a no-op without a companion
+  //   language plugin, and adding ruff-wasm back reintroduces a second,
+  //   version-skewed Python formatter fighting the real ruff toolchain.
+  // - TypeScript/Svelte/CSS are owned by Prettier (npm run format) in
+  //   buttermilk/frontend/chat. Do not add dprint's typescript/malva plugins
+  //   here.
+  // - Quarto (.qmd) and dbt (.sql) have no dprint plugin at all -- use a
+  //   separate tool (e.g. quarto's own formatter, sqlfluff) for those.
   "excludes": [
     "**/node_modules",
     "**/.venv",
@@ -18,21 +30,12 @@
     "**/aops/tests/results"
   ],
   "plugins": [
-    "https://plugins.dprint.dev/typescript-0.95.11.wasm",
     "https://plugins.dprint.dev/json-0.20.0.wasm",
     "https://plugins.dprint.dev/markdown-0.19.0.wasm",
     "https://plugins.dprint.dev/toml-0.7.0.wasm",
-    "https://plugins.dprint.dev/dockerfile-0.3.3.wasm",
-    "https://plugins.dprint.dev/jupyter-0.2.0.wasm",
-    "https://plugins.dprint.dev/ruff-0.5.0.wasm",
-    "https://plugins.dprint.dev/g-plane/malva-v0.14.3.wasm",
+    "https://plugins.dprint.dev/dockerfile-0.4.1.wasm",
     "https://plugins.dprint.dev/g-plane/pretty_yaml-v0.5.1.wasm"
   ],
-  "typescript": {
-    "lineWidth": 120,
-    "indentWidth": 2,
-    "semiColons": "asi"
-  },
   "json": {
     "indentWidth": 2
   },
@@ -41,15 +44,6 @@
     "textWrap": "never"
   },
   "toml": {
-    "indentWidth": 2
-  },
-  "dockerfile": {
-    "indentWidth": 2
-  },
-  "jupyter": {
-    "indentWidth": 2
-  },
-  "malva": {
     "indentWidth": 2
   },
   "yaml": {
