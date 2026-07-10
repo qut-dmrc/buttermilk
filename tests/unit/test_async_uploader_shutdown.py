@@ -113,3 +113,40 @@ async def test_finalize_no_warning_on_fast_flush(real_bm, tmp_path):
 
     saved = list(storage)
     assert len(saved) == 5
+
+
+@pytest.mark.anyio
+async def test_trace_writer_finalize_drains_queue(real_bm, tmp_path):
+    """TraceWriter.finalize() must drain the uploader's queue on shutdown.
+
+    graceful_shutdown() now calls finalize() (not flush()) so queued-but-not-yet-
+    buffered traces are drained rather than force-cancelled (issue #422). flush()
+    must remain a buffer-only, non-stopping operation (used mid-run by e2e tests).
+    """
+    import buttermilk.utils.trace_writer as tw_mod
+    from buttermilk.utils.trace_writer import TraceWriter
+
+    path = tmp_path / "traces.json"
+    config = FileStorageConfig(type="file", path=str(path), dataset_name="test", split_type="test")
+
+    # TraceWriter is a process-wide singleton; save and restore it so this test
+    # cannot leak a fake uploader into any other test.
+    saved_instance = TraceWriter._instance
+    saved_global = tw_mod.trace_writer
+    try:
+        TraceWriter._instance = None
+        tw = TraceWriter()
+        tw.uploader = AsyncDataUploader(storage=FileStorage(config), buffer_size=1000, flush_interval=3600)
+        tw._initialized = True
+
+        for r in _make_records(10):
+            await tw.uploader.add(r)
+
+        ok = await tw.finalize()
+        assert ok is True
+
+        saved = list(FileStorage(config))
+        assert len(saved) == 10, f"trace queue must be fully drained on finalize; got {len(saved)}"
+    finally:
+        TraceWriter._instance = saved_instance
+        tw_mod.trace_writer = saved_global
