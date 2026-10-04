@@ -70,17 +70,13 @@ async def test_osb_flow():
         await client.start_flow("osb", "What is Meta's hate speech policy?")
 
         # Wait for host's greeting and initial prompt
-        prompt = await client.wait_for_ui_message(
-            pattern="proceed|confirm|start", timeout=30
-        )
+        prompt = await client.wait_for_ui_message(pattern="proceed|confirm|start", timeout=30)
 
         # Send natural response
         await client.send_manager_response("Yes, please proceed")
 
         # Wait for agents to work
-        results = await client.wait_for_agent_results(
-            expected_agents=["researcher", "policy_analyst"], timeout=120
-        )
+        results = await client.wait_for_agent_results(expected_agents=["researcher", "policy_analyst"], timeout=120)
 
         # Verify results
         assert any("hate speech" in r.content for r in results)

@@ -19,9 +19,7 @@ storage = bm.get_bigquery_storage("my_dataset")
 # Custom configuration via BM factory
 from buttermilk.storage import StorageConfig
 
-config = StorageConfig(
-    type="bigquery", dataset_name="my_dataset", randomize=False, batch_size=500
-)
+config = StorageConfig(type="bigquery", dataset_name="my_dataset", randomize=False, batch_size=500)
 storage = bm.get_storage(config)
 
 # File storage
