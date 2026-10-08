@@ -35,9 +35,11 @@ async def test_with_real_config(real_bm):
 # ❌ DON'T DO THIS
 from hydra import initialize_config_dir, compose
 
+
 def test_something():
     with initialize_config_dir(config_dir="conf/"):
         cfg = compose(config_name="config")  # Bypasses test infrastructure!
+
 
 # ✅ DO THIS INSTEAD
 def test_something(real_bm):

@@ -70,6 +70,7 @@ import asyncio
 from pathlib import Path
 from buttermilk import init_async
 
+
 async def main():
     # Point at a directory of YAML configs (here, the buttermilk default conf/)
     bm = await init_async(
@@ -77,6 +78,7 @@ async def main():
         job="my-first-job",
     )
     bm.logger.info("buttermilk initialised", job=bm.cfg.job, version=bm.__version__)
+
 
 asyncio.run(main())
 ```
