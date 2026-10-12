@@ -70,7 +70,7 @@ class MessageService:
     @staticmethod
     def format_message_for_client(
         message: ExecutionTrace | ChatMessage | Record | FlowEvent | FlowMessage,
-    ) -> None | ChatMessage:
+    ) -> ChatMessage | None:
         """Format and pass the message to the client
 
         Args:

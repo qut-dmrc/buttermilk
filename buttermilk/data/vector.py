@@ -76,7 +76,7 @@ class ChunkedDocument(BaseModel):
     document_title: str
     chunk_index: int
     chunk_text: str
-    offset: str | None | tuple[int, int] = Field(default=None, description="Offset of chunk in the original text")
+    offset: str | tuple[int, int] | None = Field(default=None, description="Offset of chunk in the original text")
     document_id: str  # References Record.record_id
     embedding: Sequence[float] | Sequence[int] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
