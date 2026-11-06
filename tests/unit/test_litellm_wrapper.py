@@ -393,6 +393,21 @@ class TestAnthropicCacheFloor:
         assert _anthropic_cache_floor("claude-sonnet-4-6") == 2048
         assert _anthropic_cache_floor("claude-fable-5") == 2048
 
+    @pytest.mark.parametrize(
+        ("model_name", "expected_floor"),
+        [
+            ("claude-sonnet-4-5", 2048),
+            ("claude-sonnet-4.5", 2048),
+            ("claude-3-7-sonnet", 2048),
+            ("claude-3.7-sonnet", 2048),
+            ("vertex_ai/claude-sonnet-4-5@20250514", 2048),
+            ("vertex_ai/claude-sonnet-4@20250514", 2048),
+            ("claude-sonnet-4-something", 2048),
+        ],
+    )
+    def test_older_sonnet_variants_return_mid_floor(self, model_name: str, expected_floor: int):
+        assert _anthropic_cache_floor(model_name) == expected_floor
+
     def test_unknown_claude_defaults_high(self):
         """Conservative: unrecognised model treated as the 4096 floor."""
         assert _anthropic_cache_floor("claude-something-new") == 4096
@@ -444,6 +459,16 @@ class TestAnthropicCacheInjectionPoints:
         assert _anthropic_cache_injection_points(messages, "claude-sonnet-4-6") == [{"location": "message", "role": "system"}]
         assert _anthropic_cache_injection_points(messages, "claude-opus-4-7") is None
 
+    def test_near_floor_boundary_logs_info_breadcrumb(self):
+        """Within 20% of floor (e.g. ~2150 tok for 2048 floor) logs info breadcrumb."""
+        content = "x" * 8600  # 8600 / 4 = 2150 tok, within 20% of 2048 (2048 * 1.2 = 2457.6)
+        messages = [{"role": "system", "content": content}, {"role": "user", "content": "record"}]
+        with patch("buttermilk._core.llms.logger.info") as mock_info:
+            result = _anthropic_cache_injection_points(messages, "claude-sonnet-4-6")
+        assert result == [{"location": "message", "role": "system"}]
+        mock_info.assert_called_once()
+        assert "within 20% of the 2048-tok floor" in mock_info.call_args[0][0]
+
     def test_no_system_message_returns_none(self):
         messages = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "yo"}]
         assert _anthropic_cache_injection_points(messages, "claude-opus-4-7") is None
@@ -494,7 +519,35 @@ class TestAnthropicCacheControlInCreate:
         assert call_kwargs["messages"][0]["role"] == "system"
 
     async def test_anthropic_vertex_path_requests_cache_injection_point(self):
-        """create() requests the injection point on the anthropic_vertex path."""
+        """create() requests the injection point for vertex_ai/claude-* (Anthropic-on-Vertex).
+
+        client_type is set to provider_segment ("vertex_ai") by get_client(); the
+        model name discriminates Claude from Gemini on the same provider.
+        """
+        model_info = ModelInfo(vision=False, function_calling=True, json_output=False, family="claude")
+        wrapper = LiteLLMWrapper(
+            model="claude-sonnet-4-6",
+            model_info=model_info,
+            litellm_model_name="vertex_ai/claude-sonnet-4-6",
+            client_type="vertex_ai",
+            vertex_project="my-project",
+            vertex_location="us-east5",
+        )
+        messages = [
+            SystemMessage(content=_BIG_SYSTEM),
+            UserMessage(content="User content.", source="user"),
+        ]
+
+        with patch("litellm.acompletion", return_value=self._make_mock_response()):
+            await wrapper.create(messages=messages)
+            import litellm
+
+            call_kwargs = litellm.acompletion.call_args[1]
+
+        assert call_kwargs["cache_control_injection_points"] == [{"location": "message", "role": "system"}]
+
+    async def test_legacy_anthropic_vertex_client_type_requests_cache_injection_point(self):
+        """create() requests the injection point when legacy client_type='anthropic_vertex' is passed."""
         model_info = ModelInfo(vision=False, function_calling=True, json_output=False, family="claude")
         wrapper = LiteLLMWrapper(
             model="claude-sonnet-4-6",
@@ -516,6 +569,34 @@ class TestAnthropicCacheControlInCreate:
             call_kwargs = litellm.acompletion.call_args[1]
 
         assert call_kwargs["cache_control_injection_points"] == [{"location": "message", "role": "system"}]
+
+    async def test_vertex_ai_gemini_no_cache_injection_point(self):
+        """create() does NOT inject cache_control for vertex_ai/gemini-* (implicit caching).
+
+        Both Claude and Gemini share provider_segment=="vertex_ai"; only Claude
+        requires explicit cache_control breakpoints.
+        """
+        model_info = ModelInfo(vision=False, function_calling=True, json_output=False, family="gemini")
+        wrapper = LiteLLMWrapper(
+            model="gemini-2.5-flash",
+            model_info=model_info,
+            litellm_model_name="vertex_ai/gemini-2.5-flash",
+            client_type="vertex_ai",
+            vertex_project="my-project",
+            vertex_location="us-central1",
+        )
+        messages = [
+            SystemMessage(content=_BIG_SYSTEM),
+            UserMessage(content="User content.", source="user"),
+        ]
+
+        with patch("litellm.acompletion", return_value=self._make_mock_response()):
+            await wrapper.create(messages=messages)
+            import litellm
+
+            call_kwargs = litellm.acompletion.call_args[1]
+
+        assert "cache_control_injection_points" not in call_kwargs
 
     async def test_anthropic_below_floor_no_injection_point(self):
         """A small system prefix below the floor → no cache_control_injection_points param."""
@@ -610,3 +691,80 @@ class TestAnthropicCacheControlInCreate:
 
         assert call_messages[0]["role"] == "system"
         assert call_messages[1]["role"] == "user"
+
+
+class TestPrefixInvalidatorAudit:
+    """AC4 prefix-invalidator audit: verifies that rendering templates with identical
+    instructions/criteria but differing per-record/run fields produces byte-identical
+    leading SystemMessages. This ensures breakpoint 1 is never invalidated by
+    per-call variables (source, expected, answers, run_number, timestamp, record).
+    """
+
+    def test_score_template_prefix_invariance(self):
+        """score.jinja2 leading SystemMessage must be invariant across records."""
+        from buttermilk.utils.templating import make_messages, render_template
+
+        instructions = "Evaluate the analyst answer strictly against the guideline criteria."
+
+        res1 = render_template(
+            "prompt/score",
+            template_vars={
+                "instructions": instructions,
+                "source": "Article text 1 (breaking news report from May 2026)",
+                "expected": {"reasons": ["Factually inaccurate source claim"], "violating": True},
+                "answers": ["Analyst answer #1: Content contains inaccuracies."],
+                "run_number": 1,
+                "timestamp": "2026-05-01T12:00:00Z",
+            },
+            fail_on_unfilled=False,
+        )
+        msgs1, _ = make_messages(res1.rendered)
+
+        res2 = render_template(
+            "prompt/score",
+            template_vars={
+                "instructions": instructions,
+                "source": "Article text 2 (entirely different article on transportation)",
+                "expected": "Different expected answer string with distinct key points",
+                "answers": ["Analyst answer #2: Entirely different analysis and reasons."],
+                "run_number": 99,
+                "timestamp": "2026-11-06T04:00:00Z",
+            },
+            fail_on_unfilled=False,
+        )
+        msgs2, _ = make_messages(res2.rendered)
+
+        assert len(msgs1) >= 2
+        assert len(msgs2) >= 2
+        assert isinstance(msgs1[0], SystemMessage)
+        assert isinstance(msgs2[0], SystemMessage)
+        assert msgs1[0].content == msgs2[0].content
+
+    def test_judge_template_prefix_invariance(self):
+        """judge.jinja2 leading SystemMessage must be invariant across records."""
+        from buttermilk._core.types import BaseRecord
+        from buttermilk.utils.templating import make_messages, render_template
+
+        criteria = "Standard Journalism Ethics Criteria: Section 4.1 Truth and Accuracy."
+
+        rec1 = BaseRecord(
+            record_id="rec_001",
+            text="First record content with source text to evaluate.",
+            metadata={"run_number": 1, "timestamp": "2026-01-01"},
+        )
+        res1 = render_template("prompt/judge", template_vars={"criteria": criteria}, fail_on_unfilled=False)
+        msgs1, _ = make_messages(res1.rendered, record=rec1)
+
+        rec2 = BaseRecord(
+            record_id="rec_002",
+            text="Second completely unrelated record content with other claims.",
+            metadata={"run_number": 42, "timestamp": "2026-11-06"},
+        )
+        res2 = render_template("prompt/judge", template_vars={"criteria": criteria}, fail_on_unfilled=False)
+        msgs2, _ = make_messages(res2.rendered, record=rec2)
+
+        assert len(msgs1) >= 1
+        assert len(msgs2) >= 1
+        assert isinstance(msgs1[0], SystemMessage)
+        assert isinstance(msgs2[0], SystemMessage)
+        assert msgs1[0].content == msgs2[0].content

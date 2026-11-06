@@ -510,8 +510,8 @@ async def _parse_structured_output(  # noqa: PLR0912
 
 # Anthropic per-model minimum cacheable-prefix floors (tokens). A cache_control
 # breakpoint on a prefix below the model's floor is silently ineffective, so we
-# warn rather than stamp it. Opus 4.x / Haiku 4.5 = 4096; Sonnet 4.6 / Fable 5 =
-# 2048; older Sonnet (4.5/4/3.7) = 1024. See docs/design/pr435-caching-redesign.md.
+# warn rather than stamp it. Opus 4.x / Haiku 4.5 = 4096; Sonnet 4.6 / Fable 5 and
+# older Sonnet (4.5/4/3.7) = 2048 (conservative). See docs/design/pr435-caching-redesign.md.
 _ANTHROPIC_CACHE_FLOOR_HIGH = 4096
 _ANTHROPIC_CACHE_FLOOR_MID = 2048
 
@@ -527,8 +527,9 @@ def _anthropic_cache_floor(model_name: str) -> int:
         return _ANTHROPIC_CACHE_FLOOR_HIGH
     if "sonnet-4-6" in name or "sonnet4.6" in name or "fable" in name:
         return _ANTHROPIC_CACHE_FLOOR_MID
-    # Older Sonnet variants float to 1024, but default high when unsure.
-    if "sonnet" in name and any(v in name for v in ("4-5", "4.5", "-4-", "3-7", "3.7")):
+    # Older Sonnet variants: real floor is ~1024, but we stamp the conservative 2048 (MID).
+    # Handles -4-, -4@ (e.g. vertex_ai/claude-sonnet-4@20250514), 4.5, 4-5, 3.7, 3-7.
+    if "sonnet" in name and any(v in name for v in ("4-5", "4.5", "-4-", "-4@", "3-7", "3.7")):
         return _ANTHROPIC_CACHE_FLOOR_MID
     return _ANTHROPIC_CACHE_FLOOR_HIGH
 
@@ -582,6 +583,14 @@ def _anthropic_cache_injection_points(
             f"is below the {floor}-tok floor; a cache_control breakpoint would be silently ineffective."
         )
         return None
+
+    # Near the floor boundary (+20%), log a breadcrumb so false-positive sub-floor
+    # stamps are diagnosable against live telemetry instead of vanishing silently.
+    if prefix_tokens <= int(floor * 1.2):
+        logger.info(
+            f"Anthropic prompt cache enabled near floor boundary for '{model_name}': "
+            f"system prefix ~{prefix_tokens} tok is within 20% of the {floor}-tok floor."
+        )
 
     return [{"location": "message", "role": "system"}]
 
@@ -891,8 +900,11 @@ class LiteLLMWrapper(BaseModel):
         # no-op and we warn instead). Gemini/OpenAI cache the same prefix
         # implicitly and ignore the field. See docs/design/pr435-caching-redesign.md.
         cache_injection_points: list[dict[str, Any]] | None = None
-        if self.client_type in ("anthropic", "anthropic_vertex"):
-            cache_injection_points = _anthropic_cache_injection_points(litellm_messages, self.litellm_model_name or self.model)
+        _model_name = self.litellm_model_name or self.model or ""
+        _client_type = (self.client_type or "").lower()
+        _needs_explicit_cache = _client_type.startswith("anthropic") or (_client_type == "vertex_ai" and "claude" in _model_name.lower())
+        if _needs_explicit_cache:
+            cache_injection_points = _anthropic_cache_injection_points(litellm_messages, _model_name)
 
         # Merge default parameters with runtime kwargs (runtime takes precedence)
         merged_params = self.default_parameters.to_api_params()
