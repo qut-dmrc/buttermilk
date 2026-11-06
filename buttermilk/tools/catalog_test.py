@@ -289,7 +289,7 @@ class TMDBTool:
             raise ValueError("TMDB API key is required. Please set TMDB_API_KEY environment variable or pass api_key parameter.")
 
         # Underlying client + retry wrapper
-        self._tmdb_client = aioTMDb(key=self.api_key, language=language, region=self.region)
+        self._tmdb_client = aioTMDb(api_key=self.api_key, language=language, region=self.region)
         self._retry = RetryWrapper(client=self._tmdb_client)
 
         # Initialize storage uploaders if configs provided
