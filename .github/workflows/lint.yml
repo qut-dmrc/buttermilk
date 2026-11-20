@@ -1,7 +1,5 @@
 # Lint: ruff check + ruff format with autofix on PRs.
 # Adapted for buttermilk: aops-specific steps (normalize_mcp_names, validate-ruleset-alignment) removed.
-#
-# See .github/workflows/pr-pipeline.yml for the full process documentation.
 
 name: Lint
 
@@ -13,6 +11,8 @@ on:
         description: "true if lint pushed a commit in this pass"
         value: ${{ jobs.lint.outputs.committed }}
   push:
+    branches: [dev]
+  pull_request:
     branches: [dev]
 
 jobs:
@@ -41,7 +41,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4
@@ -49,7 +49,7 @@ jobs:
           version: "latest"
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --frozen --extra dev
         timeout-minutes: 5
 
       # Initial check: identify problems but don't fail the job yet
@@ -80,7 +80,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
+          git add -u -- '*.py'
           if git diff --cached --quiet; then
             echo "No formatting changes to commit"
             echo "committed=false" >> "$GITHUB_OUTPUT"
